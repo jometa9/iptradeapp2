@@ -1,0 +1,19 @@
+{
+  "name": "iptradeapp-server",
+  "version": "1.0.0",
+  "description": "Local server for IPTrade App",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "build": "esbuild src/standalone.js --bundle --platform=node --format=cjs --outfile=dist/server.cjs --external:electron"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+} 
