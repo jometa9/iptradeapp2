@@ -37,34 +37,17 @@ try {
   const newVersion = packageJson.version;
   console.log(`✅ Nueva versión: ${newVersion}`);
 
-  // 4. Construir la aplicación
-  console.log('🔨 Construyendo aplicación...');
-  execSync('npm run electron:build', { stdio: 'inherit' });
-
-  // 4.5. Publicar release con binarios (requiere GITHUB_TOKEN)
-  console.log('📤 Publicando release con binarios...');
-  try {
-    execSync('npm run publish', { stdio: 'inherit' });
-    console.log('✅ Release publicado con binarios');
-  } catch (publishError) {
-    console.log('⚠️  No se pudieron subir los binarios automáticamente');
-    console.log('💡 Puedes subirlos manualmente o configurar GITHUB_TOKEN');
-  }
-
-  // 5. Crear tag de git
-  console.log('🏷️  Creando tag de git...');
-  execSync(`git tag v${newVersion}`, { stdio: 'inherit' });
-
-  // 6. Push cambios y tags
+  // 4. Push cambios y tags (GitHub Actions se encarga del resto)
   console.log('📤 Subiendo cambios al repositorio...');
   execSync('git push', { stdio: 'inherit' });
   execSync('git push --tags', { stdio: 'inherit' });
 
   console.log('');
-  console.log('🎉 ¡Release completado!');
+  console.log('🎉 ¡Release iniciado!');
   console.log(`📦 Versión: ${newVersion}`);
-  console.log('🚀 La aplicación se distribuirá automáticamente a través de GitHub Releases');
-  console.log('💫 Los usuarios recibirán notificación de actualización automáticamente');
+  console.log('🤖 GitHub Actions construirá y publicará automáticamente');
+  console.log('⏱️  Espera 5-10 minutos para que se complete');
+  console.log('📍 Ve el progreso en: https://github.com/jometa9/iptradeapp2/actions');
 } catch (error) {
   console.error('❌ Error durante el release:', error.message);
   process.exit(1);
