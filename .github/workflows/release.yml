@@ -10,7 +10,20 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            build_script: 'electron:build'
+            build_args: '--linux'
+          - os: macos-latest
+            build_script: 'electron:build'
+            build_args: '--mac'
+          - os: windows-latest
+            build_script: 'electron:build'
+            build_args: '--win'
 
     steps:
       - name: Check out Git repository
@@ -30,4 +43,5 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           release: true
-          build_script_name: 'electron:build'
+          build_script_name: ${{ matrix.build_script }}
+          args: ${{ matrix.build_args }}
