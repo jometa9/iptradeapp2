@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react';
+
+import { UpdateCard } from './components/UpdateCard';
+import { VersionInfo } from './components/VersionInfo';
+import { UpdateTestProvider } from './context/UpdateTestContext';
 
 function App() {
   const [serverStatus, setServerStatus] = useState<string>('checking...');
 
   useEffect(() => {
-    // Detectar si estamos en desarrollo o producción
-    const isDev = window.location.hostname === 'localhost' && window.location.port === '5174';
-    const serverPort = isDev ? 3001 : 3000;
+    const serverPort = import.meta.env.VITE_SERVER_PORT;
     const serverUrl = `http://localhost:${serverPort}/api/status`;
-    
-    // Verificar el estado del servidor local
+
     fetch(serverUrl)
       .then(res => res.json())
       .then(data => setServerStatus(`${data.status} (port ${serverPort})`))
@@ -17,15 +18,23 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
-        <h1 className="text-2xl font-bold mb-4">IPTrade App</h1>
-        <div className="mb-4">
-          <p className="text-gray-600">Server Status: <span className="font-semibold">{serverStatus}</span></p>
+    <UpdateTestProvider>
+      <div className="min-h-screen p-4 space-y-4">
+        <UpdateCard />
+
+        <div className="bg-white rounded-xl shadow border border-gray-200 p-6">
+          <h1 className="text-2xl font-bold mb-4">IPTrade App</h1>
+          <div className="mb-4">
+            <p className="text-gray-600">
+              Server Status: <span className="font-semibold">{serverStatus}</span>
+            </p>
+          </div>
         </div>
+
+        <VersionInfo />
       </div>
-    </div>
-  )
+    </UpdateTestProvider>
+  );
 }
 
-export default App
+export default App;

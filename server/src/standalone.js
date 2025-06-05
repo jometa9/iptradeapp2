@@ -1,5 +1,6 @@
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
+
 import statusRoutes from './routes/status.js';
 
 export function createServer() {
@@ -24,9 +25,9 @@ export function createServer() {
 
 export function startServer() {
   const { app, PORT } = createServer();
-  
+
   return new Promise((resolve, reject) => {
-    const server = app.listen(PORT, (err) => {
+    const server = app.listen(PORT, err => {
       if (err) {
         console.error('[SERVER FAILED TO START]', err);
         reject(err);
@@ -37,4 +38,4 @@ export function startServer() {
       }
     });
   });
-} 
+}
