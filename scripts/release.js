@@ -41,6 +41,16 @@ try {
   console.log('🔨 Construyendo aplicación...');
   execSync('npm run electron:build', { stdio: 'inherit' });
 
+  // 4.5. Publicar release con binarios (requiere GITHUB_TOKEN)
+  console.log('📤 Publicando release con binarios...');
+  try {
+    execSync('npm run publish', { stdio: 'inherit' });
+    console.log('✅ Release publicado con binarios');
+  } catch (publishError) {
+    console.log('⚠️  No se pudieron subir los binarios automáticamente');
+    console.log('💡 Puedes subirlos manualmente o configurar GITHUB_TOKEN');
+  }
+
   // 5. Crear tag de git
   console.log('🏷️  Creando tag de git...');
   execSync(`git tag v${newVersion}`, { stdio: 'inherit' });
