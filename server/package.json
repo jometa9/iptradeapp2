@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "esbuild src/standalone.js --bundle --platform=node --format=cjs --outfile=dist/server.cjs --external:electron"
+    "build": "esbuild src/standalone.js --bundle --platform=node --format=esm --outfile=dist/server.mjs --external:electron"
   },
   "dependencies": {
     "cors": "^2.8.5",

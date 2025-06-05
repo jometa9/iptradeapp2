@@ -91,7 +91,7 @@ async function startServer() {
     }
 
     // Solo en producción iniciar el servidor embebido
-    const serverPath = path.join(process.resourcesPath, 'server/dist/server.cjs');
+    const serverPath = path.join(process.resourcesPath, 'server/dist/server.mjs');
     console.log('[ELECTRON] Loading server from:', serverPath);
 
     const { startServer } = require(serverPath);
