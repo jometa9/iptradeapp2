@@ -30,8 +30,6 @@ jobs:
         run: npm ci
 
       - name: Build and release Electron app
-        uses: samuelmeuli/action-electron-builder@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release: true
-          build_script_name: 'electron:build:ci'
+        run: npm run electron:build:ci
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
