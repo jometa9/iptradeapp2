@@ -35,7 +35,6 @@ export const useAuth = () => {
 };
 
 const STORAGE_KEY = 'iptrade_license_key';
-const BASE_ENDPOINT = 'http://localhost:3002/api/validate-subscription';
 
 // Valid subscription states
 const VALID_SUBSCRIPTION_STATES = ['active', 'trialing', 'admin_assigned'];
@@ -52,7 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     apiKey: string
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
-      const url = `${BASE_ENDPOINT}?apiKey=${encodeURIComponent(apiKey)}`;
+      const baseEndpoint = import.meta.env.VITE_LICENSE_API_URL;
+      const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
       console.log('Making request to:', url);
       const response = await fetch(url);
 
@@ -125,6 +125,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserInfo(validation.userInfo);
         setIsAuthenticated(true);
         localStorage.setItem(STORAGE_KEY, key);
+
+        // Cache the validation timestamp and user info
+        const now = Date.now();
+        localStorage.setItem(`${STORAGE_KEY}_last_validation`, now.toString());
+        localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
+
         return true;
       } else {
         setError(validation.message || 'Invalid API Key or inactive subscription');
@@ -145,7 +151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSecretKey(null);
     setUserInfo(null);
     setError(null);
+    // Clear all auth-related data from localStorage
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
+    localStorage.removeItem(`${STORAGE_KEY}_user_info`);
   };
 
   // Limpiar error
@@ -159,21 +168,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedKey = localStorage.getItem(STORAGE_KEY);
 
       if (storedKey) {
+        // Check if we recently validated this key to avoid unnecessary API calls
+        const lastValidationKey = `${STORAGE_KEY}_last_validation`;
+        const lastValidation = localStorage.getItem(lastValidationKey);
+        const now = Date.now();
+
+        // Only revalidate if it's been more than 5 minutes since last validation
+        if (lastValidation && now - parseInt(lastValidation) < 5 * 60 * 1000) {
+          console.log('🕒 Using cached license validation (less than 5 minutes old)');
+          // Try to get cached user info
+          const cachedUserInfo = localStorage.getItem(`${STORAGE_KEY}_user_info`);
+          if (cachedUserInfo) {
+            try {
+              const userInfo = JSON.parse(cachedUserInfo);
+              setSecretKey(storedKey);
+              setUserInfo(userInfo);
+              setIsAuthenticated(true);
+              setIsLoading(false);
+              return;
+            } catch (parseError) {
+              console.warn('Failed to parse cached user info:', parseError);
+            }
+          }
+        }
+
         try {
+          console.log('🔄 Validating stored license...');
           const validation = await validateLicense(storedKey);
 
           if (validation.valid && validation.userInfo) {
             setSecretKey(storedKey);
             setUserInfo(validation.userInfo);
             setIsAuthenticated(true);
+
+            // Cache the validation timestamp and user info
+            localStorage.setItem(lastValidationKey, now.toString());
+            localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
           } else {
             // Licencia expirada o inválida
             localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(lastValidationKey);
+            localStorage.removeItem(`${STORAGE_KEY}_user_info`);
             console.warn('Stored license is no longer valid:', validation.message);
           }
         } catch (error) {
           console.warn('Could not validate stored license:', error);
-          localStorage.removeItem(STORAGE_KEY);
+          // Don't remove the key on network errors, just log and continue
+          // localStorage.removeItem(STORAGE_KEY);
         }
       }
 

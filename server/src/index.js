@@ -1,16 +1,42 @@
 import cors from 'cors';
+import dotenv from 'dotenv';
 import express from 'express';
 
+import { killProcessOnPort } from './controllers/ordersController.js';
+import accountsRoutes from './routes/accounts.js';
+import configRoutes from './routes/config.js';
+import copierStatusRoutes from './routes/copierStatus.js';
+import ctraderRoutes from './routes/ctrader.js';
+import orderRoutes from './routes/orders.js';
+import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
+import tradingConfigRoutes from './routes/tradingConfig.js';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Debug: Let's see what PORT is actually being used
+console.log('Environment variables:');
+console.log('- process.env.PORT:', process.env.PORT);
+console.log('- Final PORT:', PORT);
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api', statusRoutes);
+app.use('/api', orderRoutes);
+app.use('/api', configRoutes);
+app.use('/api', tradingConfigRoutes);
+app.use('/api', copierStatusRoutes);
+app.use('/api/accounts', accountsRoutes);
+app.use('/api/slave-config', slaveConfigRoutes);
+app.use('/api/ctrader', ctraderRoutes);
 
 app.use((err, req, res, next) => {
   console.error('[SERVER ERROR]', err.stack);
@@ -19,14 +45,57 @@ app.use((err, req, res, next) => {
 
 export default app;
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith('server.js')) {
-  app
-    .listen(PORT, () => {
-      console.log('=== IPTRADE SERVER STARTED ===');
-      console.log(`Server running on port ${PORT}`);
-    })
-    .on('error', err => {
-      console.error('[SERVER FAILED TO START]', err);
-      process.exit(1);
+async function startServer() {
+  console.log(`🚀 Starting IPTRADE Server on port ${PORT}...`);
+
+  // Kill any existing processes on this port
+  await killProcessOnPort(PORT);
+
+  // Wait a moment to ensure port is fully free
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  const startServerAttempt = (attempt = 1) => {
+    return new Promise((resolve, reject) => {
+      const server = app.listen(PORT, () => {
+        console.log('🎉 === IPTRADE SERVER STARTED ===');
+        console.log(`📡 Server running on http://127.0.0.1:${PORT}`);
+        console.log(`🔗 Health check: http://127.0.0.1:${PORT}/api/status`);
+        resolve(server);
+      });
+
+      server.on('error', async err => {
+        if (err.code === 'EADDRINUSE') {
+          console.log(`⚠️  Port ${PORT} is still in use (attempt ${attempt}/3), cleaning again...`);
+
+          if (attempt < 3) {
+            // Try to kill processes again and retry
+            await killProcessOnPort(PORT);
+            setTimeout(() => {
+              startServerAttempt(attempt + 1)
+                .then(resolve)
+                .catch(reject);
+            }, 2000);
+          } else {
+            console.error(`❌ Unable to start server on port ${PORT} after 3 attempts`);
+            console.error('Please check if another application is using this port');
+            reject(err);
+          }
+        } else {
+          console.error('❌ [SERVER FAILED TO START]', err);
+          reject(err);
+        }
+      });
     });
+  };
+
+  try {
+    await startServerAttempt();
+  } catch (error) {
+    console.error('💥 Failed to start server:', error.message);
+    process.exit(1);
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith('server.js')) {
+  startServer();
 }

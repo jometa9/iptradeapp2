@@ -1,0 +1,238 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+
+// Trading configuration file management
+const configBaseDir = join(process.cwd(), 'config');
+const tradingConfigFilePath = join(configBaseDir, 'trading_transformations.json');
+
+// Initialize config directory if it doesn't exist
+const initializeTradingConfig = () => {
+  if (!existsSync(configBaseDir)) {
+    mkdirSync(configBaseDir, { recursive: true });
+  }
+
+  if (!existsSync(tradingConfigFilePath)) {
+    writeFileSync(tradingConfigFilePath, JSON.stringify({}, null, 2));
+  }
+};
+
+// Load trading configurations
+const loadTradingConfig = () => {
+  initializeTradingConfig();
+  try {
+    const data = readFileSync(tradingConfigFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading trading config:', error);
+    return {};
+  }
+};
+
+// Save trading configurations
+const saveTradingConfig = config => {
+  try {
+    writeFileSync(tradingConfigFilePath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error saving trading config:', error);
+    return false;
+  }
+};
+
+// Default configuration for new accounts
+const getDefaultConfig = () => ({
+  lotMultiplier: 1.0,
+  forceLot: null,
+  reverseTrading: false,
+});
+
+// Reverse trading type mappings
+const reverseTypeMapping = {
+  BUY: 'SELL',
+  SELL: 'BUY',
+  'BUY STOP': 'SELL LIMIT',
+  'SELL STOP': 'BUY LIMIT',
+  'BUY LIMIT': 'SELL STOP',
+  'SELL LIMIT': 'BUY STOP',
+  BUYSTOP: 'SELLLIMIT',
+  SELLSTOP: 'BUYLIMIT',
+  BUYLIMIT: 'SELLSTOP',
+  SELLLIMIT: 'BUYSTOP',
+};
+
+// Apply transformations to order data
+export const applyTransformations = (orderData, masterAccountId) => {
+  const configs = loadTradingConfig();
+  const accountConfig = configs[masterAccountId] || getDefaultConfig();
+
+  let transformedData = { ...orderData };
+
+  // Apply lot transformations
+  if (accountConfig.forceLot !== null && accountConfig.forceLot !== undefined) {
+    // Force specific lot
+    transformedData.lot = accountConfig.forceLot.toString();
+  } else if (accountConfig.lotMultiplier !== 1.0) {
+    // Apply lot multiplier
+    const originalLot = parseFloat(orderData.lot) || 0;
+    transformedData.lot = (originalLot * accountConfig.lotMultiplier).toFixed(2);
+  }
+
+  // Apply reverse trading
+  if (accountConfig.reverseTrading) {
+    const originalType = orderData.type.toUpperCase();
+    const reversedType = reverseTypeMapping[originalType];
+
+    if (reversedType) {
+      transformedData.type = reversedType;
+
+      // Swap TP and SL for reverse trading
+      const originalSl = transformedData.sl;
+      const originalTp = transformedData.tp;
+      transformedData.sl = originalTp;
+      transformedData.tp = originalSl;
+
+      console.log(
+        `Applied reverse trading for ${masterAccountId}: ${originalType} → ${reversedType}, SL/TP swapped`
+      );
+    }
+  }
+
+  return transformedData;
+};
+
+// Get trading configuration for specific master account
+export const getTradingConfig = (req, res) => {
+  const { masterAccountId } = req.params;
+
+  if (!masterAccountId) {
+    return res.status(400).json({ error: 'Master account ID is required' });
+  }
+
+  const configs = loadTradingConfig();
+  const accountConfig = configs[masterAccountId] || getDefaultConfig();
+
+  res.json({
+    masterAccountId,
+    config: accountConfig,
+    status: 'success',
+  });
+};
+
+// Set trading configuration for specific master account
+export const setTradingConfig = (req, res) => {
+  const { masterAccountId, lotMultiplier, forceLot, reverseTrading } = req.body;
+
+  if (!masterAccountId) {
+    return res.status(400).json({
+      error: 'masterAccountId is required',
+    });
+  }
+
+  const configs = loadTradingConfig();
+
+  // Initialize account config if it doesn't exist
+  if (!configs[masterAccountId]) {
+    configs[masterAccountId] = getDefaultConfig();
+  }
+
+  // Update configuration
+  if (lotMultiplier !== undefined) {
+    const multiplier = parseFloat(lotMultiplier);
+    if (isNaN(multiplier) || multiplier <= 0) {
+      return res.status(400).json({ error: 'lotMultiplier must be a positive number' });
+    }
+    configs[masterAccountId].lotMultiplier = multiplier;
+  }
+
+  if (forceLot !== undefined) {
+    if (forceLot === null || forceLot === '') {
+      configs[masterAccountId].forceLot = null;
+    } else {
+      const lot = parseFloat(forceLot);
+      if (isNaN(lot) || lot <= 0) {
+        return res.status(400).json({ error: 'forceLot must be a positive number or null' });
+      }
+      configs[masterAccountId].forceLot = lot;
+    }
+  }
+
+  if (reverseTrading !== undefined) {
+    configs[masterAccountId].reverseTrading = Boolean(reverseTrading);
+  }
+
+  if (saveTradingConfig(configs)) {
+    console.log(`Trading configuration updated for ${masterAccountId}:`, configs[masterAccountId]);
+    res.json({
+      message: 'Trading configuration saved successfully',
+      masterAccountId,
+      config: configs[masterAccountId],
+      status: 'success',
+    });
+  } else {
+    res.status(500).json({ error: 'Failed to save trading configuration' });
+  }
+};
+
+// Remove trading configuration for specific master account
+export const removeTradingConfig = (req, res) => {
+  const { masterAccountId } = req.params;
+
+  if (!masterAccountId) {
+    return res.status(400).json({ error: 'Master account ID is required' });
+  }
+
+  const configs = loadTradingConfig();
+
+  if (!configs[masterAccountId]) {
+    return res.status(404).json({
+      error: `No trading configuration found for master account: ${masterAccountId}`,
+    });
+  }
+
+  delete configs[masterAccountId];
+
+  if (saveTradingConfig(configs)) {
+    console.log(`Trading configuration removed for master account: ${masterAccountId}`);
+    res.json({
+      message: 'Trading configuration removed successfully',
+      masterAccountId,
+      status: 'removed',
+    });
+  } else {
+    res.status(500).json({ error: 'Failed to remove trading configuration' });
+  }
+};
+
+// Get all trading configurations
+export const getAllTradingConfigs = (req, res) => {
+  const configs = loadTradingConfig();
+
+  res.json({
+    configurations: configs,
+    totalConfigurations: Object.keys(configs).length,
+  });
+};
+
+// Reset trading configuration to defaults for specific master account
+export const resetTradingConfig = (req, res) => {
+  const { masterAccountId } = req.params;
+
+  if (!masterAccountId) {
+    return res.status(400).json({ error: 'Master account ID is required' });
+  }
+
+  const configs = loadTradingConfig();
+  configs[masterAccountId] = getDefaultConfig();
+
+  if (saveTradingConfig(configs)) {
+    console.log(`Trading configuration reset to defaults for ${masterAccountId}`);
+    res.json({
+      message: 'Trading configuration reset to defaults',
+      masterAccountId,
+      config: configs[masterAccountId],
+      status: 'reset',
+    });
+  } else {
+    res.status(500).json({ error: 'Failed to reset trading configuration' });
+  }
+};

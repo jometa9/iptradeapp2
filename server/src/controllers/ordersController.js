@@ -1,0 +1,445 @@
+import { exec } from 'child_process';
+import {
+  existsSync,
+  mkdirSync,
+  readFile,
+  readFileSync,
+  rename,
+  writeFile,
+  writeFileSync,
+} from 'fs';
+import { join } from 'path';
+
+import {
+  getSlaveConnection,
+  isMasterAccountRegistered,
+  isSlaveAccountRegistered,
+} from './accountsController.js';
+import { isCopierEnabled } from './copierStatusController.js';
+import { applySlaveTransformations } from './slaveConfigController.js';
+import { applyTransformations } from './tradingConfigController.js';
+
+// CSV file management per account
+const csvBaseDir = join(process.cwd(), 'accounts');
+const writeQueues = new Map(); // Queue per account
+const writingStatus = new Map(); // Writing status per account
+
+// Configuration file management
+const configBaseDir = join(process.cwd(), 'config');
+const configFilePath = join(configBaseDir, 'slave_master_mapping.json');
+
+// Initialize accounts directory if it doesn't exist
+if (!existsSync(csvBaseDir)) {
+  mkdirSync(csvBaseDir, { recursive: true });
+}
+
+// Helper function to load configuration
+const loadSlaveConfiguration = () => {
+  try {
+    if (!existsSync(configFilePath)) {
+      return {};
+    }
+    const data = readFileSync(configFilePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error loading slave configuration:', error);
+    return {};
+  }
+};
+
+// Helper function to get CSV path for specific account
+const getAccountCsvPath = accountId => {
+  return join(csvBaseDir, `account_${accountId}.csv`);
+};
+
+// Initialize CSV file for account if it doesn't exist
+const initializeAccountCsv = accountId => {
+  const csvPath = getAccountCsvPath(accountId);
+  if (!existsSync(csvPath)) {
+    writeFileSync(csvPath, '0');
+  }
+  return csvPath;
+};
+
+// Kill process utility - Enhanced to be more aggressive and reliable
+export function killProcessOnPort(port) {
+  return new Promise(resolve => {
+    const isWindows = process.platform === 'win32';
+    console.log(`🔍 Scanning for processes using port ${port}...`);
+
+    if (isWindows) {
+      // Windows implementation
+      exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+        if (error || !stdout) {
+          console.log(`✅ No processes found using port ${port}`);
+          resolve();
+          return;
+        }
+
+        const lines = stdout.split('\n');
+        const pids = lines
+          .filter(line => line.includes('LISTENING') && line.includes(`:${port}`))
+          .map(line => line.trim().split(/\s+/).pop())
+          .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+
+        if (pids.length > 0) {
+          console.log(`🔸 Found processes using port ${port}: ${pids.join(', ')}`);
+          const killPromises = pids.map(pid => {
+            return new Promise(killResolve => {
+              exec(`taskkill /PID ${pid} /F`, killError => {
+                if (killError) {
+                  console.log(`❌ Could not kill process ${pid}: ${killError.message}`);
+                } else {
+                  console.log(`✅ Killed process ${pid}`);
+                }
+                killResolve();
+              });
+            });
+          });
+
+          Promise.all(killPromises).then(() => {
+            console.log(`🗑️  All processes on port ${port} terminated`);
+            // Wait a bit to ensure processes are fully terminated
+            setTimeout(() => resolve(), 1000);
+          });
+        } else {
+          console.log(`✅ No processes found using port ${port}`);
+          resolve();
+        }
+      });
+    } else {
+      // Unix/Linux/macOS implementation
+      exec(`lsof -ti:${port}`, (error, stdout) => {
+        if (error || !stdout) {
+          console.log(`✅ No processes found using port ${port}`);
+          resolve();
+          return;
+        }
+
+        const pids = stdout
+          .trim()
+          .split('\n')
+          .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+
+        if (pids.length > 0) {
+          console.log(`🔸 Found processes using port ${port}: ${pids.join(', ')}`);
+
+          const killPromises = pids.map(pid => {
+            return new Promise(killResolve => {
+              // First try SIGTERM (graceful)
+              exec(`kill ${pid}`, killError => {
+                if (killError) {
+                  // If SIGTERM fails, use SIGKILL (force)
+                  exec(`kill -9 ${pid}`, forceKillError => {
+                    if (forceKillError) {
+                      console.log(`❌ Could not kill process ${pid}: ${forceKillError.message}`);
+                    } else {
+                      console.log(`✅ Force killed process ${pid}`);
+                    }
+                    killResolve();
+                  });
+                } else {
+                  console.log(`✅ Gracefully killed process ${pid}`);
+                  killResolve();
+                }
+              });
+            });
+          });
+
+          Promise.all(killPromises).then(() => {
+            console.log(`🗑️  All processes on port ${port} terminated`);
+            // Wait a bit to ensure processes are fully terminated
+            setTimeout(() => resolve(), 1000);
+          });
+        } else {
+          console.log(`✅ No processes found using port ${port}`);
+          resolve();
+        }
+      });
+    }
+  });
+}
+
+// Load existing orders from CSV for specific account
+const loadExistingOrders = accountId => {
+  const csvPath = getAccountCsvPath(accountId);
+  if (!existsSync(csvPath)) return {};
+  const data = readFileSync(csvPath, 'utf8').trim();
+  if (!data) return {};
+  let orders = {};
+  const lines = data.match(/\[(.*?)\]/g) || [];
+  for (const line of lines) {
+    const parts = line.replace(/\[|\]/g, '').split(',');
+    if (parts.length >= 8) {
+      const orderId = parts[0];
+      const timestamp = parts[7];
+      orders[orderId] = timestamp;
+    }
+  }
+  return orders;
+};
+
+// Queue management for file writing per account
+function enqueueWrite(accountId, data, callback) {
+  if (!writeQueues.has(accountId)) {
+    writeQueues.set(accountId, []);
+  }
+  writeQueues.get(accountId).push({ data, callback });
+  processQueue(accountId);
+}
+
+function processQueue(accountId) {
+  const queue = writeQueues.get(accountId);
+  const isWriting = writingStatus.get(accountId) || false;
+
+  if (isWriting || !queue || queue.length === 0) return;
+
+  const { data, callback } = queue.shift();
+  writingStatus.set(accountId, true);
+
+  const csvPath = getAccountCsvPath(accountId);
+  const tmpPath = csvPath + '.tmp';
+
+  writeFile(tmpPath, data, err => {
+    if (err) {
+      writingStatus.set(accountId, false);
+      callback(err);
+      processQueue(accountId);
+      return;
+    }
+    rename(tmpPath, csvPath, errRename => {
+      writingStatus.set(accountId, false);
+      callback(errRename);
+      processQueue(accountId);
+    });
+  });
+}
+
+// Controller for creating new orders
+export const createNewOrder = (req, res) => {
+  if (!req.body || Object.keys(req.body).length === 0) {
+    return res.status(400).send('Error: No data received');
+  }
+
+  // Extract account ID from the first order's account parameter
+  const accountId = req.body.account0;
+  if (!accountId) {
+    return res.status(400).send('Error: Account ID is required (account0 parameter)');
+  }
+
+  // Validate that the master account is registered
+  if (!isMasterAccountRegistered(accountId)) {
+    return res.status(403).json({
+      error: `Master account ${accountId} is not registered. Please register the account first.`,
+    });
+  }
+
+  console.log('Received order for account:', accountId);
+  console.log('Original order data:', req.body);
+
+  // Initialize CSV for this account if it doesn't exist
+  initializeAccountCsv(accountId);
+
+  const counter = req.body.counter || '0';
+  let csvContent = `[${counter}]`;
+  const existingOrders = loadExistingOrders(accountId);
+  let i = 0;
+  let ordersFound = 0;
+
+  while (req.body[`id${i}`] !== undefined) {
+    const orderId = req.body[`id${i}`];
+    const symbol = req.body[`sym${i}`];
+    const type = req.body[`typ${i}`];
+    const lot = req.body[`lot${i}`];
+    const price = req.body[`price${i}`];
+    const sl = req.body[`sl${i}`];
+    const tp = req.body[`tp${i}`];
+    const account = req.body[`account${i}`] || accountId;
+
+    // Create order data object for transformations
+    const orderData = {
+      orderId,
+      symbol,
+      type,
+      lot,
+      price,
+      sl,
+      tp,
+      account,
+    };
+
+    // Apply transformations based on master account configuration
+    const transformedOrder = applyTransformations(orderData, accountId);
+    console.log(`Order ${i} transformed:`, { original: orderData, transformed: transformedOrder });
+
+    const cleanTp = transformedOrder.tp ? transformedOrder.tp.replace(/\0/g, '') : '0.00000';
+    const timestamp = existingOrders[orderId] || Math.floor(Date.now() / 1000);
+
+    const line = [
+      transformedOrder.orderId,
+      transformedOrder.symbol,
+      transformedOrder.type,
+      transformedOrder.lot,
+      transformedOrder.price,
+      transformedOrder.sl,
+      cleanTp,
+      timestamp,
+      transformedOrder.account,
+    ].join(',');
+
+    csvContent += `\n[${line}]`;
+    ordersFound++;
+    i++;
+  }
+
+  console.log(`Account ${accountId} final CSV content:`, csvContent);
+
+  enqueueWrite(accountId, csvContent, err => {
+    if (err) {
+      console.error(`Error writing CSV for account ${accountId}:`, err);
+      return res.status(500).send(`Error writing CSV for account ${accountId}`);
+    }
+    res.status(200).send('OK');
+  });
+};
+
+// Controller for getting orders
+export const getOrders = (req, res) => {
+  // Get slave account ID from query parameter
+  const slaveId = req.query.account;
+
+  if (!slaveId) {
+    return res
+      .status(400)
+      .send('Error: Slave account ID is required as query parameter (?account=ID)');
+  }
+
+  // Validate that the slave account is registered
+  if (!isSlaveAccountRegistered(slaveId)) {
+    console.log(`Slave account ${slaveId} is not registered`);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.send('0'); // Return empty content if slave is not registered
+  }
+
+  // Get master account connection for this slave
+  const masterAccount = getSlaveConnection(slaveId);
+
+  if (!masterAccount) {
+    console.log(`No master configured for slave: ${slaveId}`);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.send('0'); // Return empty content if no master is configured
+  }
+
+  // Validate that the master account is also registered
+  if (!isMasterAccountRegistered(masterAccount)) {
+    console.log(`Connected master account ${masterAccount} is not registered for slave ${slaveId}`);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.send('0'); // Return empty content if master is not registered
+  }
+
+  // Check if copier is enabled for this master account
+  const copierEnabled = isCopierEnabled(masterAccount);
+  if (!copierEnabled) {
+    console.log(`Copier is OFF for master ${masterAccount}, slave ${slaveId} cannot copy orders`);
+    res.setHeader('Content-Type', 'text/plain');
+    return res.send('0'); // Return empty content when copier is disabled
+  }
+
+  // Get the CSV path for the master account
+  const csvPath = getAccountCsvPath(masterAccount);
+
+  readFile(csvPath, 'utf8', (err, data) => {
+    if (err) {
+      // If master's file doesn't exist, return empty content
+      if (err.code === 'ENOENT') {
+        console.log(`Master account ${masterAccount} file not found for slave ${slaveId}`);
+        res.setHeader('Content-Type', 'text/plain');
+        return res.send('0');
+      }
+      return res.status(500).send(`Error reading CSV for master account ${masterAccount}`);
+    }
+
+    // Clean data and apply slave transformations
+    data = data.replace(/\r/g, '');
+
+    // Parse the CSV data and apply slave-specific transformations
+    try {
+      const lines = data.match(/\[(.*?)\]/g) || [];
+      if (lines.length === 0) {
+        res.setHeader('Content-Type', 'text/plain');
+        return res.send('0');
+      }
+
+      let transformedContent = '';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (i === 0) {
+          // First line is the counter, keep it as is
+          transformedContent += line;
+          continue;
+        }
+
+        // Parse order data from CSV line
+        const parts = line.replace(/\[|\]/g, '').split(',');
+        if (parts.length >= 8) {
+          const orderData = {
+            orderId: parts[0],
+            symbol: parts[1],
+            type: parts[2],
+            lot: parts[3],
+            price: parts[4],
+            sl: parts[5],
+            tp: parts[6],
+            account: parts[8] || masterAccount,
+          };
+
+          // Apply slave-specific transformations
+          const transformedOrder = applySlaveTransformations(orderData, slaveId);
+
+          // If transformations return null, skip this order (filtered out)
+          if (transformedOrder === null) {
+            console.log(`Order filtered out by slave ${slaveId} configuration:`, orderData);
+            continue;
+          }
+
+          // Reconstruct the CSV line with transformed data
+          const transformedLine = [
+            transformedOrder.orderId,
+            transformedOrder.symbol,
+            transformedOrder.type,
+            transformedOrder.lot,
+            transformedOrder.price,
+            transformedOrder.sl,
+            transformedOrder.tp,
+            parts[7], // Keep original timestamp
+            transformedOrder.account,
+          ].join(',');
+
+          transformedContent += `\n[${transformedLine}]`;
+        }
+      }
+
+      // If no orders passed the filter, return empty
+      if (transformedContent === lines[0]) {
+        res.setHeader('Content-Type', 'text/plain');
+        console.log(`All orders filtered out for slave ${slaveId} from master ${masterAccount}`);
+        return res.send('0');
+      }
+
+      res.setHeader('Content-Type', 'text/plain');
+      console.log(
+        `Slave ${slaveId} requesting data from master ${masterAccount} (COPIER ON):`,
+        transformedContent
+      );
+      res.send(transformedContent);
+    } catch (parseError) {
+      console.error(`Error parsing CSV data for slave ${slaveId}:`, parseError);
+      res.setHeader('Content-Type', 'text/plain');
+      res.send(data); // Fall back to original data if parsing fails
+    }
+  });
+};
+
+// The killProcessOnPort function is already exported above (line 65)
