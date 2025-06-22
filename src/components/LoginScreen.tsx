@@ -43,7 +43,7 @@ export const LoginScreen: React.FC = () => {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Input
@@ -79,6 +79,11 @@ export const LoginScreen: React.FC = () => {
               )}
             </Button>
           </form>
+          <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600">
+            <a href="https://iptrade.app/pricing" target="_blank" rel="noopener noreferrer">
+              Manage your subscription here
+            </a>
+          </CardDescription>
         </CardContent>
       </div>
     </div>
