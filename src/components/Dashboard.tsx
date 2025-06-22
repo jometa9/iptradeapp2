@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Calendar, CheckCircle, CreditCard, LogOut, Shield, User } from 'lucide-react';
+import { Calendar, CheckCircle, CreditCard, HelpCircle, LogOut, User } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
@@ -11,7 +11,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 export const Dashboard: React.FC = () => {
-  const { logout, secretKey, userInfo } = useAuth();
+  const { logout, userInfo } = useAuth();
   const [serverStatus, setServerStatus] = useState<string>('checking...');
 
   useEffect(() => {
@@ -27,10 +27,6 @@ export const Dashboard: React.FC = () => {
   const handleLogout = () => {
     logout();
   };
-
-  const maskedKey = secretKey
-    ? `${'*'.repeat(Math.max(0, secretKey.length - 4))}${secretKey.slice(-4)}`
-    : '';
 
   const getSubscriptionStatusBadge = (status: string) => {
     switch (status) {
@@ -83,34 +79,38 @@ export const Dashboard: React.FC = () => {
     <UpdateTestProvider>
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 shadow-sm">
+        <header>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <Shield className="w-6 h-6 text-blue-600" />
-                  <h1 className="text-xl font-semibold text-gray-900">IPTrade App</h1>
+                  <h1 className=" text-xl font-semibold text-gray-900">IPTRADE APP</h1>
                 </div>
                 {userInfo && getSubscriptionStatusBadge(userInfo.subscriptionStatus)}
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="hidden sm:flex items-center space-x-3">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <User className="w-4 h-4" />
-                    <span>{userInfo?.name || 'User'}</span>
+              <div className="flex items-center">
+                <div className="hidden sm:flex items-center">
+                  <div className="flex items-center text-sm text-gray-600 px-3">
+                    {userInfo?.name || 'User'}
                   </div>
-                  <div className="w-px h-4 bg-gray-300"></div>
-                  <div className="text-sm text-gray-500">API: {maskedKey}</div>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleLogout}
                   className="text-gray-600 hover:text-gray-900"
+                  title="Help"
                 >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
+                  <HelpCircle className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="text-gray-600 hover:text-gray-900 mr-0 pr-0"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
                 </Button>
               </div>
             </div>
