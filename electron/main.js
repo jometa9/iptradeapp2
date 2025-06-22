@@ -2,19 +2,19 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const isDev = process.env.NODE_ENV === 'development';
 
-// Determinar la ruta del servidor
+// Determine the server path
 const getServerPath = () => {
   if (isDev) {
     return path.join(__dirname, '../server/src/index.js');
   }
-  // En producción, el servidor está en los recursos extra
+  // In production, the server is in the extra resources
   return path.join(process.resourcesPath, 'server/src/index.js');
 };
 
-// Importar el servidor Express
+// Import the Express server
 const server = require(getServerPath());
 
-// Iniciar el servidor
+// Start the server
 const PORT = 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

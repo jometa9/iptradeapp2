@@ -35,9 +35,9 @@ export const useAuth = () => {
 };
 
 const STORAGE_KEY = 'iptrade_license_key';
-const BASE_ENDPOINT = 'http://localhost:3000/api/validate-subscription';
+const BASE_ENDPOINT = 'http://localhost:3002/api/validate-subscription';
 
-// Estados válidos de suscripción
+// Valid subscription states
 const VALID_SUBSCRIPTION_STATES = ['active', 'trialing', 'admin_assigned'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,21 +53,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
       const url = `${BASE_ENDPOINT}?apiKey=${encodeURIComponent(apiKey)}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('Making request to:', url);
+      const response = await fetch(url);
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
 
       if (!response.ok) {
         if (response.status === 401) {
-          return { valid: false, message: 'API Key inválida' };
+          console.log('401 - Invalid API Key');
+          return { valid: false, message: 'Invalid API Key' };
         }
         if (response.status === 404) {
-          return { valid: false, message: 'Usuario no encontrado' };
+          console.log('404 - User not found');
+          return { valid: false, message: 'User not found' };
         }
-        throw new Error(`HTTP ${response.status}`);
+        // Para otros errores HTTP (400, 403, 500, etc.) - indica licencia inválida
+        console.log('Other HTTP error:', response.status);
+        return { valid: false, message: 'Invalid license' };
       }
 
       const userData: UserInfo = await response.json();
@@ -79,20 +82,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isValidSubscription) {
         return { valid: true, userInfo: userData };
       } else {
-        let message = 'Suscripción no válida';
+        let message = 'Invalid subscription';
 
         switch (userData.subscriptionStatus) {
           case 'canceled':
-            message = 'Su suscripción ha sido cancelada';
+            message = 'Your subscription has been canceled';
             break;
           case 'expired':
-            message = 'Su suscripción ha expirado';
+            message = 'Your subscription has expired';
             break;
           case 'past_due':
-            message = 'Su suscripción tiene pagos vencidos';
+            message = 'Your subscription has overdue payments';
             break;
           default:
-            message = `Estado de suscripción: ${userData.subscriptionStatus}`;
+            message = `Subscription status: ${userData.subscriptionStatus}`;
         }
 
         return { valid: false, message, userInfo: userData };
@@ -100,27 +103,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('License validation error:', error);
 
-      // En caso de error de conexión, usar datos mock para desarrollo
-      if (apiKey.length >= 8) {
-        const mockUserInfo: UserInfo = {
-          userId: 'dev_user',
-          email: 'dev@example.com',
-          name: 'Usuario de Desarrollo',
-          subscriptionStatus: 'active',
-          planName: 'IPTRADE Premium (DEV)',
-          isActive: true,
-          expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          daysRemaining: 30,
-          statusChanged: false,
-          subscriptionType: 'paid',
-        };
-        return { valid: true, userInfo: mockUserInfo };
-      }
-
+      // Solo error de conexión real - no mock data
       return {
         valid: false,
         message:
-          'Error de conexión. Verifique su conexión a internet y que el servidor esté funcionando.',
+          'Connection error. Check your internet connection and ensure the server is running.',
       };
     }
   };
@@ -140,12 +127,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(STORAGE_KEY, key);
         return true;
       } else {
-        setError(validation.message || 'API Key inválida o suscripción no activa');
+        setError(validation.message || 'Invalid API Key or inactive subscription');
         return false;
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Error inesperado durante el login');
+      setError('Unexpected error during login');
       return false;
     } finally {
       setIsLoading(false);

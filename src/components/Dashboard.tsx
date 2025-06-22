@@ -38,21 +38,21 @@ export const Dashboard: React.FC = () => {
         return (
           <Badge className="bg-green-100 text-green-800 border-green-200">
             <CheckCircle className="w-3 h-3 mr-1" />
-            Activa
+            Active
           </Badge>
         );
       case 'trialing':
         return (
           <Badge className="bg-blue-100 text-blue-800 border-blue-200">
             <CheckCircle className="w-3 h-3 mr-1" />
-            En Prueba
+            Trial
           </Badge>
         );
       case 'admin_assigned':
         return (
           <Badge className="bg-purple-100 text-purple-800 border-purple-200">
             <CheckCircle className="w-3 h-3 mr-1" />
-            Asignada por Admin
+            Admin Assigned
           </Badge>
         );
       default:
@@ -63,7 +63,7 @@ export const Dashboard: React.FC = () => {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('es-ES', {
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -98,7 +98,7 @@ export const Dashboard: React.FC = () => {
                 <div className="hidden sm:flex items-center space-x-3">
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <User className="w-4 h-4" />
-                    <span>{userInfo?.name || 'Usuario'}</span>
+                    <span>{userInfo?.name || 'User'}</span>
                   </div>
                   <div className="w-px h-4 bg-gray-300"></div>
                   <div className="text-sm text-gray-500">API: {maskedKey}</div>
@@ -110,7 +110,7 @@ export const Dashboard: React.FC = () => {
                   className="text-gray-600 hover:text-gray-900"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
-                  Cerrar Sesión
+                  Sign Out
                 </Button>
               </div>
             </div>
@@ -126,14 +126,14 @@ export const Dashboard: React.FC = () => {
                 <CardHeader>
                   <CardTitle className="text-xl text-gray-900 flex items-center">
                     <User className="w-5 h-5 mr-2" />
-                    Información de Usuario
+                    User Information
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Nombre</label>
+                        <label className="text-sm font-medium text-gray-500">Name</label>
                         <p className="text-lg font-semibold text-gray-900">{userInfo.name}</p>
                       </div>
                       <div>
@@ -151,25 +151,25 @@ export const Dashboard: React.FC = () => {
                         </div>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Tipo</label>
+                        <label className="text-sm font-medium text-gray-500">Type</label>
                         <p className="text-gray-700 capitalize">{userInfo.subscriptionType}</p>
                       </div>
                     </div>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Vencimiento</label>
+                        <label className="text-sm font-medium text-gray-500">Expiry</label>
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4 text-gray-500" />
                           <p className="text-gray-700">{formatDate(userInfo.expiryDate)}</p>
                         </div>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Días Restantes</label>
+                        <label className="text-sm font-medium text-gray-500">Days Remaining</label>
                         <p
                           className={`text-lg font-semibold ${getDaysRemainingColor(userInfo.daysRemaining)}`}
                         >
-                          {userInfo.daysRemaining} días
+                          {userInfo.daysRemaining} days
                         </p>
                       </div>
                     </div>
@@ -182,12 +182,12 @@ export const Dashboard: React.FC = () => {
 
             <Card className="border-gray-200">
               <CardHeader>
-                <CardTitle className="text-xl text-gray-900">Estado del Sistema</CardTitle>
+                <CardTitle className="text-xl text-gray-900">System Status</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <span className="text-gray-700 font-medium">Estado del Servidor:</span>
+                    <span className="text-gray-700 font-medium">Server Status:</span>
                     <Badge
                       variant={serverStatus.includes('error') ? 'destructive' : 'default'}
                       className={
@@ -201,7 +201,7 @@ export const Dashboard: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <span className="text-gray-700 font-medium">Suscripción:</span>
+                    <span className="text-gray-700 font-medium">Subscription:</span>
                     {userInfo && getSubscriptionStatusBadge(userInfo.subscriptionStatus)}
                   </div>
 
@@ -210,11 +210,11 @@ export const Dashboard: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <Calendar className="w-5 h-5 text-yellow-600" />
                         <span className="font-medium text-yellow-800">
-                          Su suscripción vence en {userInfo.daysRemaining} días
+                          Your subscription expires in {userInfo.daysRemaining} days
                         </span>
                       </div>
                       <p className="text-sm text-yellow-700 mt-1">
-                        Renueve su suscripción para continuar usando la aplicación.
+                        Renew your subscription to continue using the application.
                       </p>
                     </div>
                   )}

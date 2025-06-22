@@ -90,7 +90,7 @@ async function startServer() {
       return;
     }
 
-    // Solo en producción iniciar el servidor embebido
+    // Only start the embedded server in production
     const serverPath = path.join(process.resourcesPath, 'server/dist/server.mjs');
     console.log('[ELECTRON] Loading server from:', serverPath);
 
