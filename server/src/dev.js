@@ -15,14 +15,14 @@ console.log('🔧 DEV MODE Environment variables:');
 console.log('- process.env.PORT:', process.env.PORT);
 console.log('- Final DEV_PORT:', DEV_PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
-console.log(
-  '- CTRADER_CLIENT_ID:',
-  process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
-);
-console.log(
-  '- CTRADER_CLIENT_SECRET:',
-  process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
-);
+// console.log(
+//   '- CTRADER_CLIENT_ID:',
+//   process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
+// );
+// console.log(
+//   '- CTRADER_CLIENT_SECRET:',
+//   process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
+// );
 
 async function startDevServer() {
   console.log(`🚀 Starting IPTRADE DEV Server on port ${DEV_PORT}...`);

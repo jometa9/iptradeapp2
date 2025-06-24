@@ -4,7 +4,7 @@ import express from 'express';
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
 import copierStatusRoutes from './routes/copierStatus.js';
-import ctraderRoutes from './routes/ctrader.js';
+// import ctraderRoutes from './routes/ctrader.js';
 import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
@@ -27,7 +27,7 @@ export function createServer() {
   app.use('/api', copierStatusRoutes);
   app.use('/api/accounts', accountsRoutes);
   app.use('/api/slave-config', slaveConfigRoutes);
-  app.use('/api/ctrader', ctraderRoutes);
+  // app.use('/api/ctrader', ctraderRoutes);
 
   // Error handling middleware
   app.use((err, req, res, next) => {
