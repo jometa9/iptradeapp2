@@ -1,32 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
-import { BarChart3, Calendar, CheckCircle, HelpCircle, LogOut, Settings } from 'lucide-react';
+import { CheckCircle, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
-import { AccountInfoCard } from './AccountInfoCard';
-import { CtraderManager } from './CtraderManager';
-import { TradingAccountsManager } from './TradingAccountsManager';
-import { UpdateCard } from './UpdateCard';
-import { VersionInfo } from './VersionInfo';
+import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
-  const [serverStatus, setServerStatus] = useState<string>('checking...');
-
-  useEffect(() => {
-    const serverPort = import.meta.env.VITE_SERVER_PORT;
-    const serverUrl = `http://localhost:${serverPort}/api/status`;
-
-    fetch(serverUrl)
-      .then(res => res.json())
-      .then(data => setServerStatus(`${data.status} (port ${serverPort})`))
-      .catch(err => setServerStatus('error: ' + err.message));
-  }, []);
 
   const handleLogout = () => {
     logout();
@@ -60,29 +43,9 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getDaysRemainingColor = (days: number) => {
-    if (days > 30) return 'text-green-600';
-    if (days > 7) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
   return (
     <UpdateTestProvider>
       <div className="min-h-screen bg-gray-50">
-        {/* Header */}
         <header>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
@@ -121,91 +84,9 @@ export const Dashboard: React.FC = () => {
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          <div className="space-y-6">
-            {/* Account Info Card - Using the new component */}
-            <AccountInfoCard
-              user={userInfo}
-              className="border-gray-200"
-              title="Account Information"
-              subscriptionButtonText="Subscribe Now"
-            />
-
-            {/* Main Tabs */}
-            <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="overview" className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" />
-                  Overview
-                </TabsTrigger>
-                <TabsTrigger value="accounts" className="flex items-center gap-2">
-                  <Settings className="w-4 h-4" />
-                  Cuentas Trading
-                </TabsTrigger>
-                <TabsTrigger value="updates" className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Updates
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview" className="space-y-6">
-                <Card className="border-gray-200">
-                  <CardHeader>
-                    <CardTitle className="text-xl text-gray-900">System Status</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <span className="text-gray-700 font-medium">Server Status:</span>
-                        <Badge
-                          variant={serverStatus.includes('error') ? 'destructive' : 'default'}
-                          className={
-                            serverStatus.includes('error')
-                              ? ''
-                              : 'bg-green-100 text-green-800 border-green-200'
-                          }
-                        >
-                          {serverStatus}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <span className="text-gray-700 font-medium">Subscription:</span>
-                        {userInfo && getSubscriptionStatusBadge(userInfo.subscriptionStatus)}
-                      </div>
-
-                      {userInfo && userInfo.daysRemaining <= 7 && (
-                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-5 h-5 text-yellow-600" />
-                            <span className="font-medium text-yellow-800">
-                              Your subscription expires in {userInfo.daysRemaining} days
-                            </span>
-                          </div>
-                          <p className="text-sm text-yellow-700 mt-1">
-                            Renew your subscription to continue using the application.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <VersionInfo />
-              </TabsContent>
-
-              <TabsContent value="accounts">
-                <div className="space-y-6">
-                  <TradingAccountsManager />
-                  <CtraderManager />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="updates">
-                <UpdateCard />
-              </TabsContent>
-            </Tabs>
+        <main className="max-w-7xl mx-auto px-8 gap-8 flex flex-col">
+          <div>
+            <TradingAccountsConfig />
           </div>
         </main>
       </div>

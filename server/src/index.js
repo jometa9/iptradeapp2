@@ -1,28 +1,38 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
+import { join } from 'path';
 
 import { killProcessOnPort } from './controllers/ordersController.js';
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
 import copierStatusRoutes from './routes/copierStatus.js';
 import ctraderRoutes from './routes/ctrader.js';
+import mt5Routes from './routes/mt5.js';
 import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables first
+dotenv.config({ path: join(process.cwd(), '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Debug: Let's see what PORT is actually being used
+// Debug: Let's see what environment variables are loaded
 console.log('Environment variables:');
 console.log('- process.env.PORT:', process.env.PORT);
 console.log('- Final PORT:', PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log(
+  '- CTRADER_CLIENT_ID:',
+  process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
+);
+console.log(
+  '- CTRADER_CLIENT_SECRET:',
+  process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
+);
 
 app.use(cors());
 app.use(express.json());
@@ -37,6 +47,7 @@ app.use('/api', copierStatusRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/slave-config', slaveConfigRoutes);
 app.use('/api/ctrader', ctraderRoutes);
+app.use('/api/mt5', mt5Routes);
 
 app.use((err, req, res, next) => {
   console.error('[SERVER ERROR]', err.stack);

@@ -182,13 +182,13 @@ export function AccountInfoCard({
             <>
               <Button
                 variant="outline"
-                className="border-black text-black hover:bg-gray-100 w-full md:w-auto cursor-pointer"
+                className="border-gray-300 text-black hover:bg-gray-100 w-full md:w-auto cursor-pointer"
                 onClick={handleDirectSubscription}
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <>
-                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent"></span>
+                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-transparent shadow-lg"></span>
                     Processing...
                   </>
                 ) : (

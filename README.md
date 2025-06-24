@@ -1,54 +1,204 @@
-# React + TypeScript + Vite
+# IP Trade App 2
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Trading platform with copy trading capabilities for cTrader and MetaTrader 5.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### cTrader Integration
+- OAuth2 authentication with cTrader
+- Real-time WebSocket connection
+- Account management and trading operations
+- Copy trading between master and slave accounts
 
-## Expanding the ESLint configuration
+### MetaTrader 5 Integration
+- Direct integration with MT5 terminal via Python API
+- Real-time account monitoring
+- Trading operations (buy, sell, close positions)
+- Copy trading capabilities
+- Account credential management
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Copy Trading
+- Master/slave account configuration
+- Real-time trade copying
+- Risk management settings
+- Detailed logging and monitoring
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Prerequisites
+
+### For cTrader
+- cTrader account with API access
+- cTrader application credentials (CLIENT_ID and CLIENT_SECRET)
+
+### For MetaTrader 5
+- MetaTrader 5 terminal installed
+- Python 3.8+ with MetaTrader5 package
+- Trading account credentials
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd iptradeapp2
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+2. Install Node.js dependencies:
+```bash
+npm install
+cd server && npm install
 ```
+
+3. Install Python dependencies for MT5:
+```bash
+pip install -r server/src/python/requirements.txt
+```
+
+4. Set up environment variables in `server/.env`:
+```env
+# cTrader API credentials
+CTRADER_CLIENT_ID=your_ctrader_client_id
+CTRADER_CLIENT_SECRET=your_ctrader_client_secret
+
+# Server configuration
+FRONTEND_URL=http://localhost:5173
+```
+
+## Usage
+
+### Starting the Application
+
+1. Start the backend server:
+```bash
+cd server
+npm run dev
+```
+
+2. Start the frontend (in a new terminal):
+```bash
+npm run dev
+```
+
+3. Open your browser to `http://localhost:5173`
+
+### Setting Up cTrader
+
+1. Go to the cTrader tab in the application
+2. Click "Initiate Authentication" to connect your cTrader account
+3. Follow the OAuth flow to authorize the application
+4. Your cTrader accounts will be automatically loaded
+
+### Setting Up MetaTrader 5
+
+1. Ensure MetaTrader 5 terminal is installed and running
+2. Go to the MT5 tab in the application
+3. Click "Initialize MT5" to start the connection
+4. Login with your MT5 account credentials
+5. Optionally save credentials for future use
+
+### Copy Trading Setup
+
+1. Configure master accounts (signal providers)
+2. Configure slave accounts (signal receivers)
+3. Set up copy trading rules and risk management
+4. Monitor trades in real-time
+
+## API Endpoints
+
+### cTrader API
+- `POST /api/ctrader/auth/initiate` - Start OAuth flow
+- `GET /api/ctrader/auth/callback` - OAuth callback
+- `POST /api/ctrader/connect` - Connect to cTrader API
+- `GET /api/ctrader/accounts/:userId` - Get accounts
+- `POST /api/ctrader/register/master` - Register master account
+- `POST /api/ctrader/register/slave` - Register slave account
+
+### MetaTrader 5 API
+- `POST /api/mt5/initialize` - Initialize MT5 connection
+- `POST /api/mt5/login` - Login to MT5 account
+- `GET /api/mt5/account/:userId` - Get account info
+- `GET /api/mt5/positions/:userId` - Get open positions
+- `GET /api/mt5/orders/:userId` - Get pending orders
+- `POST /api/mt5/order/place` - Place new order
+- `POST /api/mt5/position/close` - Close position
+- `POST /api/mt5/register/master` - Register master account
+- `POST /api/mt5/register/slave` - Register slave account
+
+## Architecture
+
+### Backend
+- **Express.js** server with REST API
+- **WebSocket** connections for real-time data
+- **Python integration** for MT5 via child processes
+- **File-based storage** for configuration and credentials
+
+### Frontend
+- **React** with TypeScript
+- **Tailwind CSS** for styling
+- **shadcn/ui** component library
+- **Real-time updates** via WebSocket
+
+### Copy Trading Engine
+- Real-time trade monitoring
+- Configurable copying rules
+- Risk management filters
+- Detailed logging and audit trail
+
+## Security Notes
+
+⚠️ **Important**: This is a development version. For production use:
+
+1. Implement proper encryption for stored credentials
+2. Use secure WebSocket connections (WSS)
+3. Add authentication and authorization
+4. Use environment variables for all sensitive data
+5. Implement rate limiting and input validation
+
+## Development
+
+### Project Structure
+```
+iptradeapp2/
+├── src/                    # Frontend source
+│   ├── components/         # React components
+│   ├── context/           # React contexts
+│   └── types/             # TypeScript types
+├── server/                # Backend source
+│   ├── src/
+│   │   ├── controllers/   # API controllers
+│   │   ├── services/      # Business logic
+│   │   ├── routes/        # API routes
+│   │   └── python/        # Python scripts for MT5
+│   └── config/           # Configuration files
+└── config/               # Application configuration
+```
+
+### Adding New Features
+
+1. **Backend**: Add controllers, services, and routes
+2. **Frontend**: Create React components and integrate with API
+3. **MT5 Features**: Extend Python scripts and API integration
+4. **cTrader Features**: Extend WebSocket handlers and API calls
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is for educational and development purposes. Please ensure compliance with broker terms of service and applicable regulations when using for live trading.
+
+## Support
+
+For issues and questions:
+1. Check the console logs for detailed error messages
+2. Ensure all prerequisites are installed correctly
+3. Verify API credentials and permissions
+4. Check network connectivity and firewall settings
+
+## Disclaimer
+
+This software is provided for educational purposes only. Trading involves substantial risk of loss and is not suitable for all investors. Past performance does not guarantee future results. Use at your own risk.

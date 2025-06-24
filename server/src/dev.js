@@ -1,19 +1,28 @@
 import dotenv from 'dotenv';
+import { join } from 'path';
 
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from server/.env
+dotenv.config({ path: join(process.cwd(), 'server', '.env') });
 
 const { app } = createServer();
 const DEV_PORT = process.env.PORT || 3000;
 
-// Debug: Let's see what PORT is actually being used
+// Debug: Let's see what environment variables are loaded
 console.log('🔧 DEV MODE Environment variables:');
 console.log('- process.env.PORT:', process.env.PORT);
 console.log('- Final DEV_PORT:', DEV_PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log(
+  '- CTRADER_CLIENT_ID:',
+  process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
+);
+console.log(
+  '- CTRADER_CLIENT_SECRET:',
+  process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
+);
 
 async function startDevServer() {
   console.log(`🚀 Starting IPTRADE DEV Server on port ${DEV_PORT}...`);

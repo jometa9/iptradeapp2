@@ -1,7 +1,5 @@
-DOMINGO DESAYUNO IT GAUSS
 
-
-LUNES DESAYUNO EN ITALY
+LUNES
 - backend server que tenga todo listo con apis y demas incluyendo ctrader
 - dashboard de prender y apagar
 - dashboar de gestion de cuentas

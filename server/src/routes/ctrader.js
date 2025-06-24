@@ -9,6 +9,7 @@ import {
   getCtraderAccounts,
   handleOAuthCallback,
   initiateAuth,
+  refreshAccounts,
   registerCtraderMaster,
   registerCtraderSlave,
   revokeAuth,
@@ -29,6 +30,7 @@ router.get('/status/:userId', getConnectionStatus);
 
 // Account Management
 router.get('/accounts/:userId', getCtraderAccounts);
+router.post('/accounts/refresh/:userId', refreshAccounts);
 router.post('/account/authenticate', authenticateAccount);
 
 // Register accounts with your existing system

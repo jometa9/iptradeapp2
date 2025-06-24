@@ -1,8 +1,12 @@
 import axios from 'axios';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import jwt from 'jsonwebtoken';
 import { join } from 'path';
+
+// Ensure environment variables are loaded
+dotenv.config({ path: join(process.cwd(), 'server', '.env') });
 
 const configBaseDir = join(process.cwd(), 'server', 'config');
 const ctraderTokensFilePath = join(configBaseDir, 'ctrader_tokens.json');
@@ -46,31 +50,44 @@ const saveTokensConfig = config => {
 
 class CtraderAuthService {
   constructor() {
-    this.clientId = process.env.CTRADER_CLIENT_ID;
-    this.clientSecret = process.env.CTRADER_CLIENT_SECRET;
-    this.redirectUri =
-      process.env.CTRADER_REDIRECT_URI || 'http://localhost:3000/api/ctrader/callback';
-    this.authUrl = process.env.CTRADER_AUTH_URL || 'https://connect.ctrader.com/oauth/v2/auth';
-    this.tokenUrl = process.env.CTRADER_TOKEN_URL || 'https://connect.ctrader.com/oauth/v2/token';
-    this.scope = process.env.CTRADER_SCOPE || 'trading';
+    // Don't initialize here - initialize lazily when needed
+    this._initialized = false;
+  }
 
-    if (!this.clientId || !this.clientSecret) {
-      console.warn('⚠️  cTrader credentials not configured. OAuth will not work.');
+  _ensureInitialized() {
+    if (!this._initialized) {
+      this.clientId = process.env.CTRADER_CLIENT_ID;
+      this.clientSecret = process.env.CTRADER_CLIENT_SECRET;
+      this.redirectUri =
+        process.env.CTRADER_REDIRECT_URI || 'http://localhost:3000/api/ctrader/auth/callback';
+      this.authUrl =
+        process.env.CTRADER_AUTH_URL ||
+        'https://id.ctrader.com/my/settings/openapi/grantingaccess/';
+      this.tokenUrl = process.env.CTRADER_TOKEN_URL || 'https://openapi.ctrader.com/apps/token';
+      this.scope = process.env.CTRADER_SCOPE || 'trading';
+
+      if (!this.clientId || !this.clientSecret) {
+        console.warn('⚠️  cTrader credentials not configured. OAuth will not work.');
+      }
+
+      this._initialized = true;
     }
   }
 
   // Generate OAuth authorization URL
   generateAuthUrl(userId, state = null) {
+    this._ensureInitialized();
+
     if (!this.clientId) {
       throw new Error('cTrader Client ID not configured');
     }
 
     const authState = state || crypto.randomBytes(16).toString('hex');
     const params = new URLSearchParams({
-      response_type: 'code',
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       scope: this.scope,
+      product: 'web',
       state: `${userId}:${authState}`,
     });
 
@@ -80,38 +97,39 @@ class CtraderAuthService {
   // Exchange authorization code for access token
   async exchangeCodeForToken(code, state) {
     try {
+      this._ensureInitialized();
+
       if (!this.clientId || !this.clientSecret) {
         throw new Error('cTrader credentials not configured');
       }
 
-      const response = await axios.post(
-        this.tokenUrl,
-        {
-          grant_type: 'authorization_code',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          redirect_uri: this.redirectUri,
-          code: code,
+      const params = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        redirect_uri: this.redirectUri,
+        code: code,
+      });
+
+      const response = await axios.get(`${this.tokenUrl}?${params.toString()}`, {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      });
 
       const tokenData = response.data;
 
       // Parse userId from state
       const [userId] = state.split(':');
 
-      // Save tokens
+      // Save tokens (using cTrader API response format)
       const config = loadTokensConfig();
       config.userTokens[userId] = {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: Date.now() + tokenData.expires_in * 1000,
-        tokenType: tokenData.token_type || 'Bearer',
+        accessToken: tokenData.accessToken || tokenData.access_token,
+        refreshToken: tokenData.refreshToken || tokenData.refresh_token,
+        expiresAt: Date.now() + (tokenData.expiresIn || tokenData.expires_in) * 1000,
+        tokenType: tokenData.tokenType || tokenData.token_type || 'Bearer',
         scope: tokenData.scope,
         accounts: [], // Will be populated when accounts are fetched
         createdAt: new Date().toISOString(),
@@ -133,6 +151,8 @@ class CtraderAuthService {
   // Refresh access token
   async refreshToken(userId) {
     try {
+      this._ensureInitialized();
+
       const config = loadTokensConfig();
       const userTokens = config.userTokens[userId];
 
@@ -140,29 +160,28 @@ class CtraderAuthService {
         throw new Error('No refresh token available');
       }
 
-      const response = await axios.post(
-        this.tokenUrl,
-        {
-          grant_type: 'refresh_token',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          refresh_token: userTokens.refreshToken,
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        refresh_token: userTokens.refreshToken,
+      });
+
+      const response = await axios.get(`${this.tokenUrl}?${params.toString()}`, {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      });
 
       const tokenData = response.data;
 
-      // Update tokens
+      // Update tokens (using cTrader API response format)
       config.userTokens[userId] = {
         ...userTokens,
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token || userTokens.refreshToken,
-        expiresAt: Date.now() + tokenData.expires_in * 1000,
+        accessToken: tokenData.accessToken || tokenData.access_token,
+        refreshToken: tokenData.refreshToken || tokenData.refresh_token || userTokens.refreshToken,
+        expiresAt: Date.now() + (tokenData.expiresIn || tokenData.expires_in) * 1000,
         updatedAt: new Date().toISOString(),
       };
 

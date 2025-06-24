@@ -12,6 +12,15 @@ export const initiateAuth = (req, res) => {
       });
     }
 
+    // Check if cTrader credentials are configured
+    if (!process.env.CTRADER_CLIENT_ID || !process.env.CTRADER_CLIENT_SECRET) {
+      console.error('cTrader credentials not configured in environment variables');
+      return res.status(500).json({
+        error: 'cTrader API not configured',
+        details: 'Please configure CTRADER_CLIENT_ID and CTRADER_CLIENT_SECRET in server/.env file',
+      });
+    }
+
     // Generate OAuth URL
     const authUrl = CtraderAuthService.generateAuthUrl(userId);
 
@@ -87,11 +96,20 @@ export const getAuthStatus = (req, res) => {
     const accounts = CtraderAuthService.getUserAccounts(userId);
     const connectionStatus = CtraderApiService.getConnectionStatus(userId);
 
+    // If authenticated but not connected, and we have stored accounts but no live accounts,
+    // suggest reconnection
+    const shouldReconnect =
+      isAuthenticated &&
+      !connectionStatus.connected &&
+      accounts.length > 0 &&
+      connectionStatus.accounts.length === 0;
+
     res.json({
       userId,
       authenticated: isAuthenticated,
-      accounts,
+      accounts: connectionStatus.accounts.length > 0 ? connectionStatus.accounts : accounts,
       connection: connectionStatus,
+      shouldReconnect,
       status: 'success',
     });
   } catch (error) {
@@ -106,7 +124,7 @@ export const getAuthStatus = (req, res) => {
 // Connect to cTrader API
 export const connectToApi = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, useDemo = true } = req.body;
 
     if (!userId) {
       return res.status(400).json({
@@ -121,20 +139,40 @@ export const connectToApi = async (req, res) => {
       });
     }
 
-    // Create WebSocket connection
-    const connection = await CtraderApiService.createConnection(userId);
+    console.log(`🚀 Connecting to cTrader API for user ${userId} (Demo: ${useDemo})`);
 
-    res.json({
-      message: 'Successfully connected to cTrader API',
-      userId,
-      connected: true,
-      status: 'success',
-    });
+    // Get accounts via WebSocket + Protobuf (OFFICIAL METHOD)
+    const accounts = await CtraderApiService.getAllUserAccountsWebSocket(userId, useDemo);
+    console.log(`✅ Retrieved ${accounts.length} accounts via WebSocket+Protobuf`);
+
+    if (accounts.length > 0) {
+      // Check connection status
+      const connectionStatus = CtraderApiService.getConnectionStatus(userId);
+
+      res.json({
+        message: 'Successfully connected to cTrader API and retrieved accounts',
+        userId,
+        connected: connectionStatus.connected,
+        connectionType: connectionStatus.connected ? 'WebSocket + Protobuf' : 'Stored Accounts',
+        accountsFound: accounts.length,
+        accounts: accounts,
+        connectionDetails: connectionStatus,
+        status: 'success',
+      });
+    } else {
+      res.status(404).json({
+        error: 'No cTrader accounts found',
+        message: 'User is authenticated but has no accessible trading accounts',
+        userId,
+        suggestion: 'Please ensure you have demo/live accounts set up with your broker',
+      });
+    }
   } catch (error) {
     console.error('Error connecting to cTrader API:', error);
     res.status(500).json({
       error: 'Failed to connect to cTrader API',
       details: error.message,
+      suggestion: 'Please check your authentication status and try again',
     });
   }
 };
@@ -404,6 +442,46 @@ export const getConnectionStatus = (req, res) => {
     console.error('Error getting connection status:', error);
     res.status(500).json({
       error: 'Failed to get connection status',
+      details: error.message,
+    });
+  }
+};
+
+// Refresh accounts via REST API
+export const refreshAccounts = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        error: 'userId is required',
+      });
+    }
+
+    // Check if user is authenticated
+    if (!CtraderAuthService.isUserAuthenticated(userId)) {
+      return res.status(401).json({
+        error: 'User not authenticated with cTrader',
+      });
+    }
+
+    console.log(`🔄 Refreshing accounts for user ${userId}`);
+
+    // Get fresh accounts via WebSocket + Protobuf
+    const accounts = await CtraderApiService.getAllUserAccountsWebSocket(userId, true); // Default to demo
+
+    res.json({
+      message: 'Accounts refreshed successfully',
+      userId,
+      accountsFound: accounts.length,
+      accounts: accounts,
+      refreshedAt: new Date().toISOString(),
+      status: 'success',
+    });
+  } catch (error) {
+    console.error('Error refreshing accounts:', error);
+    res.status(500).json({
+      error: 'Failed to refresh accounts',
       details: error.message,
     });
   }
