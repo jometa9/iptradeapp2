@@ -221,10 +221,25 @@ export const createNewOrder = (req, res) => {
     return res.status(400).send('Error: No data received');
   }
 
+  // Get authenticated account info from middleware
+  const authenticatedAccountId = req.accountInfo.accountId;
+  const accountType = req.accountInfo.type;
+
   // Extract account ID from the first order's account parameter
-  const accountId = req.body.account0;
-  if (!accountId) {
-    return res.status(400).send('Error: Account ID is required (account0 parameter)');
+  const accountId = req.body.account0 || authenticatedAccountId;
+
+  // Verify that the account in the request matches the authenticated account
+  if (accountId !== authenticatedAccountId) {
+    return res.status(403).json({
+      error: `Account mismatch. Authenticated as ${authenticatedAccountId} but trying to create order for ${accountId}`,
+    });
+  }
+
+  // Double-check that this is indeed a master account (redundant but safe)
+  if (accountType !== 'master') {
+    return res.status(403).json({
+      error: `Only master accounts can create orders. Account ${accountId} is configured as ${accountType}`,
+    });
   }
 
   // Validate that the master account is registered
@@ -305,14 +320,28 @@ export const createNewOrder = (req, res) => {
 
 // Controller for getting orders
 export const getOrders = (req, res) => {
-  // Get slave account ID from query parameter
-  const slaveId = req.query.account;
+  // Get authenticated account info from middleware
+  const authenticatedAccountId = req.accountInfo.accountId;
+  const accountType = req.accountInfo.type;
 
-  if (!slaveId) {
-    return res
-      .status(400)
-      .send('Error: Slave account ID is required as query parameter (?account=ID)');
+  // Get slave account ID from query parameter or use authenticated account
+  const slaveId = req.query.account || authenticatedAccountId;
+
+  // Verify that the account in the request matches the authenticated account
+  if (slaveId !== authenticatedAccountId) {
+    return res.status(403).json({
+      error: `Account mismatch. Authenticated as ${authenticatedAccountId} but trying to get orders for ${slaveId}`,
+    });
   }
+
+  // Double-check that this is indeed a slave account (redundant but safe)
+  if (accountType !== 'slave') {
+    return res.status(403).json({
+      error: `Only slave accounts can retrieve orders. Account ${slaveId} is configured as ${accountType}`,
+    });
+  }
+
+  console.log(`GET request from authenticated slave account: ${slaveId}`);
 
   // Validate that the slave account is registered
   if (!isSlaveAccountRegistered(slaveId)) {
