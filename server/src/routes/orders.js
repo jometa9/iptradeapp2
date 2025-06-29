@@ -7,21 +7,41 @@ const router = express.Router();
 
 // Endpoint to check account type (no role restrictions - just authentication)
 router.get('/account-type', authenticateAccount, (req, res) => {
+  const { accountId, type, account } = req.accountInfo;
+
+  if (type === 'pending') {
+    return res.json({
+      accountId,
+      type: 'pending',
+      account,
+      message: 'Account detected and registered as pending - awaiting configuration',
+      status: 'awaiting_configuration',
+      permissions: [],
+      nextSteps: [
+        'Account has been automatically registered as pending',
+        'Administrator must configure this account as master or slave',
+        'Contact administrator to complete setup',
+        'EA will remain in standby mode until configured',
+      ],
+      adminEndpoints: {
+        viewPending: 'GET /api/accounts/pending',
+        convertToMaster: 'POST /api/accounts/pending/{accountId}/to-master',
+        convertToSlave: 'POST /api/accounts/pending/{accountId}/to-slave',
+      },
+    });
+  }
+
   res.json({
-    accountId: req.accountInfo.accountId,
-    type: req.accountInfo.type,
-    account: req.accountInfo.account,
-    message: `Account is configured as ${req.accountInfo.type}`,
+    accountId,
+    type,
+    account,
+    message: `Account is configured as ${type}`,
+    status: 'active',
     permissions:
-      req.accountInfo.type === 'master'
-        ? ['POST /neworder (send trades)']
-        : ['GET /neworder (receive trades)'],
+      type === 'master' ? ['POST /neworder (send trades)'] : ['GET /neworder (receive trades)'],
     endpoints: {
       checkType: 'GET /api/orders/account-type',
-      trading:
-        req.accountInfo.type === 'master'
-          ? 'POST /api/orders/neworder'
-          : 'GET /api/orders/neworder',
+      trading: type === 'master' ? 'POST /api/orders/neworder' : 'GET /api/orders/neworder',
     },
   });
 });
@@ -39,9 +59,11 @@ router.get('/status', (req, res) => {
       return res.json({
         masterAccounts: {},
         slaveAccounts: {},
+        pendingAccounts: {},
         connections: {},
         totalMasters: 0,
         totalSlaves: 0,
+        totalPending: 0,
         message: 'No accounts configured yet',
       });
     }
@@ -49,12 +71,14 @@ router.get('/status', (req, res) => {
     const config = JSON.parse(readFileSync(accountsFilePath, 'utf-8'));
     const masterCount = Object.keys(config.masterAccounts || {}).length;
     const slaveCount = Object.keys(config.slaveAccounts || {}).length;
+    const pendingCount = Object.keys(config.pendingAccounts || {}).length;
 
     res.json({
       ...config,
       totalMasters: masterCount,
       totalSlaves: slaveCount,
-      message: `System has ${masterCount} master(s) and ${slaveCount} slave(s) configured`,
+      totalPending: pendingCount,
+      message: `System has ${masterCount} master(s), ${slaveCount} slave(s)${pendingCount > 0 ? ` and ${pendingCount} pending` : ''} configured`,
     });
   } catch (error) {
     res.status(500).json({

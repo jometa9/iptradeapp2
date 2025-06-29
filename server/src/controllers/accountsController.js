@@ -15,6 +15,7 @@ const initializeAccountsConfig = () => {
     const defaultConfig = {
       masterAccounts: {},
       slaveAccounts: {},
+      pendingAccounts: {},
       connections: {}, // slaveId -> masterAccountId mapping
     };
     writeFileSync(accountsFilePath, JSON.stringify(defaultConfig, null, 2));
@@ -531,4 +532,206 @@ export const getSupportedPlatforms = (req, res) => {
     }),
     total: SUPPORTED_PLATFORMS.length,
   });
+};
+
+// ===== PENDING ACCOUNTS MANAGEMENT =====
+
+// Get all pending accounts
+export const getPendingAccounts = (req, res) => {
+  try {
+    const config = loadAccountsConfig();
+    const pendingAccounts = config.pendingAccounts || {};
+    const pendingCount = Object.keys(pendingAccounts).length;
+
+    res.json({
+      pendingAccounts,
+      totalPending: pendingCount,
+      message:
+        pendingCount > 0
+          ? `Found ${pendingCount} account(s) awaiting configuration`
+          : 'No pending accounts found',
+    });
+  } catch (error) {
+    console.error('Error getting pending accounts:', error);
+    res.status(500).json({ error: 'Failed to get pending accounts' });
+  }
+};
+
+// Convert pending account to master
+export const convertPendingToMaster = (req, res) => {
+  const { accountId } = req.params;
+  const { name, description, broker, platform } = req.body;
+
+  if (!accountId) {
+    return res.status(400).json({ error: 'Account ID is required' });
+  }
+
+  try {
+    const config = loadAccountsConfig();
+
+    // Check if account exists in pending
+    if (!config.pendingAccounts[accountId]) {
+      return res.status(404).json({
+        error: `Pending account ${accountId} not found`,
+      });
+    }
+
+    // Check if account already exists as master or slave
+    if (config.masterAccounts[accountId] || config.slaveAccounts[accountId]) {
+      return res.status(409).json({
+        error: `Account ${accountId} already exists as master or slave`,
+      });
+    }
+
+    // Get pending account data
+    const pendingAccount = config.pendingAccounts[accountId];
+
+    // Create master account
+    const masterAccount = {
+      id: accountId,
+      name: name || pendingAccount.name,
+      description: description || pendingAccount.description,
+      broker: broker || 'Unknown',
+      platform: platform || 'MT5',
+      registeredAt: new Date().toISOString(),
+      convertedFrom: 'pending',
+      firstSeen: pendingAccount.firstSeen,
+      lastActivity: pendingAccount.lastActivity,
+      status: 'active',
+    };
+
+    // Move from pending to master
+    config.masterAccounts[accountId] = masterAccount;
+    delete config.pendingAccounts[accountId];
+
+    if (saveAccountsConfig(config)) {
+      console.log(`✅ Pending account ${accountId} converted to master`);
+      res.json({
+        message: 'Pending account successfully converted to master',
+        accountId,
+        account: masterAccount,
+        status: 'converted_to_master',
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to save account configuration' });
+    }
+  } catch (error) {
+    console.error('Error converting pending to master:', error);
+    res.status(500).json({ error: 'Failed to convert pending account to master' });
+  }
+};
+
+// Convert pending account to slave
+export const convertPendingToSlave = (req, res) => {
+  const { accountId } = req.params;
+  const { name, description, broker, platform, masterAccountId } = req.body;
+
+  if (!accountId) {
+    return res.status(400).json({ error: 'Account ID is required' });
+  }
+
+  try {
+    const config = loadAccountsConfig();
+
+    // Check if account exists in pending
+    if (!config.pendingAccounts[accountId]) {
+      return res.status(404).json({
+        error: `Pending account ${accountId} not found`,
+      });
+    }
+
+    // Check if account already exists as master or slave
+    if (config.masterAccounts[accountId] || config.slaveAccounts[accountId]) {
+      return res.status(409).json({
+        error: `Account ${accountId} already exists as master or slave`,
+      });
+    }
+
+    // If masterAccountId provided, validate it exists
+    if (masterAccountId && !config.masterAccounts[masterAccountId]) {
+      return res.status(400).json({
+        error: `Master account ${masterAccountId} not found`,
+      });
+    }
+
+    // Get pending account data
+    const pendingAccount = config.pendingAccounts[accountId];
+
+    // Create slave account
+    const slaveAccount = {
+      id: accountId,
+      name: name || pendingAccount.name,
+      description: description || pendingAccount.description,
+      broker: broker || 'Unknown',
+      platform: platform || 'MT5',
+      registeredAt: new Date().toISOString(),
+      convertedFrom: 'pending',
+      firstSeen: pendingAccount.firstSeen,
+      lastActivity: pendingAccount.lastActivity,
+      status: 'active',
+    };
+
+    // Move from pending to slave
+    config.slaveAccounts[accountId] = slaveAccount;
+    delete config.pendingAccounts[accountId];
+
+    // If masterAccountId provided, establish connection
+    if (masterAccountId) {
+      config.connections[accountId] = masterAccountId;
+    }
+
+    if (saveAccountsConfig(config)) {
+      console.log(
+        `✅ Pending account ${accountId} converted to slave${masterAccountId ? ` and connected to master ${masterAccountId}` : ''}`
+      );
+      res.json({
+        message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''}`,
+        accountId,
+        account: slaveAccount,
+        connectedTo: masterAccountId || null,
+        status: 'converted_to_slave',
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to save account configuration' });
+    }
+  } catch (error) {
+    console.error('Error converting pending to slave:', error);
+    res.status(500).json({ error: 'Failed to convert pending account to slave' });
+  }
+};
+
+// Delete pending account
+export const deletePendingAccount = (req, res) => {
+  const { accountId } = req.params;
+
+  if (!accountId) {
+    return res.status(400).json({ error: 'Account ID is required' });
+  }
+
+  try {
+    const config = loadAccountsConfig();
+
+    if (!config.pendingAccounts[accountId]) {
+      return res.status(404).json({
+        error: `Pending account ${accountId} not found`,
+      });
+    }
+
+    // Remove from pending accounts
+    delete config.pendingAccounts[accountId];
+
+    if (saveAccountsConfig(config)) {
+      console.log(`🗑️ Pending account ${accountId} deleted`);
+      res.json({
+        message: 'Pending account deleted successfully',
+        accountId,
+        status: 'deleted',
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to save account configuration' });
+    }
+  } catch (error) {
+    console.error('Error deleting pending account:', error);
+    res.status(500).json({ error: 'Failed to delete pending account' });
+  }
 };

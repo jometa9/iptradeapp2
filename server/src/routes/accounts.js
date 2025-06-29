@@ -2,11 +2,16 @@ import express from 'express';
 
 import {
   connectSlaveToMaster,
+  convertPendingToMaster,
+  convertPendingToSlave,
   deleteMasterAccount,
+  deletePendingAccount,
   deleteSlaveAccount,
   disconnectSlave,
   getAllAccounts,
   getMasterAccount,
+  // Pending accounts management
+  getPendingAccounts,
   getSlaveAccount,
   getSupportedPlatforms,
   registerMasterAccount,
@@ -40,5 +45,11 @@ router.delete('/slave/:slaveAccountId', deleteSlaveAccount);
 
 // Get supported platforms
 router.get('/platforms', getSupportedPlatforms);
+
+// Pending accounts management
+router.get('/pending', getPendingAccounts);
+router.post('/pending/:accountId/to-master', convertPendingToMaster);
+router.post('/pending/:accountId/to-slave', convertPendingToSlave);
+router.delete('/pending/:accountId', deletePendingAccount);
 
 export default router;

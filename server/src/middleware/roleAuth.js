@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -7,15 +7,41 @@ const accountsFilePath = join(configBaseDir, 'registered_accounts.json');
 // Load accounts configuration
 const loadAccountsConfig = () => {
   if (!existsSync(accountsFilePath)) {
-    return { masterAccounts: {}, slaveAccounts: {}, connections: {} };
+    return {
+      masterAccounts: {},
+      slaveAccounts: {},
+      pendingAccounts: {},
+      connections: {},
+    };
   }
 
   try {
     const data = readFileSync(accountsFilePath, 'utf-8');
-    return JSON.parse(data);
+    const config = JSON.parse(data);
+    // Ensure pendingAccounts exists for backward compatibility
+    if (!config.pendingAccounts) {
+      config.pendingAccounts = {};
+    }
+    return config;
   } catch (error) {
     console.error('Error loading accounts config:', error);
-    return { masterAccounts: {}, slaveAccounts: {}, connections: {} };
+    return {
+      masterAccounts: {},
+      slaveAccounts: {},
+      pendingAccounts: {},
+      connections: {},
+    };
+  }
+};
+
+// Save accounts configuration
+const saveAccountsConfig = config => {
+  try {
+    writeFileSync(accountsFilePath, JSON.stringify(config, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error saving accounts config:', error);
+    return false;
   }
 };
 
@@ -32,22 +58,33 @@ export const authenticateAccount = (req, res, next) => {
 
   const config = loadAccountsConfig();
 
-  // Check if account exists as master or slave
+  // Check if account exists as master, slave, or pending
   const isMaster = config.masterAccounts[accountId];
   const isSlave = config.slaveAccounts[accountId];
+  const isPending = config.pendingAccounts[accountId];
 
-  if (!isMaster && !isSlave) {
-    return res.status(403).json({
-      error: 'Account not found',
-      message: `Account ${accountId} is not registered as master or slave`,
-    });
+  // If account doesn't exist anywhere, register as pending
+  if (!isMaster && !isSlave && !isPending) {
+    const newPendingAccount = {
+      id: accountId,
+      name: `Account ${accountId}`,
+      description: 'Automatically detected account - awaiting configuration',
+      firstSeen: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      status: 'pending',
+    };
+
+    config.pendingAccounts[accountId] = newPendingAccount;
+    saveAccountsConfig(config);
+
+    console.log(`🔄 New account detected and registered as pending: ${accountId}`);
   }
 
   // Add account info to request object
   req.accountInfo = {
     accountId,
-    type: isMaster ? 'master' : 'slave',
-    account: isMaster || isSlave,
+    type: isMaster ? 'master' : isSlave ? 'slave' : 'pending',
+    account: isMaster || isSlave || isPending || config.pendingAccounts[accountId],
   };
 
   next();
@@ -93,24 +130,41 @@ export const roleBasedAccess = (req, res, next) => {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
+  const accountType = req.accountInfo.type;
   const method = req.method.toLowerCase();
 
+  // Pending accounts cannot access trading endpoints
+  if (accountType === 'pending') {
+    return res.status(403).json({
+      error: 'Account pending configuration',
+      message:
+        'This account is pending configuration. Please contact administrator to set up as master or slave.',
+      accountType: 'pending',
+      status: 'awaiting_configuration',
+      nextSteps: [
+        'Contact administrator',
+        'Account will be configured as master or slave',
+        'Then EA can begin trading operations',
+      ],
+    });
+  }
+
   // POST requests: only masters
-  if (method === 'post' && req.accountInfo.type !== 'master') {
+  if (method === 'post' && accountType !== 'master') {
     return res.status(403).json({
       error: 'Access denied',
       message: 'POST requests (sending trades) are only allowed for master accounts',
-      accountType: req.accountInfo.type,
+      accountType,
       allowedMethods: ['GET'],
     });
   }
 
   // GET requests: only slaves
-  if (method === 'get' && req.accountInfo.type !== 'slave') {
+  if (method === 'get' && accountType !== 'slave') {
     return res.status(403).json({
       error: 'Access denied',
       message: 'GET requests (receiving trades) are only allowed for slave accounts',
-      accountType: req.accountInfo.type,
+      accountType,
       allowedMethods: ['POST'],
     });
   }
