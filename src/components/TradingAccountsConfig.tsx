@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Eye,
   EyeOff,
@@ -19,6 +22,7 @@ import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tooltip } from './ui/tooltip';
 import { toast } from './ui/use-toast';
 
 interface TradingAccount {
@@ -91,10 +95,10 @@ export function TradingAccountsConfig() {
       const data = await response.json();
 
       // Handle the actual format returned by the backend
-      const allAccounts = [];
+      const allAccounts: TradingAccount[] = [];
 
       // Helper function to map backend status to frontend status
-      const mapStatus = backendStatus => {
+      const mapStatus = (backendStatus: string) => {
         switch (backendStatus) {
           case 'active':
             return 'synchronized';
@@ -481,19 +485,18 @@ export function TradingAccountsConfig() {
     }
   };
 
-  // Helper function to get status display color class
-  const getStatusColorClass = (status: string) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'synchronized':
-        return 'text-green-600 text-sm';
+        return <CheckCircle className="text-green-700" />;
       case 'pending':
-        return 'text-blue-600 text-sm';
+        return <Clock className="text-yellow-500" />;
       case 'offline':
-        return 'text-orange-600 text-sm';
+        return <XCircle className="text-red-700" />;
       case 'error':
-        return 'text-red-600 text-sm';
+        return <AlertTriangle className="text-red-700" />;
       default:
-        return 'text-green-600 text-sm'; // Default for active accounts
+        return <CheckCircle className="text-green-700" />;
     }
   };
 
@@ -888,6 +891,7 @@ export function TradingAccountsConfig() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-muted/50">
                 <tr>
+                  <th className="px-4 py-3 align-middle"></th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Status</th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Account</th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
@@ -903,130 +907,165 @@ export function TradingAccountsConfig() {
                 {/* Master accounts */}
                 {accounts
                   .filter(account => account.accountType === 'master')
-                  .map(masterAccount => (
-                    <React.Fragment key={`master-group-${masterAccount.id}`}>
-                      <tr
-                        className="bg-blue-50 hover:bg-blue-100 cursor-pointer"
-                        onClick={e => {
-                          if (!(e.target as HTMLElement).closest('.actions-column')) {
-                            toggleMasterCollapse(masterAccount.id);
-                          }
-                        }}
-                      >
-                        <td className="px-4 py-2 whitespace-nowrap align-middle">
-                          <span className={getStatusColorClass(masterAccount.status)}>
-                            {getStatusDisplayText(masterAccount.status)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {masterAccount.accountNumber}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-yellow-700 align-middle">
-                          Master
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {masterAccount.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {masterAccount.server}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap align-middle">
-                          {accounts.filter(
-                            acc => acc.connectedToMaster === masterAccount.accountNumber
-                          ).length > 0 ? (
-                            <div className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 inline-block">
-                              {
-                                accounts.filter(
-                                  acc => acc.connectedToMaster === masterAccount.accountNumber
-                                ).length
-                              }{' '}
-                              slave
-                              {accounts.filter(
-                                acc => acc.connectedToMaster === masterAccount.accountNumber
-                              ).length > 1
-                                ? 's'
-                                : ''}{' '}
-                              connected
+                  .map(masterAccount => {
+                    const connectedSlaves = accounts.filter(
+                      acc => acc.connectedToMaster === masterAccount.accountNumber
+                    );
+                    const hasSlaves = connectedSlaves.length > 0;
+                    return (
+                      <React.Fragment key={`master-group-${masterAccount.id}`}>
+                        <tr
+                          className="bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                          onClick={e => {
+                            if (!(e.target as HTMLElement).closest('.actions-column')) {
+                              toggleMasterCollapse(masterAccount.id);
+                            }
+                          }}
+                        >
+                          <td className="w-2 pl-6 py-2 align-middle">
+                            <div className="flex items-center justify-center h-full w-full">
+                              {hasSlaves ? (
+                                <button
+                                  type="button"
+                                  className="focus:outline-none"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    toggleMasterCollapse(masterAccount.id);
+                                  }}
+                                  aria-label={
+                                    collapsedMasters[masterAccount.id]
+                                      ? 'Expand slaves'
+                                      : 'Collapse slaves'
+                                  }
+                                >
+                                  {collapsedMasters[masterAccount.id] ? (
+                                    <ChevronRight className="h-4 w-4 text-gray-700" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4 text-gray-700" />
+                                  )}
+                                </button>
+                              ) : null}
                             </div>
-                          ) : (
-                            <div className="rounded-full px-2 py-0.5 text-xs bg-gray-100 text-gray-600 inline-block">
-                              No slaves connected
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap align-middle actions-column">
-                          {deleteConfirmId === masterAccount.id ? (
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  confirmDeleteAccount();
-                                }}
-                                disabled={isDeletingAccount === masterAccount.id}
-                              >
-                                {isDeletingAccount === masterAccount.id ? 'Deleting...' : 'Confirm'}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  cancelDeleteAccount();
-                                }}
-                                disabled={isDeletingAccount === masterAccount.id}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleEditAccount(masterAccount);
-                                }}
-                                title="Edit Account"
-                                disabled={isDeletingAccount === masterAccount.id}
-                              >
-                                <Pencil className="h-4 w-4 text-blue-600" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handleDeleteAccount(masterAccount.id);
-                                }}
-                                title="Delete Account"
-                                disabled={isDeletingAccount === masterAccount.id}
-                              >
-                                <Trash className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-
-                      {/* Slave accounts connected to this master */}
-                      {!collapsedMasters[masterAccount.id] &&
-                        accounts
-                          .filter(
-                            account =>
-                              account.accountType === 'slave' &&
-                              account.connectedToMaster === masterAccount.accountNumber
-                          )
-                          .map(slaveAccount => (
-                            <tr key={slaveAccount.id} className="bg-white hover:bg-muted/50">
-                              <td className="px-4 py-1.5 whitespace-nowrap align-middle">
-                                <span className={getStatusColorClass(slaveAccount.status)}>
-                                  {getStatusDisplayText(slaveAccount.status)}
+                          </td>
+                          <td className="py-2 align-middle">
+                            <div className="flex items-center justify-center h-full w-full">
+                              <Tooltip tip={getStatusDisplayText(masterAccount.status)}>
+                                <span className="flex items-center justify-center h-4 w-4">
+                                  {getStatusIcon(masterAccount.status)}
                                 </span>
+                              </Tooltip>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                            {masterAccount.accountNumber}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-yellow-700 align-middle">
+                            Master
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                            {masterAccount.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                            {masterAccount.server}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap align-middle">
+                            {accounts.filter(
+                              acc => acc.connectedToMaster === masterAccount.accountNumber
+                            ).length > 0 ? (
+                              <div className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 inline-block">
+                                {
+                                  accounts.filter(
+                                    acc => acc.connectedToMaster === masterAccount.accountNumber
+                                  ).length
+                                }{' '}
+                                slave
+                                {accounts.filter(
+                                  acc => acc.connectedToMaster === masterAccount.accountNumber
+                                ).length > 1
+                                  ? 's'
+                                  : ''}{' '}
+                                connected
+                              </div>
+                            ) : (
+                              <div className="rounded-full px-2 py-0.5 text-xs bg-gray-100 text-gray-600 inline-block">
+                                No slaves connected
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap align-middle actions-column">
+                            {deleteConfirmId === masterAccount.id ? (
+                              <div className="flex space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    confirmDeleteAccount();
+                                  }}
+                                  disabled={isDeletingAccount === masterAccount.id}
+                                >
+                                  {isDeletingAccount === masterAccount.id
+                                    ? 'Deleting...'
+                                    : 'Confirm'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    cancelDeleteAccount();
+                                  }}
+                                  disabled={isDeletingAccount === masterAccount.id}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleEditAccount(masterAccount);
+                                  }}
+                                  title="Edit Account"
+                                  disabled={isDeletingAccount === masterAccount.id}
+                                >
+                                  <Pencil className="h-4 w-4 text-blue-600" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleDeleteAccount(masterAccount.id);
+                                  }}
+                                  title="Delete Account"
+                                  disabled={isDeletingAccount === masterAccount.id}
+                                >
+                                  <Trash className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+
+                        {/* Slave accounts connected to this master */}
+                        {!collapsedMasters[masterAccount.id] &&
+                          connectedSlaves.map(slaveAccount => (
+                            <tr key={slaveAccount.id} className="bg-white hover:bg-muted/50">
+                              <td className="w-8 px-2 py-1.5 align-middle"></td>
+                              <td className="px-4 py-1.5 align-middle">
+                                <div className="flex items-center justify-center h-full w-full">
+                                  <Tooltip tip={getStatusDisplayText(slaveAccount.status)}>
+                                    <span className="flex items-center justify-center h-4 w-4">
+                                      {getStatusIcon(slaveAccount.status)}
+                                    </span>
+                                  </Tooltip>
+                                </div>
                               </td>
                               <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
                                 {slaveAccount.accountNumber}
@@ -1114,8 +1153,9 @@ export function TradingAccountsConfig() {
                               </td>
                             </tr>
                           ))}
-                    </React.Fragment>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
 
                 {/* Orphan slave accounts */}
                 {accounts
@@ -1128,10 +1168,15 @@ export function TradingAccountsConfig() {
                   )
                   .map(orphanSlave => (
                     <tr key={orphanSlave.id} className="hover:bg-muted/50 bg-gray-50">
-                      <td className="px-4 py-2 whitespace-nowrap align-middle">
-                        <span className={getStatusColorClass(orphanSlave.status)}>
-                          {getStatusDisplayText(orphanSlave.status)}
-                        </span>
+                      <td className="w-8 px-2 py-2 align-middle"></td>
+                      <td className="px-4 py-2 align-middle">
+                        <div className="flex items-center justify-center h-full w-full">
+                          <Tooltip tip={getStatusDisplayText(orphanSlave.status)}>
+                            <span className="flex items-center justify-center h-4 w-4">
+                              {getStatusIcon(orphanSlave.status)}
+                            </span>
+                          </Tooltip>
+                        </div>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
                         {orphanSlave.accountNumber}
