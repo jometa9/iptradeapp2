@@ -105,8 +105,10 @@ async function startServer() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1000,
+    minWidth: 1000,
+    height: 750,
+    minHeight: 750,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
