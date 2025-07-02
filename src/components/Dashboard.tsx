@@ -4,6 +4,7 @@ import { CheckCircle, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
+import { CopierStatusControls } from './CopierStatusControls';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { Badge } from './ui/badge';
@@ -89,6 +90,11 @@ export const Dashboard: React.FC = () => {
           {/* Pending Accounts - Always visible at top for admin management */}
           <div className="mt-6">
             <PendingAccountsManager />
+          </div>
+
+          {/* Copier Status Controls */}
+          <div>
+            <CopierStatusControls />
           </div>
 
           {/* Main Trading Configuration */}

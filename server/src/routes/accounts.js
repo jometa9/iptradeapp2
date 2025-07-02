@@ -38,6 +38,9 @@ router.get('/master/:masterAccountId', authenticateAccount, getMasterAccount);
 router.get('/slave/:slaveAccountId', authenticateAccount, getSlaveAccount);
 router.get('/all', authenticateAccount, getAllAccounts);
 
+// Admin UI endpoint (no auth required for admin interface)
+router.get('/admin/all', getAllAccountsForAdmin);
+
 // Update accounts
 router.put('/master/:masterAccountId', updateMasterAccount);
 router.put('/slave/:slaveAccountId', updateSlaveAccount);

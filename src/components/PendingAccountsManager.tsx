@@ -90,7 +90,7 @@ export const PendingAccountsManager: React.FC = () => {
   // Load master accounts for slave connection
   const loadMasterAccounts = async () => {
     try {
-      const response = await fetch(`${baseUrl}/accounts/all`);
+      const response = await fetch(`${baseUrl}/accounts/admin/all`);
       if (response.ok) {
         const data = await response.json();
         const masters = Object.values(data.masterAccounts || {}) as MasterAccount[];

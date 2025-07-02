@@ -1,5 +1,5 @@
 {
-  "globalStatus": true,
+  "globalStatus": false,
   "masterAccounts": {
     "123456": true
   }

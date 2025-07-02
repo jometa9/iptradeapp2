@@ -843,6 +843,53 @@ export const deletePendingAccount = (req, res) => {
   }
 };
 
+// Get all accounts for admin UI (no authentication required)
+export const getAllAccountsForAdmin = (req, res) => {
+  try {
+    const config = loadAccountsConfig();
+
+    // Build the response in the same format as getAllAccounts but without auth
+    const response = {
+      masterAccounts: {},
+      unconnectedSlaves: [],
+      totalMasterAccounts: 0,
+      totalSlaveAccounts: 0,
+      totalConnections: 0,
+    };
+
+    // Process master accounts
+    response.totalMasterAccounts = Object.keys(config.masterAccounts).length;
+
+    for (const [accountId, account] of Object.entries(config.masterAccounts)) {
+      // Find connected slaves for this master
+      const connectedSlaves = Object.entries(config.connections)
+        .filter(([, masterId]) => masterId === accountId)
+        .map(([slaveId]) => config.slaveAccounts[slaveId])
+        .filter(Boolean);
+
+      response.masterAccounts[accountId] = {
+        ...account,
+        connectedSlaves,
+        totalSlaves: connectedSlaves.length,
+      };
+    }
+
+    // Process unconnected slaves
+    response.unconnectedSlaves = Object.values(config.slaveAccounts).filter(
+      slave => !config.connections[slave.id]
+    );
+
+    // Count totals
+    response.totalSlaveAccounts = Object.keys(config.slaveAccounts).length;
+    response.totalConnections = Object.keys(config.connections).length;
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error getting accounts for admin:', error);
+    res.status(500).json({ error: 'Failed to get accounts for admin interface' });
+  }
+};
+
 // Get account activity statistics
 export const getAccountActivityStats = (req, res) => {
   try {

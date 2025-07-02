@@ -82,7 +82,7 @@ export function TradingAccountsConfig() {
       }
 
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
-      const response = await fetch(`http://localhost:${serverPort}/api/accounts/all`);
+      const response = await fetch(`http://localhost:${serverPort}/api/accounts/admin/all`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch trading accounts');
@@ -181,6 +181,13 @@ export function TradingAccountsConfig() {
 
   useEffect(() => {
     fetchAccounts(true);
+
+    // Auto-refresh every 10 seconds to catch new conversions
+    const interval = setInterval(() => {
+      fetchAccounts(false);
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
