@@ -162,7 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
   };
 
-  // Verificar autenticación al iniciar la app
+  // Verify authentication when starting the app
   useEffect(() => {
     const checkAuth = async () => {
       const storedKey = localStorage.getItem(STORAGE_KEY);

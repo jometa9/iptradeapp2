@@ -68,6 +68,113 @@ export const getSlaveConnection = slaveAccountId => {
 // Define supported platforms
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
+// Activity monitoring configuration
+const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
+
+// Check and update account status based on activity
+const checkAccountActivity = () => {
+  try {
+    const config = loadAccountsConfig();
+    let hasChanges = false;
+    const now = new Date();
+
+    // Check master accounts
+    for (const [accountId, account] of Object.entries(config.masterAccounts)) {
+      if (account.lastActivity) {
+        const lastActivity = new Date(account.lastActivity);
+        const timeSinceActivity = now - lastActivity;
+
+        if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+          if (account.status !== 'offline') {
+            account.status = 'offline';
+            hasChanges = true;
+            console.log(
+              `📴 Master account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+            );
+          }
+        } else {
+          if (account.status === 'offline') {
+            account.status = 'active';
+            hasChanges = true;
+            console.log(`📡 Master account ${accountId} back online`);
+          }
+        }
+      }
+    }
+
+    // Check slave accounts
+    for (const [accountId, account] of Object.entries(config.slaveAccounts)) {
+      if (account.lastActivity) {
+        const lastActivity = new Date(account.lastActivity);
+        const timeSinceActivity = now - lastActivity;
+
+        if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+          if (account.status !== 'offline') {
+            account.status = 'offline';
+            hasChanges = true;
+            console.log(
+              `📴 Slave account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+            );
+          }
+        } else {
+          if (account.status === 'offline') {
+            account.status = 'active';
+            hasChanges = true;
+            console.log(`📡 Slave account ${accountId} back online`);
+          }
+        }
+      }
+    }
+
+    // Check pending accounts
+    for (const [accountId, account] of Object.entries(config.pendingAccounts)) {
+      if (account.lastActivity) {
+        const lastActivity = new Date(account.lastActivity);
+        const timeSinceActivity = now - lastActivity;
+
+        if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+          if (account.status !== 'offline') {
+            account.status = 'offline';
+            hasChanges = true;
+            console.log(
+              `📴 Pending account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+            );
+          }
+        } else {
+          if (account.status === 'offline') {
+            account.status = 'pending';
+            hasChanges = true;
+            console.log(`📡 Pending account ${accountId} back online`);
+          }
+        }
+      }
+    }
+
+    // Save changes if any were made
+    if (hasChanges) {
+      saveAccountsConfig(config);
+    }
+
+    return hasChanges;
+  } catch (error) {
+    console.error('Error checking account activity:', error);
+    return false;
+  }
+};
+
+// Start activity monitoring
+const startActivityMonitoring = () => {
+  console.log('🔍 Starting account activity monitoring (5-second timeout)...');
+
+  // Check activity every 1 second
+  setInterval(() => {
+    checkAccountActivity();
+  }, 1000);
+};
+
+// Initialize activity monitoring when module loads
+startActivityMonitoring();
+
 // Register new master account
 export const registerMasterAccount = (req, res) => {
   const { masterAccountId, name, description, broker, platform } = req.body;
@@ -523,7 +630,7 @@ export const getSupportedPlatforms = (req, res) => {
           platformInfo.description = 'Professional futures and forex trading platform';
           break;
         case 'Other':
-          platformInfo.label = 'Otra plataforma';
+          platformInfo.label = 'Other Platform';
           platformInfo.description = 'Other trading platform not listed above';
           break;
       }
@@ -733,5 +840,143 @@ export const deletePendingAccount = (req, res) => {
   } catch (error) {
     console.error('Error deleting pending account:', error);
     res.status(500).json({ error: 'Failed to delete pending account' });
+  }
+};
+
+// Get account activity statistics
+export const getAccountActivityStats = (req, res) => {
+  try {
+    const config = loadAccountsConfig();
+    const now = new Date();
+    const stats = {
+      total: 0,
+      synchronized: 0,
+      pending: 0,
+      offline: 0,
+      error: 0,
+      masters: {
+        total: 0,
+        synchronized: 0,
+        pending: 0,
+        offline: 0,
+        error: 0,
+      },
+      slaves: {
+        total: 0,
+        synchronized: 0,
+        pending: 0,
+        offline: 0,
+        error: 0,
+      },
+      activityDetails: [],
+    };
+
+    // Process master accounts
+    for (const [accountId, account] of Object.entries(config.masterAccounts)) {
+      stats.total++;
+      stats.masters.total++;
+
+      let status = account.status || 'active';
+      if (status === 'active') status = 'synchronized';
+
+      stats[status] = (stats[status] || 0) + 1;
+      stats.masters[status] = (stats.masters[status] || 0) + 1;
+
+      // Calculate time since last activity
+      let timeSinceActivity = null;
+      if (account.lastActivity) {
+        timeSinceActivity = now - new Date(account.lastActivity);
+      }
+
+      stats.activityDetails.push({
+        accountId,
+        type: 'master',
+        status,
+        lastActivity: account.lastActivity,
+        timeSinceActivity,
+        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+      });
+    }
+
+    // Process slave accounts
+    for (const [accountId, account] of Object.entries(config.slaveAccounts)) {
+      stats.total++;
+      stats.slaves.total++;
+
+      let status = account.status || 'active';
+      if (status === 'active') status = 'synchronized';
+
+      stats[status] = (stats[status] || 0) + 1;
+      stats.slaves[status] = (stats.slaves[status] || 0) + 1;
+
+      // Calculate time since last activity
+      let timeSinceActivity = null;
+      if (account.lastActivity) {
+        timeSinceActivity = now - new Date(account.lastActivity);
+      }
+
+      stats.activityDetails.push({
+        accountId,
+        type: 'slave',
+        status,
+        lastActivity: account.lastActivity,
+        timeSinceActivity,
+        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+        connectedTo: config.connections[accountId] || null,
+      });
+    }
+
+    // Process pending accounts
+    for (const [accountId, account] of Object.entries(config.pendingAccounts)) {
+      stats.total++;
+
+      let status = account.status || 'pending';
+
+      stats[status] = (stats[status] || 0) + 1;
+
+      // Calculate time since last activity
+      let timeSinceActivity = null;
+      if (account.lastActivity) {
+        timeSinceActivity = now - new Date(account.lastActivity);
+      }
+
+      stats.activityDetails.push({
+        accountId,
+        type: 'pending',
+        status,
+        lastActivity: account.lastActivity,
+        timeSinceActivity,
+        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+      });
+    }
+
+    res.json({
+      message: 'Account activity statistics retrieved successfully',
+      stats,
+      activityTimeout: ACTIVITY_TIMEOUT,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error getting account activity stats:', error);
+    res.status(500).json({ error: 'Failed to get account activity statistics' });
+  }
+};
+
+// Simple ping endpoint for accounts to report activity
+export const pingAccount = (req, res) => {
+  // This endpoint will automatically update activity through the authenticateAccount middleware
+  try {
+    const accountInfo = req.accountInfo;
+
+    res.json({
+      message: 'Ping successful',
+      accountId: accountInfo.accountId,
+      accountType: accountInfo.type,
+      timestamp: new Date().toISOString(),
+      status: 'active',
+    });
+  } catch (error) {
+    console.error('Error in ping endpoint:', error);
+    res.status(500).json({ error: 'Failed to process ping' });
   }
 };

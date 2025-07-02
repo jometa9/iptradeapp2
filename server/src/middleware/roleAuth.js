@@ -45,6 +45,28 @@ const saveAccountsConfig = config => {
   }
 };
 
+// Update account activity timestamp
+const updateAccountActivity = (accountId, accountType) => {
+  try {
+    const config = loadAccountsConfig();
+    const now = new Date().toISOString();
+
+    if (accountType === 'master' && config.masterAccounts[accountId]) {
+      config.masterAccounts[accountId].lastActivity = now;
+    } else if (accountType === 'slave' && config.slaveAccounts[accountId]) {
+      config.slaveAccounts[accountId].lastActivity = now;
+    } else if (accountType === 'pending' && config.pendingAccounts[accountId]) {
+      config.pendingAccounts[accountId].lastActivity = now;
+    }
+
+    saveAccountsConfig(config);
+    return true;
+  } catch (error) {
+    console.error('Error updating account activity:', error);
+    return false;
+  }
+};
+
 // Middleware to authenticate account and check if it exists
 export const authenticateAccount = (req, res, next) => {
   const accountId = req.headers['x-account-id'] || req.query.accountId || req.body.accountId;
@@ -80,10 +102,16 @@ export const authenticateAccount = (req, res, next) => {
     console.log(`🔄 New account detected and registered as pending: ${accountId}`);
   }
 
+  // Determine account type
+  const accountType = isMaster ? 'master' : isSlave ? 'slave' : 'pending';
+
+  // Update activity timestamp for this request
+  updateAccountActivity(accountId, accountType);
+
   // Add account info to request object
   req.accountInfo = {
     accountId,
-    type: isMaster ? 'master' : isSlave ? 'slave' : 'pending',
+    type: accountType,
     account: isMaster || isSlave || isPending || config.pendingAccounts[accountId],
   };
 

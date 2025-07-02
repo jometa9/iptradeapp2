@@ -55,7 +55,7 @@ const PLATFORMS = [
   { value: 'cTrader', label: 'cTrader' },
   { value: 'TradingView', label: 'TradingView' },
   { value: 'NinjaTrader', label: 'NinjaTrader' },
-  { value: 'Other', label: 'Otra plataforma' },
+  { value: 'Other', label: 'Other Platform' },
 ];
 
 export const TradingAccountsManager: React.FC = () => {
@@ -100,7 +100,7 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error loading accounts:', error);
       toast({
         title: 'Error',
-        description: 'No se pudieron cargar las cuentas de trading',
+        description: 'Failed to load trading accounts',
         variant: 'destructive',
       });
     } finally {
@@ -120,8 +120,8 @@ export const TradingAccountsManager: React.FC = () => {
 
       if (response.ok) {
         toast({
-          title: 'Éxito',
-          description: 'Cuenta master registrada correctamente',
+          title: 'Success',
+          description: 'Master account registered successfully',
         });
         setShowMasterDialog(false);
         setMasterForm({ masterAccountId: '', name: '', description: '', broker: '', platform: '' });
@@ -134,7 +134,7 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error registering master account:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error al registrar cuenta master',
+        description: error instanceof Error ? error.message : 'Error registering master account',
         variant: 'destructive',
       });
     }
@@ -152,8 +152,8 @@ export const TradingAccountsManager: React.FC = () => {
 
       if (response.ok) {
         toast({
-          title: 'Éxito',
-          description: 'Cuenta slave registrada correctamente',
+          title: 'Success',
+          description: 'Slave account registered successfully',
         });
         setShowSlaveDialog(false);
         setSlaveForm({
@@ -173,14 +173,14 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error registering slave account:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error al registrar cuenta slave',
+        description: error instanceof Error ? error.message : 'Error registering slave account',
         variant: 'destructive',
       });
     }
   };
 
   const deleteMasterAccount = async (masterAccountId: string) => {
-    if (!confirm(`¿Estás seguro de que quieres eliminar la cuenta master ${masterAccountId}?`)) {
+    if (!confirm(`Are you sure you want to delete the master account ${masterAccountId}?`)) {
       return;
     }
 
@@ -191,8 +191,8 @@ export const TradingAccountsManager: React.FC = () => {
 
       if (response.ok) {
         toast({
-          title: 'Éxito',
-          description: 'Cuenta master eliminada correctamente',
+          title: 'Success',
+          description: 'Master account deleted successfully',
         });
         loadAccounts();
       } else {
@@ -202,14 +202,14 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error deleting master account:', error);
       toast({
         title: 'Error',
-        description: 'Error al eliminar cuenta master',
+        description: 'Error deleting master account',
         variant: 'destructive',
       });
     }
   };
 
   const deleteSlaveAccount = async (slaveAccountId: string) => {
-    if (!confirm(`¿Estás seguro de que quieres eliminar la cuenta slave ${slaveAccountId}?`)) {
+    if (!confirm(`Are you sure you want to delete the slave account ${slaveAccountId}?`)) {
       return;
     }
 
@@ -220,8 +220,8 @@ export const TradingAccountsManager: React.FC = () => {
 
       if (response.ok) {
         toast({
-          title: 'Éxito',
-          description: 'Cuenta slave eliminada correctamente',
+          title: 'Success',
+          description: 'Slave account deleted successfully',
         });
         loadAccounts();
       } else {
@@ -231,7 +231,7 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error deleting slave account:', error);
       toast({
         title: 'Error',
-        description: 'Error al eliminar cuenta slave',
+        description: 'Error deleting slave account',
         variant: 'destructive',
       });
     }
@@ -258,7 +258,7 @@ export const TradingAccountsManager: React.FC = () => {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Gestión de Cuentas de Trading</CardTitle>
+          <CardTitle>Trading Accounts Management</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -275,28 +275,28 @@ export const TradingAccountsManager: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            Gestión de Cuentas de Trading
+            Trading Accounts Management
             <div className="flex gap-2">
               <Dialog open={showMasterDialog} onOpenChange={setShowMasterDialog}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="w-4 h-4 mr-2" />
-                    Cuenta Master
+                    Master Account
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Registrar Cuenta Master</DialogTitle>
+                    <DialogTitle>Register Master Account</DialogTitle>
                     <DialogDescription>
-                      Las cuentas master envían señales de trading a las cuentas slave conectadas.
+                      Master accounts send trading signals to connected slave accounts.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="masterAccountId">ID de Cuenta *</Label>
+                      <Label htmlFor="masterAccountId">Account ID *</Label>
                       <Input
                         id="masterAccountId"
-                        placeholder="Ej: 12345678"
+                        placeholder="Ex: Main EURUSD Account"
                         value={masterForm.masterAccountId}
                         onChange={e =>
                           setMasterForm({ ...masterForm, masterAccountId: e.target.value })
@@ -304,22 +304,22 @@ export const TradingAccountsManager: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="masterName">Nombre</Label>
+                      <Label htmlFor="masterName">Name</Label>
                       <Input
                         id="masterName"
-                        placeholder="Ej: Cuenta Principal EURUSD"
+                        placeholder="Ex: Main EURUSD Account"
                         value={masterForm.name}
                         onChange={e => setMasterForm({ ...masterForm, name: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="masterPlatform">Plataforma *</Label>
+                      <Label htmlFor="masterPlatform">Platform *</Label>
                       <Select
                         value={masterForm.platform}
                         onValueChange={value => setMasterForm({ ...masterForm, platform: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una plataforma" />
+                          <SelectValue placeholder="Select a platform" />
                         </SelectTrigger>
                         <SelectContent>
                           {PLATFORMS.map(platform => (
@@ -334,16 +334,16 @@ export const TradingAccountsManager: React.FC = () => {
                       <Label htmlFor="masterBroker">Broker</Label>
                       <Input
                         id="masterBroker"
-                        placeholder="Ej: IC Markets"
+                        placeholder="Ex: IC Markets"
                         value={masterForm.broker}
                         onChange={e => setMasterForm({ ...masterForm, broker: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="masterDescription">Descripción</Label>
+                      <Label htmlFor="masterDescription">Description</Label>
                       <Textarea
                         id="masterDescription"
-                        placeholder="Descripción opcional de la cuenta"
+                        placeholder="Optional account description"
                         value={masterForm.description}
                         onChange={e =>
                           setMasterForm({ ...masterForm, description: e.target.value })
@@ -353,13 +353,13 @@ export const TradingAccountsManager: React.FC = () => {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowMasterDialog(false)}>
-                      Cancelar
+                      Cancel
                     </Button>
                     <Button
                       onClick={registerMasterAccount}
                       disabled={!masterForm.masterAccountId || !masterForm.platform}
                     >
-                      Registrar
+                      Register
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -369,23 +369,22 @@ export const TradingAccountsManager: React.FC = () => {
                 <DialogTrigger asChild>
                   <Button variant="outline">
                     <Users className="w-4 h-4 mr-2" />
-                    Cuenta Slave
+                    Slave Account
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Registrar Cuenta Slave</DialogTitle>
+                    <DialogTitle>Register Slave Account</DialogTitle>
                     <DialogDescription>
-                      Las cuentas slave reciben y ejecutan las señales de una cuenta master
-                      específica.
+                      Slave accounts receive and execute signals from a specific master account.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="slaveAccountId">ID de Cuenta *</Label>
+                      <Label htmlFor="slaveAccountId">Account ID *</Label>
                       <Input
                         id="slaveAccountId"
-                        placeholder="Ej: 87654321"
+                        placeholder="Ex: Follower Account 1"
                         value={slaveForm.slaveAccountId}
                         onChange={e =>
                           setSlaveForm({ ...slaveForm, slaveAccountId: e.target.value })
@@ -393,22 +392,22 @@ export const TradingAccountsManager: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="slaveName">Nombre</Label>
+                      <Label htmlFor="slaveName">Name</Label>
                       <Input
                         id="slaveName"
-                        placeholder="Ej: Cuenta Seguidor 1"
+                        placeholder="Ex: Follower Account 1"
                         value={slaveForm.name}
                         onChange={e => setSlaveForm({ ...slaveForm, name: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="slavePlatform">Plataforma *</Label>
+                      <Label htmlFor="slavePlatform">Platform *</Label>
                       <Select
                         value={slaveForm.platform}
                         onValueChange={value => setSlaveForm({ ...slaveForm, platform: value })}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una plataforma" />
+                          <SelectValue placeholder="Select a platform" />
                         </SelectTrigger>
                         <SelectContent>
                           {PLATFORMS.map(platform => (
@@ -423,13 +422,13 @@ export const TradingAccountsManager: React.FC = () => {
                       <Label htmlFor="slaveBroker">Broker</Label>
                       <Input
                         id="slaveBroker"
-                        placeholder="Ej: IC Markets"
+                        placeholder="Ex: IC Markets"
                         value={slaveForm.broker}
                         onChange={e => setSlaveForm({ ...slaveForm, broker: e.target.value })}
                       />
                     </div>
                     <div>
-                      <Label htmlFor="masterConnection">Conectar a Master (opcional)</Label>
+                      <Label htmlFor="masterConnection">Connect to Master (optional)</Label>
                       <Select
                         value={slaveForm.masterAccountId}
                         onValueChange={value =>
@@ -437,10 +436,10 @@ export const TradingAccountsManager: React.FC = () => {
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un master" />
+                          <SelectValue placeholder="Select a master" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Sin conectar</SelectItem>
+                          <SelectItem value="none">Not connected</SelectItem>
                           {accounts &&
                             Object.entries(accounts.masterAccounts).map(([id, master]) => (
                               <SelectItem key={id} value={id}>
@@ -451,10 +450,10 @@ export const TradingAccountsManager: React.FC = () => {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="slaveDescription">Descripción</Label>
+                      <Label htmlFor="slaveDescription">Description</Label>
                       <Textarea
                         id="slaveDescription"
-                        placeholder="Descripción opcional de la cuenta"
+                        placeholder="Optional account description"
                         value={slaveForm.description}
                         onChange={e => setSlaveForm({ ...slaveForm, description: e.target.value })}
                       />
@@ -462,13 +461,13 @@ export const TradingAccountsManager: React.FC = () => {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowSlaveDialog(false)}>
-                      Cancelar
+                      Cancel
                     </Button>
                     <Button
                       onClick={registerSlaveAccount}
                       disabled={!slaveForm.slaveAccountId || !slaveForm.platform}
                     >
-                      Registrar
+                      Register
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -482,25 +481,25 @@ export const TradingAccountsManager: React.FC = () => {
               <div className="text-2xl font-bold text-blue-600">
                 {accounts?.totalMasterAccounts || 0}
               </div>
-              <div className="text-sm text-blue-700">Cuentas Master</div>
+              <div className="text-sm text-blue-700">Master Accounts</div>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <div className="text-2xl font-bold text-green-600">
                 {accounts?.totalSlaveAccounts || 0}
               </div>
-              <div className="text-sm text-green-700">Cuentas Slave</div>
+              <div className="text-sm text-green-700">Slave Accounts</div>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
               <div className="text-2xl font-bold text-purple-600">
                 {accounts?.totalConnections || 0}
               </div>
-              <div className="text-sm text-purple-700">Conexiones Activas</div>
+              <div className="text-sm text-purple-700">Active Connections</div>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="text-2xl font-bold text-gray-600">
                 {accounts?.unconnectedSlaves.length || 0}
               </div>
-              <div className="text-sm text-gray-700">Slaves Sin Conectar</div>
+              <div className="text-sm text-gray-700">Unconnected Slaves</div>
             </div>
           </div>
         </CardContent>
@@ -509,7 +508,7 @@ export const TradingAccountsManager: React.FC = () => {
       {/* Master Accounts */}
       <Card>
         <CardHeader>
-          <CardTitle>Cuentas Master</CardTitle>
+          <CardTitle>Master Accounts</CardTitle>
         </CardHeader>
         <CardContent>
           {accounts && Object.keys(accounts.masterAccounts).length > 0 ? (
@@ -539,17 +538,17 @@ export const TradingAccountsManager: React.FC = () => {
                     )}
                     {master.description && (
                       <p>
-                        <strong>Descripción:</strong> {master.description}
+                        <strong>Description:</strong> {master.description}
                       </p>
                     )}
                     <p>
-                      <strong>Registrado:</strong>{' '}
+                      <strong>Registered:</strong>{' '}
                       {new Date(master.registeredAt).toLocaleDateString()}
                     </p>
                   </div>
                   {master.connectedSlaves.length > 0 && (
                     <div className="mt-3 pt-3 border-t">
-                      <p className="text-sm font-medium mb-2">Slaves conectados:</p>
+                      <p className="text-sm font-medium mb-2">Connected slaves:</p>
                       <div className="flex flex-wrap gap-2">
                         {master.connectedSlaves.map(slave => (
                           <div key={slave.id} className="flex items-center gap-1">
@@ -568,7 +567,7 @@ export const TradingAccountsManager: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">No hay cuentas master registradas</div>
+            <div className="text-center py-8 text-gray-500">No master accounts registered</div>
           )}
         </CardContent>
       </Card>
@@ -577,7 +576,7 @@ export const TradingAccountsManager: React.FC = () => {
       {accounts && accounts.unconnectedSlaves.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Cuentas Slave Sin Conectar</CardTitle>
+            <CardTitle>Unconnected Slave Accounts</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -589,7 +588,7 @@ export const TradingAccountsManager: React.FC = () => {
                       <Badge className={getPlatformBadgeColor(slave.platform)}>
                         {slave.platform || 'N/A'}
                       </Badge>
-                      <Badge variant="destructive">Sin conectar</Badge>
+                      <Badge variant="destructive">Not connected</Badge>
                     </div>
                     <Button
                       variant="destructive"
@@ -610,11 +609,11 @@ export const TradingAccountsManager: React.FC = () => {
                     )}
                     {slave.description && (
                       <p>
-                        <strong>Descripción:</strong> {slave.description}
+                        <strong>Description:</strong> {slave.description}
                       </p>
                     )}
                     <p>
-                      <strong>Registrado:</strong>{' '}
+                      <strong>Registered:</strong>{' '}
                       {new Date(slave.registeredAt).toLocaleDateString()}
                     </p>
                   </div>

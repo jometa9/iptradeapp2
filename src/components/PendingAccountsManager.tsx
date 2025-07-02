@@ -81,7 +81,7 @@ export const PendingAccountsManager: React.FC = () => {
       console.error('Error loading pending accounts:', error);
       toast({
         title: 'Error',
-        description: 'Error al cargar cuentas pendientes',
+        description: 'Error loading pending accounts',
         variant: 'destructive',
       });
     }
@@ -174,12 +174,12 @@ export const PendingAccountsManager: React.FC = () => {
       if (response.ok) {
         const result = await response.json();
         toast({
-          title: 'Éxito',
-          description: `Cuenta convertida exitosamente a ${conversionType}${
+          title: 'Success',
+          description: `Account successfully converted to ${conversionType}${
             conversionType === 'slave' &&
             conversionForm.masterAccountId &&
             conversionForm.masterAccountId !== 'none'
-              ? ` y conectada al master ${conversionForm.masterAccountId}`
+              ? ` and connected to master ${conversionForm.masterAccountId}`
               : ''
           }`,
         });
@@ -194,7 +194,7 @@ export const PendingAccountsManager: React.FC = () => {
       console.error('Error converting account:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Error al convertir cuenta',
+        description: error.message || 'Error converting account',
         variant: 'destructive',
       });
     } finally {
@@ -204,7 +204,7 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Delete pending account
   const deletePendingAccount = async (accountId: string) => {
-    if (!confirm(`¿Estás seguro de que quieres eliminar la cuenta pendiente ${accountId}?`)) {
+    if (!confirm(`Are you sure you want to delete the pending account ${accountId}?`)) {
       return;
     }
 
@@ -215,8 +215,8 @@ export const PendingAccountsManager: React.FC = () => {
 
       if (response.ok) {
         toast({
-          title: 'Éxito',
-          description: 'Cuenta pendiente eliminada correctamente',
+          title: 'Success',
+          description: 'Pending account deleted successfully',
         });
         loadPendingAccounts();
       } else {
@@ -226,7 +226,7 @@ export const PendingAccountsManager: React.FC = () => {
       console.error('Error deleting pending account:', error);
       toast({
         title: 'Error',
-        description: 'Error al eliminar cuenta pendiente',
+        description: 'Error deleting pending account',
         variant: 'destructive',
       });
     }
@@ -256,7 +256,7 @@ export const PendingAccountsManager: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Cuentas Pendientes
+            Pending Accounts
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -278,7 +278,7 @@ export const PendingAccountsManager: React.FC = () => {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Cuentas Pendientes
+              Pending Accounts
               {pendingCount > 0 && (
                 <Badge variant="secondary" className="bg-orange-100 text-orange-800">
                   {pendingCount}
@@ -286,7 +286,7 @@ export const PendingAccountsManager: React.FC = () => {
               )}
             </CardTitle>
             <Button variant="outline" size="sm" onClick={loadPendingAccounts} disabled={loading}>
-              Actualizar
+              Refresh
             </Button>
           </div>
         </CardHeader>
@@ -294,9 +294,9 @@ export const PendingAccountsManager: React.FC = () => {
           {pendingCount === 0 ? (
             <div className="text-center py-8">
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <p className="text-muted-foreground">No hay cuentas pendientes</p>
+              <p className="text-muted-foreground">No pending accounts</p>
               <p className="text-sm text-muted-foreground mt-2">
-                Las nuevas cuentas de EA aparecerán aquí automáticamente
+                New EA accounts will appear here automatically
               </p>
             </div>
           ) : (
@@ -304,12 +304,12 @@ export const PendingAccountsManager: React.FC = () => {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock className="h-4 w-4 text-blue-600" />
-                  <h4 className="font-medium text-blue-900">¿Qué son las cuentas pendientes?</h4>
+                  <h4 className="font-medium text-blue-900">What are pending accounts?</h4>
                 </div>
                 <p className="text-sm text-blue-800">
-                  Cuando un EA se conecta por primera vez, se registra automáticamente como
-                  "pendiente". Debes configurar cada cuenta como <strong>Master</strong> (envía
-                  señales) o <strong>Slave</strong> (recibe señales).
+                  When an EA connects for the first time, it's automatically registered as
+                  "pending". You must configure each account as <strong>Master</strong> (sends
+                  signals) or <strong>Slave</strong> (receives signals).
                 </p>
               </div>
 
@@ -317,12 +317,12 @@ export const PendingAccountsManager: React.FC = () => {
                 <div key={id} className="border rounded-lg p-4 bg-orange-50 border-orange-200">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-orange-900">Cuenta {id}</h3>
+                      <h3 className="font-semibold text-orange-900">Account {id}</h3>
                       <Badge
                         variant="outline"
                         className="bg-orange-100 text-orange-800 border-orange-300"
                       >
-                        Pendiente
+                        Pending
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
@@ -334,7 +334,7 @@ export const PendingAccountsManager: React.FC = () => {
                         disabled={isConverting}
                       >
                         <UserCheck className="h-4 w-4 mr-1" />
-                        Hacer Master
+                        Make Master
                       </Button>
                       <Button
                         size="sm"
@@ -344,7 +344,7 @@ export const PendingAccountsManager: React.FC = () => {
                         disabled={isConverting}
                       >
                         <Users className="h-4 w-4 mr-1" />
-                        Hacer Slave
+                        Make Slave
                       </Button>
                       <Button
                         size="sm"
@@ -353,26 +353,26 @@ export const PendingAccountsManager: React.FC = () => {
                         onClick={() => deletePendingAccount(id)}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
-                        Eliminar
+                        Delete
                       </Button>
                     </div>
                   </div>
 
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>
-                      <strong>Nombre:</strong> {account.name}
+                      <strong>Name:</strong> {account.name}
                     </p>
                     <p>
-                      <strong>Descripción:</strong> {account.description}
+                      <strong>Description:</strong> {account.description}
                     </p>
                     <p>
-                      <strong>Primera conexión:</strong> {formatDate(account.firstSeen)}
+                      <strong>First connection:</strong> {formatDate(account.firstSeen)}
                     </p>
                     <p>
-                      <strong>Última actividad:</strong> {formatDate(account.lastActivity)}
+                      <strong>Last activity:</strong> {formatDate(account.lastActivity)}
                     </p>
                     <p className="text-orange-600">
-                      <strong>Esperando desde:</strong> {getTimeSinceFirstSeen(account.firstSeen)}
+                      <strong>Waiting since:</strong> {getTimeSinceFirstSeen(account.firstSeen)}
                     </p>
                   </div>
 
@@ -391,8 +391,8 @@ export const PendingAccountsManager: React.FC = () => {
                             conversionType === 'master' ? 'text-blue-700' : 'text-green-700'
                           }`}
                         >
-                          Convertir a{' '}
-                          {conversionType === 'master' ? 'Cuenta Master' : 'Cuenta Slave'}
+                          Convert to{' '}
+                          {conversionType === 'master' ? 'Master Account' : 'Slave Account'}
                         </h3>
                         <Button
                           size="sm"
@@ -414,21 +414,21 @@ export const PendingAccountsManager: React.FC = () => {
                       >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <Label htmlFor="convert-name">Nombre de la cuenta</Label>
+                            <Label htmlFor="convert-name">Account name</Label>
                             <Input
                               id="convert-name"
                               value={conversionForm.name}
                               onChange={e =>
                                 setConversionForm(prev => ({ ...prev, name: e.target.value }))
                               }
-                              placeholder="Ej: Cuenta Trading Principal"
+                              placeholder="Ex: Main Trading Account"
                               required
                               className="bg-white border border-gray-200"
                             />
                           </div>
 
                           <div>
-                            <Label htmlFor="convert-platform">Plataforma</Label>
+                            <Label htmlFor="convert-platform">Platform</Label>
                             <Select
                               value={conversionForm.platform}
                               onValueChange={value =>
@@ -442,7 +442,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 <SelectItem value="MT4">MetaTrader 4</SelectItem>
                                 <SelectItem value="MT5">MetaTrader 5</SelectItem>
                                 <SelectItem value="cTrader">cTrader</SelectItem>
-                                <SelectItem value="Other">Otra</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -462,7 +462,7 @@ export const PendingAccountsManager: React.FC = () => {
 
                           {conversionType === 'slave' && masterAccounts.length > 0 && (
                             <div>
-                              <Label htmlFor="convert-master">Conectar a cuenta Master</Label>
+                              <Label htmlFor="convert-master">Connect to Master account</Label>
                               <Select
                                 value={conversionForm.masterAccountId}
                                 onValueChange={value =>
@@ -470,11 +470,11 @@ export const PendingAccountsManager: React.FC = () => {
                                 }
                               >
                                 <SelectTrigger className="bg-white border border-gray-200">
-                                  <SelectValue placeholder="Seleccionar master..." />
+                                  <SelectValue placeholder="Select master..." />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="none">
-                                    Sin conectar (configurar después)
+                                    Not connected (configure later)
                                   </SelectItem>
                                   {masterAccounts.map(master => (
                                     <SelectItem key={master.id} value={master.id}>
@@ -488,14 +488,14 @@ export const PendingAccountsManager: React.FC = () => {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="convert-description">Descripción</Label>
+                          <Label htmlFor="convert-description">Description</Label>
                           <Textarea
                             id="convert-description"
                             value={conversionForm.description}
                             onChange={e =>
                               setConversionForm(prev => ({ ...prev, description: e.target.value }))
                             }
-                            placeholder="Descripción opcional"
+                            placeholder="Optional description"
                             rows={2}
                             className="bg-white border border-gray-200"
                           />
@@ -504,9 +504,7 @@ export const PendingAccountsManager: React.FC = () => {
                         {conversionType === 'slave' && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <Label htmlFor="lotCoefficient">
-                                Multiplicador de Lote (0.01 - 100)
-                              </Label>
+                              <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>
                               <Input
                                 id="lotCoefficient"
                                 type="number"
@@ -524,12 +522,12 @@ export const PendingAccountsManager: React.FC = () => {
                                 className="bg-white border border-gray-200"
                               />
                               <p className="text-xs text-muted-foreground mt-1">
-                                Multiplica el tamaño del lote de la cuenta master
+                                Multiplies the lot size from the master account
                               </p>
                             </div>
 
                             <div>
-                              <Label htmlFor="forceLot">Lote Fijo (0 para deshabilitar)</Label>
+                              <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
                               <Input
                                 id="forceLot"
                                 type="number"
@@ -547,7 +545,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 className="bg-white border border-gray-200"
                               />
                               <p className="text-xs text-muted-foreground mt-1">
-                                Si es mayor a 0, usa este lote fijo en lugar de copiar
+                                If greater than 0, uses this fixed lot instead of copying
                               </p>
                             </div>
 
@@ -565,7 +563,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 className="bg-white border border-gray-200"
                               />
                               <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                                Invertir operaciones (Compra → Venta, Venta → Compra)
+                                Reverse trades (Buy → Sell, Sell → Buy)
                               </Label>
                             </div>
                           </div>
@@ -579,7 +577,7 @@ export const PendingAccountsManager: React.FC = () => {
                             disabled={isConverting}
                             className="bg-white border border-gray-200"
                           >
-                            Cancelar
+                            Cancel
                           </Button>
                           <Button
                             type="submit"
@@ -589,10 +587,10 @@ export const PendingAccountsManager: React.FC = () => {
                             {isConverting ? (
                               <>
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                                Convirtiendo...
+                                Converting...
                               </>
                             ) : (
-                              `Convertir a ${conversionType === 'master' ? 'Master' : 'Slave'}`
+                              `Convert to ${conversionType === 'master' ? 'Master' : 'Slave'}`
                             )}
                           </Button>
                         </div>

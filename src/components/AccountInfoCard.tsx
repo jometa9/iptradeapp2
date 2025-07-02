@@ -76,7 +76,7 @@ export function AccountInfoCard({
     try {
       setIsPortalLoading(true);
 
-      // En este proyecto, redirigir a una página externa de gestión
+      // In this project, redirect to an external management page
       toast({
         title: 'Redirecting...',
         description: 'Opening subscription management portal',

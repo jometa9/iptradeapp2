@@ -8,17 +8,20 @@ import {
   deletePendingAccount,
   deleteSlaveAccount,
   disconnectSlave,
+  getAccountActivityStats,
   getAllAccounts,
   getMasterAccount,
   // Pending accounts management
   getPendingAccounts,
   getSlaveAccount,
   getSupportedPlatforms,
+  pingAccount,
   registerMasterAccount,
   registerSlaveAccount,
   updateMasterAccount,
   updateSlaveAccount,
 } from '../controllers/accountsController.js';
+import { authenticateAccount } from '../middleware/roleAuth.js';
 
 const router = express.Router();
 
@@ -30,10 +33,10 @@ router.post('/slave', registerSlaveAccount);
 router.post('/connect', connectSlaveToMaster);
 router.delete('/disconnect/:slaveAccountId', disconnectSlave);
 
-// Get account information
-router.get('/master/:masterAccountId', getMasterAccount);
-router.get('/slave/:slaveAccountId', getSlaveAccount);
-router.get('/all', getAllAccounts);
+// Get account information (with activity tracking)
+router.get('/master/:masterAccountId', authenticateAccount, getMasterAccount);
+router.get('/slave/:slaveAccountId', authenticateAccount, getSlaveAccount);
+router.get('/all', authenticateAccount, getAllAccounts);
 
 // Update accounts
 router.put('/master/:masterAccountId', updateMasterAccount);
@@ -45,6 +48,10 @@ router.delete('/slave/:slaveAccountId', deleteSlaveAccount);
 
 // Get supported platforms
 router.get('/platforms', getSupportedPlatforms);
+
+// Activity monitoring
+router.get('/activity/stats', getAccountActivityStats);
+router.post('/ping', authenticateAccount, pingAccount);
 
 // Pending accounts management
 router.get('/pending', getPendingAccounts);

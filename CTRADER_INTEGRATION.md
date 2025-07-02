@@ -1,58 +1,58 @@
-# Integración de cTrader - Guía de Configuración
+# cTrader Integration - Configuration Guide
 
-Esta guía te ayudará a configurar la integración de cTrader en tu aplicación de copy trading.
+This guide will help you configure cTrader integration in your copy trading application.
 
-## 📋 Requisitos Previos
+## 📋 Prerequisites
 
-1. **Cuenta cTrader ID**: Necesitas una cuenta cTrader registrada
-2. **Aplicación cTrader Open API**: Debes registrar tu aplicación en el portal de desarrollo
-3. **Broker compatible**: Tu broker debe soportar cTrader Open API
+1. **cTrader ID Account**: You need a registered cTrader account
+2. **cTrader Open API Application**: You must register your application in the development portal
+3. **Compatible Broker**: Your broker must support cTrader Open API
 
-## 🔧 Configuración de la Aplicación cTrader
+## 🔧 cTrader Application Configuration
 
-### Paso 1: Registrar tu aplicación
+### Step 1: Register your application
 
-1. Ve a [https://connect.ctrader.com/](https://connect.ctrader.com/)
-2. Inicia sesión con tu cTrader ID
-3. Navega a "Applications" > "Create New Application"
-4. Completa el formulario:
-   - **Name**: Nombre de tu aplicación (ej: "Mi Trade Copier")
-   - **Description**: Descripción de tu aplicación
+1. Go to [https://connect.ctrader.com/](https://connect.ctrader.com/)
+2. Sign in with your cTrader ID
+3. Navigate to "Applications" > "Create New Application"
+4. Fill out the form:
+   - **Name**: Your application name (e.g., "My Trade Copier")
+   - **Description**: Description of your application
    - **Redirect URI**: `http://localhost:3000/api/ctrader/auth/callback`
-   - **Scopes**: Selecciona `trading`
+   - **Scopes**: Select `trading`
 
-### Paso 2: Obtener credenciales
+### Step 2: Get credentials
 
-Después del registro, obtendrás:
-- **Client ID**: ID único de tu aplicación
-- **Client Secret**: Clave secreta (¡mantén esto seguro!)
+After registration, you will get:
+- **Client ID**: Unique ID of your application
+- **Client Secret**: Secret key (keep this secure!)
 
-## ⚙️ Configuración del Servidor
+## ⚙️ Server Configuration
 
-### Paso 1: Instalar dependencias
+### Step 1: Install dependencies
 
-Las dependencias ya están incluidas en el `package.json`, pero si necesitas instalarlas manualmente:
+Dependencies are already included in `package.json`, but if you need to install them manually:
 
 ```bash
 cd server
 npm install ws axios dotenv jsonwebtoken
 ```
 
-### Paso 2: Configurar variables de entorno
+### Step 2: Configure environment variables
 
-Crea un archivo `.env` en la carpeta `server/` basado en `.env.example`:
+Create a `.env` file in the `server/` folder based on `.env.example`:
 
 ```bash
 # Server Configuration
 PORT=3000
 
 # cTrader Open API Configuration
-CTRADER_CLIENT_ID=tu_client_id_aqui
-CTRADER_CLIENT_SECRET=tu_client_secret_aqui
+CTRADER_CLIENT_ID=your_client_id_here
+CTRADER_CLIENT_SECRET=your_client_secret_here
 CTRADER_REDIRECT_URI=http://localhost:3000/api/ctrader/auth/callback
 CTRADER_SCOPE=trading
 
-# cTrader API Endpoints (no cambiar)
+# cTrader API Endpoints (do not change)
 CTRADER_AUTH_URL=https://connect.ctrader.com/oauth/v2/auth
 CTRADER_TOKEN_URL=https://connect.ctrader.com/oauth/v2/token
 CTRADER_API_URL=wss://connect.ctrader.com/apps/trading
@@ -61,134 +61,134 @@ CTRADER_API_URL=wss://connect.ctrader.com/apps/trading
 FRONTEND_URL=http://localhost:5173
 
 # Security
-JWT_SECRET=tu-clave-secreta-super-segura
+JWT_SECRET=your-super-secure-secret-key
 
 # Environment
 NODE_ENV=development
 ```
 
-### Paso 3: Iniciar el servidor
+### Step 3: Start the server
 
 ```bash
 cd server
 npm start
 ```
 
-## 🖥️ Uso de la Interfaz
+## 🖥️ Interface Usage
 
-### 1. Autenticación
+### 1. Authentication
 
-1. Ve al Dashboard > pestaña "Cuentas Trading"
-2. En la sección "Gestión de cTrader", haz clic en **"Autenticar"**
-3. Se abrirá una ventana emergente de cTrader
-4. Inicia sesión con tu cTrader ID y autoriza la aplicación
-5. La ventana se cerrará automáticamente y verás el estado "Autenticado"
+1. Go to Dashboard > "Trading Accounts" tab
+2. In the "cTrader Management" section, click **"Authenticate"**
+3. A cTrader popup window will open
+4. Sign in with your cTrader ID and authorize the application
+5. The window will close automatically and you'll see "Authenticated" status
 
-### 2. Conectar a la API
+### 2. Connect to API
 
-1. Después de autenticarte, haz clic en **"Conectar"** en la sección "Conexión API"
-2. Esto establecerá una conexión WebSocket con cTrader
-3. Las cuentas disponibles se cargarán automáticamente
+1. After authentication, click **"Connect"** in the "API Connection" section
+2. This will establish a WebSocket connection with cTrader
+3. Available accounts will load automatically
 
-### 3. Registrar Cuentas
+### 3. Register Accounts
 
-#### Como Master (Proveedor de Señales):
-1. Haz clic en **"Registrar Master"**
-2. Selecciona la cuenta cTrader que proveerá las señales
-3. Asigna un nombre y descripción
-4. La cuenta se registrará en tu sistema de copy trading
+#### As Master (Signal Provider):
+1. Click **"Register Master"**
+2. Select the cTrader account that will provide signals
+3. Assign a name and description
+4. The account will be registered in your copy trading system
 
-#### Como Slave (Seguidor):
-1. Haz clic en **"Registrar Slave"**
-2. Selecciona la cuenta cTrader que seguirá las señales
-3. Selecciona la cuenta master a seguir
-4. Asigna un nombre y descripción
-5. La cuenta copiará automáticamente las operaciones del master
+#### As Slave (Follower):
+1. Click **"Register Slave"**
+2. Select the cTrader account that will follow signals
+3. Select the master account to follow
+4. Assign a name and description
+5. The account will automatically copy trades from the master
 
-## 🔗 API Endpoints Disponibles
+## 🔗 Available API Endpoints
 
-### Autenticación
-- `POST /api/ctrader/auth/initiate` - Iniciar autenticación OAuth
-- `GET /api/ctrader/auth/callback` - Callback de OAuth
-- `GET /api/ctrader/auth/status/:userId` - Estado de autenticación
-- `DELETE /api/ctrader/auth/revoke/:userId` - Revocar autenticación
+### Authentication
+- `POST /api/ctrader/auth/initiate` - Initiate OAuth authentication
+- `GET /api/ctrader/auth/callback` - OAuth callback
+- `GET /api/ctrader/auth/status/:userId` - Authentication status
+- `DELETE /api/ctrader/auth/revoke/:userId` - Revoke authentication
 
-### Conexión API
-- `POST /api/ctrader/connect` - Conectar a cTrader API
-- `DELETE /api/ctrader/disconnect/:userId` - Desconectar
-- `GET /api/ctrader/status/:userId` - Estado de conexión
+### API Connection
+- `POST /api/ctrader/connect` - Connect to cTrader API
+- `DELETE /api/ctrader/disconnect/:userId` - Disconnect
+- `GET /api/ctrader/status/:userId` - Connection status
 
-### Gestión de Cuentas
-- `GET /api/ctrader/accounts/:userId` - Obtener cuentas
-- `POST /api/ctrader/account/authenticate` - Autenticar cuenta específica
-- `POST /api/ctrader/register/master` - Registrar cuenta master
-- `POST /api/ctrader/register/slave` - Registrar cuenta slave
+### Account Management
+- `GET /api/ctrader/accounts/:userId` - Get accounts
+- `POST /api/ctrader/account/authenticate` - Authenticate specific account
+- `POST /api/ctrader/register/master` - Register master account
+- `POST /api/ctrader/register/slave` - Register slave account
 
-## 🔄 Flujo de Copy Trading
+## 🔄 Copy Trading Flow
 
-1. **Cuenta Master** ejecuta una operación en cTrader
-2. **cTrader API** envía evento de ejecución vía WebSocket
-3. **Tu servidor** recibe el evento y lo procesa
-4. **Sistema de transformaciones** aplica reglas (multiplicadores, lotes fijos, etc.)
-5. **Cuentas Slave** reciben las órdenes transformadas
-6. **cTrader API** ejecuta las órdenes en las cuentas slave
+1. **Master Account** executes a trade in cTrader
+2. **cTrader API** sends execution event via WebSocket
+3. **Your server** receives the event and processes it
+4. **Transformation system** applies rules (multipliers, fixed lots, etc.)
+5. **Slave Accounts** receive transformed orders
+6. **cTrader API** executes orders in slave accounts
 
-## 📊 Modelo de Copia
+## 📊 Copy Model
 
 ### Equity-to-Equity Ratio
 ```
-Volumen Copiado = (Equity Slave / Equity Master) × Volumen Master
+Copied Volume = (Slave Equity / Master Equity) × Master Volume
 ```
 
-### Ejemplo:
-- Master tiene $10,000 equity, abre 1 lote
-- Slave tiene $5,000 equity
-- Volumen copiado = ($5,000 / $10,000) × 1 = 0.5 lotes
+### Example:
+- Master has $10,000 equity, opens 1 lot
+- Slave has $5,000 equity
+- Copied volume = ($5,000 / $10,000) × 1 = 0.5 lots
 
-## 🛡️ Seguridad
+## 🛡️ Security
 
-### Tokens de Acceso
-- Los tokens se almacenan localmente en `server/config/ctrader_tokens.json`
-- Se renuevan automáticamente antes del vencimiento
-- Usar HTTPS en producción
+### Access Tokens
+- Tokens are stored locally in `server/config/ctrader_tokens.json`
+- They are automatically renewed before expiration
+- Use HTTPS in production
 
-### Mejores Prácticas
-1. Mantén el `CLIENT_SECRET` seguro
-2. Usa un `JWT_SECRET` fuerte
-3. Configura CORS apropiadamente
-4. Usa cuentas demo para pruebas
+### Best Practices
+1. Keep the `CLIENT_SECRET` secure
+2. Use a strong `JWT_SECRET`
+3. Configure CORS appropriately
+4. Use demo accounts for testing
 
 ## 🚨 Troubleshooting
 
 ### Error: "cTrader credentials not configured"
-- Verifica que `CTRADER_CLIENT_ID` y `CTRADER_CLIENT_SECRET` estén en el archivo `.env`
+- Verify that `CTRADER_CLIENT_ID` and `CTRADER_CLIENT_SECRET` are in the `.env` file
 
 ### Error: "Connection timeout"
-- Verifica tu conexión a internet
-- Confirma que la URL de la API es correcta
+- Check your internet connection
+- Confirm that the API URL is correct
 
 ### Error: "User not authenticated"
-- Completa el proceso de OAuth primero
-- Verifica que los tokens no hayan expirado
+- Complete the OAuth process first
+- Verify that tokens haven't expired
 
-### No se cargan las cuentas
-- Asegúrate de estar conectado a la API
-- Verifica que tu broker soporte cTrader Open API
+### Accounts don't load
+- Make sure you're connected to the API
+- Verify that your broker supports cTrader Open API
 
-## 📞 Soporte
+## 📞 Support
 
-- **Documentación cTrader**: [https://help.ctrader.com/open-api/](https://help.ctrader.com/open-api/)
-- **Portal de Desarrollo**: [https://connect.ctrader.com/](https://connect.ctrader.com/)
-- **Comunidad Telegram**: Busca "cTrader Open API" en Telegram
+- **cTrader Documentation**: [https://help.ctrader.com/open-api/](https://help.ctrader.com/open-api/)
+- **Development Portal**: [https://connect.ctrader.com/](https://connect.ctrader.com/)
+- **Telegram Community**: Search for "cTrader Open API" on Telegram
 
-## 🔄 Siguientes Pasos
+## 🔄 Next Steps
 
-1. **Prueba con cuentas Demo** primero
-2. **Configura transformaciones** específicas por cuenta
-3. **Implementa logging** para auditoría
-4. **Configura alertas** para errores críticos
-5. **Optimiza el rendimiento** para múltiples cuentas
+1. **Test with Demo accounts** first
+2. **Configure transformations** specific to each account
+3. **Implement logging** for auditing
+4. **Configure alerts** for critical errors
+5. **Optimize performance** for multiple accounts
 
 ---
 
-¡Tu integración de cTrader está lista! 🎉
+Your cTrader integration is ready! 🎉

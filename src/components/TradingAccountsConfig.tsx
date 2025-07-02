@@ -93,6 +93,22 @@ export function TradingAccountsConfig() {
       // Handle the actual format returned by the backend
       const allAccounts = [];
 
+      // Helper function to map backend status to frontend status
+      const mapStatus = backendStatus => {
+        switch (backendStatus) {
+          case 'active':
+            return 'synchronized';
+          case 'pending':
+            return 'pending';
+          case 'offline':
+            return 'offline';
+          case 'error':
+            return 'error';
+          default:
+            return 'synchronized'; // Default to synchronized for unknown statuses
+        }
+      };
+
       // Add master accounts
       if (data.masterAccounts) {
         Object.values(data.masterAccounts).forEach((master: any) => {
@@ -103,7 +119,7 @@ export function TradingAccountsConfig() {
             server: master.broker || '',
             password: '••••••••',
             accountType: 'master',
-            status: master.status || 'active',
+            status: mapStatus(master.status || 'active'),
             connectedSlaves: master.connectedSlaves || [],
             totalSlaves: master.totalSlaves || 0,
           });
@@ -122,7 +138,7 @@ export function TradingAccountsConfig() {
                 server: slave.broker || '',
                 password: '••••••••',
                 accountType: 'slave',
-                status: slave.status || 'active',
+                status: mapStatus(slave.status || 'active'),
                 connectedToMaster: master.id,
               });
             });
@@ -140,7 +156,7 @@ export function TradingAccountsConfig() {
             server: slave.broker || '',
             password: '••••••••',
             accountType: 'slave',
-            status: slave.status || 'active',
+            status: mapStatus(slave.status || 'active'),
             connectedToMaster: 'none',
           });
         });
@@ -424,13 +440,13 @@ export function TradingAccountsConfig() {
     if (accounts.length === 0) return 'none';
 
     const syncedCount = accounts.filter(acc => acc.status === 'synchronized').length;
-    const errorCount = accounts.filter(
-      acc => acc.status === 'error' || acc.status === 'offline'
-    ).length;
+    const errorCount = accounts.filter(acc => acc.status === 'error').length;
+    const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
     const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
 
     if (syncedCount === accounts.length) return 'optimal';
-    if (errorCount > syncedCount) return 'error';
+    if (errorCount > 0) return 'error';
+    if (offlineCount > syncedCount) return 'warning';
     if (pendingCount > syncedCount) return 'pending';
     return 'warning';
   };
@@ -440,6 +456,38 @@ export function TradingAccountsConfig() {
       ...prev,
       [masterId]: !prev[masterId],
     }));
+  };
+
+  // Helper function to get status display text
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'synchronized':
+        return 'Synced';
+      case 'pending':
+        return 'Pending';
+      case 'offline':
+        return 'Offline';
+      case 'error':
+        return 'Error';
+      default:
+        return 'Synced'; // Default for active accounts
+    }
+  };
+
+  // Helper function to get status display color class
+  const getStatusColorClass = (status: string) => {
+    switch (status) {
+      case 'synchronized':
+        return 'text-green-600 text-sm';
+      case 'pending':
+        return 'text-blue-600 text-sm';
+      case 'offline':
+        return 'text-orange-600 text-sm';
+      case 'error':
+        return 'text-red-600 text-sm';
+      default:
+        return 'text-green-600 text-sm'; // Default for active accounts
+    }
   };
 
   return (
@@ -546,9 +594,15 @@ export function TradingAccountsConfig() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Invalid/Error:</div>
+              <div className="text-sm text-muted-foreground">Offline:</div>
+              <div className="font-medium text-orange-600">
+                {accounts.filter(acc => acc.status === 'offline').length}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">Error:</div>
               <div className="font-medium text-red-600">
-                {accounts.filter(acc => acc.status === 'error' || acc.status === 'offline').length}
+                {accounts.filter(acc => acc.status === 'error').length}
               </div>
             </div>
           </div>
@@ -853,20 +907,8 @@ export function TradingAccountsConfig() {
                         }}
                       >
                         <td className="px-4 py-2 whitespace-nowrap align-middle">
-                          <span
-                            className={
-                              masterAccount.status === 'synchronized'
-                                ? 'text-green-600 text-sm'
-                                : masterAccount.status === 'pending'
-                                  ? 'text-blue-600 text-sm'
-                                  : 'text-red-600 text-sm'
-                            }
-                          >
-                            {masterAccount.status === 'synchronized'
-                              ? 'Synced'
-                              : masterAccount.status === 'pending'
-                                ? 'Pending'
-                                : 'Invalid'}
+                          <span className={getStatusColorClass(masterAccount.status)}>
+                            {getStatusDisplayText(masterAccount.status)}
                           </span>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
@@ -975,20 +1017,8 @@ export function TradingAccountsConfig() {
                           .map(slaveAccount => (
                             <tr key={slaveAccount.id} className="bg-white hover:bg-muted/50">
                               <td className="px-4 py-1.5 whitespace-nowrap align-middle">
-                                <span
-                                  className={
-                                    slaveAccount.status === 'synchronized'
-                                      ? 'text-green-600 text-sm'
-                                      : slaveAccount.status === 'pending'
-                                        ? 'text-blue-600 text-sm'
-                                        : 'text-red-600 text-sm'
-                                  }
-                                >
-                                  {slaveAccount.status === 'synchronized'
-                                    ? 'Synced'
-                                    : slaveAccount.status === 'pending'
-                                      ? 'Pending'
-                                      : 'Invalid'}
+                                <span className={getStatusColorClass(slaveAccount.status)}>
+                                  {getStatusDisplayText(slaveAccount.status)}
                                 </span>
                               </td>
                               <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
@@ -1092,20 +1122,8 @@ export function TradingAccountsConfig() {
                   .map(orphanSlave => (
                     <tr key={orphanSlave.id} className="hover:bg-muted/50 bg-gray-50">
                       <td className="px-4 py-2 whitespace-nowrap align-middle">
-                        <span
-                          className={
-                            orphanSlave.status === 'synchronized'
-                              ? 'text-green-600 text-sm'
-                              : orphanSlave.status === 'pending'
-                                ? 'text-blue-600 text-sm'
-                                : 'text-red-600 text-sm'
-                          }
-                        >
-                          {orphanSlave.status === 'synchronized'
-                            ? 'Synced'
-                            : orphanSlave.status === 'pending'
-                              ? 'Pending'
-                              : 'Invalid'}
+                        <span className={getStatusColorClass(orphanSlave.status)}>
+                          {getStatusDisplayText(orphanSlave.status)}
                         </span>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
