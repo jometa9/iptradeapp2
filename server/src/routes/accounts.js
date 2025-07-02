@@ -10,6 +10,7 @@ import {
   disconnectSlave,
   getAccountActivityStats,
   getAllAccounts,
+  getAllAccountsForAdmin,
   getMasterAccount,
   // Pending accounts management
   getPendingAccounts,

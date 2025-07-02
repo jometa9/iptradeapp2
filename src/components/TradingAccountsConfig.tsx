@@ -11,7 +11,6 @@ import {
   EyeOff,
   Info,
   Pencil,
-  RefreshCw,
   Trash,
   XCircle,
 } from 'lucide-react';
@@ -22,6 +21,7 @@ import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
 import { Tooltip } from './ui/tooltip';
 import { toast } from './ui/use-toast';
 
@@ -50,6 +50,11 @@ export function TradingAccountsConfig() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
+
+  // Copier status management
+  const [copierStatus, setCopierStatus] = useState<any>(null);
+  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, any>>({});
+  const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
 
   const [formState, setFormState] = useState({
     accountNumber: '',
@@ -193,6 +198,138 @@ export function TradingAccountsConfig() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Load copier status and slave configurations
+  const loadCopierData = async () => {
+    try {
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const baseUrl = `http://localhost:${serverPort}/api`;
+
+      // Load copier status
+      const copierResponse = await fetch(`${baseUrl}/copier/status`);
+      if (copierResponse.ok) {
+        const copierData = await copierResponse.json();
+        setCopierStatus(copierData);
+      }
+
+      // Load slave configurations for all slave accounts
+      const slaveAccounts = accounts.filter(acc => acc.accountType === 'slave');
+      const slaveConfigPromises = slaveAccounts.map(async slave => {
+        try {
+          const response = await fetch(`${baseUrl}/slave-config/${slave.accountNumber}`);
+          if (response.ok) {
+            const config = await response.json();
+            return { [slave.accountNumber]: config };
+          }
+        } catch (error) {
+          console.error(`Failed to load config for slave ${slave.accountNumber}:`, error);
+        }
+        return {};
+      });
+
+      const slaveConfigResults = await Promise.all(slaveConfigPromises);
+      const mergedSlaveConfigs = Object.assign({}, ...slaveConfigResults);
+      setSlaveConfigs(mergedSlaveConfigs);
+    } catch (error) {
+      console.error('Error loading copier data:', error);
+    }
+  };
+
+  // Load copier data when accounts change
+  useEffect(() => {
+    if (accounts.length > 0) {
+      loadCopierData();
+    }
+  }, [accounts]);
+
+  // Toggle master account copier status
+  const toggleMasterStatus = async (masterAccountId: string, enabled: boolean) => {
+    try {
+      setUpdatingCopier(`master-${masterAccountId}`);
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const response = await fetch(`http://localhost:${serverPort}/api/copier/master`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterAccountId, enabled }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Success',
+          description: result.message,
+        });
+        loadCopierData(); // Reload copier data
+      } else {
+        throw new Error('Failed to update master copier status');
+      }
+    } catch (error) {
+      console.error('Error updating master status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update master copier status',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdatingCopier(null);
+    }
+  };
+
+  // Toggle slave account copier status
+  const toggleSlaveStatus = async (slaveAccountId: string, enabled: boolean) => {
+    try {
+      setUpdatingCopier(`slave-${slaveAccountId}`);
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slaveAccountId, enabled }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast({
+          title: 'Success',
+          description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
+        });
+        loadCopierData(); // Reload copier data
+      } else {
+        throw new Error('Failed to update slave status');
+      }
+    } catch (error) {
+      console.error('Error updating slave status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update slave status',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdatingCopier(null);
+    }
+  };
+
+  // Get effective copier status for master account
+  const getMasterEffectiveStatus = (masterAccountId: string) => {
+    if (!copierStatus) return false;
+    const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
+    return copierStatus.globalStatus && masterStatus?.masterStatus !== false;
+  };
+
+  // Get effective copier status for slave account
+  const getSlaveEffectiveStatus = (slaveAccountId: string, masterAccountId?: string) => {
+    if (!copierStatus) return false;
+    const slaveConfig = slaveConfigs[slaveAccountId];
+    const slaveEnabled = slaveConfig?.config?.enabled !== false;
+
+    // If slave is connected to a master, check master status too
+    if (masterAccountId) {
+      const masterStatus = getMasterEffectiveStatus(masterAccountId);
+      return copierStatus.globalStatus && masterStatus && slaveEnabled;
+    }
+
+    // For unconnected slaves, only check global and slave status
+    return copierStatus.globalStatus && slaveEnabled;
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormState({ ...formState, [e.target.name]: e.target.value });
@@ -501,7 +638,7 @@ export function TradingAccountsConfig() {
   };
 
   return (
-    <Card>
+    <Card className="bg-white">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -509,19 +646,6 @@ export function TradingAccountsConfig() {
             <CardDescription>
               Manage your trading accounts and copy trading configuration (up to 50 accounts)
             </CardDescription>
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <Button
-              onClick={handleRefreshAccounts}
-              variant="ghost"
-              disabled={isRefreshing || isLoading}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button onClick={handleAddAccount} disabled={accounts.length >= 50}>
-              Add Trading Account
-            </Button>
           </div>
         </div>
       </CardHeader>
@@ -878,12 +1002,12 @@ export function TradingAccountsConfig() {
                 <p className="text-muted-foreground">Loading your trading accounts...</p>
               </div>
             ) : (
-              <>
+              <div>
                 <p className="text-muted-foreground">No trading accounts configured yet.</p>
-                <Button onClick={handleAddAccount} className="mt-4">
-                  Add your first trading account
-                </Button>
-              </>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Accounts must be added through the pending accounts section first
+                </p>
+              </div>
             )}
           </div>
         ) : (
@@ -893,6 +1017,9 @@ export function TradingAccountsConfig() {
                 <tr>
                   <th className="px-4 py-3 align-middle"></th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Status</th>
+                  <th className="px-4 py-3 text-left text-xs uppercase align-middle">
+                    Copy Trading
+                  </th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Account</th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
                   <th className="px-4 py-3 text-left text-xs uppercase align-middle">Platform</th>
@@ -950,10 +1077,31 @@ export function TradingAccountsConfig() {
                           <td className="py-2 align-middle">
                             <div className="flex items-center justify-center h-full w-full">
                               <Tooltip tip={getStatusDisplayText(masterAccount.status)}>
-                                <span className="flex items-center justify-center h-4 w-4">
+                                <span className="flex items-center justify-center h-5 w-5">
                                   {getStatusIcon(masterAccount.status)}
                                 </span>
                               </Tooltip>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 align-middle">
+                            <div className="flex items-center justify-center">
+                              <Switch
+                                checked={getMasterEffectiveStatus(masterAccount.accountNumber)}
+                                onCheckedChange={enabled =>
+                                  toggleMasterStatus(masterAccount.accountNumber, enabled)
+                                }
+                                disabled={
+                                  updatingCopier === `master-${masterAccount.accountNumber}` ||
+                                  !copierStatus?.globalStatus
+                                }
+                                title={
+                                  !copierStatus?.globalStatus
+                                    ? 'Global copier is OFF'
+                                    : getMasterEffectiveStatus(masterAccount.accountNumber)
+                                      ? 'Stop sending signals to slaves'
+                                      : 'Start sending signals to slaves'
+                                }
+                              />
                             </div>
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
@@ -1061,10 +1209,40 @@ export function TradingAccountsConfig() {
                               <td className="px-4 py-1.5 align-middle">
                                 <div className="flex items-center justify-center h-full w-full">
                                   <Tooltip tip={getStatusDisplayText(slaveAccount.status)}>
-                                    <span className="flex items-center justify-center h-4 w-4">
+                                    <span className="flex items-center justify-center h-5 w-5">
                                       {getStatusIcon(slaveAccount.status)}
                                     </span>
                                   </Tooltip>
+                                </div>
+                              </td>
+                              <td className="px-4 py-1.5 align-middle">
+                                <div className="flex items-center justify-center">
+                                  <Switch
+                                    checked={getSlaveEffectiveStatus(
+                                      slaveAccount.accountNumber,
+                                      masterAccount.accountNumber
+                                    )}
+                                    onCheckedChange={enabled =>
+                                      toggleSlaveStatus(slaveAccount.accountNumber, enabled)
+                                    }
+                                    disabled={
+                                      updatingCopier === `slave-${slaveAccount.accountNumber}` ||
+                                      !copierStatus?.globalStatus ||
+                                      !getMasterEffectiveStatus(masterAccount.accountNumber)
+                                    }
+                                    title={
+                                      !copierStatus?.globalStatus
+                                        ? 'Global copier is OFF'
+                                        : !getMasterEffectiveStatus(masterAccount.accountNumber)
+                                          ? 'Master is not sending signals'
+                                          : getSlaveEffectiveStatus(
+                                                slaveAccount.accountNumber,
+                                                masterAccount.accountNumber
+                                              )
+                                            ? 'Stop receiving signals from master'
+                                            : 'Start receiving signals from master'
+                                    }
+                                  />
                                 </div>
                               </td>
                               <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
@@ -1172,10 +1350,31 @@ export function TradingAccountsConfig() {
                       <td className="px-4 py-2 align-middle">
                         <div className="flex items-center justify-center h-full w-full">
                           <Tooltip tip={getStatusDisplayText(orphanSlave.status)}>
-                            <span className="flex items-center justify-center h-4 w-4">
+                            <span className="flex items-center justify-center h-5 w-5">
                               {getStatusIcon(orphanSlave.status)}
                             </span>
                           </Tooltip>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 align-middle">
+                        <div className="flex items-center justify-center">
+                          <Switch
+                            checked={getSlaveEffectiveStatus(orphanSlave.accountNumber)}
+                            onCheckedChange={enabled =>
+                              toggleSlaveStatus(orphanSlave.accountNumber, enabled)
+                            }
+                            disabled={
+                              updatingCopier === `slave-${orphanSlave.accountNumber}` ||
+                              !copierStatus?.globalStatus
+                            }
+                            title={
+                              !copierStatus?.globalStatus
+                                ? 'Global copier is OFF'
+                                : getSlaveEffectiveStatus(orphanSlave.accountNumber)
+                                  ? 'Stop receiving signals'
+                                  : 'Start receiving signals'
+                            }
+                          />
                         </div>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">

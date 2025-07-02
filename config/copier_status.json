@@ -1,6 +1,9 @@
 {
-  "globalStatus": false,
+  "globalStatus": true,
   "masterAccounts": {
-    "123456": true
+    "66666": false,
+    "123456": true,
+    "TEST_SLAVE_001": false,
+    "PENDING_NINJA_006": false
   }
 }

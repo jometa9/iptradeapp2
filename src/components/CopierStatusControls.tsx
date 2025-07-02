@@ -303,7 +303,7 @@ export const CopierStatusControls: React.FC = () => {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="bg-white">
         <CardHeader>
           <CardTitle>Copier Status Controls</CardTitle>
         </CardHeader>
@@ -319,7 +319,7 @@ export const CopierStatusControls: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Global Controls */}
-      <Card>
+      <Card className="bg-white">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">

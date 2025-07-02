@@ -72,6 +72,60 @@ const getDefaultSlaveConfig = () => ({
   lastUpdated: null,
 });
 
+// Default slave configuration for new accounts converted from pending
+// These accounts should be disabled by default as per requirement
+const getDisabledSlaveConfig = () => ({
+  // Trading transformations (applied after master transformations)
+  lotMultiplier: 1.0,
+  forceLot: null,
+  reverseTrading: false,
+
+  // Risk management
+  maxLotSize: null,
+  minLotSize: null,
+
+  // Symbol filtering
+  allowedSymbols: [], // Empty array means all symbols allowed
+  blockedSymbols: [],
+
+  // Order type filtering
+  allowedOrderTypes: [], // Empty array means all types allowed
+  blockedOrderTypes: [],
+
+  // Time-based filtering
+  tradingHours: {
+    enabled: false,
+    startTime: '00:00',
+    endTime: '23:59',
+    timezone: 'UTC',
+  },
+
+  // Additional settings
+  enabled: false, // Disabled by default for new accounts from pending
+  description: 'Account converted from pending - disabled by default',
+  lastUpdated: new Date().toISOString(),
+});
+
+// Create disabled slave configuration for new account
+export const createDisabledSlaveConfig = slaveAccountId => {
+  const configs = loadSlaveConfigs();
+
+  // Only create if it doesn't exist
+  if (!configs[slaveAccountId]) {
+    configs[slaveAccountId] = getDisabledSlaveConfig();
+
+    if (saveSlaveConfigs(configs)) {
+      console.log(`✅ Created disabled slave configuration for ${slaveAccountId}`);
+      return true;
+    } else {
+      console.error(`❌ Failed to create slave configuration for ${slaveAccountId}`);
+      return false;
+    }
+  }
+
+  return true; // Already exists
+};
+
 // Reverse trading type mappings (same as master)
 const reverseTypeMapping = {
   BUY: 'SELL',

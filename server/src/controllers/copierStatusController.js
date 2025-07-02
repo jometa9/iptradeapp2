@@ -60,6 +60,26 @@ export const isCopierEnabled = masterAccountId => {
   return masterStatus !== undefined ? masterStatus : true;
 };
 
+// Create disabled master configuration for new account
+export const createDisabledMasterConfig = masterAccountId => {
+  const config = loadCopierStatus();
+
+  // Only create if it doesn't exist
+  if (!config.masterAccounts.hasOwnProperty(masterAccountId)) {
+    config.masterAccounts[masterAccountId] = false; // Disabled by default for new accounts from pending
+
+    if (saveCopierStatus(config)) {
+      console.log(`✅ Created disabled master copier configuration for ${masterAccountId}`);
+      return true;
+    } else {
+      console.error(`❌ Failed to create master copier configuration for ${masterAccountId}`);
+      return false;
+    }
+  }
+
+  return true; // Already exists
+};
+
 // Get global copier status
 export const getGlobalStatus = (req, res) => {
   const config = loadCopierStatus();

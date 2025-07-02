@@ -1,19 +1,7 @@
+gestion de cuentas pendientes ui definitiva
+gestion de cuentas activas ui definitiva
+ui styles en general
 
-LUNES
-- backend server que tenga todo listo con apis y demas incluyendo ctrader
-- dashboard de prender y apagar
-- dashboar de gestion de cuentas
-
-GO SIGLO 21
-
-- requerimiento para hacer o pedir
-    - ea master y slave mt5
-    - ea master y slave mt4
-    - integracion en app con ctrader para agregar cuentas
-
-- integrar bien todo
-- pruebas bien robustas e2e
-- afinar todo a detalle y push todo para pensar ya en despliegue y salir a vender
 
 ---
 

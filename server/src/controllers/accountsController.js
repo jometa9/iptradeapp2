@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import { createDisabledMasterConfig } from './copierStatusController.js';
+import { createDisabledSlaveConfig } from './slaveConfigController.js';
+
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
 const accountsFilePath = join(configBaseDir, 'registered_accounts.json');
@@ -211,11 +214,15 @@ export const registerMasterAccount = (req, res) => {
   };
 
   if (saveAccountsConfig(config)) {
-    console.log(`Master account registered: ${masterAccountId}`);
+    // Create disabled master configuration for copy control
+    createDisabledMasterConfig(masterAccountId);
+
+    console.log(`Master account registered: ${masterAccountId} (copying disabled by default)`);
     res.json({
-      message: 'Master account registered successfully',
+      message: 'Master account registered successfully (copying disabled by default)',
       account: config.masterAccounts[masterAccountId],
       status: 'success',
+      copyingEnabled: false,
     });
   } else {
     res.status(500).json({ error: 'Failed to register master account' });
@@ -272,14 +279,18 @@ export const registerSlaveAccount = (req, res) => {
   }
 
   if (saveAccountsConfig(config)) {
+    // Create disabled slave configuration for copy control
+    createDisabledSlaveConfig(slaveAccountId);
+
     console.log(
-      `Slave account registered: ${slaveAccountId}${masterAccountId ? ` -> ${masterAccountId}` : ''}`
+      `Slave account registered: ${slaveAccountId}${masterAccountId ? ` -> ${masterAccountId}` : ''} (copying disabled by default)`
     );
     res.json({
-      message: 'Slave account registered successfully',
+      message: 'Slave account registered successfully (copying disabled by default)',
       account: config.slaveAccounts[slaveAccountId],
       connectedTo: masterAccountId || null,
       status: 'success',
+      copyingEnabled: false,
     });
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
@@ -712,12 +723,18 @@ export const convertPendingToMaster = (req, res) => {
     delete config.pendingAccounts[accountId];
 
     if (saveAccountsConfig(config)) {
-      console.log(`✅ Pending account ${accountId} converted to master`);
+      // Create disabled master configuration for copy control
+      createDisabledMasterConfig(accountId);
+
+      console.log(
+        `✅ Pending account ${accountId} converted to master (copying disabled by default)`
+      );
       res.json({
-        message: 'Pending account successfully converted to master',
+        message: 'Pending account successfully converted to master (copying disabled by default)',
         accountId,
         account: masterAccount,
         status: 'converted_to_master',
+        copyingEnabled: false,
       });
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
@@ -788,15 +805,19 @@ export const convertPendingToSlave = (req, res) => {
     }
 
     if (saveAccountsConfig(config)) {
+      // Create disabled slave configuration for copy control
+      createDisabledSlaveConfig(accountId);
+
       console.log(
-        `✅ Pending account ${accountId} converted to slave${masterAccountId ? ` and connected to master ${masterAccountId}` : ''}`
+        `✅ Pending account ${accountId} converted to slave${masterAccountId ? ` and connected to master ${masterAccountId}` : ''} (copying disabled by default)`
       );
       res.json({
-        message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''}`,
+        message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''} (copying disabled by default)`,
         accountId,
         account: slaveAccount,
         connectedTo: masterAccountId || null,
         status: 'converted_to_slave',
+        copyingEnabled: false,
       });
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });

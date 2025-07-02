@@ -31,7 +31,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="w-full max-w-md">
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
           <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
@@ -43,7 +43,7 @@ export const LoginScreen: React.FC = () => {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 max-w-sm mx-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Input
@@ -53,7 +53,7 @@ export const LoginScreen: React.FC = () => {
                 value={apiKey}
                 onChange={handleInputChange}
                 disabled={isLoading}
-                className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white"
               />
             </div>
 
