@@ -157,6 +157,21 @@ export const setMasterStatus = (req, res) => {
     });
   }
 
+  // Check if account is offline before enabling
+  if (enabled) {
+    const { loadAccountsConfig } = require('./accountsController.js');
+    const accountsConfig = loadAccountsConfig();
+    const masterAccount = accountsConfig.masterAccounts[masterAccountId];
+
+    if (masterAccount && masterAccount.status === 'offline') {
+      return res.status(400).json({
+        error: 'Cannot enable copy trading for offline account',
+        message: 'Account must be online to enable copy trading',
+        accountStatus: 'offline',
+      });
+    }
+  }
+
   const config = loadCopierStatus();
   config.masterAccounts[masterAccountId] = Boolean(enabled);
 
@@ -280,3 +295,6 @@ export const resetAllToOn = (req, res) => {
     res.status(500).json({ error: 'Failed to reset all statuses' });
   }
 };
+
+// Export internal functions for use in other controllers
+export { loadCopierStatus, saveCopierStatus };

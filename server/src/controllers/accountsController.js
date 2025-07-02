@@ -1,8 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { createDisabledMasterConfig } from './copierStatusController.js';
-import { createDisabledSlaveConfig } from './slaveConfigController.js';
+import {
+  createDisabledMasterConfig,
+  loadCopierStatus,
+  saveCopierStatus,
+} from './copierStatusController.js';
+import {
+  createDisabledSlaveConfig,
+  loadSlaveConfigs,
+  saveSlaveConfigs,
+} from './slaveConfigController.js';
 
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -94,12 +102,34 @@ const checkAccountActivity = () => {
             console.log(
               `📴 Master account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
             );
+
+            // Disable copy trading for offline master
+            const copierStatus = loadCopierStatus();
+            if (copierStatus.masterAccounts[accountId] !== false) {
+              copierStatus.masterAccounts[accountId] = false;
+              saveCopierStatus(copierStatus);
+              console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
+            }
           }
         } else {
           if (account.status === 'offline') {
             account.status = 'active';
             hasChanges = true;
             console.log(`📡 Master account ${accountId} back online`);
+          }
+        }
+      } else {
+        if (account.status !== 'offline') {
+          account.status = 'offline';
+          hasChanges = true;
+          console.log(`📴 Master account ${accountId} has no activity, marked as offline`);
+
+          // Disable copy trading for offline master
+          const copierStatus = loadCopierStatus();
+          if (copierStatus.masterAccounts[accountId] !== false) {
+            copierStatus.masterAccounts[accountId] = false;
+            saveCopierStatus(copierStatus);
+            console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
           }
         }
       }
@@ -118,12 +148,34 @@ const checkAccountActivity = () => {
             console.log(
               `📴 Slave account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
             );
+
+            // Disable copy trading for offline slave
+            const slaveConfigs = loadSlaveConfigs();
+            if (slaveConfigs[accountId] && slaveConfigs[accountId].enabled !== false) {
+              slaveConfigs[accountId].enabled = false;
+              saveSlaveConfigs(slaveConfigs);
+              console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
+            }
           }
         } else {
           if (account.status === 'offline') {
             account.status = 'active';
             hasChanges = true;
             console.log(`📡 Slave account ${accountId} back online`);
+          }
+        }
+      } else {
+        if (account.status !== 'offline') {
+          account.status = 'offline';
+          hasChanges = true;
+          console.log(`📴 Slave account ${accountId} has no activity, marked as offline`);
+
+          // Disable copy trading for offline slave
+          const slaveConfigs = loadSlaveConfigs();
+          if (slaveConfigs[accountId] && slaveConfigs[accountId].enabled !== false) {
+            slaveConfigs[accountId].enabled = false;
+            saveSlaveConfigs(slaveConfigs);
+            console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
           }
         }
       }
@@ -149,6 +201,12 @@ const checkAccountActivity = () => {
             hasChanges = true;
             console.log(`📡 Pending account ${accountId} back online`);
           }
+        }
+      } else {
+        if (account.status !== 'offline') {
+          account.status = 'offline';
+          hasChanges = true;
+          console.log(`📴 Pending account ${accountId} has no activity, marked as offline`);
         }
       }
     }
@@ -176,7 +234,7 @@ const startActivityMonitoring = () => {
 };
 
 // Initialize activity monitoring when module loads
-startActivityMonitoring();
+// startActivityMonitoring(); // Removed to avoid duplicate monitoring - now called from dev.js
 
 // Register new master account
 export const registerMasterAccount = (req, res) => {
@@ -1048,3 +1106,5 @@ export const pingAccount = (req, res) => {
     res.status(500).json({ error: 'Failed to process ping' });
   }
 };
+
+export { checkAccountActivity };

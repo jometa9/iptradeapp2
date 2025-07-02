@@ -267,6 +267,21 @@ export const setSlaveConfig = (req, res) => {
     });
   }
 
+  // Check if account is offline before enabling
+  if (enabled) {
+    const { loadAccountsConfig } = require('./accountsController.js');
+    const accountsConfig = loadAccountsConfig();
+    const slaveAccount = accountsConfig.slaveAccounts[slaveAccountId];
+
+    if (slaveAccount && slaveAccount.status === 'offline') {
+      return res.status(400).json({
+        error: 'Cannot enable copy trading for offline account',
+        message: 'Account must be online to enable copy trading',
+        accountStatus: 'offline',
+      });
+    }
+  }
+
   const configs = loadSlaveConfigs();
 
   // Initialize slave config if it doesn't exist
@@ -436,3 +451,6 @@ export const resetSlaveConfig = (req, res) => {
     res.status(500).json({ error: 'Failed to reset slave configuration' });
   }
 };
+
+// Export internal functions for use in other controllers
+export { loadSlaveConfigs, saveSlaveConfigs };

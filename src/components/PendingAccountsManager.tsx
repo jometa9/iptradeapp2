@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { CheckCircle, Clock, UserCheck, Users, XCircle } from 'lucide-react';
+import { Cable, CheckCircle, Clock, UserCheck, Users, XCircle } from 'lucide-react';
 
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -314,7 +314,7 @@ export const PendingAccountsManager: React.FC = () => {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+              <Cable className="h-5 w-5" />
               Pending Accounts
               {pendingCount > 0 && (
                 <Badge variant="secondary" className="bg-orange-100 text-orange-800">
@@ -327,10 +327,10 @@ export const PendingAccountsManager: React.FC = () => {
         <CardContent>
           {pendingCount === 0 ? (
             <div className="text-center py-8">
-              <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              <CheckCircle className="h-8 w-8 text-green-800 mx-auto mb-4" />
               <p className="text-muted-foreground">No pending accounts</p>
               <p className="text-sm text-muted-foreground mt-2">
-                New EA accounts will appear here automatically
+                New accounts connected to the server will appear here automatically
               </p>
             </div>
           ) : (

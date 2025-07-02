@@ -4,7 +4,6 @@ import { CheckCircle, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
-import { CopierStatusControls } from './CopierStatusControls';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { Badge } from './ui/badge';
@@ -15,6 +14,11 @@ export const Dashboard: React.FC = () => {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleHelp = () => {
+    const urlHelp = import.meta.env.VITE_HELP_URL;
+    window.open(urlHelp, '_blank');
   };
 
   const getSubscriptionStatusBadge = (status: string) => {
@@ -69,6 +73,8 @@ export const Dashboard: React.FC = () => {
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
                   title="Help"
+                  // que este boton lo lleve a la pagina de ayuda
+                  onClick={handleHelp}
                 >
                   <HelpCircle className="w-4 h-4" />
                 </Button>
@@ -86,20 +92,16 @@ export const Dashboard: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-8 gap-8 flex flex-col">
+        <main className="max-w-7xl mx-auto px-8 gap-6 flex flex-col pb-6">
           {/* Pending Accounts - Always visible at top for admin management */}
-          <div className="mt-6">
-            <PendingAccountsManager />
-          </div>
-
-          {/* Copier Status Controls */}
-          <div>
-            <CopierStatusControls />
-          </div>
+          <PendingAccountsManager />
 
           {/* Main Trading Configuration */}
-          <div>
-            <TradingAccountsConfig />
+          <TradingAccountsConfig />
+
+          {/* footer */}
+          <div className="flex justify-center items-center">
+            <p className="text-sm text-gray-300">IPTRADE APP</p>
           </div>
         </main>
       </div>

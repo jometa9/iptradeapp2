@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { join } from 'path';
 
+import { checkAccountActivity } from './controllers/accountsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
@@ -40,6 +41,13 @@ async function startDevServer() {
         console.log(`📡 Development server running on port ${DEV_PORT}`);
         console.log(`🔗 Available at: http://localhost:${DEV_PORT}`);
         console.log(`🔗 Health check: http://localhost:${DEV_PORT}/api/status`);
+
+        // Start periodic account activity monitoring
+        console.log('🔍 Starting account activity monitoring (5-second timeout)...');
+        setInterval(() => {
+          checkAccountActivity();
+        }, 5000);
+
         resolve(server);
       });
 
