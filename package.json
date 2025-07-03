@@ -133,28 +133,28 @@
             "arm64"
           ]
         }
-      ],
-      "dmg": {
-        "title": "IPTRADE-APP ${version}",
-        "background": null,
-        "window": {
-          "width": 540,
-          "height": 380
+      ]
+    },
+    "dmg": {
+      "title": "IPTRADE-APP ${version}",
+      "background": null,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 410,
+          "y": 230,
+          "type": "link",
+          "path": "/Applications"
         },
-        "contents": [
-          {
-            "x": 410,
-            "y": 230,
-            "type": "link",
-            "path": "/Applications"
-          },
-          {
-            "x": 130,
-            "y": 230,
-            "type": "file"
-          }
-        ]
-      }
+        {
+          "x": 130,
+          "y": 230,
+          "type": "file"
+        }
+      ]
     },
     "win": {
       "icon": "public/iconShadow025.png",
