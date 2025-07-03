@@ -23,7 +23,6 @@ import {
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -1179,10 +1178,10 @@ export function TradingAccountsConfig() {
         {isAddingAccount && (
           <div
             ref={formRef}
-            className={`mb-4 p-4 border rounded-xl ${
+            className={`mb-4 p-4 border shadow-sm rounded-xl ${
               formState.accountType === 'master'
-                ? 'border-blue-200 bg-blue-50'
-                : 'border-green-200 bg-green-50'
+                ? 'border-blue-300 bg-blue-50'
+                : 'border-green-300 bg-green-50'
             }`}
           >
             <div className="flex justify-between items-center mb-3">
@@ -1193,8 +1192,8 @@ export function TradingAccountsConfig() {
               >
                 {editingAccount
                   ? editingAccount.accountType === 'slave'
-                    ? 'Edit Slave Configuration'
-                    : 'Edit Trading Account'
+                    ? `Edit Slave Configuration for account ${formState.accountNumber}`
+                    : `Edit Trading Account ${formState.accountNumber}`
                   : 'Add New Trading Account'}
               </h3>
               <Button size="sm" variant="ghost" onClick={handleCancel} className="h-8 w-8 p-0">
@@ -1287,24 +1286,6 @@ export function TradingAccountsConfig() {
                       </div>
                     </div>
                   </>
-                )}
-
-                {/* Mostrar información de cuenta cuando se edita una cuenta slave */}
-                {editingAccount && formState.accountType === 'slave' && (
-                  <div className="md:col-span-2">
-                    <div className="bg-green-100 p-3 rounded-lg border border-green-200 mb-2">
-                      <div className="flex justify-between">
-                        <div>
-                          <span className="font-semibold">Account ID:</span>{' '}
-                          {formState.accountNumber}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Platform:</span>{' '}
-                          {formState.platform.toUpperCase()}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 )}
 
                 <div>
@@ -1406,20 +1387,19 @@ export function TradingAccountsConfig() {
                       </p>
                     </div>
 
-                    <div className="flex items-center space-x-2 h-full ">
-                      <Checkbox
+                    <div className="flex items-center space-x-2 pt-1">
+                      <Switch
                         id="reverseTrade"
                         checked={formState.reverseTrade}
                         onCheckedChange={checked =>
                           setFormState({
                             ...formState,
-                            reverseTrade: checked as boolean,
+                            reverseTrade: checked,
                           })
                         }
-                        className="bg-white border border-gray-200 shadow-sm cursor-pointer"
                       />
                       <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                        Reverse Trades (Buy → Sell, Sell → Buy)
+                        Reverse trades (Buy → Sell, Sell → Buy)
                       </Label>
                     </div>
                   </>

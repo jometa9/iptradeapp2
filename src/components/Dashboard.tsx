@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { CheckCircle, HelpCircle, LogOut } from 'lucide-react';
+import { CheckCircle, Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
@@ -14,6 +14,7 @@ import { Button } from './ui/button';
 export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
   const [userIP, setUserIP] = useState<string>('Loading...');
+  const [showIP, setShowIP] = useState<boolean>(false);
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -39,6 +40,15 @@ export const Dashboard: React.FC = () => {
   const handleHelp = () => {
     const urlHelp = import.meta.env.VITE_HELP_URL;
     window.open(urlHelp, '_blank');
+  };
+
+  const handleCopyIP = async () => {
+    try {
+      await navigator.clipboard.writeText(userIP || 'Unknown');
+    } catch (error) {
+      // Silent fail - no notification to user
+      console.log('Failed to copy IP to clipboard');
+    }
   };
 
   const getSubscriptionStatusBadge = (status: string) => {
@@ -85,7 +95,18 @@ export const Dashboard: React.FC = () => {
               {/* User IP in the center */}
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>IP</span>
-                <span>{userIP || 'Unknown'}</span>
+                <span className="select-none" onClick={handleCopyIP} title="Click to copy IP">
+                  {showIP ? userIP || 'Unknown' : '••••••••'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowIP(!showIP)}
+                  className="text-gray-400 p-1 h-auto"
+                  title={showIP ? 'Hide IP' : 'Show IP'}
+                >
+                  {showIP ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                </Button>
               </div>
 
               <div className="flex items-center">
