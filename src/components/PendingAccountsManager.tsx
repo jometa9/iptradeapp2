@@ -118,10 +118,12 @@ export const PendingAccountsManager: React.FC = () => {
   // Open conversion form inline or master confirmation
   const openConversionForm = (account: PendingAccount, type: 'master' | 'slave') => {
     if (type === 'master') {
-      // For master, just show confirmation
+      // For master, just show confirmation and hide slave form if open
+      setExpandedAccountId(null);
       setConfirmingMasterId(account.id);
     } else {
-      // For slave, show simplified form
+      // For slave, show simplified form and hide master confirmation if open
+      setConfirmingMasterId(null);
       setExpandedAccountId(account.id);
       setConversionForm({
         name: `Account ${account.id}`,
@@ -426,16 +428,16 @@ export const PendingAccountsManager: React.FC = () => {
 
                   {/* Inline Conversion Form */}
                   {expandedAccountId === id && (
-                    <div className="mt-4 p-4 border rounded-lg border-green-200 bg-green-50">
+                    <div className="mt-4 p-4 border rounded-lg border-green-400 bg-green-50 shadow">
                       <div className="flex justify-between items-center">
                         <h3 className="text-lg font-medium text-green-700">
-                          Convert to Slave Account
+                          Convert {id} to Slave Account
                         </h3>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={cancelConversion}
-                          className="h-8 w-8 p-0"
+                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
                           disabled={isConverting}
                         >
                           <XCircle className="h-4 w-4" />
@@ -451,7 +453,7 @@ export const PendingAccountsManager: React.FC = () => {
                       >
                         {/* Master Connection Section */}
                         {masterAccounts.length > 0 && (
-                          <div className="mb-4">
+                          <div className="my-4 ">
                             <Label htmlFor="convert-master">Connect to Master account</Label>
                             <Select
                               value={conversionForm.masterAccountId}
@@ -462,12 +464,16 @@ export const PendingAccountsManager: React.FC = () => {
                               <SelectTrigger className="bg-white border border-gray-200">
                                 <SelectValue placeholder="Select master..." />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-white border border-gray-200">
                                 <SelectItem value="none">
                                   Not connected (configure later)
                                 </SelectItem>
                                 {masterAccounts.map(master => (
-                                  <SelectItem key={master.id} value={master.id}>
+                                  <SelectItem
+                                    key={master.id}
+                                    value={master.id}
+                                    className=" hover:bg-gray-50 cursor-pointer"
+                                  >
                                     {master.name || master.id} ({master.platform})
                                   </SelectItem>
                                 ))}
@@ -548,14 +554,14 @@ export const PendingAccountsManager: React.FC = () => {
                             onClick={cancelConversion}
                             variant="outline"
                             disabled={isConverting}
-                            className="bg-white border border-gray-200"
+                            className="bg-white border border-gray-200 hover:bg-gray-50"
                           >
                             Cancel
                           </Button>
                           <Button
                             type="submit"
                             disabled={isConverting}
-                            className="bg-white border border-gray-200"
+                            className="bg-white border border-gray-200 hover:bg-gray-50"
                           >
                             {isConverting ? (
                               <>
