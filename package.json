@@ -2,6 +2,8 @@
   "name": "iptradeapp",
   "private": true,
   "version": "1.0.16",
+  "description": "Professional Trading Platform with Copy Trading Capabilities",
+  "author": "IPTRADE",
   "type": "module",
   "main": "electron/main.cjs",
   "homepage": "./",
@@ -13,8 +15,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"wait-on http://localhost:5174 && electron .\"",
-    "electron:build": "npm run build && npm run build:server && electron-builder --publish=never",
-    "electron:build:ci": "npm run build && npm run build:server && electron-builder --publish=always",
+    "electron:build": "npm run build && electron-builder --publish=never",
+    "electron:build:ci": "npm run build && electron-builder --publish=always",
     "electron:preview": "electron .",
     "build:server": "npm run build --prefix server",
     "version:patch": "npm version patch",
@@ -125,13 +127,34 @@
       "artifactName": "IPTRADE-APP-${arch}.dmg",
       "target": [
         {
-          "target": "default",
+          "target": "dmg",
           "arch": [
             "x64",
             "arm64"
           ]
         }
-      ]
+      ],
+      "dmg": {
+        "title": "IPTRADE-APP ${version}",
+        "background": null,
+        "window": {
+          "width": 540,
+          "height": 380
+        },
+        "contents": [
+          {
+            "x": 410,
+            "y": 230,
+            "type": "link",
+            "path": "/Applications"
+          },
+          {
+            "x": 130,
+            "y": 230,
+            "type": "file"
+          }
+        ]
+      }
     },
     "win": {
       "icon": "public/iconShadow025.png",
