@@ -15,6 +15,7 @@ import {
   PowerOff,
   Shield,
   Trash,
+  Unlink,
   WifiOff,
   XCircle,
 } from 'lucide-react';
@@ -54,6 +55,9 @@ export function TradingAccountsConfig() {
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [editingAccount, setEditingAccount] = useState<TradingAccount | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [disconnectConfirmId, setDisconnectConfirmId] = useState<string | null>(null);
+  const [disconnectAllConfirmId, setDisconnectAllConfirmId] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
 
@@ -588,6 +592,81 @@ export function TradingAccountsConfig() {
 
   const cancelDeleteAccount = () => {
     setDeleteConfirmId(null);
+  };
+
+  const disconnectSlaveAccount = async (slaveAccountId: string) => {
+    setIsDisconnecting(slaveAccountId);
+    try {
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const response = await fetch(
+        `http://localhost:${serverPort}/api/accounts/disconnect/${slaveAccountId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      if (response.ok) {
+        toast({
+          title: 'Success',
+          description: 'Slave account disconnected successfully',
+        });
+        setDisconnectConfirmId(null);
+        fetchAccounts();
+      } else {
+        throw new Error('Failed to disconnect slave account');
+      }
+    } catch (error) {
+      console.error('Error disconnecting slave account:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to disconnect slave account',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDisconnecting(null);
+    }
+  };
+
+  const disconnectAllSlaves = async (masterAccountId: string) => {
+    setIsDisconnecting(masterAccountId);
+    try {
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+
+      // Get all connected slaves for this master
+      const masterAccount = accounts.find(acc => acc.accountNumber === masterAccountId);
+      const connectedSlaves = masterAccount?.connectedSlaves || [];
+      const slaveIds = connectedSlaves.map(slave => slave.id);
+
+      // Disconnect each slave
+      const disconnectPromises = slaveIds.map(slaveId =>
+        fetch(`http://localhost:${serverPort}/api/accounts/disconnect/${slaveId}`, {
+          method: 'DELETE',
+        })
+      );
+
+      await Promise.all(disconnectPromises);
+
+      toast({
+        title: 'Success',
+        description: `All ${slaveIds.length} slave accounts disconnected successfully`,
+      });
+      setDisconnectAllConfirmId(null);
+      fetchAccounts();
+    } catch (error) {
+      console.error('Error disconnecting all slaves:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to disconnect all slave accounts',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDisconnecting(null);
+    }
+  };
+
+  const cancelDisconnectAction = () => {
+    setDisconnectConfirmId(null);
+    setDisconnectAllConfirmId(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1505,6 +1584,42 @@ export function TradingAccountsConfig() {
                                   Cancel
                                 </Button>
                               </div>
+                            ) : disconnectAllConfirmId === masterAccount.id ? (
+                              <div className="flex space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    disconnectAllSlaves(masterAccount.accountNumber);
+                                  }}
+                                  disabled={isDisconnecting === masterAccount.id}
+                                >
+                                  {isDisconnecting === masterAccount.id ? (
+                                    <>
+                                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                      Disconnecting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Unlink className="h-4 w-4 mr-1" />
+                                      Yes, disconnect all
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    cancelDisconnectAction();
+                                  }}
+                                  disabled={isDisconnecting === masterAccount.id}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
                             ) : (
                               <div className="flex space-x-2">
                                 <Button
@@ -1520,6 +1635,24 @@ export function TradingAccountsConfig() {
                                 >
                                   <Pencil className="h-4 w-4 text-blue-600" />
                                 </Button>
+                                {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setDisconnectAllConfirmId(masterAccount.id);
+                                    }}
+                                    title="Disconnect All Slaves"
+                                    disabled={
+                                      isDeletingAccount === masterAccount.id ||
+                                      isDisconnecting === masterAccount.id
+                                    }
+                                  >
+                                    <Unlink className="h-4 w-4 text-orange-600" />
+                                  </Button>
+                                ) : null}
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1635,6 +1768,42 @@ export function TradingAccountsConfig() {
                                       Cancel
                                     </Button>
                                   </div>
+                                ) : disconnectConfirmId === slaveAccount.id ? (
+                                  <div className="flex space-x-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        disconnectSlaveAccount(slaveAccount.accountNumber);
+                                      }}
+                                      disabled={isDisconnecting === slaveAccount.id}
+                                    >
+                                      {isDisconnecting === slaveAccount.id ? (
+                                        <>
+                                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                          Disconnecting...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Unlink className="h-4 w-4 mr-1" />
+                                          Yes, disconnect
+                                        </>
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        cancelDisconnectAction();
+                                      }}
+                                      disabled={isDisconnecting === slaveAccount.id}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </div>
                                 ) : (
                                   <div className="flex space-x-2">
                                     <Button
@@ -1649,6 +1818,22 @@ export function TradingAccountsConfig() {
                                       disabled={isDeletingAccount === slaveAccount.id}
                                     >
                                       <Pencil className="h-4 w-4 text-blue-600" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setDisconnectConfirmId(slaveAccount.id);
+                                      }}
+                                      title="Disconnect from Master"
+                                      disabled={
+                                        isDeletingAccount === slaveAccount.id ||
+                                        isDisconnecting === slaveAccount.id
+                                      }
+                                    >
+                                      <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
                                     <Button
                                       variant="outline"
