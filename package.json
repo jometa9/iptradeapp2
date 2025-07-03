@@ -106,12 +106,15 @@
       {
         "provider": "github",
         "owner": "jometa9",
-        "repo": "iptradeapp2"
+        "repo": "iptradeapp2",
+        "private": false,
+        "releaseType": "release"
       }
     ],
     "mac": {
       "category": "public.app-category.finance",
       "icon": "public/iconShadow025.png",
+      "artifactName": "IPTRADE-APP-${arch}.dmg",
       "target": [
         {
           "target": "default",
@@ -124,11 +127,13 @@
     },
     "win": {
       "icon": "public/iconShadow025.png",
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "IPTRADE-APP-Setup.exe"
     },
     "linux": {
       "icon": "public/iconShadow025.png",
-      "target": "AppImage"
+      "target": "AppImage",
+      "artifactName": "IPTRADE-APP.AppImage"
     }
   }
 }
