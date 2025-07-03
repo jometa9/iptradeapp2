@@ -85,7 +85,7 @@ export const Dashboard: React.FC = () => {
               {/* User IP in the center */}
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>IP</span>
-                <span>{userIP}</span>
+                <span>{userIP || 'Unknown'}</span>
               </div>
 
               <div className="flex items-center">
