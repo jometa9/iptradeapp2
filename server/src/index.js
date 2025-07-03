@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import { join } from 'path';
+import swaggerUi from 'swagger-ui-express';
 
 import { killProcessOnPort } from './controllers/ordersController.js';
 import accountsRoutes from './routes/accounts.js';
@@ -13,6 +14,7 @@ import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
+import swaggerDocs from './swaggerConfig.js';
 
 // Load environment variables first
 dotenv.config({ path: join(process.cwd(), '.env') });
@@ -48,6 +50,9 @@ app.use('/api/accounts', accountsRoutes);
 app.use('/api/slave-config', slaveConfigRoutes);
 // app.use('/api/ctrader', ctraderRoutes);
 // app.use('/api/mt5', mt5Routes);
+
+// Swagger API documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 app.use((err, req, res, next) => {
   console.error('[SERVER ERROR]', err.stack);

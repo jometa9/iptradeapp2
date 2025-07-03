@@ -4,9 +4,39 @@ import { getStatus } from '../controllers/statusController.js';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /status:
+ *   get:
+ *     summary: Get server status
+ *     tags: [Status]
+ *     responses:
+ *       200:
+ *         description: Server status
+ */
 router.get('/status', getStatus);
 
 // Endpoint para validar suscripción
+/**
+ * @swagger
+ * /validate-subscription:
+ *   get:
+ *     summary: Validate subscription by API key
+ *     tags: [Status]
+ *     parameters:
+ *       - in: query
+ *         name: apiKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Subscription info
+ *       400:
+ *         description: API Key is required
+ *       401:
+ *         description: Invalid API Key
+ */
 router.get('/validate-subscription', (req, res) => {
   const { apiKey } = req.query;
 

@@ -6,6 +6,16 @@ import { authenticateAccount, roleBasedAccess } from '../middleware/roleAuth.js'
 const router = express.Router();
 
 // Endpoint to check account type (no role restrictions - just authentication)
+/**
+ * @swagger
+ * /orders/account-type:
+ *   get:
+ *     summary: Check account type (pending, master, slave)
+ *     tags: [Orders]
+ *     responses:
+ *       200:
+ *         description: Account type information
+ */
 router.get('/account-type', authenticateAccount, (req, res) => {
   const { accountId, type, account } = req.accountInfo;
 
@@ -47,6 +57,16 @@ router.get('/account-type', authenticateAccount, (req, res) => {
 });
 
 // Admin endpoint to list all accounts and their status (no authentication required for admin purposes)
+/**
+ * @swagger
+ * /orders/status:
+ *   get:
+ *     summary: List all accounts and their status (admin)
+ *     tags: [Orders]
+ *     responses:
+ *       200:
+ *         description: All accounts and their status
+ */
 router.get('/status', (req, res) => {
   try {
     const { existsSync, readFileSync } = require('fs');
@@ -89,6 +109,61 @@ router.get('/status', (req, res) => {
 });
 
 // Apply authentication and role-based access control to trading routes
+/**
+ * @swagger
+ * /orders/neworder:
+ *   post:
+ *     summary: Create a new order (master only)
+ *     tags: [Orders]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               symbol:
+ *                 type: string
+ *                 example: EURUSD
+ *               volume:
+ *                 type: number
+ *                 example: 0.1
+ *               type:
+ *                 type: string
+ *                 example: buy
+ *               price:
+ *                 type: number
+ *                 example: 1.12345
+ *           example:
+ *             symbol: EURUSD
+ *             volume: 0.1
+ *             type: buy
+ *             price: 1.12345
+ *     responses:
+ *       200:
+ *         description: Order created
+ *         content:
+ *           application/json:
+ *             example:
+ *               orderId: 12345
+ *               status: success
+ *               message: Order placed successfully
+ *   get:
+ *     summary: Retrieve orders (slave only)
+ *     tags: [Orders]
+ *     responses:
+ *       200:
+ *         description: Orders retrieved
+ *         content:
+ *           application/json:
+ *             example:
+ *               - orderId: 12345
+ *                 symbol: EURUSD
+ *                 volume: 0.1
+ *                 type: buy
+ *                 price: 1.12345
+ *                 status: filled
+ */
 router.use('/neworder', authenticateAccount, roleBasedAccess);
 
 // POST endpoint for creating new orders (only masters can access)

@@ -13,22 +13,116 @@ import {
 
 const router = express.Router();
 
-// Global copier status
+/**
+ * @swagger
+ * /copier/global:
+ *   get:
+ *     summary: Get global copier status
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Global copier status
+ *   post:
+ *     summary: Set global copier status
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Global copier status set
+ *   put:
+ *     summary: Update global copier status
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Global copier status updated
+ */
 router.get('/copier/global', getGlobalStatus);
 router.post('/copier/global', setGlobalStatus);
 router.put('/copier/global', setGlobalStatus);
 
-// Master account specific copier status
+/**
+ * @swagger
+ * /copier/master/{masterAccountId}:
+ *   get:
+ *     summary: Get master copier status
+ *     tags: [Copier]
+ *     parameters:
+ *       - in: path
+ *         name: masterAccountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Master copier status
+ *   delete:
+ *     summary: Remove master copier status
+ *     tags: [Copier]
+ *     parameters:
+ *       - in: path
+ *         name: masterAccountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Master copier status removed
+ */
 router.get('/copier/master/:masterAccountId', getMasterStatus);
-router.post('/copier/master', setMasterStatus);
-router.put('/copier/master', setMasterStatus);
 router.delete('/copier/master/:masterAccountId', removeMasterStatus);
 
-// Get all statuses
+/**
+ * @swagger
+ * /copier/master:
+ *   post:
+ *     summary: Set master copier status
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Master copier status set
+ *   put:
+ *     summary: Update master copier status
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Master copier status updated
+ */
+router.post('/copier/master', setMasterStatus);
+router.put('/copier/master', setMasterStatus);
+
+/**
+ * @swagger
+ * /copier/status:
+ *   get:
+ *     summary: Get all copier statuses
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: All copier statuses
+ */
 router.get('/copier/status', getAllStatuses);
 
-// Emergency controls
+/**
+ * @swagger
+ * /copier/emergency-shutdown:
+ *   post:
+ *     summary: Emergency shutdown (turn off all copiers)
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Emergency shutdown executed
+ */
 router.post('/copier/emergency-shutdown', emergencyShutdown);
+
+/**
+ * @swagger
+ * /copier/reset-all-on:
+ *   post:
+ *     summary: Reset all copiers to ON
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: All copiers reset to ON
+ */
 router.post('/copier/reset-all-on', resetAllToOn);
 
 export default router;

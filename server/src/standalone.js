@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import swaggerUi from 'swagger-ui-express';
 
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
@@ -9,6 +10,7 @@ import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
+import swaggerDocs from './swaggerConfig.js';
 
 export function createServer() {
   const app = express();
@@ -18,6 +20,9 @@ export function createServer() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Swagger API documentation
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
   // Routes (same as index.js)
   app.use('/api', statusRoutes);
