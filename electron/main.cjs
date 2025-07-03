@@ -109,6 +109,7 @@ function createWindow() {
     minWidth: 1000,
     height: 750,
     minHeight: 750,
+    icon: path.join(__dirname, '../public/iconShadow025.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -131,7 +132,14 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await startServer();
+  // Cambiar el nombre de la app en desarrollo
+  app.setName('IPTRADE APP');
   createWindow();
+
+  // Configurar el icono del dock en macOS
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, '../public/iconShadow025.png'));
+  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

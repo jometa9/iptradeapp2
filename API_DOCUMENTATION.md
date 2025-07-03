@@ -1,4 +1,4 @@
-# IPTrade Server API Documentation
+# IPTRADE Server API Documentation
 
 ## Sistema de Gestión de Cuentas
 

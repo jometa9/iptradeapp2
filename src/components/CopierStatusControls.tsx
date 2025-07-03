@@ -84,7 +84,7 @@ export const CopierStatusControls: React.FC = () => {
         // Load slave configurations for all slaves
         const allSlaves = [
           ...Object.values(accountsData.masterAccounts || {}).flatMap(
-            master => master.connectedSlaves || []
+            master => (master as AccountsData['masterAccounts'][string]).connectedSlaves || []
           ),
           ...(accountsData.unconnectedSlaves || []),
         ];
@@ -197,7 +197,6 @@ export const CopierStatusControls: React.FC = () => {
       });
 
       if (response.ok) {
-        const result = await response.json();
         toast({
           title: 'Success',
           description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,

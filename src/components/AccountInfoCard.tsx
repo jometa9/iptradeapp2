@@ -33,7 +33,6 @@ interface AccountInfoCardProps {
 
 export function AccountInfoCard({
   user,
-  onManageSubscription,
   onGoToPricing,
   className = '',
   title = 'Account Information',
@@ -68,7 +67,7 @@ export function AccountInfoCard({
     return colors[index];
   };
 
-  const getAvatarTextColor = (bgColor: string) => {
+  const getAvatarTextColor = (_bgColor: string) => {
     return 'text-white';
   };
 

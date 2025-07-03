@@ -1,12 +1,13 @@
 {
   "name": "iptradeapp-server",
   "version": "1.0.0",
-  "description": "IPTrade Server for Trade Copying",
+  "description": "IPTRADE Server for Trade Copying",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

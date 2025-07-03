@@ -41,6 +41,8 @@ interface TradingAccount {
   forceLot?: number;
   reverseTrade?: boolean;
   connectedToMaster?: string;
+  connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
+  totalSlaves?: number;
 }
 
 export function TradingAccountsConfig() {
@@ -48,7 +50,6 @@ export function TradingAccountsConfig() {
   const [isDeletingAccount, setIsDeletingAccount] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [editingAccount, setEditingAccount] = useState<TradingAccount | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export function TradingAccountsConfig() {
             password: '••••••••',
             accountType: 'master',
             status: mapStatus(master.status || 'active'),
-            connectedSlaves: master.connectedSlaves || [],
+            connectedSlaves: (master as any).connectedSlaves || [],
             totalSlaves: master.totalSlaves || 0,
           });
         });
@@ -273,7 +274,7 @@ export function TradingAccountsConfig() {
       if (!enabled) {
         // Get all master accounts that are currently enabled
         const enabledMasters = Object.entries(copierStatus?.masterAccounts || {})
-          .filter(([_, status]) => status.masterStatus)
+          .filter(([_, status]: [string, any]) => status.masterStatus)
           .map(([masterId]) => masterId);
 
         // Get all slave accounts that are currently enabled
@@ -300,8 +301,8 @@ export function TradingAccountsConfig() {
         }
 
         // Update local state to reflect all accounts are now disabled
-        setCopierStatus(prev => {
-          const updatedMasters = {};
+        setCopierStatus((prev: any) => {
+          const updatedMasters: Record<string, any> = {};
           Object.keys(prev?.masterAccounts || {}).forEach(masterId => {
             updatedMasters[masterId] = {
               ...prev.masterAccounts[masterId],
@@ -321,7 +322,7 @@ export function TradingAccountsConfig() {
 
         // Update slave configs to disabled
         setSlaveConfigs(prev => {
-          const updatedConfigs = {};
+          const updatedConfigs: Record<string, any> = {};
           Object.entries(prev).forEach(([slaveId, config]) => {
             updatedConfigs[slaveId] = {
               ...config,
@@ -346,7 +347,7 @@ export function TradingAccountsConfig() {
         const result = await response.json();
 
         // Immediately update local state for responsive UI
-        setCopierStatus(prev => ({
+        setCopierStatus((prev: any) => ({
           ...prev,
           globalStatus: enabled,
           globalStatusText: enabled ? 'ON' : 'OFF',
@@ -429,7 +430,6 @@ export function TradingAccountsConfig() {
       });
 
       if (response.ok) {
-        const result = await response.json();
         toast({
           title: 'Success',
           description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
@@ -488,24 +488,6 @@ export function TradingAccountsConfig() {
       ...formState,
       platform: value,
       serverIp: '',
-    });
-  };
-
-  const handleAddAccount = () => {
-    setIsAddingAccount(true);
-    setEditingAccount(null);
-    setShowPassword(false);
-    setFormState({
-      accountNumber: '',
-      platform: 'mt4',
-      serverIp: '',
-      password: '',
-      accountType: 'master',
-      status: 'synchronized',
-      lotCoefficient: 1,
-      forceLot: 0,
-      reverseTrade: false,
-      connectedToMaster: 'none',
     });
   };
 
@@ -712,16 +694,6 @@ export function TradingAccountsConfig() {
   const handleCancel = () => {
     setIsAddingAccount(false);
     setEditingAccount(null);
-  };
-
-  const handleRefreshAccounts = async () => {
-    setIsRefreshing(true);
-    await fetchAccounts();
-    setIsRefreshing(false);
-    toast({
-      title: 'Accounts Refreshed',
-      description: 'Trading accounts have been updated successfully.',
-    });
   };
 
   const getServerStatus = () => {

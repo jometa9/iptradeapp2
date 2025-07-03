@@ -80,7 +80,8 @@
   },
   "build": {
     "appId": "com.iptradeapp.app",
-    "productName": "IPTrade App",
+    "productName": "IPTRADE APP",
+    "icon": "public/iconShadow025.png",
     "directories": {
       "output": "release"
     },
@@ -110,6 +111,7 @@
     ],
     "mac": {
       "category": "public.app-category.finance",
+      "icon": "public/iconShadow025.png",
       "target": [
         {
           "target": "default",
@@ -121,9 +123,11 @@
       ]
     },
     "win": {
+      "icon": "public/iconShadow025.png",
       "target": "nsis"
     },
     "linux": {
+      "icon": "public/iconShadow025.png",
       "target": "AppImage"
     }
   }
