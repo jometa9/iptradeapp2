@@ -338,7 +338,10 @@ export const PendingAccountsManager: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {Object.entries(accounts).map(([id, account]) => (
-                <div key={id} className="border rounded-lg p-4 bg-orange-50 border-orange-200">
+                <div
+                  key={id}
+                  className="border rounded-lg p-4 bg-orange-50 border-orange-200 shadow"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-orange-900">Account {id}</h3>
