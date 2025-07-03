@@ -12,7 +12,7 @@ export const VersionInfo: React.FC = () => {
   return (
     <>
       {currentVersion && (
-        <p className="text-sm text-gray-500 z-50 text-center p-2">Version v{currentVersion}</p>
+        <p className="text-sm text-gray-500 z-50 text-center">IPTRADE APP V{currentVersion}</p>
       )}
     </>
   );

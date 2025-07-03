@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
+import { UpdateCard } from './UpdateCard';
+import { VersionInfo } from './VersionInfo';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
@@ -93,6 +95,9 @@ export const Dashboard: React.FC = () => {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 gap-6 flex flex-col pb-6">
+          {/* Update notification appears here when available */}
+          <UpdateCard />
+
           {/* Pending Accounts - Always visible at top for admin management */}
           <PendingAccountsManager />
 
@@ -101,9 +106,13 @@ export const Dashboard: React.FC = () => {
 
           {/* footer */}
           <div className="flex justify-center items-center">
-            <p className="text-sm text-gray-300">IPTRADE APP</p>
+            <VersionInfo />
           </div>
         </main>
+
+        {/* Update tester for development (fixed position) */}
+
+        {/*<UpdateTester />*/}
       </div>
     </UpdateTestProvider>
   );

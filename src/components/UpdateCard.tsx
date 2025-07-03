@@ -94,10 +94,10 @@ export const UpdateCard: React.FC = () => {
   }
 
   const getStatusColor = () => {
-    if (displayState.error) return 'bg-red-100 text-red-800 border-red-200';
-    if (displayState.isUpdateReady) return 'bg-green-100 text-green-800 border-green-200';
-    if (displayState.isDownloading) return 'bg-blue-100 text-blue-800 border-blue-200';
-    if (displayState.isUpdateAvailable) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    if (displayState.error) return 'bg-red-100 text-red-800 border-red-400';
+    if (displayState.isUpdateReady) return 'bg-green-100 text-green-800 border-green-400';
+    if (displayState.isDownloading) return 'bg-blue-100 text-blue-800 border-blue-400';
+    if (displayState.isUpdateAvailable) return 'bg-yellow-100 text-yellow-800 border-yellow-400';
     return 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
@@ -154,11 +154,11 @@ export const UpdateCard: React.FC = () => {
   };
 
   const getPrimaryButtonStyles = () => {
-    if (displayState.error) return 'bg-red-600 border-red-600 text-white';
+    if (displayState.error) return 'bg-red-400 border-red-600 text-white';
     if (displayState.isUpdateReady) return 'bg-green-50 border-green-600 text-green-800';
-    if (displayState.isDownloading) return 'bg-blue-600 border-blue-600 text-white';
-    if (displayState.isUpdateAvailable) return 'bg-yellow-600 border-yellow-600 text-white';
-    return 'bg-gray-600 border-gray-600 text-white';
+    if (displayState.isDownloading) return 'bg-blue-400 border-blue-600 text-white';
+    if (displayState.isUpdateAvailable) return 'bg-yellow-400 border-yellow-600 text-white';
+    return 'bg-gray-400 border-gray-600 text-white';
   };
 
   const getSecondaryButtonStyles = () => {
@@ -172,7 +172,7 @@ export const UpdateCard: React.FC = () => {
   };
 
   return (
-    <Card className={`${getStatusColor()} border-2 mb-4`}>
+    <Card className={`${getStatusColor()} shados-sm`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-1">
@@ -180,7 +180,7 @@ export const UpdateCard: React.FC = () => {
               {getStatusIcon()}
               {getStatusText()}
             </CardTitle>
-            <p className="text-sm opacity-90 pr-4">{getStatusDescription()}</p>
+            <p className="text-sm opacity-90 pr-4 pt-2">{getStatusDescription()}</p>
 
             {(displayState.currentVersion || displayState.updateInfo?.version) && (
               <div className="flex items-center gap-2 text-xs pt-1">
@@ -241,7 +241,7 @@ export const UpdateCard: React.FC = () => {
           <div className="space-y-3">
             <Progress
               value={displayState.downloadProgress}
-              className="h-3 bg-blue-100 rounded-full border border-blue-200 overflow-hidden"
+              className="h-3 bg-blue-100 rounded-full border border-blue-400 overflow-hidden"
             />
             <div className="space-y-1">
               <div className="flex justify-between items-center text-xs opacity-70">

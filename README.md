@@ -179,6 +179,32 @@ iptradeapp2/
 3. **MT5 Features**: Extend Python scripts and API integration
 4. **cTrader Features**: Extend WebSocket handlers and API calls
 
+## Deployment and Versioning
+
+This application includes a complete auto-update system for Electron. For detailed information about versioning, releases, and deployment:
+
+📋 **[Read the complete Versioning and Deployment Guide](VERSIONING_AND_DEPLOYMENT.md)**
+
+### Quick Release Commands
+
+```bash
+# Deploy a new patch version (1.0.14 → 1.0.15)
+npm run release patch
+
+# Deploy a new minor version (1.0.14 → 1.1.0)
+npm run release minor
+
+# Deploy a new major version (1.0.14 → 2.0.0)
+npm run release major
+```
+
+The system automatically:
+- ✅ Updates version numbers
+- 🏗️ Builds for Windows and macOS via GitHub Actions
+- 📦 Publishes to GitHub Releases
+- 🔄 Notifies users of available updates
+- ⬇️ Handles automatic download and installation
+
 ## Contributing
 
 1. Fork the repository

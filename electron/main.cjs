@@ -1,10 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const { spawn } = require('child_process');
 const path = require('path');
 
 // Mejorar la detección de modo desarrollo
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let serverInstance;
+let serverProcess; // Para el proceso del servidor en desarrollo
 let mainWindow;
 
 // Configuración del autoUpdater
@@ -83,10 +85,37 @@ async function startServer() {
     console.log('[ELECTRON] Development mode:', isDev);
 
     if (isDev) {
-      console.log(
-        '[ELECTRON] In development mode, server should be running separately on port 3001'
-      );
-      console.log('[ELECTRON] Make sure to run: npm run dev:server');
+      console.log('[ELECTRON] Starting development server...');
+
+      // En desarrollo, lanzar el servidor como proceso hijo
+      const serverPath = path.join(__dirname, '../server/src/dev.js');
+      console.log('[ELECTRON] Starting server from:', serverPath);
+
+      serverProcess = spawn('node', [serverPath], {
+        cwd: path.join(__dirname, '..'),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PORT: '3000' },
+      });
+
+      serverProcess.stdout.on('data', data => {
+        console.log(`[SERVER] ${data.toString().trim()}`);
+      });
+
+      serverProcess.stderr.on('data', data => {
+        console.error(`[SERVER ERROR] ${data.toString().trim()}`);
+      });
+
+      serverProcess.on('close', code => {
+        console.log(`[SERVER] Process exited with code ${code}`);
+      });
+
+      serverProcess.on('error', err => {
+        console.error('[SERVER] Failed to start:', err);
+      });
+
+      // Esperar un poco para que el servidor se inicie
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('[ELECTRON] Development server should be starting...');
       return;
     }
 
@@ -118,7 +147,7 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://localhost:5174');
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -151,5 +180,12 @@ app.on('window-all-closed', function () {
     console.log('[ELECTRON] Closing server');
     serverInstance.close();
   }
+
+  // Terminar el proceso del servidor en desarrollo
+  if (serverProcess) {
+    console.log('[ELECTRON] Closing development server');
+    serverProcess.kill();
+  }
+
   if (process.platform !== 'darwin') app.quit();
 });
