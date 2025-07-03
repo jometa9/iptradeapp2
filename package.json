@@ -80,7 +80,7 @@
   },
   "build": {
     "appId": "com.iptradeapp.app",
-    "productName": "IPTRADE APP",
+    "productName": "IPTRADE-APP",
     "icon": "public/iconShadow025.png",
     "directories": {
       "output": "release"
@@ -88,15 +88,23 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "server/dist/**/*",
+      "server/src/**/*",
+      "server/config/**/*",
+      "server/package.json",
       "!server/node_modules/**/*",
-      "!server/src/**/*",
       "!server/**/*.map"
     ],
     "extraResources": [
       {
-        "from": "server/dist",
-        "to": "server/dist",
+        "from": "server/src",
+        "to": "server/src",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "server/config",
+        "to": "server/config",
         "filter": [
           "**/*"
         ]
