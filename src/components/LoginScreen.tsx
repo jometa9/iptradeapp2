@@ -58,7 +58,7 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             {error && (
-              <Alert className="border-red-200 bg-red-50">
+              <Alert className="border-red-400 bg-red-50 flex items-center [&>svg]:relative [&>svg]:left-0 [&>svg]:top-0 [&>svg+div]:translate-y-0">
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-700">{error}</AlertDescription>
               </Alert>
@@ -66,7 +66,7 @@ export const LoginScreen: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white "
               disabled={isLoading || !apiKey.trim()}
             >
               {isLoading ? (

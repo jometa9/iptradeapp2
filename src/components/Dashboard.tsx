@@ -27,21 +27,21 @@ export const Dashboard: React.FC = () => {
     switch (status) {
       case 'active':
         return (
-          <Badge className="bg-green-100 text-green-800 border-green-200">
+          <Badge className="bg-green-100 text-green-800 border border-green-400">
             <CheckCircle className="w-3 h-3 mr-1" />
             Active
           </Badge>
         );
       case 'trialing':
         return (
-          <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+          <Badge className="bg-blue-100 text-blue-800 border border-blue-400">
             <CheckCircle className="w-3 h-3 mr-1" />
             Trial
           </Badge>
         );
       case 'admin_assigned':
         return (
-          <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+          <Badge className="bg-purple-100 text-purple-800 border border-purple-400">
             <CheckCircle className="w-3 h-3 mr-1" />
             Admin Assigned
           </Badge>

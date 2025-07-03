@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Cable, CheckCircle, Clock, UserCheck, Users, XCircle } from 'lucide-react';
+import { Cable, Clock, UserCheck, Users, XCircle } from 'lucide-react';
 
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -326,10 +326,9 @@ export const PendingAccountsManager: React.FC = () => {
         </CardHeader>
         <CardContent>
           {pendingCount === 0 ? (
-            <div className="text-center py-8">
-              <CheckCircle className="h-8 w-8 text-green-800 mx-auto mb-4" />
-              <p className="text-muted-foreground">No pending accounts</p>
-              <p className="text-sm text-muted-foreground mt-2">
+            <div className="text-center py-4">
+              <p className="text-muted-foreground text-gray-400">No pending accounts</p>
+              <p className="text-sm text-muted-foreground mt-2 text-gray-400">
                 New accounts connected to the server will appear here automatically
               </p>
             </div>
