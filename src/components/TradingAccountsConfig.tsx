@@ -10,7 +10,6 @@ import {
   Eye,
   EyeOff,
   Info,
-  Pencil,
   Power,
   PowerOff,
   Shield,
@@ -998,7 +997,7 @@ export function TradingAccountsConfig() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                     onClick={cancelGlobalDisable}
                     disabled={updatingCopier === 'global'}
                   >
@@ -1567,10 +1566,11 @@ export function TradingAccountsConfig() {
                                     confirmDeleteAccount();
                                   }}
                                   disabled={isDeletingAccount === masterAccount.id}
+                                  className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                                 >
                                   {isDeletingAccount === masterAccount.id
                                     ? 'Deleting...'
-                                    : 'Confirm'}
+                                    : 'Delete'}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -1580,6 +1580,7 @@ export function TradingAccountsConfig() {
                                     cancelDeleteAccount();
                                   }}
                                   disabled={isDeletingAccount === masterAccount.id}
+                                  className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                 >
                                   Cancel
                                 </Button>
@@ -1602,10 +1603,7 @@ export function TradingAccountsConfig() {
                                       Disconnecting...
                                     </>
                                   ) : (
-                                    <>
-                                      <Unlink className="h-4 w-4 mr-1" />
-                                      Yes, disconnect all
-                                    </>
+                                    <>Disconnect all</>
                                   )}
                                 </Button>
                                 <Button
@@ -1616,25 +1614,13 @@ export function TradingAccountsConfig() {
                                     cancelDisconnectAction();
                                   }}
                                   disabled={isDisconnecting === masterAccount.id}
+                                  className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                 >
                                   Cancel
                                 </Button>
                               </div>
                             ) : (
                               <div className="flex space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleEditAccount(masterAccount);
-                                  }}
-                                  title="Edit Account"
-                                  disabled={isDeletingAccount === masterAccount.id}
-                                >
-                                  <Pencil className="h-4 w-4 text-blue-600" />
-                                </Button>
                                 {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                   <Button
                                     variant="outline"
@@ -1754,16 +1740,18 @@ export function TradingAccountsConfig() {
                                       variant="destructive"
                                       onClick={confirmDeleteAccount}
                                       disabled={isDeletingAccount === slaveAccount.id}
+                                      className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                                     >
                                       {isDeletingAccount === slaveAccount.id
                                         ? 'Deleting...'
-                                        : 'Confirm'}
+                                        : 'Delete'}
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={cancelDeleteAccount}
                                       disabled={isDeletingAccount === slaveAccount.id}
+                                      className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                     >
                                       Cancel
                                     </Button>
@@ -1786,10 +1774,7 @@ export function TradingAccountsConfig() {
                                           Disconnecting...
                                         </>
                                       ) : (
-                                        <>
-                                          <Unlink className="h-4 w-4 mr-1" />
-                                          Yes, disconnect
-                                        </>
+                                        <>Disconnect</>
                                       )}
                                     </Button>
                                     <Button
@@ -1800,6 +1785,7 @@ export function TradingAccountsConfig() {
                                         cancelDisconnectAction();
                                       }}
                                       disabled={isDisconnecting === slaveAccount.id}
+                                      className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                     >
                                       Cancel
                                     </Button>
@@ -1909,14 +1895,16 @@ export function TradingAccountsConfig() {
                               variant="destructive"
                               onClick={confirmDeleteAccount}
                               disabled={isDeletingAccount === orphanSlave.id}
+                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                             >
-                              {isDeletingAccount === orphanSlave.id ? 'Deleting...' : 'Confirm'}
+                              {isDeletingAccount === orphanSlave.id ? 'Deleting...' : 'Delete'}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={cancelDeleteAccount}
                               disabled={isDeletingAccount === orphanSlave.id}
+                              className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                             >
                               Cancel
                             </Button>
