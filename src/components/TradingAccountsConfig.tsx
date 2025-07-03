@@ -520,6 +520,7 @@ export function TradingAccountsConfig() {
     setIsAddingAccount(true);
     setEditingAccount(account);
 
+    // Preparar el formulario con los datos de la cuenta
     setFormState({
       accountNumber: account.accountNumber,
       platform: account.platform.toLowerCase(),
@@ -727,6 +728,21 @@ export function TradingAccountsConfig() {
             }),
         };
 
+        if (editingAccount && editingAccount.accountType === 'slave') {
+          // Para edición de cuentas slave, solo enviamos los datos de conexión
+          payload = {
+            slaveAccountId: editingAccount.accountNumber,
+            name: editingAccount.accountNumber,
+            description: '',
+            broker: editingAccount.server, // Mantenemos el valor original
+            platform: editingAccount.platform, // Mantenemos el valor original
+            ...(formState.connectedToMaster !== 'none' &&
+              formState.connectedToMaster !== '' && {
+                masterAccountId: formState.connectedToMaster,
+              }),
+          };
+        }
+
         if (editingAccount) {
           response = await fetch(
             `http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`,
@@ -750,7 +766,7 @@ export function TradingAccountsConfig() {
           (formState.lotCoefficient !== 1 || formState.forceLot > 0 || formState.reverseTrade)
         ) {
           const slaveConfigPayload = {
-            slaveAccountId: formState.accountNumber,
+            slaveAccountId: editingAccount ? editingAccount.accountNumber : formState.accountNumber,
             lotMultiplier: Number(formState.lotCoefficient),
             forceLot: Number(formState.forceLot) > 0 ? Number(formState.forceLot) : null,
             reverseTrading: formState.reverseTrade,
@@ -1175,7 +1191,11 @@ export function TradingAccountsConfig() {
                   formState.accountType === 'master' ? 'text-blue-700' : 'text-green-700'
                 }`}
               >
-                {editingAccount ? 'Edit Trading Account' : 'Add New Trading Account'}
+                {editingAccount
+                  ? editingAccount.accountType === 'slave'
+                    ? 'Edit Slave Configuration'
+                    : 'Edit Trading Account'
+                  : 'Add New Trading Account'}
               </h3>
               <Button size="sm" variant="ghost" onClick={handleCancel} className="h-8 w-8 p-0">
                 <svg
@@ -1200,65 +1220,92 @@ export function TradingAccountsConfig() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="accountNumber">Account Number</Label>
-                  <Input
-                    id="accountNumber"
-                    name="accountNumber"
-                    value={formState.accountNumber}
-                    onChange={handleChange}
-                    placeholder="12345678"
-                    required
-                    className="bg-white border border-gray-200"
-                  />
-                </div>
+                {/* Para cuentas nuevas o cuentas master, mostrar todos los campos */}
+                {(!editingAccount || (editingAccount && formState.accountType === 'master')) && (
+                  <>
+                    <div>
+                      <Label htmlFor="accountNumber">Account Number</Label>
+                      <Input
+                        id="accountNumber"
+                        name="accountNumber"
+                        value={formState.accountNumber}
+                        onChange={handleChange}
+                        placeholder="12345678"
+                        required
+                        className="bg-white border border-gray-200"
+                      />
+                    </div>
 
-                <div>
-                  <Label htmlFor="platform">Platform</Label>
-                  <Select
-                    name="platform"
-                    value={formState.platform}
-                    onValueChange={value => handlePlatformChange(value)}
-                  >
-                    <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
-                      <SelectValue placeholder="Select Platform" className="bg-white" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border border-gray-200">
-                      {platformOptions.map(option => (
-                        <SelectItem key={option.value} value={option.value} className="bg-white">
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div>
+                      <Label htmlFor="platform">Platform</Label>
+                      <Select
+                        name="platform"
+                        value={formState.platform}
+                        onValueChange={value => handlePlatformChange(value)}
+                      >
+                        <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
+                          <SelectValue placeholder="Select Platform" className="bg-white" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-gray-200">
+                          {platformOptions.map(option => (
+                            <SelectItem
+                              key={option.value}
+                              value={option.value}
+                              className="bg-white"
+                            >
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={formState.password}
-                      onChange={handleChange}
-                      placeholder="••••••••"
-                      required={!editingAccount}
-                      className="bg-white pr-10 border border-gray-200 shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-gray-100 focus:outline-none rounded-r-md"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-500" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-500" />
-                      )}
-                    </button>
+                    <div>
+                      <Label htmlFor="password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          name="password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={formState.password}
+                          onChange={handleChange}
+                          placeholder="••••••••"
+                          required={!editingAccount}
+                          className="bg-white pr-10 border border-gray-200 shadow-sm"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-gray-100 focus:outline-none rounded-r-md"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4 text-gray-500" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-gray-500" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Mostrar información de cuenta cuando se edita una cuenta slave */}
+                {editingAccount && formState.accountType === 'slave' && (
+                  <div className="md:col-span-2">
+                    <div className="bg-green-100 p-3 rounded-lg border border-green-200 mb-2">
+                      <div className="flex justify-between">
+                        <div>
+                          <span className="font-semibold">Account ID:</span>{' '}
+                          {formState.accountNumber}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Platform:</span>{' '}
+                          {formState.platform.toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <Label htmlFor="accountType">Account Type</Label>
@@ -1400,7 +1447,11 @@ export function TradingAccountsConfig() {
                       Saving...
                     </>
                   ) : editingAccount ? (
-                    'Update Account'
+                    editingAccount.accountType === 'slave' ? (
+                      'Update Configuration'
+                    ) : (
+                      'Update Account'
+                    )
                   ) : (
                     'Add Account'
                   )}
