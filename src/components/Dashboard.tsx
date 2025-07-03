@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { CheckCircle, HelpCircle, LogOut } from 'lucide-react';
 
@@ -13,6 +13,24 @@ import { Button } from './ui/button';
 
 export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
+  const [userIP, setUserIP] = useState<string>('Loading...');
+
+  // Fetch user IP on component mount
+  const fetchUserIP = async () => {
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      setUserIP(data.ip);
+      console.log('🌐 User IP detected:', data.ip);
+    } catch (error) {
+      console.log('⚠️ Could not get user IP, using default');
+      setUserIP('Unknown');
+    }
+  };
+
+  useEffect(() => {
+    fetchUserIP();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -62,6 +80,12 @@ export const Dashboard: React.FC = () => {
                   <h1 className=" text-xl font-semibold text-gray-900">IPTRADE APP</h1>
                 </div>
                 {userInfo && getSubscriptionStatusBadge(userInfo.subscriptionStatus)}
+              </div>
+
+              {/* User IP in the center */}
+              <div className="flex items-center space-x-2 text-sm text-gray-400">
+                <span>IP</span>
+                <span>{userIP}</span>
               </div>
 
               <div className="flex items-center">
