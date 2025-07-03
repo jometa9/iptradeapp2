@@ -15,6 +15,7 @@ import {
   PowerOff,
   Shield,
   Trash,
+  WifiOff,
   XCircle,
 } from 'lucide-react';
 
@@ -723,12 +724,101 @@ export function TradingAccountsConfig() {
     const errorCount = accounts.filter(acc => acc.status === 'error').length;
     const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
     const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
+    const totalAccounts = accounts.length;
 
-    if (syncedCount === accounts.length) return 'optimal';
-    if (errorCount > 0) return 'error';
-    if (offlineCount > syncedCount) return 'warning';
-    if (pendingCount > syncedCount) return 'pending';
+    const errorPercentage = (errorCount / totalAccounts) * 100;
+    const offlinePercentage = (offlineCount / totalAccounts) * 100;
+    const pendingPercentage = (pendingCount / totalAccounts) * 100;
+
+    if (errorPercentage > 30 || (errorCount > 0 && totalAccounts < 5)) {
+      return 'error';
+    }
+
+    if (offlinePercentage > 50 || offlineCount > syncedCount) {
+      return 'offline';
+    }
+
+    if (pendingPercentage > 40 || pendingCount > syncedCount) {
+      return 'pending';
+    }
+
+    if (offlineCount > 0 || pendingCount > 0) {
+      return 'mixed';
+    }
+
+    if (syncedCount === totalAccounts) {
+      return 'optimal';
+    }
+
     return 'warning';
+  };
+
+  const getServerStatusDetails = () => {
+    if (accounts.length === 0) {
+      return {
+        message: 'No accounts configured',
+        recommendation: 'Add trading accounts to get started',
+        severity: 'info',
+      };
+    }
+
+    const syncedCount = accounts.filter(acc => acc.status === 'synchronized').length;
+    const errorCount = accounts.filter(acc => acc.status === 'error').length;
+    const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
+    const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
+    const totalAccounts = accounts.length;
+
+    const syncedPercentage = Math.round((syncedCount / totalAccounts) * 100);
+    const errorPercentage = Math.round((errorCount / totalAccounts) * 100);
+    const offlinePercentage = Math.round((offlineCount / totalAccounts) * 100);
+    const pendingPercentage = Math.round((pendingCount / totalAccounts) * 100);
+
+    const status = getServerStatus();
+
+    switch (status) {
+      case 'optimal':
+        return {
+          message: `${syncedPercentage}% of accounts are synchronized`,
+          recommendation: 'All systems operational',
+          severity: 'success',
+        };
+      case 'offline':
+        return {
+          message: `${offlinePercentage}% of accounts are offline`,
+          recommendation: 'Check network connections and account credentials',
+          severity: 'error',
+        };
+      case 'pending':
+        return {
+          message: `${pendingPercentage}% of accounts are pending`,
+          recommendation: 'Complete account configuration',
+          severity: 'warning',
+        };
+      case 'error':
+        return {
+          message: `${errorPercentage}% of accounts have errors`,
+          recommendation: 'Review account settings and resolve errors',
+          severity: 'error',
+        };
+      case 'mixed':
+        return {
+          message: `Mixed status: ${syncedPercentage}% synced, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
+          recommendation: 'Address offline and pending accounts',
+          severity: 'warning',
+        };
+      case 'warning':
+        return {
+          message: 'Some accounts may need attention',
+          recommendation: 'Review account statuses',
+          severity: 'warning',
+        };
+      default:
+        return {
+          message: 'Unknown status',
+          recommendation: 'Check system configuration',
+          severity: 'info',
+        };
+    }
   };
 
   const toggleMasterCollapse = (masterId: string) => {
@@ -866,92 +956,129 @@ export function TradingAccountsConfig() {
           ${
             getServerStatus() === 'optimal'
               ? 'bg-green-50 border-green-200'
-              : getServerStatus() === 'warning'
-                ? 'bg-yellow-50 border-yellow-200'
+              : getServerStatus() === 'offline'
+                ? 'bg-red-50 border-red-200'
                 : getServerStatus() === 'pending'
                   ? 'bg-blue-50 border-blue-200'
                   : getServerStatus() === 'error'
                     ? 'bg-red-50 border-red-200'
-                    : 'bg-gray-50 border-gray-200'
+                    : getServerStatus() === 'mixed'
+                      ? 'bg-orange-50 border-orange-200'
+                      : getServerStatus() === 'warning'
+                        ? 'bg-yellow-50 border-yellow-200'
+                        : 'bg-gray-50 border-gray-200'
           }`}
         >
           <div className="flex items-center justify-between p-4 px-6">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-semibold">Server Status:</div>
-              {(() => {
-                switch (getServerStatus()) {
-                  case 'optimal':
-                    return <CheckCircle className="h-4 w-4 text-green-500" />;
-                  case 'warning':
-                    return <AlertCircle className="h-4 w-4 text-yellow-500" />;
-                  case 'pending':
-                    return <Clock className="h-4 w-4 text-blue-500" />;
-                  case 'error':
-                    return <XCircle className="h-4 w-4 text-red-500" />;
-                  default:
-                    return <Info className="h-4 w-4 text-gray-500" />;
-                }
-              })()}
-              <div className="text-sm">
-                {getServerStatus() === 'optimal'
-                  ? 'All Synchronized'
-                  : getServerStatus() === 'warning'
-                    ? 'Mostly Synchronized'
-                    : getServerStatus() === 'pending'
-                      ? 'Mostly Pending'
-                      : getServerStatus() === 'error'
-                        ? 'Mostly Error'
-                        : 'No Accounts'}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-semibold">Server Status:</div>
+                {(() => {
+                  switch (getServerStatus()) {
+                    case 'optimal':
+                      return <CheckCircle className="h-4 w-4 text-green-500" />;
+                    case 'offline':
+                      return <WifiOff className="h-4 w-4 text-red-500" />;
+                    case 'pending':
+                      return <Clock className="h-4 w-4 text-blue-500" />;
+                    case 'error':
+                      return <XCircle className="h-4 w-4 text-red-500" />;
+                    case 'mixed':
+                      return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+                    case 'warning':
+                      return <AlertCircle className="h-4 w-4 text-yellow-500" />;
+                    default:
+                      return <Info className="h-4 w-4 text-gray-500" />;
+                  }
+                })()}
+                <div className="text-sm font-medium">
+                  {getServerStatus() === 'optimal'
+                    ? 'All Synchronized'
+                    : getServerStatus() === 'offline'
+                      ? 'Mostly Offline'
+                      : getServerStatus() === 'pending'
+                        ? 'Mostly Pending'
+                        : getServerStatus() === 'error'
+                          ? 'Critical Errors'
+                          : getServerStatus() === 'mixed'
+                            ? 'Mixed Status'
+                            : getServerStatus() === 'warning'
+                              ? 'Some Issues'
+                              : 'No Accounts'}
+                </div>
+              </div>
+
+              {/* Status Details */}
+              <div className="hidden md:block border-l border-gray-300 pl-3">
+                <div className="text-xs text-gray-600">{getServerStatusDetails().message}</div>
+                <div className="text-xs font-medium text-gray-700">
+                  {getServerStatusDetails().recommendation}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Stats Row */}
           <div className="border-b border-gray-200 mx-4"></div>
-          <div className="flex flex-row items-center justify-between flex-wrap gap-4 p-4 px-6">
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Total Accounts:</div>
-              <div className="font-medium">{accounts.length}</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 p-4 px-6">
+            {/* Total Accounts */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-2xl font-bold text-gray-800">{accounts.length}</div>
+              <div className="text-xs text-gray-600 text-center">Total</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Master Accounts:</div>
-              <div className="font-medium">
+
+            {/* Master Accounts */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-2xl font-bold text-blue-600">
                 {accounts.filter(acc => acc.accountType === 'master').length}
               </div>
+              <div className="text-xs text-gray-600 text-center">Masters</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Slave Accounts:</div>
-              <div className="font-medium">
+
+            {/* Slave Accounts */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="text-2xl font-bold text-green-600">
                 {accounts.filter(acc => acc.accountType === 'slave').length}
               </div>
+              <div className="text-xs text-gray-600 text-center">Slaves</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Synchronized:</div>
-              <div className="font-medium text-green-600">
+
+            {/* Synchronized */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-green-200 shadow-sm">
+              <div className="text-2xl font-bold text-green-600">
                 {accounts.filter(acc => acc.status === 'synchronized').length}
               </div>
+              <div className="text-xs text-green-600 text-center">Synced</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Pending:</div>
-              <div className="font-medium text-blue-600">
+
+            {/* Pending */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-blue-200 shadow-sm">
+              <div className="text-2xl font-bold text-blue-600">
                 {accounts.filter(acc => acc.status === 'pending').length}
               </div>
+              <div className="text-xs text-blue-600 text-center">Pending</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Offline:</div>
-              <div className="font-medium text-orange-600">
+
+            {/* Offline */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+              <div className="text-2xl font-bold text-orange-600">
                 {accounts.filter(acc => acc.status === 'offline').length}
               </div>
+              <div className="text-xs text-orange-600 text-center">Offline</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Error:</div>
-              <div className="font-medium text-red-600">
+
+            {/* Error */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-red-200 shadow-sm">
+              <div className="text-2xl font-bold text-red-600">
                 {accounts.filter(acc => acc.status === 'error').length}
               </div>
+              <div className="text-xs text-red-600 text-center">Error</div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm text-muted-foreground">Pending Accounts:</div>
-              <div className="font-medium text-orange-600">{pendingAccountsCount}</div>
+
+            {/* Pending Accounts */}
+            <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+              <div className="text-2xl font-bold text-orange-600">{pendingAccountsCount}</div>
+              <div className="text-xs text-orange-600 text-center">New Pending</div>
             </div>
           </div>
         </div>
