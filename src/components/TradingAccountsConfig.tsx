@@ -61,6 +61,7 @@ export function TradingAccountsConfig() {
   const [slaveConfigs, setSlaveConfigs] = useState<Record<string, any>>({});
   const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
+  const [pendingAccountsCount, setPendingAccountsCount] = useState<number>(0);
 
   const [formState, setFormState] = useState({
     accountNumber: '',
@@ -194,12 +195,31 @@ export function TradingAccountsConfig() {
     }
   };
 
+  // Fetch pending accounts count
+  const fetchPendingAccountsCount = async () => {
+    try {
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setPendingAccountsCount(data.totalPending || 0);
+      } else {
+        console.error('Failed to fetch pending accounts count');
+      }
+    } catch (error) {
+      console.error('Error loading pending accounts count:', error);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts(true);
+    fetchPendingAccountsCount();
 
     // Auto-refresh every 10 seconds to catch new conversions
     const interval = setInterval(() => {
       fetchAccounts(false);
+      fetchPendingAccountsCount();
     }, 10000);
 
     return () => clearInterval(interval);
@@ -928,6 +948,10 @@ export function TradingAccountsConfig() {
               <div className="font-medium text-red-600">
                 {accounts.filter(acc => acc.status === 'error').length}
               </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">Pending Accounts:</div>
+              <div className="font-medium text-orange-600">{pendingAccountsCount}</div>
             </div>
           </div>
         </div>

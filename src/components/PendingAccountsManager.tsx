@@ -52,6 +52,7 @@ export const PendingAccountsManager: React.FC = () => {
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [conversionForm, setConversionForm] = useState<ConversionForm>({
     name: '',
     description: '',
@@ -121,10 +122,12 @@ export const PendingAccountsManager: React.FC = () => {
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
+      setConfirmingDeleteId(null);
       setConfirmingMasterId(account.id);
     } else {
       // For slave, show simplified form and hide master confirmation if open
       setConfirmingMasterId(null);
+      setConfirmingDeleteId(null);
       setExpandedAccountId(account.id);
       setConversionForm({
         name: `Account ${account.id}`,
@@ -144,6 +147,14 @@ export const PendingAccountsManager: React.FC = () => {
     setExpandedAccountId(null);
     setIsConverting(false);
     setConfirmingMasterId(null);
+    setConfirmingDeleteId(null);
+  };
+
+  // Open delete confirmation
+  const openDeleteConfirmation = (accountId: string) => {
+    setExpandedAccountId(null);
+    setConfirmingMasterId(null);
+    setConfirmingDeleteId(accountId);
   };
 
   // Convert directly to master (no form needed)
@@ -248,10 +259,7 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Delete pending account
   const deletePendingAccount = async (accountId: string) => {
-    if (!confirm(`Are you sure you want to delete the pending account ${accountId}?`)) {
-      return;
-    }
-
+    setIsConverting(true);
     try {
       const response = await fetch(`${baseUrl}/accounts/pending/${accountId}`, {
         method: 'DELETE',
@@ -262,6 +270,7 @@ export const PendingAccountsManager: React.FC = () => {
           title: 'Success',
           description: 'Pending account deleted successfully',
         });
+        setConfirmingDeleteId(null);
         loadPendingAccounts();
       } else {
         throw new Error('Failed to delete pending account');
@@ -273,6 +282,8 @@ export const PendingAccountsManager: React.FC = () => {
         description: 'Error deleting pending account',
         variant: 'destructive',
       });
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -384,6 +395,37 @@ export const PendingAccountsManager: React.FC = () => {
                             Cancel
                           </Button>
                         </>
+                      ) : confirmingDeleteId === id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                            onClick={() => deletePendingAccount(id)}
+                            disabled={isConverting}
+                          >
+                            {isConverting ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-4 w-4 mr-1" />
+                                Yes, delete
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                            onClick={cancelConversion}
+                            disabled={isConverting}
+                          >
+                            Cancel
+                          </Button>
+                        </>
                       ) : (
                         // Normal buttons
                         <>
@@ -411,7 +453,8 @@ export const PendingAccountsManager: React.FC = () => {
                             size="sm"
                             variant="outline"
                             className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                            onClick={() => deletePendingAccount(id)}
+                            onClick={() => openDeleteConfirmation(id)}
+                            disabled={isConverting}
                           >
                             <XCircle className="h-4 w-4 mr-1" />
                             Delete
