@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   Info,
+  Pencil,
   Power,
   PowerOff,
   Shield,

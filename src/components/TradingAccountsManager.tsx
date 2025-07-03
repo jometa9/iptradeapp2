@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Plus, Trash2, Users } from 'lucide-react';
+import { Plus, Trash2, Unlink, Users } from 'lucide-react';
 
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -63,6 +63,10 @@ export const TradingAccountsManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showMasterDialog, setShowMasterDialog] = useState(false);
   const [showSlaveDialog, setShowSlaveDialog] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [confirmingDisconnectId, setConfirmingDisconnectId] = useState<string | null>(null);
+  const [confirmingDisconnectAllId, setConfirmingDisconnectAllId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [masterForm, setMasterForm] = useState({
     masterAccountId: '',
     name: '',
@@ -89,7 +93,7 @@ export const TradingAccountsManager: React.FC = () => {
   const loadAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${baseUrl}/accounts/all`);
+      const response = await fetch(`${baseUrl}/accounts/admin/all`);
       if (response.ok) {
         const data = await response.json();
         setAccounts(data);
@@ -180,10 +184,7 @@ export const TradingAccountsManager: React.FC = () => {
   };
 
   const deleteMasterAccount = async (masterAccountId: string) => {
-    if (!confirm(`Are you sure you want to delete the master account ${masterAccountId}?`)) {
-      return;
-    }
-
+    setIsProcessing(true);
     try {
       const response = await fetch(`${baseUrl}/accounts/master/${masterAccountId}`, {
         method: 'DELETE',
@@ -194,6 +195,7 @@ export const TradingAccountsManager: React.FC = () => {
           title: 'Success',
           description: 'Master account deleted successfully',
         });
+        setConfirmingDeleteId(null);
         loadAccounts();
       } else {
         throw new Error('Failed to delete master account');
@@ -202,17 +204,16 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error deleting master account:', error);
       toast({
         title: 'Error',
-        description: 'Error deleting master account',
+        description: 'Failed to delete master account',
         variant: 'destructive',
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const deleteSlaveAccount = async (slaveAccountId: string) => {
-    if (!confirm(`Are you sure you want to delete the slave account ${slaveAccountId}?`)) {
-      return;
-    }
-
+    setIsProcessing(true);
     try {
       const response = await fetch(`${baseUrl}/accounts/slave/${slaveAccountId}`, {
         method: 'DELETE',
@@ -223,6 +224,7 @@ export const TradingAccountsManager: React.FC = () => {
           title: 'Success',
           description: 'Slave account deleted successfully',
         });
+        setConfirmingDeleteId(null);
         loadAccounts();
       } else {
         throw new Error('Failed to delete slave account');
@@ -231,10 +233,79 @@ export const TradingAccountsManager: React.FC = () => {
       console.error('Error deleting slave account:', error);
       toast({
         title: 'Error',
-        description: 'Error deleting slave account',
+        description: 'Failed to delete slave account',
         variant: 'destructive',
       });
+    } finally {
+      setIsProcessing(false);
     }
+  };
+
+  const disconnectSlaveAccount = async (slaveAccountId: string) => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch(`${baseUrl}/accounts/disconnect/${slaveAccountId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast({
+          title: 'Success',
+          description: 'Slave account disconnected successfully',
+        });
+        setConfirmingDisconnectId(null);
+        loadAccounts();
+      } else {
+        throw new Error('Failed to disconnect slave account');
+      }
+    } catch (error) {
+      console.error('Error disconnecting slave account:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to disconnect slave account',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const disconnectAllSlaves = async (masterAccountId: string) => {
+    setIsProcessing(true);
+    try {
+      // Get all connected slaves for this master
+      const connectedSlaves = accounts?.masterAccounts[masterAccountId]?.connectedSlaves || [];
+      const slaveIds = connectedSlaves.map(slave => slave.id);
+
+      // Disconnect each slave
+      const disconnectPromises = slaveIds.map(slaveId =>
+        fetch(`${baseUrl}/accounts/disconnect/${slaveId}`, { method: 'DELETE' })
+      );
+
+      await Promise.all(disconnectPromises);
+
+      toast({
+        title: 'Success',
+        description: `All ${slaveIds.length} slave accounts disconnected successfully`,
+      });
+      setConfirmingDisconnectAllId(null);
+      loadAccounts();
+    } catch (error) {
+      console.error('Error disconnecting all slaves:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to disconnect all slave accounts',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const cancelAction = () => {
+    setConfirmingDeleteId(null);
+    setConfirmingDisconnectId(null);
+    setConfirmingDisconnectAllId(null);
   };
 
   const getPlatformBadgeColor = (platform: string) => {
@@ -514,18 +585,110 @@ export const TradingAccountsManager: React.FC = () => {
           {accounts && Object.keys(accounts.masterAccounts).length > 0 ? (
             <div className="space-y-4">
               {Object.entries(accounts.masterAccounts).map(([id, master]) => (
-                <div key={id} className="border rounded-lg p-4">
+                <div key={id} className="border rounded-lg p-4 bg-blue-50 border-blue-200 shadow">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{master.name || id}</h3>
+                      <h3 className="font-semibold text-blue-900">{master.name || id}</h3>
                       <Badge className={getPlatformBadgeColor(master.platform)}>
                         {master.platform || 'N/A'}
                       </Badge>
-                      <Badge variant="outline">{master.totalSlaves} slaves</Badge>
+                      <Badge
+                        variant="outline"
+                        className="bg-blue-100 text-blue-800 border-blue-300"
+                      >
+                        {master.totalSlaves > 0 ? `${master.totalSlaves} slaves` : ''}
+                      </Badge>
                     </div>
-                    <Button variant="destructive" size="sm" onClick={() => deleteMasterAccount(id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
+                      {confirmingDeleteId === id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                            onClick={() => deleteMasterAccount(id)}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                            onClick={cancelAction}
+                            disabled={isProcessing}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : confirmingDisconnectAllId === id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                            onClick={() => disconnectAllSlaves(id)}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                Disconnecting...
+                              </>
+                            ) : (
+                              <>
+                                <Unlink className="h-4 w-4 mr-1" />
+                                Disconnect all
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                            onClick={cancelAction}
+                            disabled={isProcessing}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                            onClick={() => setConfirmingDeleteId(id)}
+                            disabled={isProcessing}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                          {master.totalSlaves > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                              onClick={() => setConfirmingDisconnectAllId(id)}
+                              disabled={isProcessing}
+                            >
+                              <Unlink className="h-4 w-4 mr-1" />
+                              Disconnect All
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>
@@ -548,16 +711,69 @@ export const TradingAccountsManager: React.FC = () => {
                   </div>
                   {master.connectedSlaves.length > 0 && (
                     <div className="mt-3 pt-3 border-t">
-                      <p className="text-sm font-medium mb-2">Connected slaves:</p>
-                      <div className="flex flex-wrap gap-2">
+                      <p className="text-sm font-medium mb-2 text-blue-700">Connected slaves:</p>
+                      <div className="space-y-2">
                         {master.connectedSlaves.map(slave => (
-                          <div key={slave.id} className="flex items-center gap-1">
-                            <Badge variant="secondary" className="text-xs">
-                              {slave.name || slave.id}
-                            </Badge>
-                            <Badge className={`text-xs ${getPlatformBadgeColor(slave.platform)}`}>
-                              {slave.platform}
-                            </Badge>
+                          <div
+                            key={slave.id}
+                            className="flex items-center justify-between p-2 bg-blue-100 rounded border border-blue-300"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="secondary"
+                                className="text-xs bg-blue-200 text-blue-800"
+                              >
+                                {slave.name || slave.id}
+                              </Badge>
+                              <Badge className={`text-xs ${getPlatformBadgeColor(slave.platform)}`}>
+                                {slave.platform}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {confirmingDisconnectId === slave.id ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 text-xs"
+                                    onClick={() => disconnectSlaveAccount(slave.id)}
+                                    disabled={isProcessing}
+                                  >
+                                    {isProcessing ? (
+                                      <>
+                                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                        Disconnecting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Unlink className="h-3 w-3 mr-1" />
+                                        Disconnect
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 text-xs"
+                                    onClick={cancelAction}
+                                    disabled={isProcessing}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 text-xs"
+                                  onClick={() => setConfirmingDisconnectId(slave.id)}
+                                  disabled={isProcessing}
+                                >
+                                  <Unlink className="h-3 w-3 mr-1" />
+                                  Disconnect
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -581,22 +797,65 @@ export const TradingAccountsManager: React.FC = () => {
           <CardContent>
             <div className="space-y-4">
               {accounts.unconnectedSlaves.map(slave => (
-                <div key={slave.id} className="border rounded-lg p-4">
+                <div
+                  key={slave.id}
+                  className="border rounded-lg p-4 bg-gray-50 border-gray-200 shadow"
+                >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{slave.name || slave.id}</h3>
+                      <h3 className="font-semibold text-gray-900">{slave.name || slave.id}</h3>
                       <Badge className={getPlatformBadgeColor(slave.platform)}>
                         {slave.platform || 'N/A'}
                       </Badge>
-                      <Badge variant="destructive">Not connected</Badge>
+                      <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
+                        Not connected
+                      </Badge>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteSlaveAccount(slave.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
+                      {confirmingDeleteId === slave.id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                            onClick={() => deleteSlaveAccount(slave.id)}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                            onClick={cancelAction}
+                            disabled={isProcessing}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                          onClick={() => setConfirmingDeleteId(slave.id)}
+                          disabled={isProcessing}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>

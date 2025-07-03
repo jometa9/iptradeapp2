@@ -381,7 +381,7 @@ export const PendingAccountsManager: React.FC = () => {
                             ) : (
                               <>
                                 <UserCheck className="h-4 w-4 mr-1" />
-                                Yes, make master
+                                Confirm
                               </>
                             )}
                           </Button>
@@ -412,14 +412,14 @@ export const PendingAccountsManager: React.FC = () => {
                             ) : (
                               <>
                                 <XCircle className="h-4 w-4 mr-1" />
-                                Yes, delete
+                                Delete
                               </>
                             )}
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                            className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                             onClick={cancelConversion}
                             disabled={isConverting}
                           >
