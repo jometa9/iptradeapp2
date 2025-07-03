@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
 
 interface PendingAccount {
@@ -451,104 +452,109 @@ export const PendingAccountsManager: React.FC = () => {
                         }}
                         className="space-y-4"
                       >
-                        {/* Master Connection Section */}
-                        {masterAccounts.length > 0 && (
-                          <div className="my-4 ">
-                            <Label htmlFor="convert-master">Connect to Master account</Label>
-                            <Select
-                              value={conversionForm.masterAccountId}
-                              onValueChange={value =>
-                                setConversionForm(prev => ({ ...prev, masterAccountId: value }))
-                              }
-                            >
-                              <SelectTrigger className="bg-white border border-gray-200">
-                                <SelectValue placeholder="Select master..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border border-gray-200">
-                                <SelectItem value="none">
-                                  Not connected (configure later)
-                                </SelectItem>
-                                {masterAccounts.map(master => (
-                                  <SelectItem
-                                    key={master.id}
-                                    value={master.id}
-                                    className=" hover:bg-gray-50 cursor-pointer"
-                                  >
-                                    {master.name || master.id} ({master.platform})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-
                         {/* Trading Configuration */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>
-                            <Input
-                              id="lotCoefficient"
-                              type="number"
-                              min="0.01"
-                              max="100"
-                              step="0.01"
-                              value={conversionForm.lotCoefficient.toString()}
-                              onChange={e =>
-                                setConversionForm(prev => ({
-                                  ...prev,
-                                  lotCoefficient:
-                                    e.target.value === '' ? 1 : parseFloat(e.target.value),
-                                }))
-                              }
-                              className="bg-white border border-gray-200"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Multiplies the lot size from the master account
-                            </p>
+                        <div className="space-y-4">
+                          {/* First Row: Master Connection + Lot Multiplier */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Master Connection Section */}
+                            {masterAccounts.length > 0 && (
+                              <div>
+                                <Label htmlFor="convert-master">Connect to Master account</Label>
+                                <Select
+                                  value={conversionForm.masterAccountId}
+                                  onValueChange={value =>
+                                    setConversionForm(prev => ({ ...prev, masterAccountId: value }))
+                                  }
+                                >
+                                  <SelectTrigger className="bg-white border border-gray-200">
+                                    <SelectValue placeholder="Select master..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white border border-gray-200">
+                                    <SelectItem value="none">
+                                      Not connected (configure later)
+                                    </SelectItem>
+                                    {masterAccounts.map(master => (
+                                      <SelectItem
+                                        key={master.id}
+                                        value={master.id}
+                                        className=" hover:bg-gray-50 cursor-pointer"
+                                      >
+                                        {master.name || master.id} ({master.platform})
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+
+                            <div>
+                              <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>
+                              <Input
+                                id="lotCoefficient"
+                                type="number"
+                                min="0.01"
+                                max="100"
+                                step="0.01"
+                                value={conversionForm.lotCoefficient.toString()}
+                                onChange={e =>
+                                  setConversionForm(prev => ({
+                                    ...prev,
+                                    lotCoefficient:
+                                      e.target.value === '' ? 1 : parseFloat(e.target.value),
+                                  }))
+                                }
+                                className="bg-white border border-gray-200"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Multiplies the lot size from the master account
+                              </p>
+                            </div>
                           </div>
 
-                          <div>
-                            <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
-                            <Input
-                              id="forceLot"
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={conversionForm.forceLot.toString()}
-                              onChange={e =>
-                                setConversionForm(prev => ({
-                                  ...prev,
-                                  forceLot: e.target.value === '' ? 0 : parseFloat(e.target.value),
-                                }))
-                              }
-                              className="bg-white border border-gray-200"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              If greater than 0, uses this fixed lot instead of copying
-                            </p>
-                          </div>
+                          {/* Second Row: Fixed Lot + Reverse Trading */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div>
+                              <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
+                              <Input
+                                id="forceLot"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={conversionForm.forceLot.toString()}
+                                onChange={e =>
+                                  setConversionForm(prev => ({
+                                    ...prev,
+                                    forceLot:
+                                      e.target.value === '' ? 0 : parseFloat(e.target.value),
+                                  }))
+                                }
+                                className="bg-white border border-gray-200"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                If greater than 0, uses this fixed lot instead of copying
+                              </p>
+                            </div>
 
-                          <div className="flex items-center space-x-2 md:col-span-2">
-                            <input
-                              type="checkbox"
-                              id="reverseTrade"
-                              checked={conversionForm.reverseTrade}
-                              onChange={e =>
-                                setConversionForm(prev => ({
-                                  ...prev,
-                                  reverseTrade: e.target.checked,
-                                }))
-                              }
-                              className="bg-white border border-gray-200"
-                            />
-                            <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                              Reverse trades (Buy → Sell, Sell → Buy)
-                            </Label>
+                            <div className="flex items-center space-x-2 pt-1">
+                              <Switch
+                                id="reverseTrade"
+                                checked={conversionForm.reverseTrade}
+                                onCheckedChange={checked =>
+                                  setConversionForm(prev => ({
+                                    ...prev,
+                                    reverseTrade: checked,
+                                  }))
+                                }
+                              />
+                              <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
+                                Reverse trades (Buy → Sell, Sell → Buy)
+                              </Label>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex justify-end space-x-2 pt-2">
+                        <div className="flex justify-end space-x-2">
                           <Button
                             type="button"
                             onClick={cancelConversion}
