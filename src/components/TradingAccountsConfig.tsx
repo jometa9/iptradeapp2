@@ -1011,9 +1011,6 @@ export function TradingAccountsConfig() {
               {/* Status Details */}
               <div className="hidden md:block border-l border-gray-300 pl-3">
                 <div className="text-xs text-gray-600">{getServerStatusDetails().message}</div>
-                <div className="text-xs font-medium text-gray-700">
-                  {getServerStatusDetails().recommendation}
-                </div>
               </div>
             </div>
           </div>
