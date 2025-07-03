@@ -342,7 +342,7 @@ export const PendingAccountsManager: React.FC = () => {
                   key={id}
                   className="border rounded-lg p-4 bg-orange-50 border-orange-200 shadow"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-orange-900">Account {id}</h3>
                       <Badge
@@ -352,7 +352,7 @@ export const PendingAccountsManager: React.FC = () => {
                         Pending
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
                       {confirmingMasterId === id ? (
                         <>
                           <Button
@@ -421,7 +421,7 @@ export const PendingAccountsManager: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-600 space-y-1">
+                  <div className="text-sm text-gray-600 space-y-1 mt-2 ">
                     <p>
                       <strong>Platform:</strong> {account.platform || 'Unknown'}
                     </p>

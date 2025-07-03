@@ -55,7 +55,7 @@ export const Dashboard: React.FC = () => {
     <UpdateTestProvider>
       <div className="min-h-screen bg-gray-50">
         <header>
-          <div className="max-w-7xl mx-auto px-4">
+          <div className="mx-auto px-4">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
@@ -94,7 +94,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-4 gap-6 flex flex-col pb-6">
+        <main className="mx-auto px-4 gap-6 flex flex-col pb-6">
           {/* Update notification appears here when available */}
           <UpdateCard />
 
