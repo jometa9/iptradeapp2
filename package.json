@@ -137,7 +137,7 @@
     },
     "dmg": {
       "title": "IPTRADE-APP ${version}",
-      "background": null,
+      "background": "public/dmg-installer.png",
       "window": {
         "width": 540,
         "height": 380
