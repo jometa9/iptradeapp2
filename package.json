@@ -89,6 +89,7 @@
     },
     "files": [
       "dist/**/*",
+      "public/dmg-installer.png",
       "electron/**/*",
       "server/src/**/*",
       "server/config/**/*",
