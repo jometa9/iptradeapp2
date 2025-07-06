@@ -82,7 +82,7 @@ export function AccountInfoCard({
       });
 
       // Simular redirección externa
-      window.open('https://iptrade.app/pricing', '_blank');
+      window.open('https://iptradecopier.com/pricing', '_blank');
 
       setIsPortalLoading(false);
     } catch (error) {
@@ -115,7 +115,7 @@ export function AccountInfoCard({
       if (onGoToPricing) {
         onGoToPricing();
       } else {
-        window.open('https://iptrade.app/pricing', '_blank');
+        window.open('https://iptradecopier.com/pricing', '_blank');
       }
 
       setIsLoading(false);

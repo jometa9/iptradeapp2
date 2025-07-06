@@ -80,7 +80,7 @@ export const LoginScreen: React.FC = () => {
             </Button>
           </form>
           <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600">
-            <a href="https://iptrade.app/pricing" target="_blank" rel="noopener noreferrer">
+            <a href="https://iptradecopier.com/pricing" target="_blank" rel="noopener noreferrer">
               Manage your subscription here
             </a>
           </CardDescription>
