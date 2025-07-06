@@ -2,14 +2,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import {
-  createDisabledMasterConfig,
-  loadCopierStatus,
-  saveCopierStatus,
+    createDisabledMasterConfig,
+    loadCopierStatus,
+    saveCopierStatus,
 } from './copierStatusController.js';
 import {
-  createDisabledSlaveConfig,
-  loadSlaveConfigs,
-  saveSlaveConfigs,
+    createDisabledSlaveConfig,
+    loadSlaveConfigs,
+    saveSlaveConfigs,
 } from './slaveConfigController.js';
 
 // Accounts management file

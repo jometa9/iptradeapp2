@@ -15,10 +15,10 @@ interface UserInfo {
   userId: string;
   email: string;
   name: string;
-  subscriptionStatus: string;
-  planName: string;
+  subscriptionStatus: string | null;
+  planName: string | null;
   isActive: boolean;
-  expiryDate: string;
+  expiryDate: string | null;
   daysRemaining: number;
   statusChanged: boolean;
   subscriptionType: string;
@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
       const baseEndpoint =
-        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
+        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:30/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
       console.log('Making request to:', url);
       const response = await fetch(url);
@@ -76,9 +76,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const userData: UserInfo = await response.json();
 
-      // Verificar si la suscripción es válida
-      const isValidSubscription =
+      // Check for both paid subscriptions and free users (null status)
+      const isValidPaidSubscription =
         VALID_SUBSCRIPTION_STATES.includes(userData.subscriptionStatus) && userData.isActive;
+
+      const isFreeUser = userData.subscriptionStatus === null;
+
+      const isValidSubscription = isValidPaidSubscription || isFreeUser;
 
       if (isValidSubscription) {
         return { valid: true, userInfo: userData };

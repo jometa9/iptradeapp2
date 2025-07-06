@@ -10,6 +10,7 @@ import {
   getPlanDisplayName,
   getRemainingAccountSlots,
   getSubscriptionLimits,
+  shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -28,6 +29,11 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
   const { userInfo } = useAuth();
 
   if (!userInfo) {
+    return null;
+  }
+
+  // Don't show the card for premium plans that don't need to show limits
+  if (!shouldShowSubscriptionLimitsCard(userInfo.planName)) {
     return null;
   }
 
@@ -51,9 +57,7 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
   };
 
   return (
-    <Card
-      className={`border-l-4 ${userInfo.planName === null ? 'border-l-gray-400' : 'border-l-blue-500'} ${className}`}
-    >
+    <Card className={` ${className} bg-white`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">

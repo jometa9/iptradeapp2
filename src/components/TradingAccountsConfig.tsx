@@ -20,6 +20,16 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+import {
+  canCreateMoreAccounts,
+  canSetCustomLotSizes,
+  getAccountLimitMessage,
+  getLotSizeMessage,
+  getMaxAllowedLotSize,
+  getPlanDisplayName,
+  validateLotSize,
+} from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -29,16 +39,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { Tooltip } from './ui/tooltip';
 import { toast } from './ui/use-toast';
-import { useAuth } from '../context/AuthContext';
-import {
-  canCreateMoreAccounts,
-  canSetCustomLotSizes,
-  getAccountLimitMessage,
-  getLotSizeMessage,
-  validateLotSize,
-  getMaxAllowedLotSize,
-  getPlanDisplayName
-} from '../lib/subscriptionUtils';
 
 interface TradingAccount {
   id: string;
@@ -1013,20 +1013,14 @@ export function TradingAccountsConfig() {
     <div className="space-y-6">
       {/* Subscription Info Card */}
       {userInfo && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscription Limits</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {getAccountLimitMessage(userInfo, accounts.length)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {getLotSizeMessage(userInfo)}
-              </p>
-            </div>
-          </CardContent>
+        <Card className=" border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3">
+          <AlertTriangle className="w-6 h-6 text-yellow-900" />
+          <div className="gap-3">
+            <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
+            <p className="text-sm mt-1.5 text-yellow-800">
+              {getAccountLimitMessage(userInfo, accounts.length)} {getLotSizeMessage(userInfo)}
+            </p>
+          </div>
         </Card>
       )}
 
@@ -1240,9 +1234,7 @@ export function TradingAccountsConfig() {
           {(isAddingAccount || editingAccount) && (
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {editingAccount ? 'Edit Account' : 'Add New Account'}
-                </CardTitle>
+                <CardTitle>{editingAccount ? 'Edit Account' : 'Add New Account'}</CardTitle>
                 {!canAddMoreAccounts && !editingAccount && (
                   <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                     <div className="flex">
@@ -1252,8 +1244,8 @@ export function TradingAccountsConfig() {
                         </h3>
                         <div className="mt-2 text-sm text-yellow-700">
                           <p>
-                            Your {planDisplayName} plan has reached the maximum number of accounts allowed.
-                            Please upgrade your plan to add more accounts.
+                            Your {planDisplayName} plan has reached the maximum number of accounts
+                            allowed. Please upgrade your plan to add more accounts.
                           </p>
                         </div>
                       </div>
@@ -1266,7 +1258,8 @@ export function TradingAccountsConfig() {
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Para cuentas nuevas o cuentas master, mostrar todos los campos */}
-                      {(!editingAccount || (editingAccount && formState.accountType === 'master')) && (
+                      {(!editingAccount ||
+                        (editingAccount && formState.accountType === 'master')) && (
                         <>
                           <div>
                             <Label htmlFor="accountNumber">Account Number</Label>
@@ -1346,7 +1339,11 @@ export function TradingAccountsConfig() {
                           </SelectTrigger>
                           <SelectContent className="bg-white border border-gray-200">
                             {accountTypeOptions.map(option => (
-                              <SelectItem key={option.value} value={option.value} className="bg-white ">
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                                className="bg-white "
+                              >
                                 {option.label}
                               </SelectItem>
                             ))}
@@ -1361,7 +1358,9 @@ export function TradingAccountsConfig() {
                             <Select
                               name="connectedToMaster"
                               value={formState.connectedToMaster}
-                              onValueChange={value => handleSelectChange('connectedToMaster', value)}
+                              onValueChange={value =>
+                                handleSelectChange('connectedToMaster', value)
+                              }
                             >
                               <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
                                 <SelectValue
@@ -1379,8 +1378,8 @@ export function TradingAccountsConfig() {
                                       value={masterAcc.accountNumber}
                                       className="bg-white"
                                     >
-                                      {masterAcc.accountNumber} ({masterAcc.platform.toUpperCase()} -{' '}
-                                      {masterAcc.server})
+                                      {masterAcc.accountNumber} ({masterAcc.platform.toUpperCase()}{' '}
+                                      - {masterAcc.server})
                                     </SelectItem>
                                   ))}
                               </SelectContent>
@@ -1399,22 +1398,28 @@ export function TradingAccountsConfig() {
                               min="0.01"
                               max="100"
                               step="0.01"
-                              value={canCustomizeLotSizes ? (formState.lotCoefficient?.toString() || '1') : '1'}
+                              value={
+                                canCustomizeLotSizes
+                                  ? formState.lotCoefficient?.toString() || '1'
+                                  : '1'
+                              }
                               onChange={e =>
                                 setFormState({
                                   ...formState,
-                                  lotCoefficient: canCustomizeLotSizes ?
-                                    (e.target.value === '' ? 1 : parseFloat(e.target.value)) : 1,
+                                  lotCoefficient: canCustomizeLotSizes
+                                    ? e.target.value === ''
+                                      ? 1
+                                      : parseFloat(e.target.value)
+                                    : 1,
                                 })
                               }
                               disabled={!canCustomizeLotSizes}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizes ?
-                                'Multiplies the lot size from the master account' :
-                                'Free plan users cannot customize lot multipliers'
-                              }
+                              {canCustomizeLotSizes
+                                ? 'Multiplies the lot size from the master account'
+                                : 'Free plan users cannot customize lot multipliers'}
                             </p>
                           </div>
 
@@ -1428,27 +1433,30 @@ export function TradingAccountsConfig() {
                               name="forceLot"
                               type="number"
                               min="0"
-                              max={canCustomizeLotSizes ? "100" : "0.01"}
+                              max={canCustomizeLotSizes ? '100' : '0.01'}
                               step="0.01"
-                              value={canCustomizeLotSizes ?
-                                (formState.forceLot?.toString() || '0') :
-                                (formState.forceLot > 0 ? '0.01' : '0')
+                              value={
+                                canCustomizeLotSizes
+                                  ? formState.forceLot?.toString() || '0'
+                                  : formState.forceLot > 0
+                                    ? '0.01'
+                                    : '0'
                               }
                               onChange={e => {
-                                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                const value =
+                                  e.target.value === '' ? 0 : parseFloat(e.target.value);
                                 setFormState({
                                   ...formState,
-                                  forceLot: canCustomizeLotSizes ? value : (value > 0 ? 0.01 : 0),
+                                  forceLot: canCustomizeLotSizes ? value : value > 0 ? 0.01 : 0,
                                 });
                               }}
                               disabled={!canCustomizeLotSizes}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizes ?
-                                'If set above 0, uses this fixed lot size instead of copying' :
-                                'Free plan users are limited to 0.01 lot size'
-                              }
+                              {canCustomizeLotSizes
+                                ? 'If set above 0, uses this fixed lot size instead of copying'
+                                : 'Free plan users are limited to 0.01 lot size'}
                             </p>
                           </div>
 
@@ -1816,7 +1824,9 @@ export function TradingAccountsConfig() {
                                   Slave
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                  {slaveAccount.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
+                                  {slaveAccount.platform === 'mt4'
+                                    ? 'MetaTrader 4'
+                                    : 'MetaTrader 5'}
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
                                   <div className="flex gap-2">

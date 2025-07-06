@@ -16,7 +16,7 @@ export interface UserInfo {
   userId: string;
   email: string;
   name: string;
-  subscriptionStatus: string;
+  subscriptionStatus: string | null;
   planName: string | null;
   isActive: boolean;
   expiryDate: string | null;
@@ -143,14 +143,31 @@ export const getPlanBadgeColor = (planName: string | null): string => {
   }
 };
 
+// Check if subscription limits card should be shown
+export const shouldShowSubscriptionLimitsCard = (planName: string | null): boolean => {
+  // Hide the card for premium plans that don't need to show limits
+  const plansToHide = ['IPTRADE Premium', 'IPTRADE Unlimited', 'IPTRADE Managed VPS'];
+  return !plansToHide.includes(planName || '');
+};
+
 // Check if subscription is valid
 export const isValidSubscription = (userInfo: UserInfo): boolean => {
   const validStatuses = ['active', 'trialing', 'admin_assigned'];
+
+  // Handle free users (null subscription status)
+  if (userInfo.subscriptionStatus === null) {
+    return userInfo.isActive;
+  }
+
   return validStatuses.includes(userInfo.subscriptionStatus) && userInfo.isActive;
 };
 
 // Get subscription status display text
-export const getSubscriptionStatusText = (subscriptionStatus: string): string => {
+export const getSubscriptionStatusText = (subscriptionStatus: string | null): string => {
+  if (subscriptionStatus === null) {
+    return 'Free';
+  }
+
   switch (subscriptionStatus) {
     case 'active':
       return 'Active';

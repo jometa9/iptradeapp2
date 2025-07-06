@@ -4,6 +4,10 @@
     "66666": false,
     "123456": false,
     "TEST_SLAVE_001": false,
-    "PENDING_NINJA_006": false
+    "PENDING_NINJA_006": false,
+    "MASTER_TEST_LIMIT": false,
+    "MASTER_TEST_LIMIT_2": false,
+    "MASTER_TEST_LIMIT_3": false,
+    "MASTER_PREMIUM_002": false
   }
 }

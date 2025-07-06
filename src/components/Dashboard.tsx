@@ -51,7 +51,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const getSubscriptionStatusBadge = (status: string) => {
+  const getSubscriptionStatusBadge = (status: string | null) => {
     switch (status) {
       case 'active':
         return (
@@ -74,6 +74,8 @@ export const Dashboard: React.FC = () => {
             Admin Assigned
           </Badge>
         );
+      case null:
+        return <Badge className="bg-gray-100 text-gray-700 border border-gray-300">Free</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }

@@ -1,60 +1,9 @@
 import express from 'express';
 
 import { getStatus } from '../controllers/statusController.js';
+import { validateSubscription } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
-
-// Mock data para testing - en producción conectar con base de datos real
-const mockUsers = {
-  'test-key-active': {
-    userId: 'user_123',
-    email: 'user@example.com',
-    name: 'Test User',
-    subscriptionStatus: 'active',
-    planName: 'IPTRADE Premium',
-    isActive: true,
-    expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días
-    daysRemaining: 30,
-    statusChanged: false,
-    subscriptionType: 'paid',
-  },
-  'test-key-trial': {
-    userId: 'user_456',
-    email: 'trial@example.com',
-    name: 'Trial User',
-    subscriptionStatus: 'trialing',
-    planName: 'IPTRADE Unlimited',
-    isActive: true,
-    expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 días
-    daysRemaining: 7,
-    statusChanged: false,
-    subscriptionType: 'paid',
-  },
-  'test-key-admin': {
-    userId: 'user_789',
-    email: 'admin@example.com',
-    name: 'Admin User',
-    subscriptionStatus: 'admin_assigned',
-    planName: 'IPTRADE Managed VPS',
-    isActive: true,
-    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 año
-    daysRemaining: 365,
-    statusChanged: false,
-    subscriptionType: 'admin_assigned',
-  },
-  'test-key-free': {
-    userId: 'user_999',
-    email: 'free@example.com',
-    name: 'Free User',
-    subscriptionStatus: 'active',
-    planName: null,
-    isActive: true,
-    expiryDate: null,
-    daysRemaining: -1, // Sin límite
-    statusChanged: false,
-    subscriptionType: 'free',
-  },
-};
 
 /**
  * @swagger
@@ -68,12 +17,11 @@ const mockUsers = {
  */
 router.get('/status', getStatus);
 
-// Endpoint para validar suscripción
 /**
  * @swagger
  * /validate-subscription:
  *   get:
- *     summary: Validate subscription by API key
+ *     summary: Validate subscription for frontend
  *     tags: [Status]
  *     parameters:
  *       - in: query
@@ -89,33 +37,30 @@ router.get('/status', getStatus);
  *       401:
  *         description: Invalid API Key
  */
-router.get('/validate-subscription', (req, res) => {
+router.get('/validate-subscription', async (req, res) => {
   const { apiKey } = req.query;
 
-  // Only log first few characters of API key for security
-  console.log('🔐 Validating API Key:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
+  console.log(
+    '🔐 Frontend validating API Key:',
+    apiKey ? apiKey.substring(0, 8) + '...' : 'undefined'
+  );
 
   if (!apiKey) {
     return res.status(400).json({ error: 'API Key is required' });
   }
 
-  const userData = mockUsers[apiKey];
+  try {
+    const validation = await validateSubscription(apiKey);
 
-  if (!userData) {
-    return res.status(401).json({ error: 'Invalid API Key' });
+    if (validation.valid && validation.userData) {
+      return res.status(200).json(validation.userData);
+    } else {
+      return res.status(401).json({ error: validation.error || 'Invalid API Key' });
+    }
+  } catch (error) {
+    console.error('Validation error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-
-  // Calcular si la suscripción está activa
-  const now = new Date();
-  const expiry = userData.expiryDate ? new Date(userData.expiryDate) : null;
-
-  if (expiry && now > expiry) {
-    userData.isActive = false;
-    userData.subscriptionStatus = 'expired';
-    userData.daysRemaining = 0;
-  }
-
-  return res.status(200).json(userData);
 });
 
 export default router;

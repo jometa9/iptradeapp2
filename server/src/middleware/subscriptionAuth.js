@@ -29,31 +29,76 @@ const PLAN_LIMITS = {
   },
 };
 
-// Validate API key using your existing validation endpoint
+// Validate subscription against external license API
 export const validateSubscription = async apiKey => {
-  if (!apiKey) {
-    return { valid: false, error: 'API Key is required' };
-  }
-
   try {
-    // Use the existing validation endpoint
-    const serverPort = process.env.PORT || 3000;
-    const response = await fetch(
-      `http://localhost:${serverPort}/api/validate-subscription?apiKey=${encodeURIComponent(apiKey)}`
-    );
+    // Use the external license API URL from .env (port 3000)
+    const licenseApiUrl =
+      process.env.VITE_LICENSE_API_URL ||
+      process.env.LICENSE_API_URL ||
+      'http://localhost:3000/api/validate-subscription';
+
+    console.log(`🔗 Calling external license API: ${licenseApiUrl}`);
+
+    const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
 
     if (!response.ok) {
-      if (response.status === 401) {
-        return { valid: false, error: 'Invalid API Key' };
+      // If API key is not found in external API, treat as free user
+      if (response.status === 401 || response.status === 404) {
+        console.log('⚠️ API key not found in external API, treating as free user');
+        return {
+          valid: true,
+          userData: {
+            userId: 'user_' + apiKey.substring(0, 8),
+            email: 'user@free.com',
+            name: 'Free User',
+            subscriptionStatus: null,
+            planName: null,
+            isActive: false,
+            expiryDate: null,
+            daysRemaining: -1,
+            statusChanged: false,
+            subscriptionType: 'none',
+          },
+        };
       }
-      const errorData = await response.json();
+
+      const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
       return { valid: false, error: errorData.error || 'Validation failed' };
     }
 
     const userData = await response.json();
 
-    // Check subscription status
-    if (!VALID_SUBSCRIPTION_STATUSES.includes(userData.subscriptionStatus) || !userData.isActive) {
+    // Check if response contains error (some APIs return 200 with error field)
+    if (userData.error) {
+      console.log('⚠️ External API returned error, treating as free user:', userData.error);
+      return {
+        valid: true,
+        userData: {
+          userId: 'user_' + apiKey.substring(0, 8),
+          email: 'user@free.com',
+          name: 'Free User',
+          subscriptionStatus: null,
+          planName: null,
+          isActive: false,
+          expiryDate: null,
+          daysRemaining: -1,
+          statusChanged: false,
+          subscriptionType: 'none',
+        },
+      };
+    }
+
+    // Check subscription status - allow null as free plan
+    const isValidStatus =
+      VALID_SUBSCRIPTION_STATUSES.includes(userData.subscriptionStatus) ||
+      userData.subscriptionStatus === null;
+
+    // For null subscription (free plan), allow even if isActive is false
+    const isFreeUser = userData.subscriptionStatus === null;
+    const shouldAllowAccess = isValidStatus && (userData.isActive || isFreeUser);
+
+    if (!shouldAllowAccess) {
       return {
         valid: false,
         error: 'Invalid subscription status',
@@ -62,8 +107,8 @@ export const validateSubscription = async apiKey => {
       };
     }
 
-    // Check if subscription is expired
-    if (userData.expiryDate) {
+    // Check if subscription is expired (only for non-free users)
+    if (!isFreeUser && userData.expiryDate) {
       const now = new Date();
       const expiry = new Date(userData.expiryDate);
       if (now > expiry) {
@@ -77,20 +122,41 @@ export const validateSubscription = async apiKey => {
 
     return { valid: true, userData };
   } catch (error) {
-    console.error('Error validating subscription:', error);
-    return { valid: false, error: 'Validation service error' };
+    console.error('Error validating subscription with external API:', error.message);
+
+    // Fallback to free user on connection error
+    console.log('⚠️ External API unavailable, treating as free user');
+    return {
+      valid: true,
+      userData: {
+        userId: 'user_' + apiKey.substring(0, 8),
+        email: 'user@free.com',
+        name: 'Free User',
+        subscriptionStatus: null,
+        planName: null,
+        isActive: false,
+        expiryDate: null,
+        daysRemaining: -1,
+        statusChanged: false,
+        subscriptionType: 'none',
+      },
+    };
   }
 };
 
 // Get subscription limits for a user
 export const getSubscriptionLimits = planName => {
-  return PLAN_LIMITS[planName] || PLAN_LIMITS[null];
+  // If planName is null, undefined, or not found, return free plan limits
+  if (planName === null || planName === undefined || !PLAN_LIMITS[planName]) {
+    return PLAN_LIMITS[null]; // Free plan limits
+  }
+  return PLAN_LIMITS[planName];
 };
 
 // Count existing accounts for a specific user (by apiKey)
 export const countUserAccounts = apiKey => {
   try {
-    const accountsConfigPath = join(process.cwd(), 'config', 'registered_accounts.json');
+    const accountsConfigPath = join(process.cwd(), 'server', 'config', 'registered_accounts.json');
 
     if (!existsSync(accountsConfigPath)) {
       return { total: 0, masters: 0, slaves: 0 };
@@ -173,14 +239,17 @@ export const checkAccountLimits = (req, res, next) => {
   // Count existing accounts for this specific user
   const accountCounts = countUserAccounts(req.apiKey);
 
+  // Get user-friendly plan name
+  const displayPlanName = req.user.planName === null ? 'Free' : req.user.planName;
+
   if (accountCounts.total >= limits.maxAccounts) {
     return res.status(403).json({
       error: 'Account limit exceeded',
-      message: `Your ${req.user.planName || 'Free'} plan allows maximum ${limits.maxAccounts} accounts. You currently have ${accountCounts.total} accounts.`,
+      message: `Your ${displayPlanName} plan allows maximum ${limits.maxAccounts} accounts. You currently have ${accountCounts.total} accounts.`,
       limits: {
         maxAccounts: limits.maxAccounts,
         currentAccounts: accountCounts.total,
-        planName: req.user.planName || 'Free',
+        planName: displayPlanName,
       },
     });
   }
