@@ -82,7 +82,7 @@
   },
   "build": {
     "appId": "com.iptradeapp.app",
-    "productName": "IPTRADE-APP",
+    "productName": "IPTRADE",
     "icon": "public/iconShadow025.png",
     "directories": {
       "output": "release"
@@ -137,35 +137,34 @@
       ]
     },
     "dmg": {
-      "title": "IPTRADE-APP ${version}",
-      "background": "public/dmg-installer.png",
+      "background": "public/dmg3.png",
       "window": {
-        "width": 540,
-        "height": 380
+        "width": 658,
+        "height": 498
       },
       "contents": [
         {
-          "x": 410,
-          "y": 230,
-          "type": "link",
-          "path": "/Applications"
+          "x": 200,
+          "y": 310,
+          "type": "file"
         },
         {
-          "x": 130,
-          "y": 230,
-          "type": "file"
+          "x": 458,
+          "y": 310,
+          "type": "link",
+          "path": "/Applications"
         }
       ]
     },
     "win": {
       "icon": "public/iconShadow025.png",
       "target": "nsis",
-      "artifactName": "IPTRADE-APP-Setup.exe"
+      "artifactName": "IPTRADE.exe"
     },
     "linux": {
       "icon": "public/iconShadow025.png",
       "target": "AppImage",
-      "artifactName": "IPTRADE-APP.AppImage"
+      "artifactName": "IPTRADE.AppImage"
     }
   }
 }
