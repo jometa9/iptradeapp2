@@ -1,5 +1,7 @@
 {
-  "masterAccounts": {},
-  "slaveAccounts": {},
-  "connections": {}
+  "userAccounts": {},
+  "globalData": {
+    "lastMigration": null,
+    "version": "2.0"
+  }
 }

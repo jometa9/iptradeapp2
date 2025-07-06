@@ -23,6 +23,7 @@ import {
   updateSlaveAccount,
 } from '../controllers/accountsController.js';
 import { authenticateAccount } from '../middleware/roleAuth.js';
+import { checkAccountLimits, requireValidSubscription } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -60,7 +61,7 @@ const router = express.Router();
  *               platform: MT5
  *               status: active
  */
-router.post('/master', registerMasterAccount);
+router.post('/master', requireValidSubscription, checkAccountLimits, registerMasterAccount);
 /**
  * @swagger
  * /accounts/slave:
@@ -94,7 +95,7 @@ router.post('/master', registerMasterAccount);
  *               platform: MT5
  *               status: active
  */
-router.post('/slave', registerSlaveAccount);
+router.post('/slave', requireValidSubscription, checkAccountLimits, registerSlaveAccount);
 
 // Connection management
 /**
@@ -107,7 +108,7 @@ router.post('/slave', registerSlaveAccount);
  *       200:
  *         description: Slave connected to master
  */
-router.post('/connect', connectSlaveToMaster);
+router.post('/connect', requireValidSubscription, connectSlaveToMaster);
 /**
  * @swagger
  * /accounts/disconnect/{slaveAccountId}:
@@ -124,7 +125,7 @@ router.post('/connect', connectSlaveToMaster);
  *       200:
  *         description: Slave disconnected
  */
-router.delete('/disconnect/:slaveAccountId', disconnectSlave);
+router.delete('/disconnect/:slaveAccountId', requireValidSubscription, disconnectSlave);
 
 // Get account information (with activity tracking)
 /**
@@ -143,7 +144,7 @@ router.delete('/disconnect/:slaveAccountId', disconnectSlave);
  *       200:
  *         description: Master account info
  */
-router.get('/master/:masterAccountId', authenticateAccount, getMasterAccount);
+router.get('/master/:masterAccountId', requireValidSubscription, getMasterAccount);
 /**
  * @swagger
  * /accounts/slave/{slaveAccountId}:
@@ -160,7 +161,7 @@ router.get('/master/:masterAccountId', authenticateAccount, getMasterAccount);
  *       200:
  *         description: Slave account info
  */
-router.get('/slave/:slaveAccountId', authenticateAccount, getSlaveAccount);
+router.get('/slave/:slaveAccountId', requireValidSubscription, getSlaveAccount);
 /**
  * @swagger
  * /accounts/all:
@@ -184,9 +185,9 @@ router.get('/slave/:slaveAccountId', authenticateAccount, getSlaveAccount);
  *                   platform:
  *                     type: string
  */
-router.get('/all', authenticateAccount, getAllAccounts);
+router.get('/all', requireValidSubscription, getAllAccounts);
 
-// Admin UI endpoint (no auth required for admin interface)
+// Admin UI endpoint - Apply authentication for user isolation
 /**
  * @swagger
  * /accounts/admin/all:
@@ -197,7 +198,7 @@ router.get('/all', authenticateAccount, getAllAccounts);
  *       200:
  *         description: All accounts for admin
  */
-router.get('/admin/all', getAllAccountsForAdmin);
+router.get('/admin/all', requireValidSubscription, getAllAccountsForAdmin);
 
 // Update accounts
 /**
@@ -216,7 +217,7 @@ router.get('/admin/all', getAllAccountsForAdmin);
  *       200:
  *         description: Master account updated
  */
-router.put('/master/:masterAccountId', updateMasterAccount);
+router.put('/master/:masterAccountId', requireValidSubscription, updateMasterAccount);
 /**
  * @swagger
  * /accounts/slave/{slaveAccountId}:
@@ -233,7 +234,7 @@ router.put('/master/:masterAccountId', updateMasterAccount);
  *       200:
  *         description: Slave account updated
  */
-router.put('/slave/:slaveAccountId', updateSlaveAccount);
+router.put('/slave/:slaveAccountId', requireValidSubscription, updateSlaveAccount);
 
 // Delete accounts
 /**
@@ -252,7 +253,7 @@ router.put('/slave/:slaveAccountId', updateSlaveAccount);
  *       200:
  *         description: Master account deleted
  */
-router.delete('/master/:masterAccountId', deleteMasterAccount);
+router.delete('/master/:masterAccountId', requireValidSubscription, deleteMasterAccount);
 /**
  * @swagger
  * /accounts/slave/{slaveAccountId}:
@@ -269,7 +270,7 @@ router.delete('/master/:masterAccountId', deleteMasterAccount);
  *       200:
  *         description: Slave account deleted
  */
-router.delete('/slave/:slaveAccountId', deleteSlaveAccount);
+router.delete('/slave/:slaveAccountId', requireValidSubscription, deleteSlaveAccount);
 
 // Get supported platforms
 /**
@@ -336,7 +337,12 @@ router.get('/pending', getPendingAccounts);
  *       200:
  *         description: Account converted to master
  */
-router.post('/pending/:accountId/to-master', convertPendingToMaster);
+router.post(
+  '/pending/:accountId/to-master',
+  requireValidSubscription,
+  checkAccountLimits,
+  convertPendingToMaster
+);
 /**
  * @swagger
  * /accounts/pending/{accountId}/to-slave:
@@ -353,7 +359,12 @@ router.post('/pending/:accountId/to-master', convertPendingToMaster);
  *       200:
  *         description: Account converted to slave
  */
-router.post('/pending/:accountId/to-slave', convertPendingToSlave);
+router.post(
+  '/pending/:accountId/to-slave',
+  requireValidSubscription,
+  checkAccountLimits,
+  convertPendingToSlave
+);
 /**
  * @swagger
  * /accounts/pending/{accountId}:

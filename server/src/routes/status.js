@@ -4,6 +4,58 @@ import { getStatus } from '../controllers/statusController.js';
 
 const router = express.Router();
 
+// Mock data para testing - en producción conectar con base de datos real
+const mockUsers = {
+  'test-key-active': {
+    userId: 'user_123',
+    email: 'user@example.com',
+    name: 'Test User',
+    subscriptionStatus: 'active',
+    planName: 'IPTRADE Premium',
+    isActive: true,
+    expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días
+    daysRemaining: 30,
+    statusChanged: false,
+    subscriptionType: 'paid',
+  },
+  'test-key-trial': {
+    userId: 'user_456',
+    email: 'trial@example.com',
+    name: 'Trial User',
+    subscriptionStatus: 'trialing',
+    planName: 'IPTRADE Unlimited',
+    isActive: true,
+    expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 días
+    daysRemaining: 7,
+    statusChanged: false,
+    subscriptionType: 'paid',
+  },
+  'test-key-admin': {
+    userId: 'user_789',
+    email: 'admin@example.com',
+    name: 'Admin User',
+    subscriptionStatus: 'admin_assigned',
+    planName: 'IPTRADE Managed VPS',
+    isActive: true,
+    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 año
+    daysRemaining: 365,
+    statusChanged: false,
+    subscriptionType: 'admin_assigned',
+  },
+  'test-key-free': {
+    userId: 'user_999',
+    email: 'free@example.com',
+    name: 'Free User',
+    subscriptionStatus: 'active',
+    planName: null,
+    isActive: true,
+    expiryDate: null,
+    daysRemaining: -1, // Sin límite
+    statusChanged: false,
+    subscriptionType: 'free',
+  },
+};
+
 /**
  * @swagger
  * /status:
@@ -41,63 +93,11 @@ router.get('/validate-subscription', (req, res) => {
   const { apiKey } = req.query;
 
   // Only log first few characters of API key for security
-  console.log('🔐 Validating API Key:', apiKey.substring(0, 8) + '...');
+  console.log('🔐 Validating API Key:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
 
   if (!apiKey) {
     return res.status(400).json({ error: 'API Key is required' });
   }
-
-  // Mock data para testing - en producción conectar con base de datos real
-  const mockUsers = {
-    'test-key-active': {
-      userId: 'user_123',
-      email: 'user@example.com',
-      name: 'Test User',
-      subscriptionStatus: 'active',
-      planName: 'Pro Plan',
-      isActive: true,
-      expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 días
-      daysRemaining: 30,
-      statusChanged: false,
-      subscriptionType: 'paid',
-    },
-    'test-key-trial': {
-      userId: 'user_456',
-      email: 'trial@example.com',
-      name: 'Trial User',
-      subscriptionStatus: 'trialing',
-      planName: 'Trial Plan',
-      isActive: true,
-      expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 días
-      daysRemaining: 7,
-      statusChanged: false,
-      subscriptionType: 'paid',
-    },
-    'test-key-admin': {
-      userId: 'user_789',
-      email: 'admin@example.com',
-      name: 'Admin User',
-      subscriptionStatus: 'admin_assigned',
-      planName: 'Admin Plan',
-      isActive: true,
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 año
-      daysRemaining: 365,
-      statusChanged: false,
-      subscriptionType: 'admin_assigned',
-    },
-    'test-key-free': {
-      userId: 'user_999',
-      email: 'free@example.com',
-      name: 'Free User',
-      subscriptionStatus: 'active',
-      planName: 'Free Plan',
-      isActive: true,
-      expiryDate: null,
-      daysRemaining: -1, // Sin límite
-      statusChanged: false,
-      subscriptionType: 'free',
-    },
-  };
 
   const userData = mockUsers[apiKey];
 

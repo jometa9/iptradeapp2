@@ -2,6 +2,10 @@ import express from 'express';
 
 import { createNewOrder, getOrders } from '../controllers/ordersController.js';
 import { authenticateAccount, roleBasedAccess } from '../middleware/roleAuth.js';
+import {
+  enforceLotSizeRestrictions,
+  requireValidSubscription,
+} from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -167,7 +171,7 @@ router.get('/status', (req, res) => {
 router.use('/neworder', authenticateAccount, roleBasedAccess);
 
 // POST endpoint for creating new orders (only masters can access)
-router.post('/neworder', createNewOrder);
+router.post('/neworder', requireValidSubscription, enforceLotSizeRestrictions, createNewOrder);
 
 // GET endpoint for retrieving orders (only slaves can access)
 router.get('/neworder', getOrders);

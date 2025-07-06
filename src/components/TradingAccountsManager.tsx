@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
-import { Plus, Trash2, Unlink, Users } from 'lucide-react';
+import { Plus, Trash2, Unlink } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+import {
+  canCreateMoreAccounts,
+  getAccountLimitMessage,
+  getPlanDisplayName,
+} from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -59,6 +65,7 @@ const PLATFORMS = [
 ];
 
 export const TradingAccountsManager: React.FC = () => {
+  const { userInfo } = useAuth();
   const [accounts, setAccounts] = useState<AccountsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMasterDialog, setShowMasterDialog] = useState(false);
@@ -85,6 +92,13 @@ export const TradingAccountsManager: React.FC = () => {
 
   const serverPort = import.meta.env.VITE_SERVER_PORT;
   const baseUrl = `http://localhost:${serverPort}/api`;
+
+  // Calculate total accounts for limit checking
+  const totalAccounts = accounts ? accounts.totalMasterAccounts + accounts.totalSlaveAccounts : 0;
+
+  // Check if user can create more accounts
+  const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
+  const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
 
   useEffect(() => {
     loadAccounts();
@@ -342,6 +356,30 @@ export const TradingAccountsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Subscription Info Card */}
+      {userInfo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Account Limits</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {getAccountLimitMessage(userInfo, totalAccounts)}
+              </p>
+              {!canAddMoreAccounts && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">
+                    You have reached your account limit. Please upgrade your plan to add more
+                    accounts.
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header with stats */}
       <Card>
         <CardHeader>
@@ -350,7 +388,7 @@ export const TradingAccountsManager: React.FC = () => {
             <div className="flex gap-2">
               <Dialog open={showMasterDialog} onOpenChange={setShowMasterDialog}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button className="bg-blue-600 hover:bg-blue-700" disabled={!canAddMoreAccounts}>
                     <Plus className="w-4 h-4 mr-2" />
                     Master Account
                   </Button>
@@ -361,6 +399,14 @@ export const TradingAccountsManager: React.FC = () => {
                     <DialogDescription>
                       Master accounts send trading signals to connected slave accounts.
                     </DialogDescription>
+                    {!canAddMoreAccounts && (
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <p className="text-sm text-yellow-800">
+                          Your {planDisplayName} plan has reached the maximum number of accounts
+                          allowed.
+                        </p>
+                      </div>
+                    )}
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
@@ -428,7 +474,9 @@ export const TradingAccountsManager: React.FC = () => {
                     </Button>
                     <Button
                       onClick={registerMasterAccount}
-                      disabled={!masterForm.masterAccountId || !masterForm.platform}
+                      disabled={
+                        !masterForm.masterAccountId || !masterForm.platform || !canAddMoreAccounts
+                      }
                     >
                       Register
                     </Button>
@@ -438,8 +486,11 @@ export const TradingAccountsManager: React.FC = () => {
 
               <Dialog open={showSlaveDialog} onOpenChange={setShowSlaveDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Users className="w-4 h-4 mr-2" />
+                  <Button
+                    className="bg-green-600 hover:bg-green-700"
+                    disabled={!canAddMoreAccounts}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
                     Slave Account
                   </Button>
                 </DialogTrigger>
@@ -449,6 +500,14 @@ export const TradingAccountsManager: React.FC = () => {
                     <DialogDescription>
                       Slave accounts receive and execute signals from a specific master account.
                     </DialogDescription>
+                    {!canAddMoreAccounts && (
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <p className="text-sm text-yellow-800">
+                          Your {planDisplayName} plan has reached the maximum number of accounts
+                          allowed.
+                        </p>
+                      </div>
+                    )}
                   </DialogHeader>
                   <div className="space-y-4">
                     <div>
@@ -536,7 +595,9 @@ export const TradingAccountsManager: React.FC = () => {
                     </Button>
                     <Button
                       onClick={registerSlaveAccount}
-                      disabled={!slaveForm.slaveAccountId || !slaveForm.platform}
+                      disabled={
+                        !slaveForm.slaveAccountId || !slaveForm.platform || !canAddMoreAccounts
+                      }
                     >
                       Register
                     </Button>

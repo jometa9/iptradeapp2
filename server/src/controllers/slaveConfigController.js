@@ -267,6 +267,18 @@ export const setSlaveConfig = (req, res) => {
     });
   }
 
+  // Apply subscription-based restrictions
+  const userPlan = req.user?.planName;
+  const subscriptionLimits = req.subscriptionLimits;
+
+  // Check if this is a free user (null plan)
+  if (userPlan === null && subscriptionLimits?.maxLotSize === 0.01) {
+    // For free users, override lot configurations to force 0.01
+    console.log(`Applying free user lot restrictions for slave ${slaveAccountId}`);
+    req.body.forceLot = 0.01;
+    req.body.lotMultiplier = 1.0;
+  }
+
   // Check if account is offline before enabling
   if (enabled) {
     const { loadAccountsConfig } = require('./accountsController.js');
@@ -289,20 +301,25 @@ export const setSlaveConfig = (req, res) => {
     configs[slaveAccountId] = getDefaultSlaveConfig();
   }
 
+  // Update configuration with subscription-enforced values
+  const finalLotMultiplier =
+    req.body.lotMultiplier !== undefined ? req.body.lotMultiplier : lotMultiplier;
+  const finalForceLot = req.body.forceLot !== undefined ? req.body.forceLot : forceLot;
+
   // Update configuration
-  if (lotMultiplier !== undefined) {
-    const multiplier = parseFloat(lotMultiplier);
+  if (finalLotMultiplier !== undefined) {
+    const multiplier = parseFloat(finalLotMultiplier);
     if (isNaN(multiplier) || multiplier <= 0) {
       return res.status(400).json({ error: 'lotMultiplier must be a positive number' });
     }
     configs[slaveAccountId].lotMultiplier = multiplier;
   }
 
-  if (forceLot !== undefined) {
-    if (forceLot === null || forceLot === '') {
+  if (finalForceLot !== undefined) {
+    if (finalForceLot === null || finalForceLot === '') {
       configs[slaveAccountId].forceLot = null;
     } else {
-      const lot = parseFloat(forceLot);
+      const lot = parseFloat(finalForceLot);
       if (isNaN(lot) || lot <= 0) {
         return res.status(400).json({ error: 'forceLot must be a positive number or null' });
       }
@@ -375,14 +392,30 @@ export const setSlaveConfig = (req, res) => {
 
   configs[slaveAccountId].lastUpdated = new Date().toISOString();
 
+  // Save configuration
   if (saveSlaveConfigs(configs)) {
-    console.log(`Slave configuration updated for ${slaveAccountId}:`, configs[slaveAccountId]);
-    res.json({
+    console.log(`Slave config updated for ${slaveAccountId}:`, configs[slaveAccountId]);
+
+    // Include subscription info in response
+    const responseData = {
       message: 'Slave configuration saved successfully',
       slaveAccountId,
       config: configs[slaveAccountId],
       status: 'success',
-    });
+    };
+
+    // Add subscription-related info if user is on a restricted plan
+    if (userPlan === null && subscriptionLimits?.maxLotSize === 0.01) {
+      responseData.subscriptionInfo = {
+        planName: 'Free',
+        restrictions: {
+          lotSize: 0.01,
+          message: 'Free plan users are limited to 0.01 lot size',
+        },
+      };
+    }
+
+    res.json(responseData);
   } else {
     res.status(500).json({ error: 'Failed to save slave configuration' });
   }

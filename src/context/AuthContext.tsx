@@ -51,7 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     apiKey: string
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
-      const baseEndpoint = import.meta.env.VITE_LICENSE_API_URL;
+      const baseEndpoint =
+        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
       console.log('Making request to:', url);
       const response = await fetch(url);

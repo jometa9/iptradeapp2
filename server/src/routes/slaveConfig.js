@@ -7,6 +7,10 @@ import {
   resetSlaveConfig,
   setSlaveConfig,
 } from '../controllers/slaveConfigController.js';
+import {
+  enforceLotSizeRestrictions,
+  requireValidSubscription,
+} from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -51,7 +55,7 @@ const router = express.Router();
  *               message: Slave config set
  */
 router.get('/', getAllSlaveConfigs);
-router.post('/', setSlaveConfig);
+router.post('/', requireValidSubscription, enforceLotSizeRestrictions, setSlaveConfig);
 
 /**
  * @swagger
