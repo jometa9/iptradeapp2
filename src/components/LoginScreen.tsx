@@ -31,7 +31,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md">
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
           <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
