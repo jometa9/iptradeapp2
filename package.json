@@ -14,7 +14,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"wait-on http://localhost:5174 && electron .\"",
+    "electron:dev": "concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"wait-on http://localhost:5174 && cross-env VITE_PORT=5174 electron .\"",
     "electron:build": "npm run build && electron-builder --publish=never",
     "electron:build:ci": "npm run build && electron-builder --publish=always",
     "electron:preview": "electron .",
@@ -81,7 +81,7 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.iptradeapp.app",
+    "appId": "com.iptrade.app",
     "productName": "IPTRADE",
     "icon": "public/iconShadow025.png",
     "directories": {
