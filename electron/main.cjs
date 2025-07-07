@@ -139,6 +139,7 @@ function createWindow() {
     height: 750,
     minHeight: 750,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
+    title: 'IPTRADE',
     autoHideMenuBar: true, // Oculta la barra de menú en Windows/Linux
     webPreferences: {
       nodeIntegration: false,
@@ -147,9 +148,12 @@ function createWindow() {
     },
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5174');
-    mainWindow.webContents.openDevTools();
+    if (isDev) {
+    // Try to load from the correct port (Vite might use different ports)
+    const devServerPort = process.env.VITE_PORT || 5174;
+    mainWindow.loadURL(`http://localhost:${devServerPort}`);
+    // Uncomment the line below if you need DevTools during development
+    // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
 
@@ -162,8 +166,8 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await startServer();
-  // Cambiar el nombre de la app en desarrollo
-  app.setName('IPTRADE APP');
+  // Cambiar el nombre de la app
+  app.setName('IPTRADE');
   createWindow();
 
   // Configurar el icono del dock en macOS
