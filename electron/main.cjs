@@ -139,6 +139,7 @@ function createWindow() {
     height: 750,
     minHeight: 750,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
+    autoHideMenuBar: true, // Oculta la barra de menú en Windows/Linux
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
