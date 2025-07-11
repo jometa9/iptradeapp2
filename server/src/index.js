@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import { join } from 'path';
+import { existsSync } from 'fs';
 import swaggerUi from 'swagger-ui-express';
 
 import { killProcessOnPort } from './controllers/ordersController.js';
@@ -16,8 +17,19 @@ import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
 import swaggerDocs from './swaggerConfig.js';
 
-// Load environment variables first
-dotenv.config({ path: join(process.cwd(), '.env') });
+// Load environment variables from root .env only
+// Try to load from current directory first, then from parent directory
+const rootEnvPath = join(process.cwd(), '.env');
+const parentEnvPath = join(process.cwd(), '..', '.env');
+
+// Check which path exists and load it
+if (existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else if (existsSync(parentEnvPath)) {
+  dotenv.config({ path: parentEnvPath });
+} else {
+  console.warn('⚠️ No .env file found in current or parent directory');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;

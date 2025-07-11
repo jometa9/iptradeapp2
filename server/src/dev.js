@@ -1,12 +1,30 @@
 import dotenv from 'dotenv';
+import { existsSync } from 'fs';
 import { join } from 'path';
 
 import { checkAccountActivity } from './controllers/accountsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
-// Load environment variables from server/.env
-dotenv.config({ path: join(process.cwd(), 'server', '.env') });
+// Load environment variables from root .env only
+// Try to load from current directory first, then from parent directory
+const rootEnvPath = join(process.cwd(), '.env');
+const parentEnvPath = join(process.cwd(), '..', '.env');
+
+console.log('🔍 Checking for .env files:');
+console.log('- Current directory .env:', rootEnvPath);
+console.log('- Parent directory .env:', parentEnvPath);
+
+// Check which path exists and load it
+if (existsSync(rootEnvPath)) {
+  console.log('✅ Loading .env from current directory');
+  dotenv.config({ path: rootEnvPath });
+} else if (existsSync(parentEnvPath)) {
+  console.log('✅ Loading .env from parent directory');
+  dotenv.config({ path: parentEnvPath });
+} else {
+  console.warn('⚠️ No .env file found in current or parent directory');
+}
 
 const { app } = createServer();
 const DEV_PORT = process.env.PORT || 3000;
@@ -16,14 +34,17 @@ console.log('🔧 DEV MODE Environment variables:');
 console.log('- process.env.PORT:', process.env.PORT);
 console.log('- Final DEV_PORT:', DEV_PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
-// console.log(
-//   '- CTRADER_CLIENT_ID:',
-//   process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
-// );
-// console.log(
-//   '- CTRADER_CLIENT_SECRET:',
-//   process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
-// );
+console.log('- LICENSE_API_URL:', process.env.LICENSE_API_URL);
+console.log(
+  '- CTRADER_CLIENT_ID:',
+  process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
+);
+console.log(
+  '- CTRADER_CLIENT_SECRET:',
+  process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
+);
+console.log('- .env file:', join(process.cwd(), '..', '.env'));
+console.log('- Current working directory:', process.cwd());
 
 async function startDevServer() {
   console.log(`🚀 Starting IPTRADE DEV Server on port ${DEV_PORT}...`);

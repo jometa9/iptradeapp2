@@ -2,6 +2,18 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+
+// Helper para leer el puerto del .env raíz
+function getPortFromEnv() {
+  const envPath = path.join(__dirname, '../.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const match = envContent.match(/^PORT=(\d+)/m);
+    if (match) return match[1];
+  }
+  return '3000'; // fallback
+}
 
 // Mejorar la detección de modo desarrollo
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -84,6 +96,8 @@ async function startServer() {
   try {
     console.log('[ELECTRON] Development mode:', isDev);
 
+    const port = getPortFromEnv();
+
     if (isDev) {
       console.log('[ELECTRON] Starting development server...');
 
@@ -94,7 +108,7 @@ async function startServer() {
       serverProcess = spawn('node', [serverPath], {
         cwd: path.join(__dirname, '..'),
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, PORT: '3000' },
+        env: { ...process.env, PORT: port },
       });
 
       serverProcess.stdout.on('data', data => {
@@ -148,7 +162,7 @@ function createWindow() {
     },
   });
 
-    if (isDev) {
+  if (isDev) {
     // Try to load from the correct port (Vite might use different ports)
     const devServerPort = process.env.VITE_PORT || 5174;
     mainWindow.loadURL(`http://localhost:${devServerPort}`);
