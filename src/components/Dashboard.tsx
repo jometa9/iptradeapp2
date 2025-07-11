@@ -5,6 +5,7 @@ import { CheckCircle, Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
 import { PendingAccountsManager } from './PendingAccountsManager';
+import { TemporarySubscriptionLimitsCard } from './SubscriptionLimitsCard';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
 import { VersionInfo } from './VersionInfo';
@@ -15,6 +16,8 @@ export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(false);
+  // Estado para controlar si se acaba de iniciar sesión
+  const [isRecentLogin, setIsRecentLogin] = useState<boolean>(true);
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -23,14 +26,25 @@ export const Dashboard: React.FC = () => {
       const data = await response.json();
       setUserIP(data.ip);
       console.log('🌐 User IP detected:', data.ip);
-    } catch (error) {
+    } catch {
       console.log('⚠️ Could not get user IP, using default');
       setUserIP('Unknown');
     }
   };
 
+  // Efecto para realizar acciones al montar el componente
   useEffect(() => {
     fetchUserIP();
+    
+    // Marcar que el usuario acaba de iniciar sesión
+    setIsRecentLogin(true);
+    
+    // Después de 10 segundos, no es un login reciente
+    const loginTimer = setTimeout(() => {
+      setIsRecentLogin(false);
+    }, 10000);
+    
+    return () => clearTimeout(loginTimer);
   }, []);
 
   const handleLogout = () => {
@@ -45,7 +59,7 @@ export const Dashboard: React.FC = () => {
   const handleCopyIP = async () => {
     try {
       await navigator.clipboard.writeText(userIP || 'Unknown');
-    } catch (error) {
+    } catch {
       // Silent fail - no notification to user
       console.log('Failed to copy IP to clipboard');
     }
@@ -122,7 +136,6 @@ export const Dashboard: React.FC = () => {
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
                   title="Help"
-                  // que este boton lo lleve a la pagina de ayuda
                   onClick={handleHelp}
                 >
                   <HelpCircle className="w-4 h-4" />
@@ -144,6 +157,14 @@ export const Dashboard: React.FC = () => {
         <main className="mx-auto px-4 gap-6 flex flex-col pb-6">
           {/* Update notification appears here when available */}
           <UpdateCard />
+          
+          {/* Subscription Limits Card - Solo se muestra temporalmente después del login */}
+          {isRecentLogin && userInfo && (
+            <TemporarySubscriptionLimitsCard 
+              className="mt-4" 
+              temporaryDuration={10000}
+            />
+          )}
 
           {/* Pending Accounts - Always visible at top for admin management */}
           <PendingAccountsManager />

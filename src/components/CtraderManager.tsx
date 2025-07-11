@@ -54,7 +54,7 @@ interface MasterAccount {
 }
 
 export const CtraderManager: React.FC = () => {
-  const { userInfo, isAuthenticated } = useAuth();
+  const { userInfo, isAuthenticated, secretKey } = useAuth();
   const [status, setStatus] = useState<CtraderStatus>({
     authenticated: false,
     connected: false,
@@ -82,7 +82,7 @@ export const CtraderManager: React.FC = () => {
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Get userId from authenticated user context
-  const userId = isAuthenticated && userInfo ? userInfo.userId : null;
+  const userId = userInfo?.userId;
 
   const loadStatus = useCallback(async () => {
     if (!userId) {
@@ -120,7 +120,11 @@ export const CtraderManager: React.FC = () => {
 
   const loadMasterAccounts = useCallback(async () => {
     try {
-      const response = await fetch(`${baseUrl}/accounts/all`);
+      const response = await fetch(`${baseUrl}/accounts/all`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         const masters = Object.values(data.masterAccounts || {}) as MasterAccount[];
@@ -129,7 +133,7 @@ export const CtraderManager: React.FC = () => {
     } catch (error) {
       console.error('Error loading master accounts:', error);
     }
-  }, [baseUrl]);
+  }, [baseUrl, secretKey]);
 
   useEffect(() => {
     if (userId) {

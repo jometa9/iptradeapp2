@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { AlertCircle, CheckCircle, Crown, Zap } from 'lucide-react';
 
@@ -15,12 +15,28 @@ import {
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
+// Estilos para la animación
+const fadeInDownAnimation = {
+  opacity: 1,
+  animation: 'fadeInDown 0.5s ease-out',
+  transition: 'opacity 0.3s, transform 0.3s'
+};
+
+// Estilo para cuando desaparece
+const fadeOutAnimation = {
+  opacity: 0,
+  transform: 'translateY(-10px)',
+  transition: 'opacity 0.5s, transform 0.5s'
+};
+
 interface SubscriptionLimitsCardProps {
   currentAccountCount: number;
   showDetailedLimits?: boolean;
   className?: string;
+  temporaryDuration?: number; // Duración en ms para la tarjeta temporal
 }
 
+// Componente principal de tarjeta de límites de suscripción
 export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
   currentAccountCount,
   showDetailedLimits = true,
@@ -32,7 +48,7 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
     return null;
   }
 
-  // Don't show the card for premium plans that don't need to show limits
+  // Don't show the card for plans that don't need to show limits
   if (!shouldShowSubscriptionLimitsCard(userInfo.planName)) {
     return null;
   }
@@ -103,7 +119,7 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
             </div>
           )}
 
-          {canAddAccounts && remainingSlots !== null && (
+          {remainingSlots !== null && (
             <p className="text-sm text-muted-foreground">
               {remainingSlots} slot{remainingSlots !== 1 ? 's' : ''} remaining
             </p>
@@ -158,6 +174,94 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
             </p>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Componente de tarjeta temporal que solo se muestra por un tiempo limitado
+export const TemporarySubscriptionLimitsCard: React.FC<{
+  className?: string;
+  temporaryDuration?: number;
+}> = ({
+  className = '',
+  temporaryDuration = 10000, // 10 segundos por defecto
+}) => {
+  const [isVisible, setIsVisible] = useState(true);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const { userInfo } = useAuth();
+
+  // Ocultar la tarjeta después del tiempo especificado
+  useEffect(() => {
+    if (!isVisible) return;
+    
+    // Iniciar desvanecimiento medio segundo antes
+    const fadeTimer = setTimeout(() => {
+      setIsLeaving(true);
+    }, temporaryDuration - 500);
+    
+    // Ocultar completamente
+    const hideTimer = setTimeout(() => {
+      setIsVisible(false);
+    }, temporaryDuration);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [temporaryDuration, isVisible]);
+
+  // No mostrar si no es visible o si no hay información de usuario
+  if (!isVisible || !userInfo) {
+    return null;
+  }
+
+  // Solo mostrar para planes gratuitos y Premium
+  if (!shouldShowSubscriptionLimitsCard(userInfo.planName)) {
+    return null;
+  }
+
+  return (
+    <Card 
+      className={`${className} bg-white`}
+      style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            {userInfo.planName === 'IPTRADE Premium' ? (
+              <Crown className="w-4 h-4" />
+            ) : (
+              <AlertCircle className="w-4 h-4" />
+            )}
+            Subscription Limits
+          </CardTitle>
+          <Badge
+            className={
+              userInfo.planName === 'IPTRADE Premium'
+                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                : 'bg-gray-100 text-gray-800 border-gray-200'
+            }
+          >
+            {userInfo.planName === null ? 'Free' : userInfo.planName}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Simplified content for temporary card */}
+        <div className="space-y-2">
+          <p className="text-sm">
+            {userInfo.planName === null
+              ? 'Your Free plan allows 3 accounts with 0.01 lot size.'
+              : 'Your Premium plan allows 5 accounts with unlimited lot size.'}
+          </p>
+          
+          {userInfo.planName === null && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800 font-medium">Upgrade to unlock more features</p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

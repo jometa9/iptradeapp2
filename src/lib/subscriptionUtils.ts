@@ -145,9 +145,9 @@ export const getPlanBadgeColor = (planName: string | null): string => {
 
 // Check if subscription limits card should be shown
 export const shouldShowSubscriptionLimitsCard = (planName: string | null): boolean => {
-  // Hide the card for premium plans that don't need to show limits
-  const plansToHide = ['IPTRADE Premium', 'IPTRADE Unlimited', 'IPTRADE Managed VPS'];
-  return !plansToHide.includes(planName || '');
+  // Only show the card for free users and Premium plan
+  const plansToShow = [null, 'IPTRADE Premium'];
+  return plansToShow.includes(planName);
 };
 
 // Check if subscription is valid

@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
+import { useAuth } from '../context/AuthContext';
 
 interface CopierStatus {
   globalStatus: boolean;
@@ -59,6 +60,7 @@ export const CopierStatusControls: React.FC = () => {
   const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const { secretKey } = useAuth();
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
   const baseUrl = `http://localhost:${serverPort}/api`;
@@ -69,14 +71,22 @@ export const CopierStatusControls: React.FC = () => {
       setLoading(true);
 
       // Load copier status
-      const copierResponse = await fetch(`${baseUrl}/copier/status`);
+      const copierResponse = await fetch(`${baseUrl}/copier/status`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (copierResponse.ok) {
         const copierData = await copierResponse.json();
         setCopierStatus(copierData);
       }
 
       // Load accounts
-      const accountsResponse = await fetch(`${baseUrl}/accounts/all`);
+      const accountsResponse = await fetch(`${baseUrl}/accounts/all`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (accountsResponse.ok) {
         const accountsData = await accountsResponse.json();
         setAccounts(accountsData);
@@ -91,7 +101,11 @@ export const CopierStatusControls: React.FC = () => {
 
         const slaveConfigPromises = allSlaves.map(async slave => {
           try {
-            const response = await fetch(`${baseUrl}/slave-config/${slave.id}`);
+            const response = await fetch(`${baseUrl}/slave-config/${slave.id}`, {
+              headers: {
+                'x-api-key': secretKey || ''
+              }
+            });
             if (response.ok) {
               const config = await response.json();
               return { [slave.id]: config };
@@ -120,7 +134,7 @@ export const CopierStatusControls: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [secretKey]); // Add secretKey as dependency
 
   // Toggle global copier status
   const toggleGlobalStatus = async (enabled: boolean) => {
@@ -128,7 +142,10 @@ export const CopierStatusControls: React.FC = () => {
       setUpdating('global');
       const response = await fetch(`${baseUrl}/copier/global`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ enabled }),
       });
 
@@ -160,7 +177,10 @@ export const CopierStatusControls: React.FC = () => {
       setUpdating(`master-${masterAccountId}`);
       const response = await fetch(`${baseUrl}/copier/master`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ masterAccountId, enabled }),
       });
 
@@ -192,7 +212,10 @@ export const CopierStatusControls: React.FC = () => {
       setUpdating(`slave-${slaveAccountId}`);
       const response = await fetch(`${baseUrl}/slave-config`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ slaveAccountId, enabled }),
       });
 
@@ -227,6 +250,10 @@ export const CopierStatusControls: React.FC = () => {
       setUpdating('emergency');
       const response = await fetch(`${baseUrl}/copier/emergency-shutdown`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        }
       });
 
       if (response.ok) {
@@ -262,6 +289,10 @@ export const CopierStatusControls: React.FC = () => {
       setUpdating('reset');
       const response = await fetch(`${baseUrl}/copier/reset-all-on`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        }
       });
 
       if (response.ok) {

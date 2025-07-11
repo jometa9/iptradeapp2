@@ -5,6 +5,31 @@ import { join } from 'path';
 // Valid subscription statuses
 const VALID_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'admin_assigned'];
 
+// Map API plan names to internal plan names
+const mapPlanName = (apiPlanName, subscriptionType) => {
+  // Check if the user is an admin, give them IPTRADE Managed VPS regardless of plan
+  if (subscriptionType === 'admin') {
+    console.log('🔑 User is admin, mapping to IPTRADE Managed VPS');
+    return 'IPTRADE Managed VPS';
+  }
+
+  // Map API plan names to our internal plan names
+  const planMap = {
+    'free': null,
+    'premium': 'IPTRADE Premium',
+    'unlimited': 'IPTRADE Unlimited',
+    'managed_vps': 'IPTRADE Managed VPS'
+  };
+
+  // If plan name is found in our map, use it
+  if (apiPlanName && planMap[apiPlanName]) {
+    return planMap[apiPlanName];
+  }
+
+  // Default to free plan
+  return null;
+};
+
 // Plan limits configuration
 const PLAN_LIMITS = {
   null: {
@@ -31,20 +56,36 @@ const PLAN_LIMITS = {
 
 // Validate subscription against external license API
 export const validateSubscription = async apiKey => {
+  console.log('🔍 === SUBSCRIPTION VALIDATION START ===');
+  console.log('📝 API Key received:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
+  console.log('🌍 Environment variables:');
+  console.log('  - LICENSE_API_URL:', process.env.LICENSE_API_URL);
+  console.log('  - NODE_ENV:', process.env.NODE_ENV);
+  
   try {
     // Use the external license API URL from .env (port 3000)
     const licenseApiUrl =
       process.env.LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
-    console.log(process.env.LICENSE_API_URL);
-    console.log(`🔗 Calling external license API: ${licenseApiUrl}`);
-
+    
+    console.log('🔗 Constructed API URL:', licenseApiUrl);
+    console.log('🎯 Full request URL:', `${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
+    
+    const requestStart = Date.now();
     const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
+    const requestDuration = Date.now() - requestStart;
+    
+    console.log('⏱️ Request duration:', requestDuration + 'ms');
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response ok:', response.ok);
+    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
+      console.log('❌ Response not ok - status:', response.status);
+      
       // If API key is not found in external API, treat as free user
       if (response.status === 401 || response.status === 404) {
-        console.log('⚠️ API key not found in external API, treating as free user');
-        return {
+        console.log('⚠️ API key not found in external API (401/404), treating as free user');
+        const freeUserData = {
           valid: true,
           userData: {
             userId: 'user_' + apiKey.substring(0, 8),
@@ -59,18 +100,27 @@ export const validateSubscription = async apiKey => {
             subscriptionType: 'none',
           },
         };
+        console.log('✅ Returning free user data:', freeUserData);
+        return freeUserData;
       }
 
       const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
+      console.log('❌ Error response data:', errorData);
       return { valid: false, error: errorData.error || 'Validation failed' };
     }
 
     const userData = await response.json();
+    console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
+    
+    // Map the API plan name to our internal plan name format
+    const originalPlanName = userData.planName;
+    userData.planName = mapPlanName(userData.planName, userData.subscriptionType);
+    console.log(`🔄 Mapped plan name: "${originalPlanName}" => "${userData.planName}"`);
 
     // Check if response contains error (some APIs return 200 with error field)
     if (userData.error) {
-      console.log('⚠️ External API returned error, treating as free user:', userData.error);
-      return {
+      console.log('⚠️ External API returned error in 200 response, treating as free user:', userData.error);
+      const freeUserData = {
         valid: true,
         userData: {
           userId: 'user_' + apiKey.substring(0, 8),
@@ -85,46 +135,76 @@ export const validateSubscription = async apiKey => {
           subscriptionType: 'none',
         },
       };
+      console.log('✅ Returning free user data due to API error:', freeUserData);
+      return freeUserData;
     }
 
     // Check subscription status - allow null as free plan
     const isValidStatus =
       VALID_SUBSCRIPTION_STATUSES.includes(userData.subscriptionStatus) ||
       userData.subscriptionStatus === null;
+    
+    console.log('🔍 Subscription validation details:');
+    console.log('  - Subscription status:', userData.subscriptionStatus);
+    console.log('  - Is active:', userData.isActive);
+    console.log('  - Valid statuses:', VALID_SUBSCRIPTION_STATUSES);
+    console.log('  - Is valid status:', isValidStatus);
+    console.log('  - Original plan name:', originalPlanName);
+    console.log('  - Mapped plan name:', userData.planName);
+    console.log('  - Subscription type:', userData.subscriptionType);
 
     // For null subscription (free plan), allow even if isActive is false
     const isFreeUser = userData.subscriptionStatus === null;
     const shouldAllowAccess = isValidStatus && (userData.isActive || isFreeUser);
+    
+    console.log('  - Is free user:', isFreeUser);
+    console.log('  - Should allow access:', shouldAllowAccess);
 
     if (!shouldAllowAccess) {
-      return {
+      console.log('❌ Access denied - invalid subscription status');
+      const errorResult = {
         valid: false,
         error: 'Invalid subscription status',
         subscriptionStatus: userData.subscriptionStatus,
         isActive: userData.isActive,
       };
+      console.log('❌ Returning error result:', errorResult);
+      return errorResult;
     }
 
     // Check if subscription is expired (only for non-free users)
     if (!isFreeUser && userData.expiryDate) {
       const now = new Date();
       const expiry = new Date(userData.expiryDate);
+      console.log('📅 Expiry check:');
+      console.log('  - Current time:', now.toISOString());
+      console.log('  - Expiry date:', userData.expiryDate);
+      console.log('  - Is expired:', now > expiry);
+      
       if (now > expiry) {
-        return {
+        console.log('❌ Subscription expired');
+        const expiredResult = {
           valid: false,
           error: 'Subscription expired',
           expiryDate: userData.expiryDate,
         };
+        console.log('❌ Returning expired result:', expiredResult);
+        return expiredResult;
       }
     }
 
+    console.log('✅ Subscription validation successful');
+    console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
+    console.log('🔍 === SUBSCRIPTION VALIDATION END ===');
     return { valid: true, userData };
   } catch (error) {
-    console.error('Error validating subscription with external API:', error.message);
+    console.error('💥 Error validating subscription with external API:', error.message);
+    console.error('💥 Error stack:', error.stack);
+    console.error('💥 Error details:', error);
 
     // Fallback to free user on connection error
     console.log('⚠️ External API unavailable, treating as free user');
-    return {
+    const fallbackData = {
       valid: true,
       userData: {
         userId: 'user_' + apiKey.substring(0, 8),
@@ -139,6 +219,9 @@ export const validateSubscription = async apiKey => {
         subscriptionType: 'none',
       },
     };
+    console.log('✅ Returning fallback data due to error:', fallbackData);
+    console.log('🔍 === SUBSCRIPTION VALIDATION END (ERROR) ===');
+    return fallbackData;
   }
 };
 
