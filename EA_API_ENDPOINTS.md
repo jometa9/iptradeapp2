@@ -25,8 +25,11 @@ http://localhost:3000/api
 ### Headers requeridos
 ```http
 Content-Type: application/json
-Authorization: Bearer {accountId}
+x-account-id: {accountId}
+x-api-key: IPTRADE_APIKEY
 ```
+
+> **🔑 API Key único**: Todas las cuentas MT4/MT5 deben usar el mismo API key fijo `IPTRADE_APIKEY` para autenticar sus requests. Este key valida que las órdenes vienen de fuentes autorizadas, mientras que `x-account-id` identifica la cuenta específica.
 
 ---
 
@@ -38,7 +41,8 @@ Authorization: Bearer {accountId}
 
 ```http
 GET /api/orders/account-type
-Authorization: Bearer {accountId}
+x-account-id: {accountId}
+x-api-key: IPTRADE_APIKEY
 ```
 
 **Respuestas:**
@@ -81,37 +85,26 @@ Authorization: Bearer {accountId}
 
 ```http
 POST /api/orders/neworder
-Authorization: Bearer {masterAccountId}
-Content-Type: application/json
+x-account-id: {masterAccountId}
+x-api-key: IPTRADE_APIKEY
+Content-Type: application/x-www-form-urlencoded
 
-{
-  "symbol": "EURUSD",
-  "volume": 0.1,
-  "type": "buy",
-  "price": 1.12345,
-  "stopLoss": 1.12000,
-  "takeProfit": 1.13000,
-  "comment": "Master trade #1",
-  "magic": 12345
-}
+counter=1&id0=12345&sym0=EURUSD&typ0=buy&lot0=0.1&price0=1.12345&sl0=1.12000&tp0=1.13000&account0={masterAccountId}
 ```
 
 **Respuesta:**
-```json
-{
-  "orderId": 12345,
-  "status": "success",
-  "message": "Order placed successfully",
-  "copiedTo": ["slave_456", "slave_789"]
-}
 ```
+OK
+```
+*Nota: La respuesta es texto plano "OK" cuando la orden se procesa exitosamente.*
 
 #### 2. Obtener configuración de trading
 **Endpoint:** `GET /trading-config/{masterAccountId}`
 
 ```http
 GET /api/trading-config/master_123
-Authorization: Bearer master_123
+x-account-id: master_123
+x-api-key: IPTRADE_APIKEY
 ```
 
 ### Para cuentas SLAVE
@@ -122,42 +115,19 @@ Authorization: Bearer master_123
 
 ```http
 GET /api/orders/neworder
-Authorization: Bearer {slaveAccountId}
+x-account-id: {slaveAccountId}
+x-api-key: IPTRADE_APIKEY
 ```
 
 **Respuesta:**
-```json
-[
-  {
-    "orderId": 12345,
-    "symbol": "EURUSD",
-    "volume": 0.1,
-    "type": "buy",
-    "price": 1.12345,
-    "stopLoss": 1.12000,
-    "takeProfit": 1.13000,
-    "masterAccountId": "master_123",
-    "timestamp": "2024-01-01T12:00:00Z"
-  }
-]
 ```
-
-#### 2. Confirmar ejecución de orden
-**Endpoint:** `POST /orders/confirm`
-**Descripción:** Confirma que la orden fue ejecutada exitosamente en la cuenta slave.
-
-```http
-POST /api/orders/confirm
-Authorization: Bearer {slaveAccountId}
-Content-Type: application/json
-
-{
-  "orderId": 12345,
-  "status": "executed",
-  "slaveOrderId": 67890,
-  "executionPrice": 1.12348
-}
+[1]
+[12345,EURUSD,buy,0.1,1.12345,1.12000,1.13000,1704110400,master_123]
 ```
+*Nota: La respuesta es formato CSV donde cada línea representa una orden. La primera línea es el contador, las siguientes son: [orderId,symbol,type,lot,price,sl,tp,timestamp,account]*
+
+#### 2. Procesar órdenes recibidas
+**Descripción:** No es necesario confirmar al servidor - el slave simplemente ejecuta las órdenes recibidas en su plataforma MT4/MT5.
 
 ### Para todas las cuentas
 
@@ -167,7 +137,8 @@ Content-Type: application/json
 
 ```http
 POST /api/accounts/ping
-Authorization: Bearer {accountId}
+x-account-id: {accountId}
+x-api-key: IPTRADE_APIKEY
 Content-Type: application/json
 
 {
@@ -196,7 +167,6 @@ GET /api/status
 2. **Trading activo:**
    - Cuando abres una posición → `POST /orders/neworder`
    - Cada 30 segundos → `POST /accounts/ping`
-   - Cuando cierras una posición → `POST /orders/close`
 
 ### Para EA SLAVE:
 1. **Inicialización:**
@@ -206,8 +176,7 @@ GET /api/status
 
 2. **Copiar trades:**
    - Cada 5 segundos → `GET /orders/neworder`
-   - Por cada orden recibida → Ejecutar en MT5
-   - Confirmar ejecución → `POST /orders/confirm`
+   - Por cada orden recibida → Ejecutar en MT4/MT5
    - Cada 30 segundos → `POST /accounts/ping`
 
 ---
@@ -219,7 +188,8 @@ GET /api/status
 bool CheckAccountType()
 {
    string url = API_BASE_URL + "/orders/account-type";
-   string headers = "Authorization: Bearer " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   string headers = "x-account-id: " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   headers += "x-api-key: " + API_KEY + "\r\n";
 
    char post[], result[];
    string result_string;
@@ -239,25 +209,26 @@ bool CheckAccountType()
 
 ### Función para enviar orden (Master)
 ```mql5
-bool SendOrderToAPI(string symbol, double volume, int type, double price)
+bool SendOrderToAPI(string symbol, double volume, int type, double price, double sl, double tp, long orderId)
 {
    string url = API_BASE_URL + "/orders/neworder";
-   string headers = "Authorization: Bearer " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
-   headers += "Content-Type: application/json\r\n";
+   string headers = "x-account-id: " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   headers += "x-api-key: " + API_KEY + "\r\n";
+   headers += "Content-Type: application/x-www-form-urlencoded\r\n";
 
-   string json = StringFormat(
-      "{\"symbol\":\"%s\",\"volume\":%.2f,\"type\":\"%s\",\"price\":%.5f}",
-      symbol, volume, (type == ORDER_TYPE_BUY) ? "buy" : "sell", price
+   string postData = StringFormat(
+      "counter=1&id0=%d&sym0=%s&typ0=%s&lot0=%.2f&price0=%.5f&sl0=%.5f&tp0=%.5f&account0=%d",
+      orderId, symbol, (type == ORDER_TYPE_BUY) ? "buy" : "sell", volume, price, sl, tp, AccountInfoInteger(ACCOUNT_LOGIN)
    );
 
    char post[], result[];
    string result_string;
 
-   StringToCharArray(json, post, 0, StringLen(json));
+   StringToCharArray(postData, post, 0, StringLen(postData));
 
    int res = WebRequest("POST", url, headers, 5000, post, result, result_string);
 
-   return (res == 200);
+   return (res == 200 && result_string == "OK");
 }
 ```
 
@@ -266,7 +237,8 @@ bool SendOrderToAPI(string symbol, double volume, int type, double price)
 bool GetPendingOrders()
 {
    string url = API_BASE_URL + "/orders/neworder";
-   string headers = "Authorization: Bearer " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   string headers = "x-account-id: " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   headers += "x-api-key: " + API_KEY + "\r\n";
 
    char post[], result[];
    string result_string;
@@ -275,8 +247,27 @@ bool GetPendingOrders()
 
    if(res == 200)
    {
-      // Parsear JSON array
-      // Ejecutar cada orden en MT5
+      // Parsear formato CSV
+      // Primera línea es el contador [1]
+      // Siguientes líneas son órdenes [id,symbol,type,lot,price,sl,tp,timestamp,account]
+      string lines[];
+      int lineCount = StringSplit(result_string, '\n', lines);
+      
+      for(int i = 1; i < lineCount; i++) // Saltar línea del contador
+      {
+         if(StringLen(lines[i]) > 0 && StringFind(lines[i], "[") >= 0)
+         {
+            string cleanLine = StringSubstr(lines[i], 1, StringLen(lines[i]) - 2); // Remover []
+            string fields[];
+            int fieldCount = StringSplit(cleanLine, ',', fields);
+            
+            if(fieldCount >= 7)
+            {
+               // Ejecutar orden: fields[0]=id, fields[1]=symbol, fields[2]=type, etc.
+               ExecuteSlaveOrder(fields);
+            }
+         }
+      }
       return true;
    }
 
@@ -304,6 +295,7 @@ bool GetPendingOrders()
 ### Variables del EA recomendadas:
 ```mql5
 input string API_BASE_URL = "http://localhost:3000/api";
+input string API_KEY = "IPTRADE_APIKEY";  // API key fijo para todas las cuentas
 input int PING_INTERVAL = 30;        // segundos
 input int POLL_INTERVAL = 5;         // segundos (solo slaves)
 input int MAX_RETRIES = 3;
@@ -327,11 +319,14 @@ bool TestAPIConnection()
 
 ## 📝 Notas importantes
 
-1. **Autenticación:** Usa el número de cuenta de MT5 como Bearer token.
-2. **Polling:** Las cuentas slave deben hacer polling cada 5 segundos máximo.
-3. **Keep Alive:** Todas las cuentas deben hacer ping cada 30 segundos.
-4. **Error Handling:** Implementa reintentos automáticos para errores 500.
-5. **Logs:** Registra todas las llamadas al API para debugging.
+1. **Autenticación:** Usa el número de cuenta de MT4/MT5 como header `x-account-id` y el API key fijo `IPTRADE_APIKEY`.
+2. **API Key único:** Todas las cuentas usan el mismo API key `IPTRADE_APIKEY` para autenticar requests.
+3. **Formato de datos:** Master envía datos en formato form-urlencoded, slave recibe CSV.
+4. **Múltiples órdenes:** Un master puede enviar múltiples órdenes usando índices (id0, id1, etc.).
+5. **Polling:** Las cuentas slave deben hacer polling cada 5 segundos máximo.
+6. **Keep Alive:** Todas las cuentas deben hacer ping cada 30 segundos.
+7. **Error Handling:** Implementa reintentos automáticos para errores 500.
+8. **Logs:** Registra todas las llamadas al API para debugging.
 
 ---
 

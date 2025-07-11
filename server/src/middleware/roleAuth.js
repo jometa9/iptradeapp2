@@ -70,11 +70,20 @@ const updateAccountActivity = (accountId, accountType) => {
 // Middleware to authenticate account and check if it exists
 export const authenticateAccount = (req, res, next) => {
   const accountId = req.headers['x-account-id'] || req.query.accountId || req.body.accountId;
+  const apiKey = req.headers['x-api-key'];
 
   if (!accountId) {
     return res.status(401).json({
       error: 'Account ID is required',
       message: 'Please provide accountId in headers (x-account-id), query params, or request body',
+    });
+  }
+
+  // Validate API key for copy trading operations
+  if (!apiKey || apiKey !== 'IPTRADE_APIKEY') {
+    return res.status(401).json({
+      error: 'Invalid or missing API key',
+      message: 'Please provide the correct API key in x-api-key header',
     });
   }
 
