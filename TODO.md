@@ -1,9 +1,15 @@
-porbar desde fuera si andan los endpoints
-aws de donde viene ese gasto
-que dependiendo del plan le dejo hacer una cosa u otra
+MT4
+Name     : jom aes
+Type     : Forex Hedged USD
+Server   : MetaQuotes-Demo MT4
+Login    : 5038002547
+Password : L@Uv2jDv
+Investor : M*8kLpYo
 
-detalle de lo que necesito en los eas
-arrancar desde cero con los eas haciendo la carcaza
-
-requerimeinto para integrar ctrader en mi applicacion
-publicar requerimiento en freelancer
+MT5
+Name     : jom aes
+Type     : Forex Hedged USD
+Server   : MetaQuotes-Demo
+Login    : 94424443
+Password : NaS-PaK4
+Investor : @5JtCkQp

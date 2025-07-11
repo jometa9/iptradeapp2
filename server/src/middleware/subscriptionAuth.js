@@ -34,10 +34,8 @@ export const validateSubscription = async apiKey => {
   try {
     // Use the external license API URL from .env (port 3000)
     const licenseApiUrl =
-      process.env.VITE_LICENSE_API_URL ||
-      process.env.LICENSE_API_URL ||
-      'http://localhost:3000/api/validate-subscription';
-
+      process.env.LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
+    console.log(process.env.LICENSE_API_URL);
     console.log(`🔗 Calling external license API: ${licenseApiUrl}`);
 
     const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
