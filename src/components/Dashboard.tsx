@@ -4,6 +4,7 @@ import { CheckCircle, Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
+import { isUnlimitedPlan } from '../lib/subscriptionUtils';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TemporarySubscriptionLimitsCard } from './SubscriptionLimitsCard';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
@@ -18,6 +19,8 @@ export const Dashboard: React.FC = () => {
   const [showIP, setShowIP] = useState<boolean>(false);
   // Estado para controlar si se acaba de iniciar sesión
   const [isRecentLogin, setIsRecentLogin] = useState<boolean>(true);
+  // Estado para saber si ya se disparó el temporizador
+  const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -36,16 +39,56 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchUserIP();
     
+    // Log de información de plan para depuración
+    if (userInfo) {
+      console.log('🔍 Dashboard - Plan del usuario:', userInfo.planName);
+      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
+      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
+      
+      if (isUnlimitedPlan(userInfo)) {
+        console.log('ℹ️ Plan sin límites - no se muestra tarjeta de límites');
+      } else {
+        console.log('ℹ️ Plan con límites - mostrando tarjeta temporal');
+      }
+    }
+    
     // Marcar que el usuario acaba de iniciar sesión
     setIsRecentLogin(true);
     
     // Después de 10 segundos, no es un login reciente
     const loginTimer = setTimeout(() => {
+      console.log('⏱️ 10 segundos transcurridos - ocultando tarjeta temporal');
       setIsRecentLogin(false);
     }, 10000);
     
     return () => clearTimeout(loginTimer);
-  }, []);
+  }, [userInfo]);
+
+  // Efecto para controlar la visibilidad de la tarjeta solo una vez por sesión
+  useEffect(() => {
+    if (!userInfo) return;
+    // Si el usuario es admin o tiene plan ilimitado, nunca mostrar la tarjeta
+    if (isUnlimitedPlan(userInfo)) {
+      setIsRecentLogin(false);
+      setLoginTimerStarted(false);
+      console.log('⛔ Usuario admin o plan ilimitado, nunca mostrar tarjeta de límites');
+      return;
+    }
+    // Solo iniciar el temporizador si no se ha iniciado antes
+    if (!loginTimerStarted) {
+      setIsRecentLogin(true);
+      setLoginTimerStarted(true);
+      console.log('🚀 isRecentLogin establecido a: true (inicio de sesión)');
+      const loginTimer = setTimeout(() => {
+        setIsRecentLogin(false);
+        console.log('⏱️ 10 segundos transcurridos - ocultando tarjeta temporal');
+      }, 10000);
+      return () => clearTimeout(loginTimer);
+    }
+  }, [userInfo, loginTimerStarted]);
+
+  // Debug render
+  console.log('Dashboard render', { isRecentLogin, userInfo, loginTimerStarted });
 
   const handleLogout = () => {
     logout();
@@ -65,35 +108,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const getSubscriptionStatusBadge = (status: string | null) => {
-    switch (status) {
-      case 'active':
-        return (
-          <Badge className="bg-green-100 text-green-800 border border-green-400">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Active
-          </Badge>
-        );
-      case 'trialing':
-        return (
-          <Badge className="bg-blue-100 text-blue-800 border border-blue-400">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Trial
-          </Badge>
-        );
-      case 'admin_assigned':
-        return (
-          <Badge className="bg-purple-100 text-purple-800 border border-purple-400">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Admin Assigned
-          </Badge>
-        );
-      case null:
-        return <Badge className="bg-gray-100 text-gray-700 border border-gray-300">Free</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
 
   return (
     <UpdateTestProvider>
@@ -105,7 +119,6 @@ export const Dashboard: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <h1 className=" text-xl font-semibold text-gray-900">IPTRADE APP</h1>
                 </div>
-                {userInfo && getSubscriptionStatusBadge(userInfo.subscriptionStatus)}
               </div>
 
               {/* User IP in the center */}
@@ -158,14 +171,6 @@ export const Dashboard: React.FC = () => {
           {/* Update notification appears here when available */}
           <UpdateCard />
           
-          {/* Subscription Limits Card - Solo se muestra temporalmente después del login */}
-          {isRecentLogin && userInfo && (
-            <TemporarySubscriptionLimitsCard 
-              className="mt-4" 
-              temporaryDuration={10000}
-            />
-          )}
-
           {/* Pending Accounts - Always visible at top for admin management */}
           <PendingAccountsManager />
 

@@ -77,10 +77,21 @@ export function killProcessOnPort(port) {
         }
 
         const lines = stdout.split('\n');
-        const pids = lines
-          .filter(line => line.includes('LISTENING') && line.includes(`:${port}`))
-          .map(line => line.trim().split(/\s+/).pop())
-          .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+        const pidMap = new Map();
+        
+        // More precise filtering to only find processes LISTENING on the exact port
+        lines.forEach(line => {
+          // Only consider lines with this exact port and in LISTENING state
+          if (line.includes(`LISTENING`) && line.includes(`:${port} `)) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parts[parts.length - 1];
+            if (pid && !isNaN(pid) && pid !== process.pid.toString()) {
+              pidMap.set(pid, true);
+            }
+          }
+        });
+        
+        const pids = Array.from(pidMap.keys());
 
         if (pids.length > 0) {
           console.log(`🔸 Found processes using port ${port}: ${pids.join(', ')}`);

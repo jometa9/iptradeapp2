@@ -10,6 +10,7 @@ import {
   getPlanDisplayName,
   getRemainingAccountSlots,
   getSubscriptionLimits,
+  isUnlimitedPlan,
   shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
@@ -48,24 +49,26 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
     return null;
   }
 
-  // Don't show the card for plans that don't need to show limits
-  if (!shouldShowSubscriptionLimitsCard(userInfo.planName)) {
+  // Don't show the card for subscription types that don't need to show limits
+  if (!shouldShowSubscriptionLimitsCard(userInfo.subscriptionType)) {
+    console.log('📝 SubscriptionLimitsCard - No se muestra para subscription type:', userInfo.subscriptionType);
     return null;
   }
 
-  const limits = getSubscriptionLimits(userInfo.planName);
-  const planDisplayName = getPlanDisplayName(userInfo.planName);
-  const badgeColor = getPlanBadgeColor(userInfo.planName);
+  const limits = getSubscriptionLimits(userInfo.subscriptionType);
+  const planDisplayName = getPlanDisplayName(userInfo.subscriptionType);
+  const badgeColor = getPlanBadgeColor(userInfo.subscriptionType);
   const canAddAccounts = canCreateMoreAccounts(userInfo, currentAccountCount);
   const canCustomizeLots = canSetCustomLotSizes(userInfo);
   const remainingSlots = getRemainingAccountSlots(userInfo, currentAccountCount);
 
   const getPlanIcon = () => {
-    switch (userInfo.planName) {
-      case 'IPTRADE Premium':
+    switch (userInfo.subscriptionType) {
+      case 'premium':
         return <Crown className="w-4 h-4" />;
-      case 'IPTRADE Unlimited':
-      case 'IPTRADE Managed VPS':
+      case 'unlimited':
+      case 'managed_vps':
+      case 'admin':
         return <Zap className="w-4 h-4" />;
       default:
         return <AlertCircle className="w-4 h-4" />;
@@ -166,7 +169,7 @@ export const SubscriptionLimitsCard: React.FC<SubscriptionLimitsCardProps> = ({
         )}
 
         {/* Upgrade CTA for free users */}
-        {userInfo.planName === null && (
+        {userInfo.subscriptionType === 'free' && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800 font-medium">Upgrade to unlock more features</p>
             <p className="text-xs text-blue-600 mt-1">
@@ -190,77 +193,143 @@ export const TemporarySubscriptionLimitsCard: React.FC<{
   const [isVisible, setIsVisible] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
   const { userInfo } = useAuth();
+  const [currentAccountCount, setCurrentAccountCount] = useState(0);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Fetch account count when component mounts
+  useEffect(() => {
+    const fetchAccountCount = async () => {
+      try {
+        console.log('📊 TemporarySubscriptionLimitsCard - Intentando obtener cuentas de API');
+        const response = await fetch('/api/accounts');
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.accounts && Array.isArray(data.accounts)) {
+            setCurrentAccountCount(data.accounts.length);
+            console.log('📊 TemporarySubscriptionLimitsCard - Cuentas detectadas:', data.accounts.length);
+          } else {
+            console.log('⚠️ TemporarySubscriptionLimitsCard - No se encontraron cuentas en la respuesta:', data);
+            // Sin error, simplemente no hay cuentas
+          }
+        } else {
+          console.error('❌ TemporarySubscriptionLimitsCard - Error al obtener cuentas:', response.status);
+          setFetchError(`Error ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('❌ TemporarySubscriptionLimitsCard - Error inesperado:', error);
+        setFetchError('Error al conectar con el servidor');
+      }
+    };
+
+    // Solo intentamos obtener las cuentas si hay un usuario logueado
+    if (userInfo) {
+      fetchAccountCount();
+    } else {
+      console.log('⏳ TemporarySubscriptionLimitsCard - No hay userInfo, no se obtienen cuentas');
+    }
+  }, [userInfo]);
 
   // Ocultar la tarjeta después del tiempo especificado
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || !userInfo) return;
+    
+    console.log('🕒 TemporarySubscriptionLimitsCard - Mostrando tarjeta, desaparecerá en', temporaryDuration/1000, 'segundos');
+    console.log('🔍 TemporarySubscriptionLimitsCard - Datos del usuario:', {
+      subscriptionType: userInfo.subscriptionType,
+      isUnlimited: isUnlimitedPlan(userInfo)
+    });
     
     // Iniciar desvanecimiento medio segundo antes
     const fadeTimer = setTimeout(() => {
+      console.log('⏱️ TemporarySubscriptionLimitsCard - Iniciando animación de desvanecimiento');
       setIsLeaving(true);
     }, temporaryDuration - 500);
     
     // Ocultar completamente
     const hideTimer = setTimeout(() => {
+      console.log('✓ TemporarySubscriptionLimitsCard - Ocultando tarjeta completamente');
       setIsVisible(false);
     }, temporaryDuration);
 
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(hideTimer);
+      console.log('🧹 TemporarySubscriptionLimitsCard - Limpiando temporizadores');
     };
-  }, [temporaryDuration, isVisible]);
+  }, [temporaryDuration, isVisible, userInfo]);
 
   // No mostrar si no es visible o si no hay información de usuario
   if (!isVisible || !userInfo) {
+    console.log('❌ TemporarySubscriptionLimitsCard - No visible o sin userInfo');
     return null;
   }
 
-  // Solo mostrar para planes gratuitos y Premium
-  if (!shouldShowSubscriptionLimitsCard(userInfo.planName)) {
+  // Validación explícita - no mostrar para planes ilimitados
+  if (isUnlimitedPlan(userInfo)) {
+    console.log('❌ TemporarySubscriptionLimitsCard - Usuario con plan ilimitado');
     return null;
   }
+
+  // Comprobar si debemos mostrar la tarjeta para este tipo de plan
+  if (!shouldShowSubscriptionLimitsCard(userInfo.subscriptionType)) {
+    console.log('❌ TemporarySubscriptionLimitsCard - shouldShowSubscriptionLimitsCard devolvió false');
+    return null;
+  }
+
+  console.log('✅ TemporarySubscriptionLimitsCard - Mostrando tarjeta');
 
   return (
     <Card 
-      className={`${className} bg-white`}
+      className={`${className} bg-white relative overflow-hidden`}
       style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            {userInfo.planName === 'IPTRADE Premium' ? (
+            {userInfo.subscriptionType === 'premium' ? (
               <Crown className="w-4 h-4" />
             ) : (
               <AlertCircle className="w-4 h-4" />
             )}
             Subscription Limits
           </CardTitle>
-          <Badge
-            className={
-              userInfo.planName === 'IPTRADE Premium'
-                ? 'bg-blue-100 text-blue-800 border-blue-200'
-                : 'bg-gray-100 text-gray-800 border-gray-200'
-            }
-          >
-            {userInfo.planName === null ? 'Free' : userInfo.planName}
-          </Badge>
+          <Badge className={getPlanBadgeColor(userInfo.subscriptionType)}>{getPlanDisplayName(userInfo.subscriptionType)}</Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Simplified content for temporary card */}
-        <div className="space-y-2">
-          <p className="text-sm">
-            {userInfo.planName === null
-              ? 'Your Free plan allows 3 accounts with 0.01 lot size.'
-              : 'Your Premium plan allows 5 accounts with unlimited lot size.'}
-          </p>
-          
-          {userInfo.planName === null && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-sm text-blue-800 font-medium">Upgrade to unlock more features</p>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Account Limits */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Trading Accounts</span>
+              <span className="text-sm">
+                {fetchError ? "?" : currentAccountCount}/{getSubscriptionLimits(userInfo.subscriptionType).maxAccounts || '∞'}
+              </span>
             </div>
-          )}
+
+            {/* Lot Size */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Lot Size</span>
+              <span className="text-sm">
+                {getSubscriptionLimits(userInfo.subscriptionType).maxLotSize || 'Custom'}
+              </span>
+            </div>
+
+            {/* Fetch error message */}
+            {fetchError && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-xs text-red-600">Error loading accounts: {fetchError}</p>
+              </div>
+            )}
+
+            {/* Upgrade CTA for free users */}
+            {userInfo.subscriptionType === 'free' && (
+              <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800 font-medium">Upgrade to unlock more features</p>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

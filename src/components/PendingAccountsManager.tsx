@@ -10,6 +10,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
+import { useAuth } from '../context/AuthContext';
 
 interface PendingAccount {
   id: string;
@@ -46,9 +47,10 @@ interface ConversionForm {
 }
 
 export const PendingAccountsManager: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const { secretKey } = useAuth();
   const [pendingAccounts, setPendingAccounts] = useState<PendingAccountsData | null>(null);
   const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
@@ -70,7 +72,11 @@ export const PendingAccountsManager: React.FC = () => {
   // Load pending accounts
   const loadPendingAccounts = async () => {
     try {
-      const response = await fetch(`${baseUrl}/accounts/pending`);
+      const response = await fetch(`${baseUrl}/accounts/pending`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setPendingAccounts(data);
@@ -90,7 +96,11 @@ export const PendingAccountsManager: React.FC = () => {
   // Load master accounts for slave connection
   const loadMasterAccounts = async () => {
     try {
-      const response = await fetch(`${baseUrl}/accounts/admin/all`);
+      const response = await fetch(`${baseUrl}/accounts/admin/all`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         const masters = Object.values(data.masterAccounts || {}) as MasterAccount[];
@@ -115,7 +125,7 @@ export const PendingAccountsManager: React.FC = () => {
     // Auto-refresh every 30 seconds to catch new pending accounts
     const interval = setInterval(loadPendingAccounts, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [secretKey]); // Add secretKey as dependency
 
   // Open conversion form inline or master confirmation
   const openConversionForm = (account: PendingAccount, type: 'master' | 'slave') => {
@@ -172,6 +182,7 @@ export const PendingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
         },
         body: JSON.stringify(payload),
       });
@@ -225,6 +236,7 @@ export const PendingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
         },
         body: JSON.stringify(payload),
       });
@@ -263,6 +275,9 @@ export const PendingAccountsManager: React.FC = () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/pending/${accountId}`, {
         method: 'DELETE',
+        headers: {
+          'x-api-key': secretKey || ''
+        }
       });
 
       if (response.ok) {

@@ -1,9 +1,12 @@
-// Middleware for subscription validation and authorization
-import { existsSync, readFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
-// Valid subscription statuses
+// Add valid subscription statuses
 const VALID_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'admin_assigned'];
+
+// Add a cache for validated subscriptions
+export const subscriptionCache = new Map();
+const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 
 // Map API plan names to internal plan names
 const mapPlanName = (apiPlanName, subscriptionType) => {
@@ -30,27 +33,32 @@ const mapPlanName = (apiPlanName, subscriptionType) => {
   return null;
 };
 
-// Plan limits configuration
+// Plan limits configuration based on subscription type
 const PLAN_LIMITS = {
-  null: {
+  'free': {
     maxAccounts: 3,
     maxLotSize: 0.01,
     features: ['basic_copy_trading'],
   },
-  'IPTRADE Premium': {
+  'premium': {
     maxAccounts: 5,
     maxLotSize: null, // No limit
     features: ['advanced_copy_trading', 'custom_lot_sizes'],
   },
-  'IPTRADE Unlimited': {
+  'unlimited': {
     maxAccounts: null, // No limit
     maxLotSize: null, // No limit
     features: ['unlimited_copy_trading', 'advanced_features'],
   },
-  'IPTRADE Managed VPS': {
+  'managed_vps': {
     maxAccounts: null, // No limit
     maxLotSize: null, // No limit
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support'],
+  },
+  'admin': {
+    maxAccounts: null, // No limit
+    maxLotSize: null, // No limit
+    features: ['unlimited_copy_trading', 'managed_vps', 'priority_support', 'admin_access'],
   },
 };
 
@@ -91,13 +99,7 @@ export const validateSubscription = async apiKey => {
             userId: 'user_' + apiKey.substring(0, 8),
             email: 'user@free.com',
             name: 'Free User',
-            subscriptionStatus: null,
-            planName: null,
-            isActive: false,
-            expiryDate: null,
-            daysRemaining: -1,
-            statusChanged: false,
-            subscriptionType: 'none',
+            subscriptionType: 'free'
           },
         };
         console.log('✅ Returning free user data:', freeUserData);
@@ -112,11 +114,6 @@ export const validateSubscription = async apiKey => {
     const userData = await response.json();
     console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
     
-    // Map the API plan name to our internal plan name format
-    const originalPlanName = userData.planName;
-    userData.planName = mapPlanName(userData.planName, userData.subscriptionType);
-    console.log(`🔄 Mapped plan name: "${originalPlanName}" => "${userData.planName}"`);
-
     // Check if response contains error (some APIs return 200 with error field)
     if (userData.error) {
       console.log('⚠️ External API returned error in 200 response, treating as free user:', userData.error);
@@ -126,71 +123,24 @@ export const validateSubscription = async apiKey => {
           userId: 'user_' + apiKey.substring(0, 8),
           email: 'user@free.com',
           name: 'Free User',
-          subscriptionStatus: null,
-          planName: null,
-          isActive: false,
-          expiryDate: null,
-          daysRemaining: -1,
-          statusChanged: false,
-          subscriptionType: 'none',
+          subscriptionType: 'free'
         },
       };
       console.log('✅ Returning free user data due to API error:', freeUserData);
       return freeUserData;
     }
 
-    // Check subscription status - allow null as free plan
-    const isValidStatus =
-      VALID_SUBSCRIPTION_STATUSES.includes(userData.subscriptionStatus) ||
-      userData.subscriptionStatus === null;
-    
-    console.log('🔍 Subscription validation details:');
-    console.log('  - Subscription status:', userData.subscriptionStatus);
-    console.log('  - Is active:', userData.isActive);
-    console.log('  - Valid statuses:', VALID_SUBSCRIPTION_STATUSES);
-    console.log('  - Is valid status:', isValidStatus);
-    console.log('  - Original plan name:', originalPlanName);
-    console.log('  - Mapped plan name:', userData.planName);
-    console.log('  - Subscription type:', userData.subscriptionType);
-
-    // For null subscription (free plan), allow even if isActive is false
-    const isFreeUser = userData.subscriptionStatus === null;
-    const shouldAllowAccess = isValidStatus && (userData.isActive || isFreeUser);
-    
-    console.log('  - Is free user:', isFreeUser);
-    console.log('  - Should allow access:', shouldAllowAccess);
-
-    if (!shouldAllowAccess) {
-      console.log('❌ Access denied - invalid subscription status');
-      const errorResult = {
-        valid: false,
-        error: 'Invalid subscription status',
-        subscriptionStatus: userData.subscriptionStatus,
-        isActive: userData.isActive,
-      };
-      console.log('❌ Returning error result:', errorResult);
-      return errorResult;
+    // Validate that we have the required fields
+    if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
+      console.log('❌ Missing required fields in user data');
+      return { valid: false, error: 'Invalid user data format' };
     }
 
-    // Check if subscription is expired (only for non-free users)
-    if (!isFreeUser && userData.expiryDate) {
-      const now = new Date();
-      const expiry = new Date(userData.expiryDate);
-      console.log('📅 Expiry check:');
-      console.log('  - Current time:', now.toISOString());
-      console.log('  - Expiry date:', userData.expiryDate);
-      console.log('  - Is expired:', now > expiry);
-      
-      if (now > expiry) {
-        console.log('❌ Subscription expired');
-        const expiredResult = {
-          valid: false,
-          error: 'Subscription expired',
-          expiryDate: userData.expiryDate,
-        };
-        console.log('❌ Returning expired result:', expiredResult);
-        return expiredResult;
-      }
+    // Validate subscription type
+    const validSubscriptionTypes = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
+    if (!validSubscriptionTypes.includes(userData.subscriptionType)) {
+      console.log('❌ Invalid subscription type:', userData.subscriptionType);
+      return { valid: false, error: 'Invalid subscription type' };
     }
 
     console.log('✅ Subscription validation successful');
@@ -210,13 +160,7 @@ export const validateSubscription = async apiKey => {
         userId: 'user_' + apiKey.substring(0, 8),
         email: 'user@free.com',
         name: 'Free User',
-        subscriptionStatus: null,
-        planName: null,
-        isActive: false,
-        expiryDate: null,
-        daysRemaining: -1,
-        statusChanged: false,
-        subscriptionType: 'none',
+        subscriptionType: 'free'
       },
     };
     console.log('✅ Returning fallback data due to error:', fallbackData);
@@ -225,13 +169,13 @@ export const validateSubscription = async apiKey => {
   }
 };
 
-// Get subscription limits for a user
-export const getSubscriptionLimits = planName => {
-  // If planName is null, undefined, or not found, return free plan limits
-  if (planName === null || planName === undefined || !PLAN_LIMITS[planName]) {
-    return PLAN_LIMITS[null]; // Free plan limits
+// Get subscription limits for a user based on subscription type
+export const getSubscriptionLimits = subscriptionType => {
+  // If subscriptionType is null, undefined, or not found, return free plan limits
+  if (subscriptionType === null || subscriptionType === undefined || !PLAN_LIMITS[subscriptionType]) {
+    return PLAN_LIMITS['free']; // Free plan limits
   }
-  return PLAN_LIMITS[planName];
+  return PLAN_LIMITS[subscriptionType];
 };
 
 // Count existing accounts for a specific user (by apiKey)
@@ -284,21 +228,54 @@ export const requireValidSubscription = async (req, res, next) => {
     });
   }
 
-  const validation = await validateSubscription(apiKey);
+  try {
+    // Check if we have a cached validation result that's still valid
+    const cachedValidation = subscriptionCache.get(apiKey);
+    const now = Date.now();
+    
+    if (cachedValidation && (now - cachedValidation.timestamp < CACHE_DURATION)) {
+      console.log('📋 Using cached subscription validation for key:', apiKey.substring(0, 8) + '...');
+      console.log('⏱️ Cache age:', Math.round((now - cachedValidation.timestamp) / 1000 / 60), 'minutes');
+      
+      // Use cached validation data
+      req.user = cachedValidation.userData;
+      req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
+      req.apiKey = apiKey;
+      
+      return next();
+    }
 
-  if (!validation.valid) {
-    return res.status(401).json({
-      error: validation.error,
-      details: validation,
+    // No cache or cache expired, perform validation
+    console.log('🔄 Cache miss or expired, validating subscription for:', apiKey.substring(0, 8) + '...');
+    const validation = await validateSubscription(apiKey);
+
+    if (!validation.valid) {
+      return res.status(401).json({
+        error: validation.error,
+        details: validation,
+      });
+    }
+
+    // Store in cache with current timestamp
+    subscriptionCache.set(apiKey, {
+      userData: validation.userData,
+      timestamp: now
+    });
+    
+    console.log('💾 Stored validation result in cache, valid for 12 hours');
+
+    // Attach user info, subscription limits, and apiKey to request
+    req.user = validation.userData;
+    req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
+    req.apiKey = apiKey; // Add apiKey for account isolation
+
+    next();
+  } catch (error) {
+    console.error('Error in requireValidSubscription middleware:', error);
+    return res.status(500).json({
+      error: 'Internal server error validating subscription'
     });
   }
-
-  // Attach user info, subscription limits, and apiKey to request
-  req.user = validation.userData;
-  req.subscriptionLimits = getSubscriptionLimits(validation.userData.planName);
-  req.apiKey = apiKey; // Add apiKey for account isolation
-
-  next();
 };
 
 // Middleware to check account limits before creating new accounts
@@ -321,7 +298,7 @@ export const checkAccountLimits = (req, res, next) => {
   const accountCounts = countUserAccounts(req.apiKey);
 
   // Get user-friendly plan name
-  const displayPlanName = req.user.planName === null ? 'Free' : req.user.planName;
+  const displayPlanName = req.user.subscriptionType === 'free' ? 'Free' : req.user.subscriptionType;
 
   if (accountCounts.total >= limits.maxAccounts) {
     return res.status(403).json({
@@ -349,8 +326,8 @@ export const enforceLotSizeRestrictions = (req, res, next) => {
 
   const limits = req.subscriptionLimits;
 
-  // For null plan (free users), force lot size to 0.01
-  if (req.user.planName === null && limits.maxLotSize === 0.01) {
+  // For free users, force lot size to 0.01
+  if (req.user.subscriptionType === 'free' && limits.maxLotSize === 0.01) {
     // Check if this is a slave configuration or order creation
     if (req.body.forceLot !== undefined) {
       req.body.forceLot = 0.01;
@@ -377,4 +354,5 @@ export default {
   requireValidSubscription,
   checkAccountLimits,
   enforceLotSizeRestrictions,
+  subscriptionCache
 };

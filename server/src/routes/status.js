@@ -1,7 +1,7 @@
 import express from 'express';
 
 import { getStatus } from '../controllers/statusController.js';
-import { validateSubscription } from '../middleware/subscriptionAuth.js';
+import { validateSubscription, subscriptionCache } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -46,6 +46,7 @@ router.get('/validate-subscription', async (req, res) => {
   console.log('  - Query params:', req.query);
   
   const { apiKey } = req.query;
+  const forceRefresh = req.query.force === 'true'; // Optional parameter to force cache refresh
 
   console.log(
     '🔐 Frontend validating API Key:',
@@ -59,6 +60,7 @@ router.get('/validate-subscription', async (req, res) => {
   }
 
   try {
+    // This is the login/initial validation - always refresh cache on direct API calls
     console.log('🔄 Calling validateSubscription function...');
     const validation = await validateSubscription(apiKey);
     console.log('📦 Validation result:', JSON.stringify(validation, null, 2));
@@ -77,6 +79,54 @@ router.get('/validate-subscription', async (req, res) => {
     console.error('💥 Error stack:', error.stack);
     console.log('🔍 === VALIDATE-SUBSCRIPTION ROUTE END (ERROR) ===');
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * @swagger
+ * /clear-subscription-cache:
+ *   post:
+ *     summary: Clear subscription validation cache for an API key or all keys
+ *     tags: [Status]
+ *     parameters:
+ *       - in: query
+ *         name: apiKey
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Optional API key to clear specific cache entry
+ *     responses:
+ *       200:
+ *         description: Cache cleared successfully
+ */
+router.post('/clear-subscription-cache', (req, res) => {
+  const { apiKey } = req.query;
+  
+  if (apiKey) {
+    // Clear specific API key's cache
+    if (subscriptionCache.has(apiKey)) {
+      subscriptionCache.delete(apiKey);
+      console.log(`🧹 Cleared subscription cache for key: ${apiKey.substring(0, 8)}...`);
+      return res.status(200).json({ 
+        message: 'Cache cleared for specific API key',
+        cleared: true
+      });
+    } else {
+      return res.status(404).json({ 
+        message: 'No cache found for the specified API key',
+        cleared: false
+      });
+    }
+  } else {
+    // Clear all cache
+    const cacheSize = subscriptionCache.size;
+    subscriptionCache.clear();
+    console.log(`🧹 Cleared entire subscription cache (${cacheSize} entries)`);
+    return res.status(200).json({ 
+      message: `Cleared entire subscription cache (${cacheSize} entries)`,
+      cleared: true,
+      entriesCleared: cacheSize
+    });
   }
 });
 

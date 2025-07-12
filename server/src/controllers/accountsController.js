@@ -1069,31 +1069,42 @@ export const getAllAccountsForAdmin = (req, res) => {
       totalConnections: 0,
     };
 
-    // Process master accounts
-    response.totalMasterAccounts = Object.keys(config.masterAccounts).length;
+    // Process master accounts - add null checks
+    response.totalMasterAccounts = config.masterAccounts ? Object.keys(config.masterAccounts).length : 0;
 
-    for (const [accountId, account] of Object.entries(config.masterAccounts)) {
-      // Find connected slaves for this master
-      const connectedSlaves = Object.entries(config.connections)
-        .filter(([, masterId]) => masterId === accountId)
-        .map(([slaveId]) => config.slaveAccounts[slaveId])
-        .filter(Boolean);
+    // Process master accounts if they exist
+    if (config.masterAccounts) {
+      for (const [accountId, account] of Object.entries(config.masterAccounts)) {
+        // Find connected slaves for this master
+        const connectedSlaves = config.connections 
+          ? Object.entries(config.connections)
+              .filter(([, masterId]) => masterId === accountId)
+              .map(([slaveId]) => config.slaveAccounts && config.slaveAccounts[slaveId])
+              .filter(Boolean)
+          : [];
 
-      response.masterAccounts[accountId] = {
-        ...account,
-        connectedSlaves,
-        totalSlaves: connectedSlaves.length,
-      };
+        response.masterAccounts[accountId] = {
+          ...account,
+          connectedSlaves,
+          totalSlaves: connectedSlaves.length,
+        };
+      }
     }
 
-    // Process unconnected slaves
-    response.unconnectedSlaves = Object.values(config.slaveAccounts)
-      .filter(slave => !config.connections[slave.id])
-      .map(slave => ({ id: slave.id, ...slave }));
+    // Process unconnected slaves - add null checks
+    if (config.slaveAccounts && config.connections) {
+      response.unconnectedSlaves = Object.values(config.slaveAccounts)
+        .filter(slave => !config.connections[slave.id])
+        .map(slave => ({ id: slave.id, ...slave }));
+    } else if (config.slaveAccounts) {
+      // If no connections exist, all slaves are unconnected
+      response.unconnectedSlaves = Object.values(config.slaveAccounts)
+        .map(slave => ({ id: slave.id, ...slave }));
+    }
 
-    // Count totals
-    response.totalSlaveAccounts = Object.keys(config.slaveAccounts).length;
-    response.totalConnections = Object.keys(config.connections).length;
+    // Count totals with null checks
+    response.totalSlaveAccounts = config.slaveAccounts ? Object.keys(config.slaveAccounts).length : 0;
+    response.totalConnections = config.connections ? Object.keys(config.connections).length : 0;
 
     res.json(response);
   } catch (error) {
@@ -1130,83 +1141,89 @@ export const getAccountActivityStats = (req, res) => {
       activityDetails: [],
     };
 
-    // Process master accounts
-    for (const [accountId, account] of Object.entries(config.masterAccounts)) {
-      stats.total++;
-      stats.masters.total++;
+    // Process master accounts with null checks
+    if (config.masterAccounts) {
+      for (const [accountId, account] of Object.entries(config.masterAccounts)) {
+        stats.total++;
+        stats.masters.total++;
 
-      let status = account.status || 'active';
-      if (status === 'active') status = 'synchronized';
+        let status = account.status || 'active';
+        if (status === 'active') status = 'synchronized';
 
-      stats[status] = (stats[status] || 0) + 1;
-      stats.masters[status] = (stats.masters[status] || 0) + 1;
+        stats[status] = (stats[status] || 0) + 1;
+        stats.masters[status] = (stats.masters[status] || 0) + 1;
 
-      // Calculate time since last activity
-      let timeSinceActivity = null;
-      if (account.lastActivity) {
-        timeSinceActivity = now - new Date(account.lastActivity);
+        // Calculate time since last activity
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.activityDetails.push({
+          accountId,
+          type: 'master',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+        });
       }
-
-      stats.activityDetails.push({
-        accountId,
-        type: 'master',
-        status,
-        lastActivity: account.lastActivity,
-        timeSinceActivity,
-        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
-      });
     }
 
-    // Process slave accounts
-    for (const [accountId, account] of Object.entries(config.slaveAccounts)) {
-      stats.total++;
-      stats.slaves.total++;
+    // Process slave accounts with null checks
+    if (config.slaveAccounts) {
+      for (const [accountId, account] of Object.entries(config.slaveAccounts)) {
+        stats.total++;
+        stats.slaves.total++;
 
-      let status = account.status || 'active';
-      if (status === 'active') status = 'synchronized';
+        let status = account.status || 'active';
+        if (status === 'active') status = 'synchronized';
 
-      stats[status] = (stats[status] || 0) + 1;
-      stats.slaves[status] = (stats.slaves[status] || 0) + 1;
+        stats[status] = (stats[status] || 0) + 1;
+        stats.slaves[status] = (stats.slaves[status] || 0) + 1;
 
-      // Calculate time since last activity
-      let timeSinceActivity = null;
-      if (account.lastActivity) {
-        timeSinceActivity = now - new Date(account.lastActivity);
+        // Calculate time since last activity
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.activityDetails.push({
+          accountId,
+          type: 'slave',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+          connectedTo: config.connections && config.connections[accountId] || null,
+        });
       }
-
-      stats.activityDetails.push({
-        accountId,
-        type: 'slave',
-        status,
-        lastActivity: account.lastActivity,
-        timeSinceActivity,
-        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
-        connectedTo: config.connections[accountId] || null,
-      });
     }
 
-    // Process pending accounts
-    for (const [accountId, account] of Object.entries(config.pendingAccounts)) {
-      stats.total++;
+    // Process pending accounts with null checks
+    if (config.pendingAccounts) {
+      for (const [accountId, account] of Object.entries(config.pendingAccounts)) {
+        stats.total++;
 
-      let status = account.status || 'pending';
+        let status = account.status || 'pending';
 
-      stats[status] = (stats[status] || 0) + 1;
+        stats[status] = (stats[status] || 0) + 1;
 
-      // Calculate time since last activity
-      let timeSinceActivity = null;
-      if (account.lastActivity) {
-        timeSinceActivity = now - new Date(account.lastActivity);
+        // Calculate time since last activity
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.activityDetails.push({
+          accountId,
+          type: 'pending',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+        });
       }
-
-      stats.activityDetails.push({
-        accountId,
-        type: 'pending',
-        status,
-        lastActivity: account.lastActivity,
-        timeSinceActivity,
-        isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
-      });
     }
 
     res.json({

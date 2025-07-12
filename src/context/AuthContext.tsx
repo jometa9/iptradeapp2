@@ -15,12 +15,6 @@ interface UserInfo {
   userId: string;
   email: string;
   name: string;
-  subscriptionStatus: string | null;
-  planName: string | null;
-  isActive: boolean;
-  expiryDate: string | null;
-  daysRemaining: number;
-  statusChanged: boolean;
   subscriptionType: string;
 }
 
@@ -36,33 +30,8 @@ export const useAuth = () => {
 
 const STORAGE_KEY = 'iptrade_license_key';
 
-// Valid subscription states
-const VALID_SUBSCRIPTION_STATES = ['active', 'trialing', 'admin_assigned'];
-
-// Map API plan names to internal plan names
-const mapPlanName = (apiPlanName: string | null, subscriptionType: string): string | null => {
-  // Check if the user is an admin, give them IPTRADE Managed VPS regardless of plan
-  if (subscriptionType === 'admin') {
-    console.log('🔑 User is admin, mapping to IPTRADE Managed VPS');
-    return 'IPTRADE Managed VPS';
-  }
-
-  // Map API plan names to our internal plan names
-  const planMap: Record<string, string | null> = {
-    'free': null,
-    'premium': 'IPTRADE Premium',
-    'unlimited': 'IPTRADE Unlimited',
-    'managed_vps': 'IPTRADE Managed VPS'
-  };
-
-  // If plan name is found in our map, use it
-  if (apiPlanName && planMap[apiPlanName]) {
-    return planMap[apiPlanName];
-  }
-
-  // Default to free plan
-  return null;
-};
+// Valid subscription types
+const VALID_SUBSCRIPTION_TYPES = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -118,57 +87,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userData: UserInfo = await response.json();
       console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
       
-      // Map the API plan name to our internal plan name format
-      const originalPlanName = userData.planName;
-      userData.planName = mapPlanName(userData.planName, userData.subscriptionType);
-      console.log(`🔄 Mapped plan name: "${originalPlanName}" => "${userData.planName}"`);
+      // Validate that we have the required fields
+      if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
+        console.log('❌ Missing required fields in user data');
+        return { valid: false, message: 'Invalid user data format' };
+      }
 
-      // Check for both paid subscriptions and free users (null status)
-      const isValidPaidSubscription =
-        userData.subscriptionStatus && VALID_SUBSCRIPTION_STATES.includes(userData.subscriptionStatus) && userData.isActive;
-
-      const isFreeUser = userData.subscriptionStatus === null;
-
-      const isValidSubscription = isValidPaidSubscription || isFreeUser;
+      // Validate subscription type
+      if (!VALID_SUBSCRIPTION_TYPES.includes(userData.subscriptionType)) {
+        console.log('❌ Invalid subscription type:', userData.subscriptionType);
+        return { valid: false, message: 'Invalid subscription type' };
+      }
       
       console.log('🔍 Subscription validation details:');
-      console.log('  - Subscription status:', userData.subscriptionStatus || 'null');
-      console.log('  - Is active:', userData.isActive);
-      console.log('  - Valid states:', VALID_SUBSCRIPTION_STATES);
-      console.log('  - Is valid paid subscription:', isValidPaidSubscription);
-      console.log('  - Is free user:', isFreeUser);
-      console.log('  - Is valid subscription:', isValidSubscription);
-      console.log('  - Original plan name:', originalPlanName);
-      console.log('  - Mapped plan name:', userData.planName);
       console.log('  - Subscription type:', userData.subscriptionType);
+      console.log('  - Valid types:', VALID_SUBSCRIPTION_TYPES);
+      console.log('  - Is valid subscription:', true);
 
-      if (isValidSubscription) {
-        console.log('✅ Subscription validation successful');
-        console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
-        console.log('🔍 === FRONTEND LICENSE VALIDATION END ===');
-        return { valid: true, userInfo: userData };
-      } else {
-        console.log('❌ Invalid subscription');
-        let message = 'Invalid subscription';
-
-        switch (userData.subscriptionStatus) {
-          case 'canceled':
-            message = 'Your subscription has been canceled';
-            break;
-          case 'expired':
-            message = 'Your subscription has expired';
-            break;
-          case 'past_due':
-            message = 'Your subscription has overdue payments';
-            break;
-          default:
-            message = `Subscription status: ${userData.subscriptionStatus || 'null'}`;
-        }
-
-        console.log('❌ Returning error with message:', message);
-        console.log('🔍 === FRONTEND LICENSE VALIDATION END (ERROR) ===');
-        return { valid: false, message, userInfo: userData };
-      }
+      console.log('✅ Subscription validation successful');
+      console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
+      console.log('🔍 === FRONTEND LICENSE VALIDATION END ===');
+      return { valid: true, userInfo: userData };
     } catch (error) {
       console.error('💥 License validation error:', error);
       console.error('💥 Error details:', error);

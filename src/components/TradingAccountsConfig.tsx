@@ -18,6 +18,7 @@ import {
   Unlink,
   WifiOff,
   XCircle,
+  Zap,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,7 @@ import {
   getLotSizeMessage,
   getMaxAllowedLotSize,
   getPlanDisplayName,
+  isUnlimitedPlan,
   validateLotSize,
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
@@ -38,7 +40,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Tooltip } from './ui/tooltip';
-import { toast } from './ui/use-toast';
+import { toast, useToast } from './ui/use-toast';
 
 interface TradingAccount {
   id: string;
@@ -57,11 +59,13 @@ interface TradingAccount {
 }
 
 export function TradingAccountsConfig() {
-  const { userInfo } = useAuth();
+  const { toast: toastUtil } = useToast();
+  const [activeTab, setActiveTab] = useState('masters');
+  const [isLoading, setIsLoading] = useState(true);
+  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const { userInfo, secretKey } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState<string | null>(null);
-  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [editingAccount, setEditingAccount] = useState<TradingAccount | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -70,6 +74,8 @@ export function TradingAccountsConfig() {
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
+  const [showLimitsCard, setShowLimitsCard] = useState(true);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   // Copier status management
   const [copierStatus, setCopierStatus] = useState<any>(null);
@@ -111,6 +117,31 @@ export function TradingAccountsConfig() {
   const maxAllowedLot = userInfo ? getMaxAllowedLotSize(userInfo) : null;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
 
+  // Log de depuración para plan del usuario
+  useEffect(() => {
+    if (userInfo) {
+      console.log('🔍 TradingAccountsConfig - Plan del usuario:', userInfo.planName);
+      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
+      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
+    }
+  }, [userInfo]);
+
+  useEffect(() => {
+    if (!userInfo || isUnlimitedPlan(userInfo)) return;
+    setShowLimitsCard(true);
+    setIsLeaving(false);
+    const fadeTimer = setTimeout(() => {
+      setIsLeaving(true);
+    }, 9750); // Iniciar fade out medio segundo antes
+    const hideTimer = setTimeout(() => {
+      setShowLimitsCard(false);
+    }, 10000);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [userInfo]);
+
   // Fetch accounts from API
   const fetchAccounts = async (showLoadingState = false) => {
     try {
@@ -119,7 +150,11 @@ export function TradingAccountsConfig() {
       }
 
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
-      const response = await fetch(`http://localhost:${serverPort}/api/accounts/admin/all`);
+      const response = await fetch(`http://localhost:${serverPort}/api/accounts/admin/all`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
 
       if (!response.ok) {
         throw new Error('Failed to fetch trading accounts');
@@ -203,7 +238,7 @@ export function TradingAccountsConfig() {
     } catch (error) {
       console.error('Error fetching accounts:', error);
       if (showLoadingState) {
-        toast({
+        toastUtil({
           title: 'Error',
           description: 'Failed to load trading accounts. Please try again.',
           variant: 'destructive',
@@ -220,7 +255,11 @@ export function TradingAccountsConfig() {
   const fetchPendingAccountsCount = async () => {
     try {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
-      const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`);
+      const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -236,7 +275,8 @@ export function TradingAccountsConfig() {
   useEffect(() => {
     fetchAccounts(true);
     fetchPendingAccountsCount();
-
+    loadCopierData();
+    
     // Auto-refresh every 10 seconds to catch new conversions
     const interval = setInterval(() => {
       fetchAccounts(false);
@@ -265,7 +305,11 @@ export function TradingAccountsConfig() {
       const baseUrl = `http://localhost:${serverPort}/api`;
 
       // Load copier status
-      const copierResponse = await fetch(`${baseUrl}/copier/status`);
+      const copierResponse = await fetch(`${baseUrl}/copier/status`, {
+        headers: {
+          'x-api-key': secretKey || ''
+        }
+      });
       if (copierResponse.ok) {
         const copierData = await copierResponse.json();
         setCopierStatus(copierData);
@@ -275,7 +319,11 @@ export function TradingAccountsConfig() {
       const slaveAccounts = accounts.filter(acc => acc.accountType === 'slave');
       const slaveConfigPromises = slaveAccounts.map(async slave => {
         try {
-          const response = await fetch(`${baseUrl}/slave-config/${slave.accountNumber}`);
+          const response = await fetch(`${baseUrl}/slave-config/${slave.accountNumber}`, {
+            headers: {
+              'x-api-key': secretKey || ''
+            }
+          });
           if (response.ok) {
             const config = await response.json();
             return { [slave.accountNumber]: config };
@@ -327,7 +375,10 @@ export function TradingAccountsConfig() {
         for (const masterId of enabledMasters) {
           await fetch(`http://localhost:${serverPort}/api/copier/master`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': secretKey || ''
+            },
             body: JSON.stringify({ masterAccountId: masterId, enabled: false }),
           });
         }
@@ -336,7 +387,10 @@ export function TradingAccountsConfig() {
         for (const slaveId of enabledSlaves) {
           await fetch(`http://localhost:${serverPort}/api/slave-config`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-api-key': secretKey || ''
+            },
             body: JSON.stringify({ slaveAccountId: slaveId, enabled: false }),
           });
         }
@@ -380,7 +434,10 @@ export function TradingAccountsConfig() {
       // Now update global status
       const response = await fetch(`http://localhost:${serverPort}/api/copier/global`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ enabled }),
       });
 
@@ -394,7 +451,7 @@ export function TradingAccountsConfig() {
           globalStatusText: enabled ? 'ON' : 'OFF',
         }));
 
-        toast({
+        toastUtil({
           title: 'Success',
           description: enabled
             ? result.message
@@ -410,7 +467,7 @@ export function TradingAccountsConfig() {
       }
     } catch (error) {
       console.error('Error updating global status:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Failed to update global copier status',
         variant: 'destructive',
@@ -433,13 +490,16 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/copier/master`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ masterAccountId, enabled }),
       });
 
       if (response.ok) {
         const result = await response.json();
-        toast({
+        toastUtil({
           title: 'Success',
           description: result.message,
         });
@@ -449,7 +509,7 @@ export function TradingAccountsConfig() {
       }
     } catch (error) {
       console.error('Error updating master status:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Failed to update master copier status',
         variant: 'destructive',
@@ -466,12 +526,15 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || ''
+        },
         body: JSON.stringify({ slaveAccountId, enabled }),
       });
 
       if (response.ok) {
-        toast({
+        toastUtil({
           title: 'Success',
           description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
         });
@@ -481,7 +544,7 @@ export function TradingAccountsConfig() {
       }
     } catch (error) {
       console.error('Error updating slave status:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Failed to update slave status',
         variant: 'destructive',
@@ -588,13 +651,13 @@ export function TradingAccountsConfig() {
 
         await fetchAccounts();
 
-        toast({
+        toastUtil({
           title: 'Account Deleted',
           description: 'The account has been removed successfully.',
         });
       } catch (error) {
         console.error('Error deleting account:', error);
-        toast({
+        toastUtil({
           title: 'Error',
           description: 'Failed to delete trading account. Please try again.',
           variant: 'destructive',
@@ -612,18 +675,21 @@ export function TradingAccountsConfig() {
   };
 
   const disconnectSlaveAccount = async (slaveAccountId: string) => {
-    setIsDisconnecting(slaveAccountId);
     try {
+      setIsDisconnecting(slaveAccountId);
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(
         `http://localhost:${serverPort}/api/accounts/disconnect/${slaveAccountId}`,
         {
           method: 'DELETE',
+          headers: {
+            'x-api-key': secretKey || ''
+          }
         }
       );
 
       if (response.ok) {
-        toast({
+        toastUtil({
           title: 'Success',
           description: 'Slave account disconnected successfully',
         });
@@ -634,7 +700,7 @@ export function TradingAccountsConfig() {
       }
     } catch (error) {
       console.error('Error disconnecting slave account:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Failed to disconnect slave account',
         variant: 'destructive',
@@ -645,25 +711,25 @@ export function TradingAccountsConfig() {
   };
 
   const disconnectAllSlaves = async (masterAccountId: string) => {
-    setIsDisconnecting(masterAccountId);
     try {
+      setIsDisconnecting(masterAccountId);
+      const slaveIds = accounts
+        .filter(acc => acc.accountType === 'slave' && acc.connectedToMaster === masterAccountId)
+        .map(acc => acc.id);
+
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
-
-      // Get all connected slaves for this master
-      const masterAccount = accounts.find(acc => acc.accountNumber === masterAccountId);
-      const connectedSlaves = masterAccount?.connectedSlaves || [];
-      const slaveIds = connectedSlaves.map(slave => slave.id);
-
-      // Disconnect each slave
       const disconnectPromises = slaveIds.map(slaveId =>
         fetch(`http://localhost:${serverPort}/api/accounts/disconnect/${slaveId}`, {
           method: 'DELETE',
+          headers: {
+            'x-api-key': secretKey || ''
+          }
         })
       );
 
       await Promise.all(disconnectPromises);
 
-      toast({
+      toastUtil({
         title: 'Success',
         description: `All ${slaveIds.length} slave accounts disconnected successfully`,
       });
@@ -671,7 +737,7 @@ export function TradingAccountsConfig() {
       fetchAccounts();
     } catch (error) {
       console.error('Error disconnecting all slaves:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Failed to disconnect all slave accounts',
         variant: 'destructive',
@@ -692,7 +758,7 @@ export function TradingAccountsConfig() {
 
     // Check account limits before creating
     if (!canAddMoreAccounts) {
-      toast({
+      toastUtil({
         title: 'Account Limit Reached',
         description: `Your ${planDisplayName} plan has reached the maximum number of accounts allowed.`,
         variant: 'destructive',
@@ -705,7 +771,7 @@ export function TradingAccountsConfig() {
       if (formState.forceLot > 0) {
         const lotValidation = validateLotSize(userInfo, formState.forceLot);
         if (!lotValidation.valid) {
-          toast({
+          toastUtil({
             title: 'Invalid Lot Size',
             description: lotValidation.error,
             variant: 'destructive',
@@ -716,7 +782,7 @@ export function TradingAccountsConfig() {
     }
 
     if (!formState.accountNumber || !formState.serverIp) {
-      toast({
+      toastUtil({
         title: 'Error',
         description: 'Please fill in all required fields.',
         variant: 'destructive',
@@ -830,7 +896,7 @@ export function TradingAccountsConfig() {
 
       await fetchAccounts();
 
-      toast({
+      toastUtil({
         title: editingAccount ? 'Account Updated' : 'Account Created',
         description: `Your trading account has been ${editingAccount ? 'updated' : 'created'} successfully.`,
       });
@@ -838,7 +904,7 @@ export function TradingAccountsConfig() {
       handleCancel();
     } catch (error: any) {
       console.error('Error saving account:', error);
-      toast({
+      toastUtil({
         title: 'Error',
         description: error.message || 'Failed to save trading account. Please try again.',
         variant: 'destructive',
@@ -1009,11 +1075,34 @@ export function TradingAccountsConfig() {
     );
   };
 
+  const fadeInDownAnimation = {
+    opacity: 1,
+    animation: 'fadeInDown 0.25s ease-out',
+    transition: 'opacity 0.3s, transform 0.3s'
+  };
+  const fadeOutAnimation = {
+    opacity: 0,
+    transition: 'opacity 0.25s, transform 0.25s'
+  };
+
   return (
     <div className="space-y-6">
-      {/* Subscription Info Card */}
-      {userInfo && (
-        <Card className=" border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3">
+      {/* Logs de depuración */}
+      {userInfo && (() => {
+        console.log('🔍 TradingAccountsConfig - Render', {
+          subscriptionType: userInfo.subscriptionType,
+          isUnlimitedPlan: isUnlimitedPlan(userInfo),
+          shouldShowSubscriptionLimitsCard: !isUnlimitedPlan(userInfo)
+        });
+        return null;
+      })()}
+      
+      {/* Subscription Info Card para planes con límites */}
+      {userInfo && !isUnlimitedPlan(userInfo) && showLimitsCard && (
+        <Card 
+          className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3"
+          style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
+        >
           <AlertTriangle className="w-6 h-6 text-yellow-900" />
           <div className="gap-3">
             <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
@@ -1023,6 +1112,19 @@ export function TradingAccountsConfig() {
           </div>
         </Card>
       )}
+      
+      {/* Información de plan sin límites para planes premium */}
+      {(userInfo && userInfo.subscriptionType === 'premium' && !isUnlimitedPlan(userInfo)) ? (
+        <Card className="border-purple-400 bg-purple-50 flex items-center p-4 gap-3">
+          <Zap className="w-6 h-6 text-purple-900" />
+          <div className="gap-3">
+            <CardTitle className="text-purple-800 mt-1">Premium Plan</CardTitle>
+            <p className="text-sm mt-1.5 text-purple-800">
+              Your Premium plan includes unlimited accounts and custom lot sizes.
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="bg-white rounded-xl shadow-sm">
         <CardHeader>
@@ -1857,9 +1959,7 @@ export function TradingAccountsConfig() {
                                         disabled={isDeletingAccount === slaveAccount.id}
                                         className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                                       >
-                                        {isDeletingAccount === slaveAccount.id
-                                          ? 'Deleting...'
-                                          : 'Delete'}
+                                        {isDeletingAccount === slaveAccount.id ? 'Deleting...' : 'Delete'}
                                       </Button>
                                       <Button
                                         size="sm"

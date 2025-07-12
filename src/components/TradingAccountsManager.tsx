@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
-import { Plus, Trash2, Unlink } from 'lucide-react';
+import { Plus, Trash2, Unlink, Zap } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
   getPlanDisplayName,
+  isUnlimitedPlan,
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -99,9 +100,16 @@ export const TradingAccountsManager: React.FC = () => {
   // Check if user can create more accounts
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
-
+  
   useEffect(() => {
     loadAccounts();
+    
+    // Log de depuración para plan del usuario
+    if (userInfo) {
+      console.log('🔍 TradingAccountsManager - Plan del usuario:', userInfo.planName);
+      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
+      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
+    }
   }, []);
 
   const loadAccounts = async () => {
@@ -356,8 +364,8 @@ export const TradingAccountsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Subscription Info Card */}
-      {userInfo && (
+      {/* Subscription Info Card para planes con límites */}
+      {userInfo && !isUnlimitedPlan(userInfo) && (
         <Card>
           <CardHeader>
             <CardTitle>Account Limits</CardTitle>
@@ -379,6 +387,25 @@ export const TradingAccountsManager: React.FC = () => {
           </CardContent>
         </Card>
       )}
+      
+      {/* Información de plan sin límites para planes premium */}
+      {(userInfo && userInfo.planName === 'IPTRADE Premium' && userInfo.subscriptionType !== 'admin' && !isUnlimitedPlan(userInfo)) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-purple-700" /> Premium Plan
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Your {userInfo.planName} plan includes unlimited trading accounts.
+                You currently have {totalAccounts} accounts.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Header with stats */}
       <Card>
