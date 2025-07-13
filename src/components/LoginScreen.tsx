@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useExternalLink } from '../hooks/useExternalLink';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -11,6 +12,7 @@ import { Input } from './ui/input';
 export const LoginScreen: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const { login, isLoading, error, clearError } = useAuth();
+  const { openExternalLink } = useExternalLink();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,7 +82,15 @@ export const LoginScreen: React.FC = () => {
             </Button>
           </form>
           <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600">
-            <a href="https://iptradecopier.com/pricing" target="_blank" rel="noopener noreferrer">
+            <a
+              href="https://iptradecopier.com/pricing"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => {
+                e.preventDefault();
+                openExternalLink('https://iptradecopier.com/pricing');
+              }}
+            >
               Manage your subscription here
             </a>
           </CardDescription>

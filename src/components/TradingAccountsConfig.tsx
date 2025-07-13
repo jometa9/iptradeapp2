@@ -24,12 +24,12 @@ import {
 import { useAuth } from '../context/AuthContext';
 import {
   canCreateMoreAccounts,
-  canSetCustomLotSizes,
+  canCustomizeLotSizes,
   getAccountLimitMessage,
   getLotSizeMessage,
-  getMaxAllowedLotSize,
   getPlanDisplayName,
   isUnlimitedPlan,
+  shouldShowSubscriptionLimitsCard,
   validateLotSize,
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
@@ -40,7 +40,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Tooltip } from './ui/tooltip';
-import { toast, useToast } from './ui/use-toast';
+import { useToast } from './ui/use-toast';
 
 interface TradingAccount {
   id: string;
@@ -58,9 +58,44 @@ interface TradingAccount {
   totalSlaves?: number;
 }
 
+interface MasterAccountStatus {
+  masterStatus: boolean;
+  effectiveStatus: boolean;
+  status: string;
+}
+
+interface CopierStatus {
+  globalStatus: boolean;
+  globalStatusText: string;
+  masterAccounts: Record<string, MasterAccountStatus>;
+}
+
+interface SlaveConfig {
+  config: {
+    enabled: boolean;
+    lotMultiplier?: number;
+    forceLot?: number | null;
+    reverseTrading?: boolean;
+    description?: string;
+  };
+}
+
+interface ApiAccountData {
+  id: string;
+  platform?: string;
+  broker?: string;
+  status?: string;
+  connectedSlaves?: ApiAccountData[];
+  totalSlaves?: number;
+}
+
+interface ApiResponse {
+  masterAccounts?: Record<string, ApiAccountData>;
+  unconnectedSlaves?: ApiAccountData[];
+}
+
 export function TradingAccountsConfig() {
   const { toast: toastUtil } = useToast();
-  const [activeTab, setActiveTab] = useState('masters');
   const [isLoading, setIsLoading] = useState(true);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const { userInfo, secretKey } = useAuth();
@@ -78,11 +113,16 @@ export function TradingAccountsConfig() {
   const [isLeaving, setIsLeaving] = useState(false);
 
   // Copier status management
-  const [copierStatus, setCopierStatus] = useState<any>(null);
-  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, any>>({});
+  const [copierStatus, setCopierStatus] = useState<CopierStatus | null>(null);
+  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
   const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
   const [pendingAccountsCount, setPendingAccountsCount] = useState<number>(0);
+
+  // Derived values for subscription limits
+  const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
+  const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
+  const canCustomizeLotSizesValue = userInfo ? canCustomizeLotSizes(userInfo) : false;
 
   const [formState, setFormState] = useState({
     accountNumber: '',
@@ -111,23 +151,7 @@ export function TradingAccountsConfig() {
     { value: 'slave', label: 'Slave Account (Signal Follower)' },
   ];
 
-  // Check if user can create more accounts
-  const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
-  const canCustomizeLotSizes = userInfo ? canSetCustomLotSizes(userInfo) : false;
-  const maxAllowedLot = userInfo ? getMaxAllowedLotSize(userInfo) : null;
-  const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
-
-  // Log de depuración para plan del usuario
   useEffect(() => {
-    if (userInfo) {
-      console.log('🔍 TradingAccountsConfig - Plan del usuario:', userInfo.planName);
-      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
-      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
-    }
-  }, [userInfo]);
-
-  useEffect(() => {
-    if (!userInfo || isUnlimitedPlan(userInfo)) return;
     setShowLimitsCard(true);
     setIsLeaving(false);
     const fadeTimer = setTimeout(() => {
@@ -152,15 +176,15 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/admin/all`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (!response.ok) {
         throw new Error('Failed to fetch trading accounts');
       }
 
-      const data = await response.json();
+      const data: ApiResponse = await response.json();
 
       // Handle the actual format returned by the backend
       const allAccounts: TradingAccount[] = [];
@@ -183,7 +207,7 @@ export function TradingAccountsConfig() {
 
       // Add master accounts
       if (data.masterAccounts) {
-        Object.values(data.masterAccounts).forEach((master: any) => {
+        Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
           allAccounts.push({
             id: master.id.toString(),
             accountNumber: master.id,
@@ -192,7 +216,7 @@ export function TradingAccountsConfig() {
             password: '••••••••',
             accountType: 'master',
             status: mapStatus(master.status || 'active'),
-            connectedSlaves: (master as any).connectedSlaves || [],
+            connectedSlaves: master.connectedSlaves || [],
             totalSlaves: master.totalSlaves || 0,
           });
         });
@@ -200,9 +224,9 @@ export function TradingAccountsConfig() {
 
       // Add connected slaves
       if (data.masterAccounts) {
-        Object.values(data.masterAccounts).forEach((master: any) => {
+        Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
           if (master.connectedSlaves && Array.isArray(master.connectedSlaves)) {
-            master.connectedSlaves.forEach((slave: any) => {
+            master.connectedSlaves.forEach((slave: ApiAccountData) => {
               allAccounts.push({
                 id: slave.id.toString(),
                 accountNumber: slave.id,
@@ -220,7 +244,7 @@ export function TradingAccountsConfig() {
 
       // Add unconnected slaves
       if (data.unconnectedSlaves && Array.isArray(data.unconnectedSlaves)) {
-        data.unconnectedSlaves.forEach((slave: any) => {
+        data.unconnectedSlaves.forEach((slave: ApiAccountData) => {
           allAccounts.push({
             id: slave.id.toString(),
             accountNumber: slave.id,
@@ -257,8 +281,8 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (response.ok) {
@@ -276,7 +300,7 @@ export function TradingAccountsConfig() {
     fetchAccounts(true);
     fetchPendingAccountsCount();
     loadCopierData();
-    
+
     // Auto-refresh every 10 seconds to catch new conversions
     const interval = setInterval(() => {
       fetchAccounts(false);
@@ -307,8 +331,8 @@ export function TradingAccountsConfig() {
       // Load copier status
       const copierResponse = await fetch(`${baseUrl}/copier/status`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
       if (copierResponse.ok) {
         const copierData = await copierResponse.json();
@@ -321,8 +345,8 @@ export function TradingAccountsConfig() {
         try {
           const response = await fetch(`${baseUrl}/slave-config/${slave.accountNumber}`, {
             headers: {
-              'x-api-key': secretKey || ''
-            }
+              'x-api-key': secretKey || '',
+            },
           });
           if (response.ok) {
             const config = await response.json();
@@ -363,21 +387,21 @@ export function TradingAccountsConfig() {
       if (!enabled) {
         // Get all master accounts that are currently enabled
         const enabledMasters = Object.entries(copierStatus?.masterAccounts || {})
-          .filter(([_, status]: [string, any]) => status.masterStatus)
+          .filter(([, status]) => status.masterStatus)
           .map(([masterId]) => masterId);
 
         // Get all slave accounts that are currently enabled
         const enabledSlaves = Object.entries(slaveConfigs || {})
-          .filter(([_, config]) => config.config?.enabled !== false)
+          .filter(([, config]) => config.config?.enabled !== false)
           .map(([slaveId]) => slaveId);
 
         // Disable all masters
         for (const masterId of enabledMasters) {
           await fetch(`http://localhost:${serverPort}/api/copier/master`, {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
-              'x-api-key': secretKey || ''
+              'x-api-key': secretKey || '',
             },
             body: JSON.stringify({ masterAccountId: masterId, enabled: false }),
           });
@@ -387,18 +411,20 @@ export function TradingAccountsConfig() {
         for (const slaveId of enabledSlaves) {
           await fetch(`http://localhost:${serverPort}/api/slave-config`, {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
-              'x-api-key': secretKey || ''
+              'x-api-key': secretKey || '',
             },
             body: JSON.stringify({ slaveAccountId: slaveId, enabled: false }),
           });
         }
 
         // Update local state to reflect all accounts are now disabled
-        setCopierStatus((prev: any) => {
-          const updatedMasters: Record<string, any> = {};
-          Object.keys(prev?.masterAccounts || {}).forEach(masterId => {
+        setCopierStatus(prev => {
+          if (!prev) return null;
+
+          const updatedMasters: Record<string, MasterAccountStatus> = {};
+          Object.keys(prev.masterAccounts || {}).forEach(masterId => {
             updatedMasters[masterId] = {
               ...prev.masterAccounts[masterId],
               masterStatus: false,
@@ -417,7 +443,7 @@ export function TradingAccountsConfig() {
 
         // Update slave configs to disabled
         setSlaveConfigs(prev => {
-          const updatedConfigs: Record<string, any> = {};
+          const updatedConfigs: Record<string, SlaveConfig> = {};
           Object.entries(prev).forEach(([slaveId, config]) => {
             updatedConfigs[slaveId] = {
               ...config,
@@ -434,9 +460,9 @@ export function TradingAccountsConfig() {
       // Now update global status
       const response = await fetch(`http://localhost:${serverPort}/api/copier/global`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'x-api-key': secretKey || ''
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify({ enabled }),
       });
@@ -445,11 +471,15 @@ export function TradingAccountsConfig() {
         const result = await response.json();
 
         // Immediately update local state for responsive UI
-        setCopierStatus((prev: any) => ({
-          ...prev,
-          globalStatus: enabled,
-          globalStatusText: enabled ? 'ON' : 'OFF',
-        }));
+        setCopierStatus(prev => {
+          if (!prev) return null;
+
+          return {
+            ...prev,
+            globalStatus: enabled,
+            globalStatusText: enabled ? 'ON' : 'OFF',
+          };
+        });
 
         toastUtil({
           title: 'Success',
@@ -490,9 +520,9 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/copier/master`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'x-api-key': secretKey || ''
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify({ masterAccountId, enabled }),
       });
@@ -526,9 +556,9 @@ export function TradingAccountsConfig() {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'x-api-key': secretKey || ''
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify({ slaveAccountId, enabled }),
       });
@@ -683,8 +713,8 @@ export function TradingAccountsConfig() {
         {
           method: 'DELETE',
           headers: {
-            'x-api-key': secretKey || ''
-          }
+            'x-api-key': secretKey || '',
+          },
         }
       );
 
@@ -722,8 +752,8 @@ export function TradingAccountsConfig() {
         fetch(`http://localhost:${serverPort}/api/accounts/disconnect/${slaveId}`, {
           method: 'DELETE',
           headers: {
-            'x-api-key': secretKey || ''
-          }
+            'x-api-key': secretKey || '',
+          },
         })
       );
 
@@ -756,16 +786,6 @@ export function TradingAccountsConfig() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Check account limits before creating
-    if (!canAddMoreAccounts) {
-      toastUtil({
-        title: 'Account Limit Reached',
-        description: `Your ${planDisplayName} plan has reached the maximum number of accounts allowed.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // Validate lot size for free users
     if (userInfo && formState.accountType === 'slave') {
       if (formState.forceLot > 0) {
@@ -776,9 +796,21 @@ export function TradingAccountsConfig() {
             description: lotValidation.error,
             variant: 'destructive',
           });
+          setIsSubmitting(false);
           return;
         }
       }
+    }
+
+    // Check if user can add more accounts (only for new accounts)
+    if (!editingAccount && !canAddMoreAccounts) {
+      toastUtil({
+        title: 'Account Limit Reached',
+        description: `Your ${planDisplayName} plan has reached its account limit. Please upgrade to add more accounts.`,
+        variant: 'destructive',
+      });
+      setIsSubmitting(false);
+      return;
     }
 
     if (!formState.accountNumber || !formState.serverIp) {
@@ -902,11 +934,14 @@ export function TradingAccountsConfig() {
       });
 
       handleCancel();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving account:', error);
       toastUtil({
         title: 'Error',
-        description: error.message || 'Failed to save trading account. Please try again.',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Failed to save trading account. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -1078,28 +1113,29 @@ export function TradingAccountsConfig() {
   const fadeInDownAnimation = {
     opacity: 1,
     animation: 'fadeInDown 0.25s ease-out',
-    transition: 'opacity 0.3s, transform 0.3s'
+    transition: 'opacity 0.3s, transform 0.3s',
   };
   const fadeOutAnimation = {
     opacity: 0,
-    transition: 'opacity 0.25s, transform 0.25s'
+    transition: 'opacity 0.25s, transform 0.25s',
   };
 
   return (
     <div className="space-y-6">
       {/* Logs de depuración */}
-      {userInfo && (() => {
-        console.log('🔍 TradingAccountsConfig - Render', {
-          subscriptionType: userInfo.subscriptionType,
-          isUnlimitedPlan: isUnlimitedPlan(userInfo),
-          shouldShowSubscriptionLimitsCard: !isUnlimitedPlan(userInfo)
-        });
-        return null;
-      })()}
-      
+      {userInfo &&
+        (() => {
+          console.log('🔍 TradingAccountsConfig - Render', {
+            subscriptionType: userInfo.subscriptionType,
+            isUnlimitedPlan: isUnlimitedPlan(userInfo),
+            shouldShowSubscriptionLimitsCard: shouldShowSubscriptionLimitsCard(userInfo),
+          });
+          return null;
+        })()}
+
       {/* Subscription Info Card para planes con límites */}
-      {userInfo && !isUnlimitedPlan(userInfo) && showLimitsCard && (
-        <Card 
+      {userInfo && shouldShowSubscriptionLimitsCard(userInfo) && showLimitsCard && (
+        <Card
           className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3"
           style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
         >
@@ -1112,27 +1148,40 @@ export function TradingAccountsConfig() {
           </div>
         </Card>
       )}
-      
-      {/* Información de plan sin límites para planes premium */}
-      {(userInfo && userInfo.subscriptionType === 'premium' && !isUnlimitedPlan(userInfo)) ? (
+
+      {/* Información de plan premium */}
+      {userInfo && userInfo.subscriptionType === 'premium' && (
         <Card className="border-purple-400 bg-purple-50 flex items-center p-4 gap-3">
           <Zap className="w-6 h-6 text-purple-900" />
           <div className="gap-3">
-            <CardTitle className="text-purple-800 mt-1">Premium Plan</CardTitle>
+            <CardTitle className="text-purple-800 mt-1">Premium Plan Active</CardTitle>
             <p className="text-sm mt-1.5 text-purple-800">
-              Your Premium plan includes unlimited accounts and custom lot sizes.
+              Enhanced features: Up to 5 accounts, custom lot sizes, and reverse trading options.
             </p>
           </div>
         </Card>
-      ) : null}
+      )}
+
+      {/* Información de plan sin límites para planes unlimited */}
+      {userInfo && isUnlimitedPlan(userInfo) && (
+        <Card className="border-green-400 bg-green-50 flex items-center p-4 gap-3">
+          <CheckCircle className="w-6 h-6 text-green-900" />
+          <div className="gap-3">
+            <CardTitle className="text-green-800 mt-1">Unlimited Plan Active</CardTitle>
+            <p className="text-sm mt-1.5 text-green-800">
+              Your {planDisplayName} plan includes unlimited accounts and all advanced features.
+            </p>
+          </div>
+        </Card>
+      )}
 
       <Card className="bg-white rounded-xl shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Trading Accounts Configuration</CardTitle>
-              <CardDescription>
-                Manage your trading accounts and copy trading configuration (up to 50 accounts)
+              <CardDescription className="text-sm text-gray-400 mt-2">
+                Manage your trading accounts and copy trading configuration
               </CardDescription>
             </div>
           </div>
@@ -1491,7 +1540,7 @@ export function TradingAccountsConfig() {
                           <div>
                             <Label htmlFor="lotCoefficient">
                               Lot Size Coefficient
-                              {!canCustomizeLotSizes && ' (Fixed at 1.0 for Free plan)'}
+                              {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
                             </Label>
                             <Input
                               id="lotCoefficient"
@@ -1501,25 +1550,25 @@ export function TradingAccountsConfig() {
                               max="100"
                               step="0.01"
                               value={
-                                canCustomizeLotSizes
+                                canCustomizeLotSizesValue
                                   ? formState.lotCoefficient?.toString() || '1'
                                   : '1'
                               }
                               onChange={e =>
                                 setFormState({
                                   ...formState,
-                                  lotCoefficient: canCustomizeLotSizes
+                                  lotCoefficient: canCustomizeLotSizesValue
                                     ? e.target.value === ''
                                       ? 1
                                       : parseFloat(e.target.value)
                                     : 1,
                                 })
                               }
-                              disabled={!canCustomizeLotSizes}
+                              disabled={!canCustomizeLotSizesValue}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizes
+                              {canCustomizeLotSizesValue
                                 ? 'Multiplies the lot size from the master account'
                                 : 'Free plan users cannot customize lot multipliers'}
                             </p>
@@ -1528,17 +1577,17 @@ export function TradingAccountsConfig() {
                           <div>
                             <Label htmlFor="forceLot">
                               Force Fixed Lot Size
-                              {!canCustomizeLotSizes && ' (Fixed at 0.01 for Free plan)'}
+                              {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
                             </Label>
                             <Input
                               id="forceLot"
                               name="forceLot"
                               type="number"
                               min="0"
-                              max={canCustomizeLotSizes ? '100' : '0.01'}
+                              max={canCustomizeLotSizesValue ? '100' : '0.01'}
                               step="0.01"
                               value={
-                                canCustomizeLotSizes
+                                canCustomizeLotSizesValue
                                   ? formState.forceLot?.toString() || '0'
                                   : formState.forceLot > 0
                                     ? '0.01'
@@ -1549,14 +1598,18 @@ export function TradingAccountsConfig() {
                                   e.target.value === '' ? 0 : parseFloat(e.target.value);
                                 setFormState({
                                   ...formState,
-                                  forceLot: canCustomizeLotSizes ? value : value > 0 ? 0.01 : 0,
+                                  forceLot: canCustomizeLotSizesValue
+                                    ? value
+                                    : value > 0
+                                      ? 0.01
+                                      : 0,
                                 });
                               }}
-                              disabled={!canCustomizeLotSizes}
+                              disabled={!canCustomizeLotSizesValue}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizes
+                              {canCustomizeLotSizesValue
                                 ? 'If set above 0, uses this fixed lot size instead of copying'
                                 : 'Free plan users are limited to 0.01 lot size'}
                             </p>
@@ -1959,7 +2012,9 @@ export function TradingAccountsConfig() {
                                         disabled={isDeletingAccount === slaveAccount.id}
                                         className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                                       >
-                                        {isDeletingAccount === slaveAccount.id ? 'Deleting...' : 'Delete'}
+                                        {isDeletingAccount === slaveAccount.id
+                                          ? 'Deleting...'
+                                          : 'Delete'}
                                       </Button>
                                       <Button
                                         size="sm"

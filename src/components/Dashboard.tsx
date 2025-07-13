@@ -1,20 +1,19 @@
 import React, { useEffect, useState } from 'react';
 
-import { CheckCircle, Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
-import { isUnlimitedPlan } from '../lib/subscriptionUtils';
+import { useExternalLink } from '../hooks/useExternalLink';
 import { PendingAccountsManager } from './PendingAccountsManager';
-import { TemporarySubscriptionLimitsCard } from './SubscriptionLimitsCard';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
 import { VersionInfo } from './VersionInfo';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
 export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
+  const { openExternalLink } = useExternalLink();
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(false);
   // Estado para controlar si se acaba de iniciar sesión
@@ -38,42 +37,23 @@ export const Dashboard: React.FC = () => {
   // Efecto para realizar acciones al montar el componente
   useEffect(() => {
     fetchUserIP();
-    
+
     // Log de información de plan para depuración
-    if (userInfo) {
-      console.log('🔍 Dashboard - Plan del usuario:', userInfo.planName);
-      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
-      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
-      
-      if (isUnlimitedPlan(userInfo)) {
-        console.log('ℹ️ Plan sin límites - no se muestra tarjeta de límites');
-      } else {
-        console.log('ℹ️ Plan con límites - mostrando tarjeta temporal');
-      }
-    }
-    
-    // Marcar que el usuario acaba de iniciar sesión
     setIsRecentLogin(true);
-    
+
     // Después de 10 segundos, no es un login reciente
     const loginTimer = setTimeout(() => {
       console.log('⏱️ 10 segundos transcurridos - ocultando tarjeta temporal');
       setIsRecentLogin(false);
     }, 10000);
-    
+
     return () => clearTimeout(loginTimer);
   }, [userInfo]);
 
   // Efecto para controlar la visibilidad de la tarjeta solo una vez por sesión
   useEffect(() => {
     if (!userInfo) return;
-    // Si el usuario es admin o tiene plan ilimitado, nunca mostrar la tarjeta
-    if (isUnlimitedPlan(userInfo)) {
-      setIsRecentLogin(false);
-      setLoginTimerStarted(false);
-      console.log('⛔ Usuario admin o plan ilimitado, nunca mostrar tarjeta de límites');
-      return;
-    }
+
     // Solo iniciar el temporizador si no se ha iniciado antes
     if (!loginTimerStarted) {
       setIsRecentLogin(true);
@@ -96,7 +76,7 @@ export const Dashboard: React.FC = () => {
 
   const handleHelp = () => {
     const urlHelp = import.meta.env.VITE_HELP_URL;
-    window.open(urlHelp, '_blank');
+    openExternalLink(urlHelp);
   };
 
   const handleCopyIP = async () => {
@@ -107,7 +87,6 @@ export const Dashboard: React.FC = () => {
       console.log('Failed to copy IP to clipboard');
     }
   };
-
 
   return (
     <UpdateTestProvider>
@@ -170,7 +149,7 @@ export const Dashboard: React.FC = () => {
         <main className="mx-auto px-4 gap-6 flex flex-col pb-6">
           {/* Update notification appears here when available */}
           <UpdateCard />
-          
+
           {/* Pending Accounts - Always visible at top for admin management */}
           <PendingAccountsManager />
 

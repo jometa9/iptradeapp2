@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, ExternalLink, Link, Users, Wifi, WifiOff } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useExternalLink } from '../hooks/useExternalLink';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -55,6 +56,7 @@ interface MasterAccount {
 
 export const CtraderManager: React.FC = () => {
   const { userInfo, isAuthenticated, secretKey } = useAuth();
+  const { openExternalLink } = useExternalLink();
   const [status, setStatus] = useState<CtraderStatus>({
     authenticated: false,
     connected: false,
@@ -122,8 +124,8 @@ export const CtraderManager: React.FC = () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/all`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
       if (response.ok) {
         const data = await response.json();
@@ -166,7 +168,7 @@ export const CtraderManager: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         // Open OAuth URL in new window
-        window.open(data.authUrl, 'ctrader-auth', 'width=600,height=700');
+        openExternalLink(data.authUrl);
 
         // Listen for auth completion
         const checkAuth = setInterval(async () => {

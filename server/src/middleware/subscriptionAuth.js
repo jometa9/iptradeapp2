@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // Add valid subscription statuses
@@ -18,10 +18,10 @@ const mapPlanName = (apiPlanName, subscriptionType) => {
 
   // Map API plan names to our internal plan names
   const planMap = {
-    'free': null,
-    'premium': 'IPTRADE Premium',
-    'unlimited': 'IPTRADE Unlimited',
-    'managed_vps': 'IPTRADE Managed VPS'
+    free: null,
+    premium: 'IPTRADE Premium',
+    unlimited: 'IPTRADE Unlimited',
+    managed_vps: 'IPTRADE Managed VPS',
   };
 
   // If plan name is found in our map, use it
@@ -35,27 +35,27 @@ const mapPlanName = (apiPlanName, subscriptionType) => {
 
 // Plan limits configuration based on subscription type
 const PLAN_LIMITS = {
-  'free': {
+  free: {
     maxAccounts: 3,
     maxLotSize: 0.01,
     features: ['basic_copy_trading'],
   },
-  'premium': {
+  premium: {
     maxAccounts: 5,
     maxLotSize: null, // No limit
     features: ['advanced_copy_trading', 'custom_lot_sizes'],
   },
-  'unlimited': {
+  unlimited: {
     maxAccounts: null, // No limit
     maxLotSize: null, // No limit
     features: ['unlimited_copy_trading', 'advanced_features'],
   },
-  'managed_vps': {
+  managed_vps: {
     maxAccounts: null, // No limit
     maxLotSize: null, // No limit
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support'],
   },
-  'admin': {
+  admin: {
     maxAccounts: null, // No limit
     maxLotSize: null, // No limit
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support', 'admin_access'],
@@ -69,19 +69,19 @@ export const validateSubscription = async apiKey => {
   console.log('🌍 Environment variables:');
   console.log('  - LICENSE_API_URL:', process.env.LICENSE_API_URL);
   console.log('  - NODE_ENV:', process.env.NODE_ENV);
-  
+
   try {
     // Use the external license API URL from .env (port 3000)
     const licenseApiUrl =
       process.env.LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
-    
+
     console.log('🔗 Constructed API URL:', licenseApiUrl);
     console.log('🎯 Full request URL:', `${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
-    
+
     const requestStart = Date.now();
     const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
     const requestDuration = Date.now() - requestStart;
-    
+
     console.log('⏱️ Request duration:', requestDuration + 'ms');
     console.log('📡 Response status:', response.status);
     console.log('📡 Response ok:', response.ok);
@@ -89,7 +89,7 @@ export const validateSubscription = async apiKey => {
 
     if (!response.ok) {
       console.log('❌ Response not ok - status:', response.status);
-      
+
       // If API key is not found in external API, treat as free user
       if (response.status === 401 || response.status === 404) {
         console.log('⚠️ API key not found in external API (401/404), treating as free user');
@@ -99,7 +99,7 @@ export const validateSubscription = async apiKey => {
             userId: 'user_' + apiKey.substring(0, 8),
             email: 'user@free.com',
             name: 'Free User',
-            subscriptionType: 'free'
+            subscriptionType: 'free',
           },
         };
         console.log('✅ Returning free user data:', freeUserData);
@@ -113,17 +113,20 @@ export const validateSubscription = async apiKey => {
 
     const userData = await response.json();
     console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
-    
+
     // Check if response contains error (some APIs return 200 with error field)
     if (userData.error) {
-      console.log('⚠️ External API returned error in 200 response, treating as free user:', userData.error);
+      console.log(
+        '⚠️ External API returned error in 200 response, treating as free user:',
+        userData.error
+      );
       const freeUserData = {
         valid: true,
         userData: {
           userId: 'user_' + apiKey.substring(0, 8),
           email: 'user@free.com',
           name: 'Free User',
-          subscriptionType: 'free'
+          subscriptionType: 'free',
         },
       };
       console.log('✅ Returning free user data due to API error:', freeUserData);
@@ -160,7 +163,7 @@ export const validateSubscription = async apiKey => {
         userId: 'user_' + apiKey.substring(0, 8),
         email: 'user@free.com',
         name: 'Free User',
-        subscriptionType: 'free'
+        subscriptionType: 'free',
       },
     };
     console.log('✅ Returning fallback data due to error:', fallbackData);
@@ -172,7 +175,11 @@ export const validateSubscription = async apiKey => {
 // Get subscription limits for a user based on subscription type
 export const getSubscriptionLimits = subscriptionType => {
   // If subscriptionType is null, undefined, or not found, return free plan limits
-  if (subscriptionType === null || subscriptionType === undefined || !PLAN_LIMITS[subscriptionType]) {
+  if (
+    subscriptionType === null ||
+    subscriptionType === undefined ||
+    !PLAN_LIMITS[subscriptionType]
+  ) {
     return PLAN_LIMITS['free']; // Free plan limits
   }
   return PLAN_LIMITS[subscriptionType];
@@ -232,21 +239,34 @@ export const requireValidSubscription = async (req, res, next) => {
     // Check if we have a cached validation result that's still valid
     const cachedValidation = subscriptionCache.get(apiKey);
     const now = Date.now();
-    
-    if (cachedValidation && (now - cachedValidation.timestamp < CACHE_DURATION)) {
-      console.log('📋 Using cached subscription validation for key:', apiKey.substring(0, 8) + '...');
-      console.log('⏱️ Cache age:', Math.round((now - cachedValidation.timestamp) / 1000 / 60), 'minutes');
-      
+
+    if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
+      // Use cached validation data silently (only log in debug mode)
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          '📋 Using cached subscription validation for key:',
+          apiKey.substring(0, 8) + '...'
+        );
+        console.log(
+          '⏱️ Cache age:',
+          Math.round((now - cachedValidation.timestamp) / 1000 / 60),
+          'minutes'
+        );
+      }
+
       // Use cached validation data
       req.user = cachedValidation.userData;
       req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
       req.apiKey = apiKey;
-      
+
       return next();
     }
 
     // No cache or cache expired, perform validation
-    console.log('🔄 Cache miss or expired, validating subscription for:', apiKey.substring(0, 8) + '...');
+    console.log(
+      '🔄 Cache miss or expired, validating subscription for:',
+      apiKey.substring(0, 8) + '...'
+    );
     const validation = await validateSubscription(apiKey);
 
     if (!validation.valid) {
@@ -259,9 +279,9 @@ export const requireValidSubscription = async (req, res, next) => {
     // Store in cache with current timestamp
     subscriptionCache.set(apiKey, {
       userData: validation.userData,
-      timestamp: now
+      timestamp: now,
     });
-    
+
     console.log('💾 Stored validation result in cache, valid for 12 hours');
 
     // Attach user info, subscription limits, and apiKey to request
@@ -273,7 +293,7 @@ export const requireValidSubscription = async (req, res, next) => {
   } catch (error) {
     console.error('Error in requireValidSubscription middleware:', error);
     return res.status(500).json({
-      error: 'Internal server error validating subscription'
+      error: 'Internal server error validating subscription',
     });
   }
 };
@@ -354,5 +374,5 @@ export default {
   requireValidSubscription,
   checkAccountLimits,
   enforceLotSizeRestrictions,
-  subscriptionCache
+  subscriptionCache,
 };

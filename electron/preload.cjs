@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartApp: () => ipcRenderer.invoke('restart-app'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // API para abrir enlaces externos
+  openExternalLink: url => ipcRenderer.invoke('open-external-link', url),
+
   // Listeners para eventos de actualización
   onUpdateAvailable: callback => {
     ipcRenderer.on('update-available', (event, info) => callback(info));

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -75,6 +75,17 @@ ipcMain.handle('check-for-updates', async () => {
     return await autoUpdater.checkForUpdatesAndNotify();
   }
   return null;
+});
+
+// Handler para abrir enlaces externos
+ipcMain.handle('open-external-link', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external link:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.handle('download-update', async () => {
@@ -160,6 +171,12 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
+  });
+
+  // Manejar enlaces externos
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   if (isDev) {

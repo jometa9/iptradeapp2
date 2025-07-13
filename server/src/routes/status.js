@@ -1,7 +1,7 @@
 import express from 'express';
 
 import { getStatus } from '../controllers/statusController.js';
-import { validateSubscription, subscriptionCache } from '../middleware/subscriptionAuth.js';
+import { subscriptionCache, validateSubscription } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -39,12 +39,7 @@ router.get('/status', getStatus);
  */
 router.get('/validate-subscription', async (req, res) => {
   console.log('🔍 === VALIDATE-SUBSCRIPTION ROUTE START ===');
-  console.log('📝 Request details:');
-  console.log('  - Method:', req.method);
-  console.log('  - URL:', req.url);
-  console.log('  - Headers:', req.headers);
-  console.log('  - Query params:', req.query);
-  
+
   const { apiKey } = req.query;
   const forceRefresh = req.query.force === 'true'; // Optional parameter to force cache refresh
 
@@ -60,6 +55,19 @@ router.get('/validate-subscription', async (req, res) => {
   }
 
   try {
+    // Check if we should use cache or force refresh
+    if (!forceRefresh) {
+      const cachedValidation = subscriptionCache.get(apiKey);
+      const now = Date.now();
+      const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours
+
+      if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
+        console.log('📋 Using cached validation for frontend request');
+        console.log('🔍 === VALIDATE-SUBSCRIPTION ROUTE END (CACHED) ===');
+        return res.status(200).json(cachedValidation.userData);
+      }
+    }
+
     // This is the login/initial validation - always refresh cache on direct API calls
     console.log('🔄 Calling validateSubscription function...');
     const validation = await validateSubscription(apiKey);
@@ -101,20 +109,20 @@ router.get('/validate-subscription', async (req, res) => {
  */
 router.post('/clear-subscription-cache', (req, res) => {
   const { apiKey } = req.query;
-  
+
   if (apiKey) {
     // Clear specific API key's cache
     if (subscriptionCache.has(apiKey)) {
       subscriptionCache.delete(apiKey);
       console.log(`🧹 Cleared subscription cache for key: ${apiKey.substring(0, 8)}...`);
-      return res.status(200).json({ 
+      return res.status(200).json({
         message: 'Cache cleared for specific API key',
-        cleared: true
+        cleared: true,
       });
     } else {
-      return res.status(404).json({ 
+      return res.status(404).json({
         message: 'No cache found for the specified API key',
-        cleared: false
+        cleared: false,
       });
     }
   } else {
@@ -122,10 +130,10 @@ router.post('/clear-subscription-cache', (req, res) => {
     const cacheSize = subscriptionCache.size;
     subscriptionCache.clear();
     console.log(`🧹 Cleared entire subscription cache (${cacheSize} entries)`);
-    return res.status(200).json({ 
+    return res.status(200).json({
       message: `Cleared entire subscription cache (${cacheSize} entries)`,
       cleared: true,
-      entriesCleared: cacheSize
+      entriesCleared: cacheSize,
     });
   }
 });

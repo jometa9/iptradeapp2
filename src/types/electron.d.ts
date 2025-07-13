@@ -30,6 +30,25 @@ export interface ElectronAPI {
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI?: {
+      // APIs de actualización
+      checkForUpdates: () => Promise<any>;
+      downloadUpdate: () => Promise<any>;
+      restartApp: () => Promise<any>;
+      getAppVersion: () => Promise<string>;
+
+      // API para abrir enlaces externos
+      openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
+
+      // Listeners para eventos de actualización
+      onUpdateAvailable: (callback: (info: any) => void) => void;
+      onDownloadProgress: (callback: (progress: any) => void) => void;
+      onUpdateDownloaded: (callback: (info: any) => void) => void;
+
+      // Remover listeners
+      removeAllListeners: (channel: string) => void;
+    };
   }
 }
+
+export {};

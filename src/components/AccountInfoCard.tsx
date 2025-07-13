@@ -41,6 +41,7 @@ export function AccountInfoCard({
   const [isLoading, setIsLoading] = useState(false);
   const [isPortalLoading, setIsPortalLoading] = useState(false);
   const [userData, setUserData] = useState<UserInfo | null>(null);
+  const { openExternalLink } = useExternalLink();
 
   useEffect(() => {
     if (user && Object.keys(user).length > 0) {
@@ -82,7 +83,7 @@ export function AccountInfoCard({
       });
 
       // Simular redirección externa
-      window.open('https://iptradecopier.com/pricing', '_blank');
+      openExternalLink('https://iptradecopier.com/pricing');
 
       setIsPortalLoading(false);
     } catch (error) {
@@ -115,7 +116,7 @@ export function AccountInfoCard({
       if (onGoToPricing) {
         onGoToPricing();
       } else {
-        window.open('https://iptradecopier.com/pricing', '_blank');
+        openExternalLink('https://iptradecopier.com/pricing');
       }
 
       setIsLoading(false);

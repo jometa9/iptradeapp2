@@ -49,15 +49,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('🌍 Environment variables:');
     console.log('  - VITE_LICENSE_API_URL:', import.meta.env.VITE_LICENSE_API_URL);
     console.log('  - VITE_APP_ENV:', import.meta.env.VITE_APP_ENV);
-    
+
     try {
       const baseEndpoint =
         import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
-      
+
       console.log('🔗 Constructed base endpoint:', baseEndpoint);
       console.log('🎯 Full request URL:', url);
-      
+
       const requestStart = Date.now();
       console.log('📡 Making request to:', url);
       const response = await fetch(url);
@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!response.ok) {
         console.log('❌ Response not ok - status:', response.status);
-        
+
         if (response.status === 401) {
           console.log('401 - Invalid API Key');
           return { valid: false, message: 'Invalid API Key' };
@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const userData: UserInfo = await response.json();
       console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
-      
+
       // Validate that we have the required fields
       if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
         console.log('❌ Missing required fields in user data');
@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('❌ Invalid subscription type:', userData.subscriptionType);
         return { valid: false, message: 'Invalid subscription type' };
       }
-      
+
       console.log('🔍 Subscription validation details:');
       console.log('  - Subscription type:', userData.subscriptionType);
       console.log('  - Valid types:', VALID_SUBSCRIPTION_TYPES);
@@ -113,7 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('💥 Error details:', error);
 
       // Solo error de conexión real - no mock data
-      const errorMessage = 'Connection error. Check your internet connection and ensure the server is running.';
+      const errorMessage =
+        'Connection error. Check your internet connection and ensure the server is running.';
       console.log('❌ Returning connection error:', errorMessage);
       console.log('🔍 === FRONTEND LICENSE VALIDATION END (CONNECTION ERROR) ===');
       return {
@@ -184,9 +185,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const lastValidation = localStorage.getItem(lastValidationKey);
         const now = Date.now();
 
-        // Only revalidate if it's been more than 5 minutes since last validation
-        if (lastValidation && now - parseInt(lastValidation) < 5 * 60 * 1000) {
-          console.log('🕒 Using cached license validation (less than 5 minutes old)');
+        // Only revalidate if it's been more than 12 hours since last validation
+        if (lastValidation && now - parseInt(lastValidation) < 12 * 60 * 60 * 1000) {
+          console.log('🕒 Using cached license validation (less than 12 hours old)');
           // Try to get cached user info
           const cachedUserInfo = localStorage.getItem(`${STORAGE_KEY}_user_info`);
           if (cachedUserInfo) {
@@ -196,6 +197,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUserInfo(userInfo);
               setIsAuthenticated(true);
               setIsLoading(false);
+
+              // Set up timer for next validation in 12 hours
+              const timeUntilNextValidation =
+                12 * 60 * 60 * 1000 - (now - parseInt(lastValidation));
+              if (timeUntilNextValidation > 0) {
+                setTimeout(() => {
+                  console.log('⏰ 12 hours passed, revalidating license...');
+                  validateLicense(storedKey).then(validation => {
+                    if (validation.valid && validation.userInfo) {
+                      setUserInfo(validation.userInfo);
+                      localStorage.setItem(lastValidationKey, Date.now().toString());
+                      localStorage.setItem(
+                        `${STORAGE_KEY}_user_info`,
+                        JSON.stringify(validation.userInfo)
+                      );
+                    } else {
+                      // License expired, logout user
+                      logout();
+                    }
+                  });
+                }, timeUntilNextValidation);
+              }
+
               return;
             } catch (parseError) {
               console.warn('Failed to parse cached user info:', parseError);
@@ -215,6 +239,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Cache the validation timestamp and user info
             localStorage.setItem(lastValidationKey, now.toString());
             localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
+
+            // Set up timer for next validation in 12 hours
+            setTimeout(
+              () => {
+                console.log('⏰ 12 hours passed, revalidating license...');
+                validateLicense(storedKey).then(validation => {
+                  if (validation.valid && validation.userInfo) {
+                    setUserInfo(validation.userInfo);
+                    localStorage.setItem(lastValidationKey, Date.now().toString());
+                    localStorage.setItem(
+                      `${STORAGE_KEY}_user_info`,
+                      JSON.stringify(validation.userInfo)
+                    );
+                  } else {
+                    // License expired, logout user
+                    logout();
+                  }
+                });
+              },
+              12 * 60 * 60 * 1000
+            );
           } else {
             // Licencia expirada o inválida
             localStorage.removeItem(STORAGE_KEY);
