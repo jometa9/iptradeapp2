@@ -118,18 +118,30 @@ x-api-key: IPTRADE_APIKEY
 *Note: Response is CSV format where each line represents an order. First line is counter, following lines are: [orderId,symbol,type,lot,price,sl,tp,timestamp,account]*
 
 **Response (when master is offline or no orders):**
+
+**Master Offline/Not Registered:**
 ```
 0
 ```
-*Note: Returns "0" (special response, NOT the counter) when:*
+
+**Master Online but No Orders:**
+```
+[3]
+```
+*Note: Returns "0" (special response) when:*
 - *Master account is offline*
-- *Master has no pending orders*
 - *Slave account is not registered*
 - *Master account is not registered*
 - *Copier is disabled for master*
+
+*Note: Returns "[counter]" (only counter) when:*
+- *Master is online but has no pending orders*
 - *All orders are filtered out by slave configuration*
 
-**Important:** The "0" response is **NOT** the counter from the CSV format. It's a special server response indicating "no orders available". The EA should **NOT** close existing positions when receiving "0" - it only means no new orders are available.
+**Important:** 
+- The "0" response is **NOT** the counter from the CSV format. It's a special server response indicating "no orders available".
+- The "[counter]" response means "master is online but no new orders available".
+- The EA should **NOT** close existing positions when receiving either response - it only means no new orders are available.
 
 #### 2. Process Received Orders
 **Description:** No need to confirm to server - slave simply executes received orders in MT4/MT5 platform.
@@ -263,10 +275,10 @@ bool GetPendingOrders()
 
    if(res == 200)
    {
-      // Check for empty response (master offline or no orders)
+      // Check for empty response (master offline or not registered)
       if(result_string == "0")
       {
-         UpdateChartMessage("⏸️ IPTRADE STATUS: NO ORDERS\\nMaster offline or no pending orders\\nExisting positions maintained");
+         UpdateChartMessage("⏸️ IPTRADE STATUS: NO ORDERS\\nMaster offline or not registered\\nExisting positions maintained");
          return true; // Success but no orders - DO NOT close existing positions
       }
       
@@ -295,6 +307,11 @@ bool GetPendingOrders()
                }
             }
          }
+      }
+      else if(lineCount == 1 && StringFind(lines[0], "[") >= 0)
+      {
+         // Only counter received (master online but no orders)
+         UpdateChartMessage("⏸️ IPTRADE STATUS: NO ORDERS\\nMaster online but no pending orders\\nExisting positions maintained");
       }
       else
       {
@@ -1032,7 +1049,7 @@ When a master account goes offline, the system automatically:
 
 ### Position Management
 
-**Important:** The "0" response means "no new orders available", NOT "close all positions".
+**Important:** Both "0" and "[counter]" responses mean "no new orders available", NOT "close all positions".
 
 **Slave EA should:**
 - ✅ **Keep all existing positions open**
@@ -1041,10 +1058,18 @@ When a master account goes offline, the system automatically:
 - ✅ **Wait for master to come back online**
 
 **Slave EA should NOT:**
-- ❌ **Close existing positions when receiving "0"**
+- ❌ **Close existing positions when receiving "0" or "[counter]"**
 - ❌ **Modify existing stop loss or take profit**
 - ❌ **Stop monitoring for new orders**
 - ❌ **Assume master is permanently offline**
+
+### Response Types
+
+| Response | Meaning | Master Status | Action |
+|----------|---------|---------------|--------|
+| `"0"` | No orders available | **Offline/Not Registered** | Keep positions, continue monitoring |
+| `"[3]"` | No orders available | **Online but No Orders** | Keep positions, continue monitoring |
+| `"[1]\n[order1]\n[order2]"` | Orders available | **Online with Orders** | Execute new orders |
 
 **Slave EA Behavior when Master is Offline:**
 - Receives `"0"` response from `/orders/neworder` endpoint

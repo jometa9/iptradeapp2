@@ -461,11 +461,11 @@ export const getOrders = (req, res) => {
         }
       }
 
-      // If no orders passed the filter, return empty
+      // If no orders passed the filter, return only counter (master online but no orders)
       if (transformedContent === lines[0]) {
         res.setHeader('Content-Type', 'text/plain');
-        console.log(`All orders filtered out for slave ${slaveId} from master ${masterAccount}`);
-        return res.send('0');
+        console.log(`All orders filtered out for slave ${slaveId} from master ${masterAccount} - returning counter only`);
+        return res.send(lines[0]); // Return only the counter [X]
       }
 
       res.setHeader('Content-Type', 'text/plain');
