@@ -20,7 +20,7 @@
 
 ### Base URL
 ```
-http://localhost:3000/api
+http://localhost:80/api
 ```
 
 ### Required Headers
@@ -110,12 +110,26 @@ x-account-id: {slaveAccountId}
 x-api-key: IPTRADE_APIKEY
 ```
 
-**Response:**
+**Response (when master is online and has orders):**
 ```
 [1]
 [12345,EURUSD,buy,0.1,1.12345,1.12000,1.13000,1704110400,master_123]
 ```
 *Note: Response is CSV format where each line represents an order. First line is counter, following lines are: [orderId,symbol,type,lot,price,sl,tp,timestamp,account]*
+
+**Response (when master is offline or no orders):**
+```
+0
+```
+*Note: Returns "0" (special response, NOT the counter) when:*
+- *Master account is offline*
+- *Master has no pending orders*
+- *Slave account is not registered*
+- *Master account is not registered*
+- *Copier is disabled for master*
+- *All orders are filtered out by slave configuration*
+
+**Important:** The "0" response is **NOT** the counter from the CSV format. It's a special server response indicating "no orders available". The EA should **NOT** close existing positions when receiving "0" - it only means no new orders are available.
 
 #### 2. Process Received Orders
 **Description:** No need to confirm to server - slave simply executes received orders in MT4/MT5 platform.
@@ -249,31 +263,65 @@ bool GetPendingOrders()
 
    if(res == 200)
    {
+      // Check for empty response (master offline or no orders)
+      if(result_string == "0")
+      {
+         UpdateChartMessage("⏸️ IPTRADE STATUS: NO ORDERS\\nMaster offline or no pending orders\\nExisting positions maintained");
+         return true; // Success but no orders - DO NOT close existing positions
+      }
+      
       // Parse CSV format
       // First line is counter [1]
       // Following lines are orders [id,symbol,type,lot,price,sl,tp,timestamp,account]
       string lines[];
       int lineCount = StringSplit(result_string, '\n', lines);
       
-      for(int i = 1; i < lineCount; i++) // Skip counter line
+      if(lineCount > 1) // Has orders (more than just counter)
       {
-         if(StringLen(lines[i]) > 0 && StringFind(lines[i], "[") >= 0)
+         UpdateChartMessage("📈 IPTRADE STATUS: ORDERS RECEIVED\\nProcessing new trades from master");
+         
+         for(int i = 1; i < lineCount; i++) // Skip counter line
          {
-            string cleanLine = StringSubstr(lines[i], 1, StringLen(lines[i]) - 2); // Remove []
-            string fields[];
-            int fieldCount = StringSplit(cleanLine, ',', fields);
-            
-            if(fieldCount >= 7)
+            if(StringLen(lines[i]) > 0 && StringFind(lines[i], "[") >= 0)
             {
-               // Execute order: fields[0]=id, fields[1]=symbol, fields[2]=type, etc.
-               ExecuteSlaveOrder(fields);
+               string cleanLine = StringSubstr(lines[i], 1, StringLen(lines[i]) - 2); // Remove []
+               string fields[];
+               int fieldCount = StringSplit(cleanLine, ',', fields);
+               
+               if(fieldCount >= 7)
+               {
+                  // Execute order: fields[0]=id, fields[1]=symbol, fields[2]=type, etc.
+                  ExecuteSlaveOrder(fields);
+               }
             }
          }
+      }
+      else
+      {
+         UpdateChartMessage("⏸️ IPTRADE STATUS: NO ORDERS\\nNo pending orders from master\\nExisting positions maintained");
       }
       return true;
    }
 
    return false;
+}
+
+// Function to execute slave order (example)
+void ExecuteSlaveOrder(string &fields[])
+{
+   // fields[0] = orderId
+   // fields[1] = symbol
+   // fields[2] = type (buy/sell)
+   // fields[3] = lot
+   // fields[4] = price
+   // fields[5] = stopLoss
+   // fields[6] = takeProfit
+   // fields[7] = timestamp
+   // fields[8] = masterAccount
+   
+   // Execute the order in MT4/MT5
+   // This is just an example - implement according to your EA logic
+   Print("Executing order: ", fields[1], " ", fields[2], " ", fields[3], " lots");
 }
 ```
 
@@ -483,14 +531,138 @@ bool PingServer()
 
 ## 🔧 Advanced Configuration
 
-### Recommended EA Variables:
+### Fixed Variables (Defined by System)
+
+These variables are **FIXED** and should **NOT** be changed by users:
+
 ```mql5
-input string API_BASE_URL = "http://localhost:3000/api";
-input string API_KEY = "IPTRADE_APIKEY";  // Fixed API key for all accounts
-input int PING_INTERVAL = 30;        // seconds
-input int POLL_INTERVAL = 5;         // seconds (slaves only)
-input int MAX_RETRIES = 3;
-input bool ENABLE_COPY_TRADING = true;
+// FIXED VARIABLES - DO NOT MODIFY
+#define API_BASE_URL "http://localhost:80/api"
+#define API_KEY "IPTRADE_APIKEY"
+#define PING_INTERVAL 50        // seconds - fixed by system
+#define POLL_INTERVAL 5         // seconds - fixed by system (slaves only)
+#define MAX_RETRIES 3           // fixed by system
+#define STATUS_CHECK_INTERVAL 60 // seconds - fixed by system (pending accounts)
+#define CONNECTION_TIMEOUT 5000  // milliseconds - fixed by system
+#define RETRY_DELAY 30          // seconds - fixed by system
+```
+
+### System-Defined Intervals
+
+The following intervals are **automatically managed** by the system:
+
+| Interval | Value | Purpose | Account Type |
+|----------|-------|---------|--------------|
+| **PING_INTERVAL** | 30 seconds | Keep-alive ping | All accounts |
+| **POLL_INTERVAL** | 5 seconds | Check for new orders | Slave accounts only |
+| **STATUS_CHECK_INTERVAL** | 60 seconds | Check account status | Pending accounts only |
+| **CONNECTION_TIMEOUT** | 5 seconds | HTTP request timeout | All accounts |
+| **RETRY_DELAY** | 30 seconds | Wait before retry | All accounts (on error) |
+| **MAX_RETRIES** | 3 attempts | Maximum retry attempts | All accounts |
+
+### User-Configurable Variables (Optional)
+
+These variables can be modified by users if needed:
+
+```mql5
+// USER-CONFIGURABLE VARIABLES (Optional)
+input bool ENABLE_DEBUG_MODE = false;     // Enable detailed logging
+input bool SHOW_CHART_MESSAGES = true;    // Show status on chart
+input string CUSTOM_SERVER_URL = "";      // Override server URL (advanced users only)
+```
+
+### Implementation Example
+
+```mql5
+// Global variables (system-managed)
+string g_lastStatus = "";
+string g_lastError = "";
+datetime g_lastUpdate = 0;
+int g_retryCount = 0;
+bool g_isConnected = false;
+
+// Timer variables (system-managed)
+datetime g_lastPing = 0;
+datetime g_lastPoll = 0;
+datetime g_lastStatusCheck = 0;
+
+// Function to check if it's time to ping
+bool ShouldPing()
+{
+   return (TimeCurrent() - g_lastPing) >= PING_INTERVAL;
+}
+
+// Function to check if it's time to poll (slaves only)
+bool ShouldPoll()
+{
+   return (TimeCurrent() - g_lastPoll) >= POLL_INTERVAL;
+}
+
+// Function to check if it's time to check status (pending only)
+bool ShouldCheckStatus()
+{
+   return (TimeCurrent() - g_lastStatusCheck) >= STATUS_CHECK_INTERVAL;
+}
+
+// Function to handle retry logic
+void HandleRetry(string operation)
+{
+   if(g_retryCount < MAX_RETRIES)
+   {
+      g_retryCount++;
+      if(ENABLE_DEBUG_MODE)
+         Print("Retrying ", operation, " (attempt ", g_retryCount, "/", MAX_RETRIES, ")");
+      
+      // Wait before retry
+      Sleep(RETRY_DELAY * 1000);
+   }
+   else
+   {
+      g_retryCount = 0;
+      UpdateChartMessage("", "MAX RETRIES REACHED\nCheck connection and settings");
+   }
+}
+```
+
+### Automatic Interval Management
+
+The EA automatically manages these intervals based on account type:
+
+#### For Master Accounts:
+- **Ping every 30 seconds** → Keep connection alive
+- **Send orders immediately** → When trades are opened
+- **Status check every 60 seconds** → Verify account status
+
+#### For Slave Accounts:
+- **Ping every 30 seconds** → Keep connection alive
+- **Poll every 5 seconds** → Check for new orders from master
+- **Status check every 60 seconds** → Verify account status
+
+#### For Pending Accounts:
+- **Ping every 30 seconds** → Keep connection alive
+- **Status check every 60 seconds** → Check if admin has configured account
+- **No polling** → Cannot receive orders until configured
+
+### Error Handling with Fixed Intervals
+
+```mql5
+// Function to handle connection errors with fixed retry logic
+void HandleConnectionError(string error)
+{
+   g_isConnected = false;
+   g_retryCount++;
+   
+   if(g_retryCount <= MAX_RETRIES)
+   {
+      UpdateChartMessage("", "CONNECTION ERROR\nRetrying in " + IntegerToString(RETRY_DELAY) + " seconds");
+      Sleep(RETRY_DELAY * 1000);
+   }
+   else
+   {
+      UpdateChartMessage("", "CONNECTION FAILED\nMax retries reached\nCheck settings");
+      g_retryCount = 0;
+   }
+}
 ```
 
 ### Connectivity Test:
@@ -829,10 +1001,65 @@ void HandleAPIResponse(int responseCode, string response)
 
 ### Status Update Frequency
 
-- **Normal operation:** Update every 30 seconds
+- **Normal operation:** Update every 50 seconds (ping interval)
 - **Error state:** Update immediately
 - **Retry mode:** Update every 5 seconds
 - **Pending account:** Update every 60 seconds
+
+### Server Activity Monitoring
+
+The server monitors account activity with the following settings:
+
+- **Activity Timeout:** 60 seconds (accounts marked offline after 60s of inactivity)
+- **Check Frequency:** Every 10 seconds (server checks activity status)
+- **EA Ping Interval:** 50 seconds (EA sends ping every 50s)
+- **Buffer Time:** 10 seconds (allows for network delays and timing variations)
+
+This configuration ensures:
+- EA has enough time to send pings (50s interval)
+- Server detects offline accounts quickly (60s timeout)
+- Minimal false positives from network delays
+
+### Master Offline Handling
+
+When a master account goes offline, the system automatically:
+
+1. **Marks master as offline** after 60 seconds of inactivity
+2. **Disables copy trading** for that master account
+3. **Slaves receive "0" response** when requesting orders
+4. **No new orders are processed** until master comes back online
+5. **Existing orders remain** in the system but are not sent to slaves
+
+### Position Management
+
+**Important:** The "0" response means "no new orders available", NOT "close all positions".
+
+**Slave EA should:**
+- ✅ **Keep all existing positions open**
+- ✅ **Continue monitoring for new orders**
+- ✅ **Maintain stop loss and take profit levels**
+- ✅ **Wait for master to come back online**
+
+**Slave EA should NOT:**
+- ❌ **Close existing positions when receiving "0"**
+- ❌ **Modify existing stop loss or take profit**
+- ❌ **Stop monitoring for new orders**
+- ❌ **Assume master is permanently offline**
+
+**Slave EA Behavior when Master is Offline:**
+- Receives `"0"` response from `/orders/neworder` endpoint
+- Should display appropriate message to user
+- Should continue polling but expect no orders
+- Should **NOT** close existing positions (only no new orders)
+- Should **NOT** attempt to execute any new trades
+- Should wait for master to come back online
+- Should maintain all existing open positions
+
+**Master EA Behavior when Coming Back Online:**
+- Sends ping to `/accounts/ping` endpoint
+- System automatically re-enables copy trading
+- New orders will be sent to slaves again
+- Previous orders are not resent (only new orders)
 
 ### User-Friendly Messages
 
@@ -859,10 +1086,3 @@ void HandleAPIResponse(int responseCode, string response)
 ```
 
 ---
-
-## 🆘 Support
-
-For questions or issues:
-- Swagger UI: `http://localhost:3000/api-docs`
-- Server logs: Check backend console
-- System status: `GET /api/status`

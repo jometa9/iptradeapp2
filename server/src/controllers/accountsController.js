@@ -131,7 +131,7 @@ export const getSlaveConnection = (apiKey, slaveAccountId) => {
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
 // Activity monitoring configuration
-const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
+const ACTIVITY_TIMEOUT = 60000; // 60 seconds in milliseconds (allows for EA ping interval of 50s + buffer)
 
 // Check and update account status based on activity
 const checkAccountActivity = () => {

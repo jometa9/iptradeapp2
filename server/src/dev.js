@@ -64,10 +64,10 @@ async function startDevServer() {
         console.log(`🔗 Health check: http://localhost:${DEV_PORT}/api/status`);
 
         // Start periodic account activity monitoring
-        console.log('🔍 Starting account activity monitoring (5-second timeout)...');
+        console.log('🔍 Starting account activity monitoring (60-second timeout, checking every 10 seconds)...');
         setInterval(() => {
           checkAccountActivity();
-        }, 5000);
+        }, 10000);
 
         resolve(server);
       });
