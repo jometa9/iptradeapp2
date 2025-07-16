@@ -1,43 +1,44 @@
-# IPTRADE API - MetaTrader EA Integration Guide
+# IPTRADE API - Expert Advisor Integration Guide
 
-> **Documentación completa de endpoints para EA de MetaTrader**
-> Versión: 1.0.0
-> Fecha: 2024
+> **Complete documentation for MetaTrader Expert Advisors**
+> Version: 1.0.0
+> Date: 2024
 
-## 📋 Índice
+## 📋 Table of Contents
 
-1. [Configuración inicial](#configuración-inicial)
-2. [Autenticación](#autenticación)
-3. [Endpoints principales](#endpoints-principales)
-4. [Flujo de trabajo](#flujo-de-trabajo)
-5. [Ejemplos de código](#ejemplos-de-código)
-6. [Códigos de error](#códigos-de-error)
+1. [Initial Setup](#initial-setup)
+2. [Authentication](#authentication)
+3. [Main Endpoints](#main-endpoints)
+4. [Workflow](#workflow)
+5. [Code Examples](#code-examples)
+6. [Error Codes](#error-codes)
+7. [Response Messages](#response-messages)
 
 ---
 
-## 🔧 Configuración inicial
+## 🔧 Initial Setup
 
-### Base URL del API
+### Base URL
 ```
 http://localhost:3000/api
 ```
 
-### Headers requeridos
+### Required Headers
 ```http
 Content-Type: application/json
 x-account-id: {accountId}
 x-api-key: IPTRADE_APIKEY
 ```
 
-> **🔑 API Key único**: Todas las cuentas MT4/MT5 deben usar el mismo API key fijo `IPTRADE_APIKEY` para autenticar sus requests. Este key valida que las órdenes vienen de fuentes autorizadas, mientras que `x-account-id` identifica la cuenta específica.
+> **🔑 Fixed API Key**: All MT4/MT5 accounts must use the same fixed API key `IPTRADE_APIKEY` to authenticate their requests. This key validates that orders come from authorized sources, while `x-account-id` identifies the specific account.
 
 ---
 
-## 🔐 Autenticación
+## 🔐 Authentication
 
-### 1. Verificar tipo de cuenta
+### 1. Check Account Type
 **Endpoint:** `GET /orders/account-type`
-**Descripción:** Primer endpoint que debe llamar el EA para identificar si es master, slave o pending.
+**Description:** First endpoint that EA must call to identify if it's master, slave, or pending.
 
 ```http
 GET /api/orders/account-type
@@ -45,43 +46,53 @@ x-account-id: {accountId}
 x-api-key: IPTRADE_APIKEY
 ```
 
-**Respuestas:**
-- **Cuenta pendiente (nueva):**
+**Responses:**
+
+#### Pending Account (New):
 ```json
 {
   "accountId": "123456",
   "type": "pending",
   "status": "awaiting_configuration",
   "message": "Account detected and registered as pending - awaiting configuration",
+  "permissions": [],
   "nextSteps": [
     "Account has been automatically registered as pending",
-    "Administrator must configure this account as master or slave"
-  ]
+    "Administrator must configure this account as master or slave",
+    "Contact administrator to complete setup",
+    "EA will remain in standby mode until configured"
+  ],
+  "adminEndpoints": {
+    "viewPending": "GET /api/accounts/pending",
+    "convertToMaster": "POST /api/accounts/pending/{accountId}/to-master",
+    "convertToSlave": "POST /api/accounts/pending/{accountId}/to-slave"
+  }
 }
 ```
 
-- **Cuenta configurada (master/slave):**
+#### Configured Account (Master/Slave):
 ```json
 {
   "accountId": "123456",
-  "type": "master", // o "slave"
+  "type": "master", // or "slave"
   "status": "active",
-  "permissions": ["POST /neworder (send trades)"], // o ["GET /neworder (receive trades)"]
+  "permissions": ["POST /neworder (send trades)"], // or ["GET /neworder (receive trades)"]
   "endpoints": {
-    "trading": "POST /api/orders/neworder" // o "GET /api/orders/neworder"
+    "checkType": "GET /api/orders/account-type",
+    "trading": "POST /api/orders/neworder" // or "GET /api/orders/neworder"
   }
 }
 ```
 
 ---
 
-## 📡 Endpoints principales
+## 📡 Main Endpoints
 
-### Para cuentas MASTER
+### For MASTER Accounts
 
-#### 1. Enviar nueva orden
+#### 1. Send New Order
 **Endpoint:** `POST /orders/neworder`
-**Descripción:** Envía una nueva orden de trading que será copiada a las cuentas slave conectadas.
+**Description:** Sends a new trading order that will be copied to connected slave accounts.
 
 ```http
 POST /api/orders/neworder
@@ -92,13 +103,13 @@ Content-Type: application/x-www-form-urlencoded
 counter=1&id0=12345&sym0=EURUSD&typ0=buy&lot0=0.1&price0=1.12345&sl0=1.12000&tp0=1.13000&account0={masterAccountId}
 ```
 
-**Respuesta:**
+**Response:**
 ```
 OK
 ```
-*Nota: La respuesta es texto plano "OK" cuando la orden se procesa exitosamente.*
+*Note: Response is plain text "OK" when order is processed successfully.*
 
-#### 2. Obtener configuración de trading
+#### 2. Get Trading Configuration
 **Endpoint:** `GET /trading-config/{masterAccountId}`
 
 ```http
@@ -107,11 +118,11 @@ x-account-id: master_123
 x-api-key: IPTRADE_APIKEY
 ```
 
-### Para cuentas SLAVE
+### For SLAVE Accounts
 
-#### 1. Recibir órdenes pendientes
+#### 1. Receive Pending Orders
 **Endpoint:** `GET /orders/neworder`
-**Descripción:** Obtiene las órdenes que debe copiar desde su cuenta master.
+**Description:** Gets orders that should be copied from its master account.
 
 ```http
 GET /api/orders/neworder
@@ -119,21 +130,21 @@ x-account-id: {slaveAccountId}
 x-api-key: IPTRADE_APIKEY
 ```
 
-**Respuesta:**
+**Response:**
 ```
 [1]
 [12345,EURUSD,buy,0.1,1.12345,1.12000,1.13000,1704110400,master_123]
 ```
-*Nota: La respuesta es formato CSV donde cada línea representa una orden. La primera línea es el contador, las siguientes son: [orderId,symbol,type,lot,price,sl,tp,timestamp,account]*
+*Note: Response is CSV format where each line represents an order. First line is counter, following lines are: [orderId,symbol,type,lot,price,sl,tp,timestamp,account]*
 
-#### 2. Procesar órdenes recibidas
-**Descripción:** No es necesario confirmar al servidor - el slave simplemente ejecuta las órdenes recibidas en su plataforma MT4/MT5.
+#### 2. Process Received Orders
+**Description:** No need to confirm to server - slave simply executes received orders in MT4/MT5 platform.
 
-### Para todas las cuentas
+### For All Accounts
 
 #### 1. Ping/Keep Alive
 **Endpoint:** `POST /accounts/ping`
-**Descripción:** Mantiene la conexión activa y reporta el estado del EA.
+**Description:** Keeps connection active and reports EA status.
 
 ```http
 POST /api/accounts/ping
@@ -147,7 +158,18 @@ Content-Type: application/json
 }
 ```
 
-#### 2. Verificar estado del servidor
+**Response:**
+```json
+{
+  "message": "Ping successful",
+  "accountId": "123456",
+  "accountType": "master",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "status": "active"
+}
+```
+
+#### 2. Check Server Status
 **Endpoint:** `GET /status`
 
 ```http
@@ -156,34 +178,34 @@ GET /api/status
 
 ---
 
-## 🔄 Flujo de trabajo
+## 🔄 Workflow
 
-### Para EA MASTER:
-1. **Inicialización:**
-   - Llamar `GET /orders/account-type` para verificar tipo
-   - Si es "pending", esperar configuración del admin
-   - Si es "master", continuar con el flujo
+### For MASTER EA:
+1. **Initialization:**
+   - Call `GET /orders/account-type` to verify type
+   - If "pending", wait for admin configuration
+   - If "master", continue with workflow
 
-2. **Trading activo:**
-   - Cuando abres una posición → `POST /orders/neworder`
-   - Cada 30 segundos → `POST /accounts/ping`
+2. **Active Trading:**
+   - When opening position → `POST /orders/neworder`
+   - Every 30 seconds → `POST /accounts/ping`
 
-### Para EA SLAVE:
-1. **Inicialización:**
-   - Llamar `GET /orders/account-type` para verificar tipo
-   - Si es "pending", esperar configuración del admin
-   - Si es "slave", continuar con el flujo
+### For SLAVE EA:
+1. **Initialization:**
+   - Call `GET /orders/account-type` to verify type
+   - If "pending", wait for admin configuration
+   - If "slave", continue with workflow
 
-2. **Copiar trades:**
-   - Cada 5 segundos → `GET /orders/neworder`
-   - Por cada orden recibida → Ejecutar en MT4/MT5
-   - Cada 30 segundos → `POST /accounts/ping`
+2. **Copy Trades:**
+   - Every 5 seconds → `GET /orders/neworder`
+   - For each received order → Execute in MT4/MT5
+   - Every 30 seconds → `POST /accounts/ping`
 
 ---
 
-## 💻 Ejemplos de código (MQL5)
+## 💻 Code Examples (MQL5)
 
-### Función para verificar tipo de cuenta
+### Function to Check Account Type
 ```mql5
 bool CheckAccountType()
 {
@@ -198,8 +220,8 @@ bool CheckAccountType()
 
    if(res == 200)
    {
-      // Parsear JSON response
-      // Determinar si es master, slave o pending
+      // Parse JSON response
+      // Determine if master, slave or pending
       return true;
    }
 
@@ -207,7 +229,7 @@ bool CheckAccountType()
 }
 ```
 
-### Función para enviar orden (Master)
+### Function to Send Order (Master)
 ```mql5
 bool SendOrderToAPI(string symbol, double volume, int type, double price, double sl, double tp, long orderId)
 {
@@ -232,7 +254,7 @@ bool SendOrderToAPI(string symbol, double volume, int type, double price, double
 }
 ```
 
-### Función para recibir órdenes (Slave)
+### Function to Receive Orders (Slave)
 ```mql5
 bool GetPendingOrders()
 {
@@ -247,23 +269,23 @@ bool GetPendingOrders()
 
    if(res == 200)
    {
-      // Parsear formato CSV
-      // Primera línea es el contador [1]
-      // Siguientes líneas son órdenes [id,symbol,type,lot,price,sl,tp,timestamp,account]
+      // Parse CSV format
+      // First line is counter [1]
+      // Following lines are orders [id,symbol,type,lot,price,sl,tp,timestamp,account]
       string lines[];
       int lineCount = StringSplit(result_string, '\n', lines);
       
-      for(int i = 1; i < lineCount; i++) // Saltar línea del contador
+      for(int i = 1; i < lineCount; i++) // Skip counter line
       {
          if(StringLen(lines[i]) > 0 && StringFind(lines[i], "[") >= 0)
          {
-            string cleanLine = StringSubstr(lines[i], 1, StringLen(lines[i]) - 2); // Remover []
+            string cleanLine = StringSubstr(lines[i], 1, StringLen(lines[i]) - 2); // Remove []
             string fields[];
             int fieldCount = StringSplit(cleanLine, ',', fields);
             
             if(fieldCount >= 7)
             {
-               // Ejecutar orden: fields[0]=id, fields[1]=symbol, fields[2]=type, etc.
+               // Execute order: fields[0]=id, fields[1]=symbol, fields[2]=type, etc.
                ExecuteSlaveOrder(fields);
             }
          }
@@ -275,34 +297,199 @@ bool GetPendingOrders()
 }
 ```
 
+### Function to Ping Server
+```mql5
+bool PingServer()
+{
+   string url = API_BASE_URL + "/accounts/ping";
+   string headers = "x-account-id: " + AccountInfoInteger(ACCOUNT_LOGIN) + "\r\n";
+   headers += "x-api-key: " + API_KEY + "\r\n";
+   headers += "Content-Type: application/json\r\n";
+
+   string postData = StringFormat(
+      "{\"status\":\"online\",\"lastActivity\":\"%s\"}",
+      TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS)
+   );
+
+   char post[], result[];
+   string result_string;
+
+   StringToCharArray(postData, post, 0, StringLen(postData));
+
+   int res = WebRequest("POST", url, headers, 5000, post, result, result_string);
+
+   return (res == 200);
+}
+```
+
 ---
 
-## ⚠️ Códigos de error
+## ⚠️ Error Codes
 
-| Código | Descripción | Acción recomendada |
-|--------|-------------|-------------------|
-| 200 | OK | Continuar |
-| 400 | Bad Request | Verificar formato de datos |
-| 401 | Unauthorized | Verificar account ID |
-| 403 | Forbidden | Verificar permisos de cuenta |
-| 404 | Not Found | Verificar endpoint |
-| 500 | Server Error | Reintentar después de 30s |
+| Code | Description | Action |
+|------|-------------|--------|
+| 200 | OK | Continue |
+| 400 | Bad Request | Check data format |
+| 401 | Unauthorized | Check account ID and API key |
+| 403 | Forbidden | Check account permissions |
+| 404 | Not Found | Check endpoint |
+| 500 | Server Error | Retry after 30s |
 
 ---
 
-## 🔧 Configuración avanzada
+## 📝 Response Messages
 
-### Variables del EA recomendadas:
+### Success Messages
+
+#### Account Type Check (Pending):
+```json
+{
+  "accountId": "123456",
+  "type": "pending",
+  "status": "awaiting_configuration",
+  "message": "Account detected and registered as pending - awaiting configuration",
+  "permissions": [],
+  "nextSteps": [
+    "Account has been automatically registered as pending",
+    "Administrator must configure this account as master or slave",
+    "Contact administrator to complete setup",
+    "EA will remain in standby mode until configured"
+  ]
+}
+```
+
+#### Account Type Check (Master):
+```json
+{
+  "accountId": "123456",
+  "type": "master",
+  "status": "active",
+  "permissions": ["POST /neworder (send trades)"],
+  "endpoints": {
+    "checkType": "GET /api/orders/account-type",
+    "trading": "POST /api/orders/neworder"
+  }
+}
+```
+
+#### Account Type Check (Slave):
+```json
+{
+  "accountId": "123456",
+  "type": "slave",
+  "status": "active",
+  "permissions": ["GET /neworder (receive trades)"],
+  "endpoints": {
+    "checkType": "GET /api/orders/account-type",
+    "trading": "GET /api/orders/neworder"
+  }
+}
+```
+
+#### Ping Response:
+```json
+{
+  "message": "Ping successful",
+  "accountId": "123456",
+  "accountType": "master",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "status": "active"
+}
+```
+
+### Error Messages
+
+#### 401 - Unauthorized:
+```json
+{
+  "error": "Account ID is required",
+  "message": "Please provide accountId in headers (x-account-id), query params, or request body"
+}
+```
+
+```json
+{
+  "error": "Invalid or missing API key",
+  "message": "Please provide the correct API key in x-api-key header"
+}
+```
+
+#### 403 - Forbidden (Pending Account):
+```json
+{
+  "error": "Account pending configuration",
+  "message": "This account is pending configuration. Please contact administrator to set up as master or slave.",
+  "accountType": "pending",
+  "status": "awaiting_configuration",
+  "nextSteps": [
+    "Contact administrator",
+    "Account will be configured as master or slave",
+    "Then EA can begin trading operations"
+  ]
+}
+```
+
+#### 403 - Forbidden (Wrong Account Type):
+```json
+{
+  "error": "Access denied",
+  "message": "POST requests (sending trades) are only allowed for master accounts",
+  "accountType": "slave",
+  "allowedMethods": ["GET"]
+}
+```
+
+```json
+{
+  "error": "Access denied",
+  "message": "GET requests (receiving trades) are only allowed for slave accounts",
+  "accountType": "master",
+  "allowedMethods": ["POST"]
+}
+```
+
+#### 400 - Bad Request:
+```json
+{
+  "error": "Master account 123456 is not registered. Please register the account first."
+}
+```
+
+```json
+{
+  "error": "Slave account 123456 is not registered"
+}
+```
+
+```json
+{
+  "error": "No master configured for slave: 123456"
+}
+```
+
+#### 500 - Server Error:
+```json
+{
+  "error": "Failed to process order",
+  "message": "Internal server error occurred"
+}
+```
+
+---
+
+## 🔧 Advanced Configuration
+
+### Recommended EA Variables:
 ```mql5
 input string API_BASE_URL = "http://localhost:3000/api";
-input string API_KEY = "IPTRADE_APIKEY";  // API key fijo para todas las cuentas
-input int PING_INTERVAL = 30;        // segundos
-input int POLL_INTERVAL = 5;         // segundos (solo slaves)
+input string API_KEY = "IPTRADE_APIKEY";  // Fixed API key for all accounts
+input int PING_INTERVAL = 30;        // seconds
+input int POLL_INTERVAL = 5;         // seconds (slaves only)
 input int MAX_RETRIES = 3;
 input bool ENABLE_COPY_TRADING = true;
 ```
 
-### Verificación de conectividad:
+### Connectivity Test:
 ```mql5
 bool TestAPIConnection()
 {
@@ -317,22 +504,22 @@ bool TestAPIConnection()
 
 ---
 
-## 📝 Notas importantes
+## 📝 Important Notes
 
-1. **Autenticación:** Usa el número de cuenta de MT4/MT5 como header `x-account-id` y el API key fijo `IPTRADE_APIKEY`.
-2. **API Key único:** Todas las cuentas usan el mismo API key `IPTRADE_APIKEY` para autenticar requests.
-3. **Formato de datos:** Master envía datos en formato form-urlencoded, slave recibe CSV.
-4. **Múltiples órdenes:** Un master puede enviar múltiples órdenes usando índices (id0, id1, etc.).
-5. **Polling:** Las cuentas slave deben hacer polling cada 5 segundos máximo.
-6. **Keep Alive:** Todas las cuentas deben hacer ping cada 30 segundos.
-7. **Error Handling:** Implementa reintentos automáticos para errores 500.
-8. **Logs:** Registra todas las llamadas al API para debugging.
+1. **Authentication:** Use MT4/MT5 account number as `x-account-id` header and fixed API key `IPTRADE_APIKEY`.
+2. **Fixed API Key:** All accounts use the same API key `IPTRADE_APIKEY` to authenticate requests.
+3. **Data Format:** Master sends data in form-urlencoded format, slave receives CSV.
+4. **Multiple Orders:** A master can send multiple orders using indices (id0, id1, etc.).
+5. **Polling:** Slave accounts should poll every 5 seconds maximum.
+6. **Keep Alive:** All accounts should ping every 30 seconds.
+7. **Error Handling:** Implement automatic retries for 500 errors.
+8. **Logs:** Log all API calls for debugging.
 
 ---
 
-## 🆘 Soporte
+## 🆘 Support
 
-Para dudas o problemas:
+For questions or issues:
 - Swagger UI: `http://localhost:3000/api-docs`
-- Logs del servidor: Revisar consola del backend
-- Estado del sistema: `GET /api/status`
+- Server logs: Check backend console
+- System status: `GET /api/status`
