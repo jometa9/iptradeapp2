@@ -52,21 +52,7 @@ x-api-key: IPTRADE_APIKEY
 ```json
 {
   "accountId": "123456",
-  "type": "pending",
-  "status": "awaiting_configuration",
-  "message": "Account detected and registered as pending - awaiting configuration",
-  "permissions": [],
-  "nextSteps": [
-    "Account has been automatically registered as pending",
-    "Administrator must configure this account as master or slave",
-    "Contact administrator to complete setup",
-    "EA will remain in standby mode until configured"
-  ],
-  "adminEndpoints": {
-    "viewPending": "GET /api/accounts/pending",
-    "convertToMaster": "POST /api/accounts/pending/{accountId}/to-master",
-    "convertToSlave": "POST /api/accounts/pending/{accountId}/to-slave"
-  }
+  "type": "pending"
 }
 ```
 
@@ -74,13 +60,7 @@ x-api-key: IPTRADE_APIKEY
 ```json
 {
   "accountId": "123456",
-  "type": "master", // or "slave"
-  "status": "active",
-  "permissions": ["POST /neworder (send trades)"], // or ["GET /neworder (receive trades)"]
-  "endpoints": {
-    "checkType": "GET /api/orders/account-type",
-    "trading": "POST /api/orders/neworder" // or "GET /api/orders/neworder"
-  }
+  "type": "master" // or "slave"
 }
 ```
 
@@ -326,14 +306,15 @@ bool PingServer()
 
 ## ⚠️ Error Codes
 
-| Code | Description | Action |
-|------|-------------|--------|
-| 200 | OK | Continue |
-| 400 | Bad Request | Check data format |
-| 401 | Unauthorized | Check account ID and API key |
-| 403 | Forbidden | Check account permissions |
-| 404 | Not Found | Check endpoint |
-| 500 | Server Error | Retry after 30s |
+| Code | Description | Specific Error Messages | Action |
+|------|-------------|------------------------|--------|
+| 200 | OK | - | Continue |
+| 400 | Bad Request | - `"masterAccountId is required"`<br>- `"slaveAccountId is required"`<br>- `"Both slaveAccountId and masterAccountId are required"`<br>- `"Account ID is required"`<br>- `"No data received"`<br>- `"Platform {platform} is not supported"` | Check request parameters |
+| 401 | Unauthorized | - `"Account ID is required"`<br>- `"Invalid or missing API key"`<br>- `"API Key required - use requireValidSubscription middleware"`<br>- `"Authentication required"` | Check account ID and API key |
+| 403 | Forbidden | - `"Account pending configuration"`<br>- `"Access denied - This endpoint is only available for master accounts"`<br>- `"Access denied - This endpoint is only available for slave accounts"`<br>- `"POST requests (sending trades) are only allowed for master accounts"`<br>- `"GET requests (receiving trades) are only allowed for slave accounts"`<br>- `"Account mismatch"`<br>- `"Only master accounts can create orders"`<br>- `"Only slave accounts can retrieve orders"`<br>- `"Master account {id} is not registered"`<br>- `"Slave account {id} is not registered"` | Check account permissions and type |
+| 404 | Not Found | - `"Master account {id} not found"`<br>- `"Slave account {id} not found"`<br>- `"Pending account {id} not found"` | Check account registration |
+| 409 | Conflict | - `"Master account {id} is already registered"`<br>- `"Slave account {id} is already registered"`<br>- `"Account {id} already exists as master or slave"` | Account already exists |
+| 500 | Server Error | - `"Failed to register master account"`<br>- `"Failed to register slave account"`<br>- `"Failed to connect accounts"`<br>- `"Failed to save account configuration"`<br>- `"Error writing CSV for account {id}"`<br>- `"Error reading CSV for master account {id}"`<br>- `"Internal server error"` | Retry after 30s |
 
 ---
 
@@ -345,16 +326,7 @@ bool PingServer()
 ```json
 {
   "accountId": "123456",
-  "type": "pending",
-  "status": "awaiting_configuration",
-  "message": "Account detected and registered as pending - awaiting configuration",
-  "permissions": [],
-  "nextSteps": [
-    "Account has been automatically registered as pending",
-    "Administrator must configure this account as master or slave",
-    "Contact administrator to complete setup",
-    "EA will remain in standby mode until configured"
-  ]
+  "type": "pending"
 }
 ```
 
@@ -362,13 +334,7 @@ bool PingServer()
 ```json
 {
   "accountId": "123456",
-  "type": "master",
-  "status": "active",
-  "permissions": ["POST /neworder (send trades)"],
-  "endpoints": {
-    "checkType": "GET /api/orders/account-type",
-    "trading": "POST /api/orders/neworder"
-  }
+  "type": "master"
 }
 ```
 
@@ -376,13 +342,7 @@ bool PingServer()
 ```json
 {
   "accountId": "123456",
-  "type": "slave",
-  "status": "active",
-  "permissions": ["GET /neworder (receive trades)"],
-  "endpoints": {
-    "checkType": "GET /api/orders/account-type",
-    "trading": "GET /api/orders/neworder"
-  }
+  "type": "slave"
 }
 ```
 
@@ -448,7 +408,14 @@ bool PingServer()
 }
 ```
 
-#### 400 - Bad Request:
+#### 403 - Forbidden (Account Mismatch):
+```json
+{
+  "error": "Account mismatch. Authenticated as 123456 but trying to create order for 789012"
+}
+```
+
+#### 403 - Forbidden (Not Registered):
 ```json
 {
   "error": "Master account 123456 is not registered. Please register the account first."
@@ -461,17 +428,54 @@ bool PingServer()
 }
 ```
 
+#### 400 - Bad Request:
 ```json
 {
-  "error": "No master configured for slave: 123456"
+  "error": "masterAccountId is required"
+}
+```
+
+```json
+{
+  "error": "slaveAccountId is required"
+}
+```
+
+```json
+{
+  "error": "No data received"
+}
+```
+
+#### 409 - Conflict:
+```json
+{
+  "error": "Master account 123456 is already registered"
+}
+```
+
+```json
+{
+  "error": "Slave account 123456 is already registered"
 }
 ```
 
 #### 500 - Server Error:
 ```json
 {
-  "error": "Failed to process order",
-  "message": "Internal server error occurred"
+  "error": "Failed to register master account"
+}
+```
+
+```json
+{
+  "error": "Error writing CSV for account 123456"
+}
+```
+
+```json
+{
+  "error": "Error reading CSV for master account 123456"
 }
 ```
 
@@ -514,6 +518,345 @@ bool TestAPIConnection()
 6. **Keep Alive:** All accounts should ping every 30 seconds.
 7. **Error Handling:** Implement automatic retries for 500 errors.
 8. **Logs:** Log all API calls for debugging.
+
+---
+
+## 📊 Chart Messages & User Feedback
+
+### Display Messages on Chart
+
+The EA should display status messages on the chart to keep users informed. Use `Comment()` function to show real-time status.
+
+### Status Messages by Account Type
+
+#### For Pending Accounts:
+```
+🔄 IPTRADE STATUS: PENDING CONFIGURATION
+Account: 123456
+Status: Awaiting administrator setup
+Action: Contact administrator to configure as master/slave
+Last Check: 2024-01-01 12:00:00
+```
+
+#### For Master Accounts:
+```
+✅ IPTRADE STATUS: MASTER ACTIVE
+Account: 123456
+Status: Sending trades to slaves
+Connected Slaves: 3
+Last Order: 2024-01-01 12:00:00
+Last Ping: 2024-01-01 12:00:00
+```
+
+#### For Slave Accounts:
+```
+📥 IPTRADE STATUS: SLAVE ACTIVE
+Account: 123456
+Status: Receiving trades from master
+Master: MASTER001
+Last Order: 2024-01-01 12:00:00
+Last Ping: 2024-01-01 12:00:00
+```
+
+### Error Messages on Chart
+
+#### Connection Errors:
+```
+❌ IPTRADE ERROR: CONNECTION FAILED
+Account: 123456
+Error: Cannot connect to server
+Action: Check internet connection
+Retry: 30 seconds
+```
+
+#### Authentication Errors:
+```
+❌ IPTRADE ERROR: AUTHENTICATION FAILED
+Account: 123456
+Error: Invalid API key or account ID
+Action: Check EA settings
+Status: Disabled
+```
+
+#### Permission Errors:
+```
+❌ IPTRADE ERROR: ACCESS DENIED
+Account: 123456
+Error: Account not configured for this operation
+Action: Contact administrator
+Status: Disabled
+```
+
+#### Server Errors:
+```
+⚠️ IPTRADE WARNING: SERVER ERROR
+Account: 123456
+Error: Internal server error
+Action: Retrying in 30 seconds
+Status: Retry mode
+```
+
+### Implementation Example
+
+```mql5
+// Global variables for status tracking
+string g_lastStatus = "";
+string g_lastError = "";
+datetime g_lastUpdate = 0;
+int g_retryCount = 0;
+
+// Function to update chart message
+void UpdateChartMessage(string status, string error = "")
+{
+   string message = "";
+   
+   if(error != "")
+   {
+      message = "❌ IPTRADE ERROR: " + error + "\n";
+      message += "Account: " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n";
+      message += "Time: " + TimeToString(TimeCurrent()) + "\n";
+      message += "Action: Check connection and settings";
+   }
+   else
+   {
+      message = status + "\n";
+      message += "Account: " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n";
+      message += "Last Update: " + TimeToString(TimeCurrent());
+   }
+   
+   Comment(message);
+   g_lastStatus = status;
+   g_lastError = error;
+   g_lastUpdate = TimeCurrent();
+}
+
+// Function to handle API responses
+void HandleAPIResponse(int responseCode, string response)
+{
+   switch(responseCode)
+   {
+      case 200:
+         if(StringFind(response, "pending") >= 0)
+         {
+            UpdateChartMessage("🔄 IPTRADE STATUS: PENDING CONFIGURATION\nContact administrator to setup account");
+         }
+         else if(StringFind(response, "master") >= 0)
+         {
+            UpdateChartMessage("✅ IPTRADE STATUS: MASTER ACTIVE\nSending trades to slaves");
+         }
+         else if(StringFind(response, "slave") >= 0)
+         {
+            UpdateChartMessage("📥 IPTRADE STATUS: SLAVE ACTIVE\nReceiving trades from master");
+         }
+         break;
+         
+      case 400:
+         if(StringFind(response, "masterAccountId is required") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nMaster account ID is required");
+         }
+         else if(StringFind(response, "slaveAccountId is required") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nSlave account ID is required");
+         }
+         else if(StringFind(response, "Both slaveAccountId and masterAccountId are required") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nBoth slave and master account IDs are required");
+         }
+         else if(StringFind(response, "Account ID is required") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nAccount ID is required in headers");
+         }
+         else if(StringFind(response, "No data received") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nNo order data received");
+         }
+         else if(StringFind(response, "Platform") >= 0 && StringFind(response, "not supported") >= 0)
+         {
+            UpdateChartMessage("", "BAD REQUEST\nPlatform not supported");
+         }
+         else
+         {
+            UpdateChartMessage("", "BAD REQUEST\nCheck request parameters");
+         }
+         break;
+         
+      case 401:
+         if(StringFind(response, "Account ID is required") >= 0)
+         {
+            UpdateChartMessage("", "AUTHENTICATION FAILED\nAccount ID is required in headers");
+         }
+         else if(StringFind(response, "Invalid or missing API key") >= 0)
+         {
+            UpdateChartMessage("", "AUTHENTICATION FAILED\nInvalid or missing API key");
+         }
+         else if(StringFind(response, "API Key required") >= 0)
+         {
+            UpdateChartMessage("", "AUTHENTICATION FAILED\nAPI key required for subscription");
+         }
+         else if(StringFind(response, "Authentication required") >= 0)
+         {
+            UpdateChartMessage("", "AUTHENTICATION FAILED\nAuthentication required");
+         }
+         else
+         {
+            UpdateChartMessage("", "AUTHENTICATION FAILED\nCheck account ID and API key");
+         }
+         break;
+         
+      case 403:
+         if(StringFind(response, "Account pending configuration") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nAccount pending configuration\nContact administrator");
+         }
+         else if(StringFind(response, "only available for master accounts") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nThis endpoint is only for master accounts");
+         }
+         else if(StringFind(response, "only available for slave accounts") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nThis endpoint is only for slave accounts");
+         }
+         else if(StringFind(response, "POST requests (sending trades) are only allowed for master accounts") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nOnly master accounts can send trades");
+         }
+         else if(StringFind(response, "GET requests (receiving trades) are only allowed for slave accounts") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nOnly slave accounts can receive trades");
+         }
+         else if(StringFind(response, "Account mismatch") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nAccount mismatch\nCheck account configuration");
+         }
+         else if(StringFind(response, "Only master accounts can create orders") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nOnly master accounts can create orders");
+         }
+         else if(StringFind(response, "Only slave accounts can retrieve orders") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nOnly slave accounts can retrieve orders");
+         }
+         else if(StringFind(response, "is not registered") >= 0)
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nAccount not registered\nContact administrator");
+         }
+         else
+         {
+            UpdateChartMessage("", "ACCESS DENIED\nAccount not configured for this operation");
+         }
+         break;
+         
+      case 404:
+         if(StringFind(response, "Master account") >= 0 && StringFind(response, "not found") >= 0)
+         {
+            UpdateChartMessage("", "NOT FOUND\nMaster account not found");
+         }
+         else if(StringFind(response, "Slave account") >= 0 && StringFind(response, "not found") >= 0)
+         {
+            UpdateChartMessage("", "NOT FOUND\nSlave account not found");
+         }
+         else if(StringFind(response, "Pending account") >= 0 && StringFind(response, "not found") >= 0)
+         {
+            UpdateChartMessage("", "NOT FOUND\nPending account not found");
+         }
+         else
+         {
+            UpdateChartMessage("", "NOT FOUND\nAccount not registered");
+         }
+         break;
+         
+      case 409:
+         if(StringFind(response, "Master account") >= 0 && StringFind(response, "already registered") >= 0)
+         {
+            UpdateChartMessage("", "CONFLICT\nMaster account already registered");
+         }
+         else if(StringFind(response, "Slave account") >= 0 && StringFind(response, "already registered") >= 0)
+         {
+            UpdateChartMessage("", "CONFLICT\nSlave account already registered");
+         }
+         else if(StringFind(response, "already exists as master or slave") >= 0)
+         {
+            UpdateChartMessage("", "CONFLICT\nAccount already exists as master or slave");
+         }
+         else
+         {
+            UpdateChartMessage("", "CONFLICT\nAccount already exists");
+         }
+         break;
+         
+      case 500:
+         if(StringFind(response, "Failed to register master account") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nFailed to register master account\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Failed to register slave account") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nFailed to register slave account\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Failed to connect accounts") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nFailed to connect accounts\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Failed to save account configuration") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nFailed to save configuration\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Error writing CSV") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nError writing order data\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Error reading CSV") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nError reading order data\nRetrying in 30 seconds");
+         }
+         else if(StringFind(response, "Internal server error") >= 0)
+         {
+            UpdateChartMessage("", "SERVER ERROR\nInternal server error\nRetrying in 30 seconds");
+         }
+         else
+         {
+            UpdateChartMessage("", "SERVER ERROR\nRetrying in 30 seconds");
+         }
+         break;
+         
+      default:
+         UpdateChartMessage("", "UNKNOWN ERROR\nCheck connection");
+         break;
+   }
+}
+```
+
+### Status Update Frequency
+
+- **Normal operation:** Update every 30 seconds
+- **Error state:** Update immediately
+- **Retry mode:** Update every 5 seconds
+- **Pending account:** Update every 60 seconds
+
+### User-Friendly Messages
+
+#### Connection Status:
+```
+🟢 CONNECTED - All systems operational
+🟡 CONNECTING - Establishing connection
+🔴 DISCONNECTED - Connection lost
+```
+
+#### Account Status:
+```
+📋 PENDING - Waiting for administrator setup
+👑 MASTER - Sending trades to followers
+📥 SLAVE - Following master trades
+❌ ERROR - Check configuration
+```
+
+#### Trading Status:
+```
+📈 ACTIVE - Trading operations normal
+⏸️ PAUSED - Trading temporarily stopped
+🚫 DISABLED - Trading disabled by admin
+```
 
 ---
 

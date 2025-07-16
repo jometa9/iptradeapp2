@@ -21,42 +21,18 @@ const router = express.Router();
  *         description: Account type information
  */
 router.get('/account-type', authenticateAccount, (req, res) => {
-  const { accountId, type, account } = req.accountInfo;
+  const { accountId, type } = req.accountInfo;
 
   if (type === 'pending') {
     return res.json({
       accountId,
       type: 'pending',
-      account,
-      message: 'Account detected and registered as pending - awaiting configuration',
-      status: 'awaiting_configuration',
-      permissions: [],
-      nextSteps: [
-        'Account has been automatically registered as pending',
-        'Administrator must configure this account as master or slave',
-        'Contact administrator to complete setup',
-        'EA will remain in standby mode until configured',
-      ],
-      adminEndpoints: {
-        viewPending: 'GET /api/accounts/pending',
-        convertToMaster: 'POST /api/accounts/pending/{accountId}/to-master',
-        convertToSlave: 'POST /api/accounts/pending/{accountId}/to-slave',
-      },
     });
   }
 
   res.json({
     accountId,
     type,
-    account,
-    message: `Account is configured as ${type}`,
-    status: 'active',
-    permissions:
-      type === 'master' ? ['POST /neworder (send trades)'] : ['GET /neworder (receive trades)'],
-    endpoints: {
-      checkType: 'GET /api/orders/account-type',
-      trading: type === 'master' ? 'POST /api/orders/neworder' : 'GET /api/orders/neworder',
-    },
   });
 });
 
