@@ -207,7 +207,7 @@ class CtraderAuthService {
     const isExpired = userTokens.expiresAt < Date.now() + 5 * 60 * 1000;
 
     if (isExpired) {
-      console.log(`Token expired for user ${userId}, refreshing...`);
+      (`Token expired for user ${userId}, refreshing...`);
       const refreshedTokens = await this.refreshToken(userId);
       return refreshedTokens.accessToken;
     }

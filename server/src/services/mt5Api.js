@@ -11,8 +11,6 @@ class Mt5ApiService {
     this.connections = new Map(); // userId -> connection info
     this.pythonScriptPath = join(__dirname, '..', 'python', 'mt5_connector.py');
     this.ensurePythonScript();
-
-    console.log(`🐍 MT5 Python script path: ${this.pythonScriptPath}`);
   }
 
   // Ensure Python script exists
@@ -396,14 +394,11 @@ if __name__ == "__main__":
 `;
 
     fs.writeFileSync(this.pythonScriptPath, pythonScript);
-    console.log(`✅ Created MT5 Python script at: ${this.pythonScriptPath}`);
   }
 
   // Initialize MT5 connection for a user
   async initializeMT5(userId, terminalPath = null) {
     try {
-      console.log(`🚀 Initializing MT5 for user ${userId}`);
-
       // Start Python process
       const pythonProcess = spawn('python', [this.pythonScriptPath], {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -430,7 +425,6 @@ if __name__ == "__main__":
       if (result.success) {
         const connection = this.connections.get(userId);
         connection.connected = true;
-        console.log(`✅ MT5 initialized successfully for user ${userId}`);
         return { success: true, message: 'MT5 initialized successfully' };
       } else {
         throw new Error(result.error || 'Failed to initialize MT5');
@@ -449,7 +443,6 @@ if __name__ == "__main__":
     });
 
     pythonProcess.on('exit', code => {
-      console.log(`MT5 Python process exited for user ${userId} with code: ${code}`);
       this.connections.delete(userId);
     });
 
@@ -495,7 +488,6 @@ if __name__ == "__main__":
   // Login to MT5 account
   async loginToAccount(userId, account, password, server) {
     try {
-      console.log(`🔐 Logging into MT5 account ${account} for user ${userId}`);
 
       const loginCommand = {
         action: 'login',
@@ -508,7 +500,6 @@ if __name__ == "__main__":
       if (result.success) {
         const connection = this.connections.get(userId);
         connection.accounts.push(result.account);
-        console.log(`✅ Successfully logged into MT5 account ${account}`);
         return result;
       } else {
         throw new Error(result.error || 'Login failed');
@@ -648,7 +639,6 @@ if __name__ == "__main__":
       }
 
       this.connections.delete(userId);
-      console.log(`🔌 Disconnected MT5 for user ${userId}`);
     } catch (error) {
       console.error(`❌ Error disconnecting MT5 for user ${userId}:`, error);
       // Force cleanup
@@ -674,7 +664,6 @@ if __name__ == "__main__":
 
     for (const [userId, connection] of this.connections.entries()) {
       if (now - connection.lastActivity > inactiveTimeout) {
-        console.log(`🧹 Cleaning up inactive MT5 connection for user ${userId}`);
         this.disconnect(userId);
       }
     }

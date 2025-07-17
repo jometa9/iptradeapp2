@@ -78,7 +78,7 @@ export function killProcessOnPort(port) {
 
         const lines = stdout.split('\n');
         const pidMap = new Map();
-        
+
         // More precise filtering to only find processes LISTENING on the exact port
         lines.forEach(line => {
           // Only consider lines with this exact port and in LISTENING state
@@ -90,7 +90,7 @@ export function killProcessOnPort(port) {
             }
           }
         });
-        
+
         const pids = Array.from(pidMap.keys());
 
         if (pids.length > 0) {
@@ -378,7 +378,7 @@ export const getOrders = (req, res) => {
   }
 
   // Check if copier is enabled for this master account
-  const copierEnabled = isCopierEnabled(masterAccount);
+      const copierEnabled = isCopierEnabled(masterAccount, apiKey);
   if (!copierEnabled) {
     console.log(`Copier is OFF for master ${masterAccount}, slave ${slaveId} cannot copy orders`);
     res.setHeader('Content-Type', 'text/plain');

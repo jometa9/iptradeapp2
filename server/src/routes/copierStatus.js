@@ -10,6 +10,7 @@ import {
   setGlobalStatus,
   setMasterStatus,
 } from '../controllers/copierStatusController.js';
+import { requireValidSubscription } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -35,9 +36,9 @@ const router = express.Router();
  *       200:
  *         description: Global copier status updated
  */
-router.get('/copier/global', getGlobalStatus);
-router.post('/copier/global', setGlobalStatus);
-router.put('/copier/global', setGlobalStatus);
+router.get('/copier/global', requireValidSubscription, getGlobalStatus);
+router.post('/copier/global', requireValidSubscription, setGlobalStatus);
+router.put('/copier/global', requireValidSubscription, setGlobalStatus);
 
 /**
  * @swagger
@@ -67,8 +68,8 @@ router.put('/copier/global', setGlobalStatus);
  *       200:
  *         description: Master copier status removed
  */
-router.get('/copier/master/:masterAccountId', getMasterStatus);
-router.delete('/copier/master/:masterAccountId', removeMasterStatus);
+router.get('/copier/master/:masterAccountId', requireValidSubscription, getMasterStatus);
+router.delete('/copier/master/:masterAccountId', requireValidSubscription, removeMasterStatus);
 
 /**
  * @swagger
@@ -86,8 +87,8 @@ router.delete('/copier/master/:masterAccountId', removeMasterStatus);
  *       200:
  *         description: Master copier status updated
  */
-router.post('/copier/master', setMasterStatus);
-router.put('/copier/master', setMasterStatus);
+router.post('/copier/master', requireValidSubscription, setMasterStatus);
+router.put('/copier/master', requireValidSubscription, setMasterStatus);
 
 /**
  * @swagger
@@ -99,7 +100,7 @@ router.put('/copier/master', setMasterStatus);
  *       200:
  *         description: All copier statuses
  */
-router.get('/copier/status', getAllStatuses);
+router.get('/copier/status', requireValidSubscription, getAllStatuses);
 
 /**
  * @swagger
@@ -111,7 +112,7 @@ router.get('/copier/status', getAllStatuses);
  *       200:
  *         description: Emergency shutdown executed
  */
-router.post('/copier/emergency-shutdown', emergencyShutdown);
+router.post('/copier/emergency-shutdown', requireValidSubscription, emergencyShutdown);
 
 /**
  * @swagger
@@ -123,6 +124,6 @@ router.post('/copier/emergency-shutdown', emergencyShutdown);
  *       200:
  *         description: All copiers reset to ON
  */
-router.post('/copier/reset-all-on', resetAllToOn);
+router.post('/copier/reset-all-on', requireValidSubscription, resetAllToOn);
 
 export default router;

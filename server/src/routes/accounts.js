@@ -23,7 +23,11 @@ import {
   updateSlaveAccount,
 } from '../controllers/accountsController.js';
 import { authenticateAccount } from '../middleware/roleAuth.js';
-import { checkAccountLimits, requireValidSubscription } from '../middleware/subscriptionAuth.js';
+import {
+  allowPendingConversions,
+  checkAccountLimits,
+  requireValidSubscription,
+} from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
@@ -320,7 +324,7 @@ router.post('/ping', authenticateAccount, pingAccount);
  *       200:
  *         description: List of pending accounts
  */
-router.get('/pending', getPendingAccounts);
+router.get('/pending', requireValidSubscription, getPendingAccounts);
 /**
  * @swagger
  * /accounts/pending/{accountId}/to-master:
@@ -340,7 +344,7 @@ router.get('/pending', getPendingAccounts);
 router.post(
   '/pending/:accountId/to-master',
   requireValidSubscription,
-  checkAccountLimits,
+  allowPendingConversions,
   convertPendingToMaster
 );
 /**
@@ -362,7 +366,7 @@ router.post(
 router.post(
   '/pending/:accountId/to-slave',
   requireValidSubscription,
-  checkAccountLimits,
+  allowPendingConversions,
   convertPendingToSlave
 );
 /**
@@ -381,6 +385,6 @@ router.post(
  *       200:
  *         description: Pending account deleted
  */
-router.delete('/pending/:accountId', deletePendingAccount);
+router.delete('/pending/:accountId', requireValidSubscription, deletePendingAccount);
 
 export default router;

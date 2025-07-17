@@ -80,7 +80,7 @@ export const CtraderManager: React.FC = () => {
   });
   const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT;
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Get userId from authenticated user context
@@ -97,13 +97,6 @@ export const CtraderManager: React.FC = () => {
       const response = await fetch(`${baseUrl}/ctrader/auth/status/${userId}`);
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 cTrader Status Update:', {
-          authenticated: data.authenticated,
-          connected: data.connection.connected,
-          accountsCount: data.accounts.length,
-          shouldReconnect: data.shouldReconnect,
-          wsState: data.connection.wsState,
-        });
 
         setStatus({
           authenticated: data.authenticated,
@@ -138,13 +131,13 @@ export const CtraderManager: React.FC = () => {
   }, [baseUrl, secretKey]);
 
   useEffect(() => {
-    if (userId) {
+    if (userId && isAuthenticated && secretKey) {
       loadStatus();
       loadMasterAccounts();
     } else {
       setLoading(false);
     }
-  }, [userId, loadStatus, loadMasterAccounts]);
+  }, [userId, isAuthenticated, secretKey, loadStatus, loadMasterAccounts]);
 
   const initiateAuth = async () => {
     if (!userId) {
@@ -207,7 +200,6 @@ export const CtraderManager: React.FC = () => {
 
     try {
       setConnecting(true);
-      console.log('🚀 Getting cTrader accounts via REST API...');
 
       const response = await fetch(`${baseUrl}/ctrader/connect`, {
         method: 'POST',
@@ -219,11 +211,6 @@ export const CtraderManager: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🎉 cTrader REST API Success:', {
-          accountsFound: data.accountsFound,
-          totalAccounts: data.accounts?.length,
-          accounts: data.accounts,
-        });
 
         toast({
           title: 'Success',
@@ -273,7 +260,6 @@ export const CtraderManager: React.FC = () => {
 
     try {
       setConnecting(true);
-      console.log('🔄 Refreshing cTrader accounts via REST API...');
 
       const response = await fetch(`${baseUrl}/ctrader/accounts/refresh/${userId}`, {
         method: 'POST',
@@ -284,11 +270,6 @@ export const CtraderManager: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('🎉 Accounts refreshed successfully:', {
-          accountsFound: data.accountsFound,
-          totalAccounts: data.accounts?.length,
-          refreshedAt: data.refreshedAt,
-        });
 
         toast({
           title: 'Accounts Refreshed',
@@ -307,7 +288,6 @@ export const CtraderManager: React.FC = () => {
         await loadStatus();
       } else {
         const error = await response.json();
-        console.error('❌ Failed to refresh accounts:', error);
         toast({
           title: 'Refresh Failed',
           description: error.details || 'Failed to refresh accounts from cTrader',

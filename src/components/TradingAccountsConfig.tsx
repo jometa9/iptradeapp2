@@ -174,7 +174,7 @@ export function TradingAccountsConfig() {
       }
 
       const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
-      const response = await fetch(`http://localhost:${serverPort}/api/accounts/admin/all`, {
+      const response = await fetch(`http://localhost:${serverPort}/api/accounts/all`, {
         headers: {
           'x-api-key': secretKey || '',
         },
@@ -673,6 +673,9 @@ export function TradingAccountsConfig() {
 
         const response = await fetch(endpoint, {
           method: 'DELETE',
+          headers: {
+            'x-api-key': secretKey || '',
+          },
         });
 
         if (!response.ok) {
@@ -680,6 +683,7 @@ export function TradingAccountsConfig() {
         }
 
         await fetchAccounts();
+        await fetchPendingAccountsCount();
 
         toastUtil({
           title: 'Account Deleted',
@@ -927,6 +931,7 @@ export function TradingAccountsConfig() {
       }
 
       await fetchAccounts();
+      await fetchPendingAccountsCount();
 
       toastUtil({
         title: editingAccount ? 'Account Updated' : 'Account Created',
@@ -1953,21 +1958,26 @@ export function TradingAccountsConfig() {
                                         updatingCopier === `slave-${slaveAccount.accountNumber}` ||
                                         !copierStatus?.globalStatus ||
                                         !getMasterEffectiveStatus(masterAccount.accountNumber) ||
-                                        slaveAccount.status === 'offline'
+                                        slaveAccount.status === 'offline' ||
+                                        !slaveAccount.masterOnline
                                       }
                                       title={
                                         slaveAccount.status === 'offline'
                                           ? 'Account is offline - copy trading disabled'
-                                          : !copierStatus?.globalStatus
-                                            ? 'Global copier is OFF'
-                                            : !getMasterEffectiveStatus(masterAccount.accountNumber)
-                                              ? 'Master is not sending signals'
-                                              : getSlaveEffectiveStatus(
-                                                    slaveAccount.accountNumber,
+                                          : !slaveAccount.masterOnline
+                                            ? 'Master account is offline - copy trading disabled'
+                                            : !copierStatus?.globalStatus
+                                              ? 'Global copier is OFF'
+                                              : !getMasterEffectiveStatus(
                                                     masterAccount.accountNumber
                                                   )
-                                                ? 'Stop receiving signals from master'
-                                                : 'Start receiving signals from master'
+                                                ? 'Master is not sending signals'
+                                                : getSlaveEffectiveStatus(
+                                                      slaveAccount.accountNumber,
+                                                      masterAccount.accountNumber
+                                                    )
+                                                  ? 'Stop receiving signals from master'
+                                                  : 'Start receiving signals from master'
                                       }
                                     />
                                   </div>

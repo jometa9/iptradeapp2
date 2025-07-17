@@ -242,18 +242,6 @@ export const requireValidSubscription = async (req, res, next) => {
 
     if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
       // Use cached validation data silently (only log in debug mode)
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          '📋 Using cached subscription validation for key:',
-          apiKey.substring(0, 8) + '...'
-        );
-        console.log(
-          '⏱️ Cache age:',
-          Math.round((now - cachedValidation.timestamp) / 1000 / 60),
-          'minutes'
-        );
-      }
-
       // Use cached validation data
       req.user = cachedValidation.userData;
       req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
@@ -335,6 +323,88 @@ export const checkAccountLimits = (req, res, next) => {
   next();
 };
 
+// Middleware to check account limits for NEW account creation (not pending conversions)
+export const checkNewAccountLimits = (req, res, next) => {
+  if (!req.user || !req.subscriptionLimits || !req.apiKey) {
+    return res.status(401).json({
+      error: 'Subscription validation required',
+      message: 'Please use requireValidSubscription middleware first',
+    });
+  }
+
+  const limits = req.subscriptionLimits;
+
+  // If no account limit (unlimited plan), allow creation
+  if (limits.maxAccounts === null) {
+    return next();
+  }
+
+  // Count existing accounts for this specific user (excluding pending accounts)
+  const accountCounts = countUserAccounts(req.apiKey);
+
+  // Get user-friendly plan name
+  const displayPlanName = req.user.subscriptionType === 'free' ? 'Free' : req.user.subscriptionType;
+
+  if (accountCounts.total >= limits.maxAccounts) {
+    return res.status(403).json({
+      error: 'Account limit exceeded',
+      message: `Your ${displayPlanName} plan allows maximum ${limits.maxAccounts} accounts. You currently have ${accountCounts.total} accounts.`,
+      limits: {
+        maxAccounts: limits.maxAccounts,
+        currentAccounts: accountCounts.total,
+        planName: displayPlanName,
+      },
+    });
+  }
+
+  next();
+};
+
+// Middleware to check limits for pending account conversions
+export const allowPendingConversions = (req, res, next) => {
+  console.log('🔍 allowPendingConversions middleware called');
+
+  if (!req.user || !req.subscriptionLimits || !req.apiKey) {
+    console.log('❌ Missing required data in allowPendingConversions');
+    return res.status(401).json({
+      error: 'Subscription validation required',
+      message: 'Please use requireValidSubscription middleware first',
+    });
+  }
+
+  const limits = req.subscriptionLimits;
+  console.log('📊 Subscription limits:', limits);
+
+  // If no account limit (unlimited plan), allow conversion
+  if (limits.maxAccounts === null) {
+    console.log('✅ Unlimited plan, allowing conversion');
+    return next();
+  }
+
+  // Count existing accounts for this specific user (including pending accounts)
+  const accountCounts = countUserAccounts(req.apiKey);
+  console.log('📊 Account counts:', accountCounts);
+
+  // Get user-friendly plan name
+  const displayPlanName = req.user.subscriptionType === 'free' ? 'Free' : req.user.subscriptionType;
+
+  if (accountCounts.total >= limits.maxAccounts) {
+    console.log(`❌ Account limit exceeded: ${accountCounts.total}/${limits.maxAccounts}`);
+    return res.status(403).json({
+      error: 'Account limit exceeded',
+      message: `Your ${displayPlanName} plan allows maximum ${limits.maxAccounts} accounts. You currently have ${accountCounts.total} accounts. Cannot convert pending accounts.`,
+      limits: {
+        maxAccounts: limits.maxAccounts,
+        currentAccounts: accountCounts.total,
+        planName: displayPlanName,
+      },
+    });
+  }
+
+  console.log('✅ Account limit check passed, allowing conversion');
+  next();
+};
+
 // Middleware to enforce lot size restrictions
 export const enforceLotSizeRestrictions = (req, res, next) => {
   if (!req.user || !req.subscriptionLimits) {
@@ -373,6 +443,8 @@ export default {
   countUserAccounts,
   requireValidSubscription,
   checkAccountLimits,
+  checkNewAccountLimits,
+  allowPendingConversions,
   enforceLotSizeRestrictions,
   subscriptionCache,
 };

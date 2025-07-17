@@ -44,69 +44,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const validateLicense = async (
     apiKey: string
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
-    console.log('🔍 === FRONTEND LICENSE VALIDATION START ===');
-    console.log('📝 API Key received:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
-    console.log('🌍 Environment variables:');
-    console.log('  - VITE_LICENSE_API_URL:', import.meta.env.VITE_LICENSE_API_URL);
-    console.log('  - VITE_APP_ENV:', import.meta.env.VITE_APP_ENV);
-
     try {
       const baseEndpoint =
         import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
 
-      console.log('🔗 Constructed base endpoint:', baseEndpoint);
-      console.log('🎯 Full request URL:', url);
-
-      const requestStart = Date.now();
-      console.log('📡 Making request to:', url);
       const response = await fetch(url);
-      const requestDuration = Date.now() - requestStart;
-
-      console.log('⏱️ Request duration:', requestDuration + 'ms');
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
-      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        console.log('❌ Response not ok - status:', response.status);
-
         if (response.status === 401) {
-          console.log('401 - Invalid API Key');
           return { valid: false, message: 'Invalid API Key' };
         }
         if (response.status === 404) {
-          console.log('404 - User not found');
           return { valid: false, message: 'User not found' };
         }
         // Para otros errores HTTP (400, 403, 500, etc.) - indica licencia inválida
-        console.log('Other HTTP error:', response.status);
         return { valid: false, message: 'Invalid license' };
       }
 
       const userData: UserInfo = await response.json();
-      console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
 
       // Validate that we have the required fields
       if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
-        console.log('❌ Missing required fields in user data');
         return { valid: false, message: 'Invalid user data format' };
       }
 
       // Validate subscription type
       if (!VALID_SUBSCRIPTION_TYPES.includes(userData.subscriptionType)) {
-        console.log('❌ Invalid subscription type:', userData.subscriptionType);
         return { valid: false, message: 'Invalid subscription type' };
       }
 
-      console.log('🔍 Subscription validation details:');
-      console.log('  - Subscription type:', userData.subscriptionType);
-      console.log('  - Valid types:', VALID_SUBSCRIPTION_TYPES);
-      console.log('  - Is valid subscription:', true);
-
-      console.log('✅ Subscription validation successful');
-      console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
-      console.log('🔍 === FRONTEND LICENSE VALIDATION END ===');
       return { valid: true, userInfo: userData };
     } catch (error) {
       console.error('💥 License validation error:', error);
@@ -115,8 +82,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Solo error de conexión real - no mock data
       const errorMessage =
         'Connection error. Check your internet connection and ensure the server is running.';
-      console.log('❌ Returning connection error:', errorMessage);
-      console.log('🔍 === FRONTEND LICENSE VALIDATION END (CONNECTION ERROR) ===');
       return {
         valid: false,
         message: errorMessage,
@@ -187,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Only revalidate if it's been more than 12 hours since last validation
         if (lastValidation && now - parseInt(lastValidation) < 12 * 60 * 60 * 1000) {
-          console.log('🕒 Using cached license validation (less than 12 hours old)');
           // Try to get cached user info
           const cachedUserInfo = localStorage.getItem(`${STORAGE_KEY}_user_info`);
           if (cachedUserInfo) {
@@ -203,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 12 * 60 * 60 * 1000 - (now - parseInt(lastValidation));
               if (timeUntilNextValidation > 0) {
                 setTimeout(() => {
-                  console.log('⏰ 12 hours passed, revalidating license...');
                   validateLicense(storedKey).then(validation => {
                     if (validation.valid && validation.userInfo) {
                       setUserInfo(validation.userInfo);
@@ -228,7 +191,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         try {
-          console.log('🔄 Validating stored license...');
           const validation = await validateLicense(storedKey);
 
           if (validation.valid && validation.userInfo) {
@@ -243,7 +205,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Set up timer for next validation in 12 hours
             setTimeout(
               () => {
-                console.log('⏰ 12 hours passed, revalidating license...');
                 validateLicense(storedKey).then(validation => {
                   if (validation.valid && validation.userInfo) {
                     setUserInfo(validation.userInfo);

@@ -1,65 +1,24 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-
-const configBaseDir = join(process.cwd(), 'server', 'config');
-const accountsFilePath = join(configBaseDir, 'registered_accounts.json');
-
-// Load accounts configuration
-const loadAccountsConfig = () => {
-  if (!existsSync(accountsFilePath)) {
-    return {
-      masterAccounts: {},
-      slaveAccounts: {},
-      pendingAccounts: {},
-      connections: {},
-    };
-  }
-
-  try {
-    const data = readFileSync(accountsFilePath, 'utf-8');
-    const config = JSON.parse(data);
-    // Ensure pendingAccounts exists for backward compatibility
-    if (!config.pendingAccounts) {
-      config.pendingAccounts = {};
-    }
-    return config;
-  } catch (error) {
-    console.error('Error loading accounts config:', error);
-    return {
-      masterAccounts: {},
-      slaveAccounts: {},
-      pendingAccounts: {},
-      connections: {},
-    };
-  }
-};
-
-// Save accounts configuration
-const saveAccountsConfig = config => {
-  try {
-    writeFileSync(accountsFilePath, JSON.stringify(config, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error saving accounts config:', error);
-    return false;
-  }
-};
+import { getUserAccounts, saveUserAccounts } from '../controllers/configManager.js';
 
 // Update account activity timestamp
-const updateAccountActivity = (accountId, accountType) => {
+const updateAccountActivity = (accountId, accountType, apiKey) => {
   try {
-    const config = loadAccountsConfig();
+    const userAccounts = getUserAccounts(apiKey);
     const now = new Date().toISOString();
 
-    if (accountType === 'master' && config.masterAccounts[accountId]) {
-      config.masterAccounts[accountId].lastActivity = now;
-    } else if (accountType === 'slave' && config.slaveAccounts[accountId]) {
-      config.slaveAccounts[accountId].lastActivity = now;
-    } else if (accountType === 'pending' && config.pendingAccounts[accountId]) {
-      config.pendingAccounts[accountId].lastActivity = now;
+    if (accountType === 'master' && userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) {
+      userAccounts.masterAccounts[accountId].lastActivity = now;
+    } else if (accountType === 'slave' && userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId]) {
+      userAccounts.slaveAccounts[accountId].lastActivity = now;
+    } else if (
+      accountType === 'pending' &&
+      userAccounts.pendingAccounts &&
+      userAccounts.pendingAccounts[accountId]
+    ) {
+      userAccounts.pendingAccounts[accountId].lastActivity = now;
     }
 
-    saveAccountsConfig(config);
+    saveUserAccounts(apiKey, userAccounts);
     return true;
   } catch (error) {
     console.error('Error updating account activity:', error);
@@ -79,20 +38,15 @@ export const authenticateAccount = (req, res, next) => {
     });
   }
 
-  // Validate API key for copy trading operations
-  if (!apiKey || apiKey !== 'IPTRADE_APIKEY') {
-    return res.status(401).json({
-      error: 'Invalid or missing API key',
-      message: 'Please provide the correct API key in x-api-key header',
-    });
-  }
+  // For now, use a temporary API key - this should be replaced with proper user-based authentication
+  const tempApiKey = apiKey || 'iptrade_89536f5b9e643c0433f3';
 
-  const config = loadAccountsConfig();
+  const userAccounts = getUserAccounts(tempApiKey);
 
   // Check if account exists as master, slave, or pending
-  const isMaster = config.masterAccounts[accountId];
-  const isSlave = config.slaveAccounts[accountId];
-  const isPending = config.pendingAccounts[accountId];
+  const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
+  const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
+  const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
 
   // If account doesn't exist anywhere, register as pending
   if (!isMaster && !isSlave && !isPending) {
@@ -103,26 +57,33 @@ export const authenticateAccount = (req, res, next) => {
       firstSeen: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       status: 'pending',
+      apiKey: tempApiKey,
     };
 
-    config.pendingAccounts[accountId] = newPendingAccount;
-    saveAccountsConfig(config);
+    if (!userAccounts.pendingAccounts) {
+      userAccounts.pendingAccounts = {};
+    }
+    userAccounts.pendingAccounts[accountId] = newPendingAccount;
+    saveUserAccounts(tempApiKey, userAccounts);
 
-    console.log(`🔄 New account detected and registered as pending: ${accountId}`);
+    console.log(`🔄 New account detected and registered as pending: ${accountId} (user: ${tempApiKey.substring(0, 8)}...)`);
   }
 
   // Determine account type
   const accountType = isMaster ? 'master' : isSlave ? 'slave' : 'pending';
 
   // Update activity timestamp for this request
-  updateAccountActivity(accountId, accountType);
+  updateAccountActivity(accountId, accountType, tempApiKey);
 
   // Add account info to request object
   req.accountInfo = {
     accountId,
     type: accountType,
-    account: isMaster || isSlave || isPending || config.pendingAccounts[accountId],
+    account: isMaster || isSlave || isPending || userAccounts.pendingAccounts[accountId],
   };
+
+  // Add API key to request for use in other middleware
+  req.apiKey = tempApiKey;
 
   next();
 };

@@ -66,7 +66,7 @@ const PLATFORMS = [
 ];
 
 export const TradingAccountsManager: React.FC = () => {
-  const { userInfo } = useAuth();
+  const { userInfo, secretKey, isAuthenticated } = useAuth();
   const [accounts, setAccounts] = useState<AccountsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMasterDialog, setShowMasterDialog] = useState(false);
@@ -91,7 +91,7 @@ export const TradingAccountsManager: React.FC = () => {
     masterAccountId: 'none',
   });
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT;
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Calculate total accounts for limit checking
@@ -100,22 +100,21 @@ export const TradingAccountsManager: React.FC = () => {
   // Check if user can create more accounts
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
-  
+
   useEffect(() => {
-    loadAccounts();
-    
-    // Log de depuración para plan del usuario
-    if (userInfo) {
-      console.log('🔍 TradingAccountsManager - Plan del usuario:', userInfo.planName);
-      console.log('🔍 Tipo de suscripción:', userInfo.subscriptionType);
-      console.log('🔍 Es plan ilimitado:', isUnlimitedPlan(userInfo));
+    if (isAuthenticated && secretKey) {
+      loadAccounts();
     }
-  }, []);
+  }, [isAuthenticated, secretKey]);
 
   const loadAccounts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${baseUrl}/accounts/admin/all`);
+      const response = await fetch(`${baseUrl}/accounts/all`, {
+        headers: {
+          'x-api-key': secretKey || '',
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setAccounts(data);
@@ -140,6 +139,7 @@ export const TradingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify(masterForm),
       });
@@ -172,6 +172,7 @@ export const TradingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify(slaveForm),
       });
@@ -210,6 +211,9 @@ export const TradingAccountsManager: React.FC = () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/master/${masterAccountId}`, {
         method: 'DELETE',
+        headers: {
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (response.ok) {
@@ -239,6 +243,9 @@ export const TradingAccountsManager: React.FC = () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/slave/${slaveAccountId}`, {
         method: 'DELETE',
+        headers: {
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (response.ok) {
@@ -268,6 +275,9 @@ export const TradingAccountsManager: React.FC = () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/disconnect/${slaveAccountId}`, {
         method: 'DELETE',
+        headers: {
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (response.ok) {
@@ -301,7 +311,12 @@ export const TradingAccountsManager: React.FC = () => {
 
       // Disconnect each slave
       const disconnectPromises = slaveIds.map(slaveId =>
-        fetch(`${baseUrl}/accounts/disconnect/${slaveId}`, { method: 'DELETE' })
+        fetch(`${baseUrl}/accounts/disconnect/${slaveId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-api-key': secretKey || '',
+          },
+        })
       );
 
       await Promise.all(disconnectPromises);
@@ -387,9 +402,12 @@ export const TradingAccountsManager: React.FC = () => {
           </CardContent>
         </Card>
       )}
-      
+
       {/* Información de plan sin límites para planes premium */}
-      {(userInfo && userInfo.planName === 'IPTRADE Premium' && userInfo.subscriptionType !== 'admin' && !isUnlimitedPlan(userInfo)) ? (
+      {userInfo &&
+      userInfo.planName === 'IPTRADE Premium' &&
+      userInfo.subscriptionType !== 'admin' &&
+      !isUnlimitedPlan(userInfo) ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -399,8 +417,8 @@ export const TradingAccountsManager: React.FC = () => {
           <CardContent>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Your {userInfo.planName} plan includes unlimited trading accounts.
-                You currently have {totalAccounts} accounts.
+                Your {userInfo.planName} plan includes unlimited trading accounts. You currently
+                have {totalAccounts} accounts.
               </p>
             </div>
           </CardContent>

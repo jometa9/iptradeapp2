@@ -2,9 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import {
+    getUserAccounts,
+    loadAccountsConfig,
+    saveAccountsConfig,
+    saveUserAccounts,
+} from './configManager.js';
+import {
     createDisabledMasterConfig,
-    loadCopierStatus,
-    saveCopierStatus,
+    loadUserCopierStatus,
+    saveUserCopierStatus,
 } from './copierStatusController.js';
 import {
     createDisabledSlaveConfig,
@@ -34,82 +40,7 @@ const initializeAccountsConfig = () => {
   }
 };
 
-// Load accounts configuration
-const loadAccountsConfig = () => {
-  initializeAccountsConfig();
-  try {
-    const data = readFileSync(accountsFilePath, 'utf8');
-    const config = JSON.parse(data);
 
-    // Migrate old structure if needed
-    if (!config.userAccounts && (config.masterAccounts || config.slaveAccounts)) {
-      console.log('⚠️  Detected old account structure, migrating to user-based structure...');
-      const migratedConfig = {
-        userAccounts: {},
-        globalData: {
-          lastMigration: new Date().toISOString(),
-          version: '2.0',
-        },
-      };
-
-      // Save migrated structure (old data will be lost since we don't know which user it belongs to)
-      writeFileSync(accountsFilePath, JSON.stringify(migratedConfig, null, 2));
-      console.log(
-        '✅ Migration completed. Old account data has been cleared due to lack of user association.'
-      );
-      return migratedConfig;
-    }
-
-    return config;
-  } catch (error) {
-    console.error('Error loading accounts config:', error);
-    return {
-      userAccounts: {},
-      globalData: {
-        lastMigration: null,
-        version: '2.0',
-      },
-    };
-  }
-};
-
-// Save accounts configuration
-const saveAccountsConfig = config => {
-  try {
-    writeFileSync(accountsFilePath, JSON.stringify(config, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Error saving accounts config:', error);
-    return false;
-  }
-};
-
-// Get user-specific accounts structure
-const getUserAccounts = apiKey => {
-  const config = loadAccountsConfig();
-  if (!config.userAccounts[apiKey]) {
-    config.userAccounts[apiKey] = {
-      masterAccounts: {},
-      slaveAccounts: {},
-      pendingAccounts: {},
-      connections: {}, // slaveId -> masterAccountId mapping
-      createdAt: new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-    };
-    saveAccountsConfig(config);
-  }
-  return config.userAccounts[apiKey];
-};
-
-// Save user-specific accounts
-const saveUserAccounts = (apiKey, userAccounts) => {
-  const config = loadAccountsConfig();
-  config.userAccounts[apiKey] = {
-    ...userAccounts,
-    lastActivity: new Date().toISOString(),
-  };
-  return saveAccountsConfig(config);
-};
 
 // Validation helpers - now user-specific
 export const isMasterAccountRegistered = (apiKey, masterAccountId) => {
@@ -127,11 +58,24 @@ export const getSlaveConnection = (apiKey, slaveAccountId) => {
   return userAccounts.connections[slaveAccountId] || null;
 };
 
+// Check if master account is online for a given slave
+export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
+  const userAccounts = getUserAccounts(apiKey);
+  const masterId = userAccounts.connections[slaveAccountId];
+
+  if (!masterId) {
+    return false; // No master connected
+  }
+
+  const masterAccount = userAccounts.masterAccounts[masterId];
+  return masterAccount && masterAccount.status !== 'offline';
+};
+
 // Define supported platforms
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
 // Activity monitoring configuration
-const ACTIVITY_TIMEOUT = 60000; // 60 seconds in milliseconds (allows for EA ping interval of 50s + buffer)
+const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
 
 // Check and update account status based on activity
 const checkAccountActivity = () => {
@@ -159,11 +103,34 @@ const checkAccountActivity = () => {
               );
 
               // Disable copy trading for offline master
-              const copierStatus = loadCopierStatus();
+              const copierStatus = loadUserCopierStatus(apiKey);
               if (copierStatus.masterAccounts[accountId] !== false) {
                 copierStatus.masterAccounts[accountId] = false;
-                saveCopierStatus(copierStatus);
+                saveUserCopierStatus(apiKey, copierStatus);
                 console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
+              }
+
+              // Disable copy trading for all connected slaves
+              const connectedSlaves = Object.entries(userAccounts.connections || {})
+                .filter(([, masterId]) => masterId === accountId)
+                .map(([slaveId]) => slaveId);
+
+              if (connectedSlaves.length > 0) {
+                const slaveConfigs = loadSlaveConfigs();
+                let slavesUpdated = false;
+
+                connectedSlaves.forEach(slaveId => {
+                  if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
+                    slaveConfigs[slaveId].enabled = false;
+                    slavesUpdated = true;
+                    console.log(`🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`);
+                  }
+                });
+
+                if (slavesUpdated) {
+                  saveSlaveConfigs(slaveConfigs);
+                }
+                console.log(`📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`);
               }
             }
           } else {
@@ -184,11 +151,34 @@ const checkAccountActivity = () => {
             );
 
             // Disable copy trading for offline master
-            const copierStatus = loadCopierStatus();
+            const copierStatus = loadUserCopierStatus(apiKey);
             if (copierStatus.masterAccounts[accountId] !== false) {
               copierStatus.masterAccounts[accountId] = false;
-              saveCopierStatus(copierStatus);
+              saveUserCopierStatus(apiKey, copierStatus);
               console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
+            }
+
+            // Disable copy trading for all connected slaves
+            const connectedSlaves = Object.entries(userAccounts.connections || {})
+              .filter(([, masterId]) => masterId === accountId)
+              .map(([slaveId]) => slaveId);
+
+            if (connectedSlaves.length > 0) {
+              const slaveConfigs = loadSlaveConfigs();
+              let slavesUpdated = false;
+
+              connectedSlaves.forEach(slaveId => {
+                if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
+                  slaveConfigs[slaveId].enabled = false;
+                  slavesUpdated = true;
+                  console.log(`🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`);
+                }
+              });
+
+              if (slavesUpdated) {
+                saveSlaveConfigs(slaveConfigs);
+              }
+              console.log(`📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`);
             }
           }
         }
@@ -354,7 +344,7 @@ export const registerMasterAccount = (req, res) => {
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     // Create disabled master configuration for copy control
-    createDisabledMasterConfig(masterAccountId);
+    createDisabledMasterConfig(masterAccountId, apiKey);
 
     console.log(
       `Master account registered: ${masterAccountId} (user: ${apiKey.substring(0, 8)}...) (copying disabled by default)`
@@ -609,6 +599,7 @@ export const getAllAccounts = (req, res) => {
       .map(([slaveId]) => ({
         id: slaveId,
         ...userAccounts.slaveAccounts[slaveId],
+        masterOnline: masterData.status !== 'offline' // Include master online status
       }));
 
     masterAccountsWithSlaves[masterId] = {
@@ -620,7 +611,11 @@ export const getAllAccounts = (req, res) => {
 
   const unconnectedSlaves = Object.entries(userAccounts.slaveAccounts)
     .filter(([slaveId]) => !userAccounts.connections[slaveId])
-    .map(([slaveId, slaveData]) => ({ id: slaveId, ...slaveData }));
+    .map(([slaveId, slaveData]) => ({
+      id: slaveId,
+      ...slaveData,
+      masterOnline: false // Unconnected slaves have no master
+    }));
 
   res.json({
     masterAccounts: masterAccountsWithSlaves,
@@ -848,8 +843,15 @@ export const getSupportedPlatforms = (req, res) => {
 // Get all pending accounts
 export const getPendingAccounts = (req, res) => {
   try {
-    const config = loadAccountsConfig();
-    const pendingAccounts = config.pendingAccounts || {};
+    const apiKey = req.apiKey; // Set by requireValidSubscription middleware
+    if (!apiKey) {
+      return res
+        .status(401)
+        .json({ error: 'API Key required - use requireValidSubscription middleware' });
+    }
+
+    const userAccounts = getUserAccounts(apiKey);
+    const pendingAccounts = userAccounts.pendingAccounts || {};
     const pendingCount = Object.keys(pendingAccounts).length;
 
     res.json({
@@ -870,31 +872,32 @@ export const getPendingAccounts = (req, res) => {
 export const convertPendingToMaster = (req, res) => {
   const { accountId } = req.params;
   const { name, description, broker, platform } = req.body;
-
+  const apiKey = req.apiKey;
+  if (!apiKey) {
+    return res
+      .status(401)
+      .json({ error: 'API Key required - use requireValidSubscription middleware' });
+  }
   if (!accountId) {
     return res.status(400).json({ error: 'Account ID is required' });
   }
-
   try {
-    const config = loadAccountsConfig();
-
+    const userAccounts = getUserAccounts(apiKey);
     // Check if account exists in pending
-    if (!config.pendingAccounts[accountId]) {
-      return res.status(404).json({
-        error: `Pending account ${accountId} not found`,
-      });
+    if (!userAccounts.pendingAccounts || !userAccounts.pendingAccounts[accountId]) {
+      return res.status(404).json({ error: `Pending account ${accountId} not found` });
     }
-
     // Check if account already exists as master or slave
-    if (config.masterAccounts[accountId] || config.slaveAccounts[accountId]) {
-      return res.status(409).json({
-        error: `Account ${accountId} already exists as master or slave`,
-      });
+    if (
+      (userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) ||
+      (userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId])
+    ) {
+      return res
+        .status(409)
+        .json({ error: `Account ${accountId} already exists as master or slave` });
     }
-
     // Get pending account data
-    const pendingAccount = config.pendingAccounts[accountId];
-
+    const pendingAccount = userAccounts.pendingAccounts[accountId];
     // Create master account
     const masterAccount = {
       id: accountId,
@@ -908,18 +911,12 @@ export const convertPendingToMaster = (req, res) => {
       lastActivity: pendingAccount.lastActivity,
       status: 'active',
     };
-
     // Move from pending to master
-    config.masterAccounts[accountId] = masterAccount;
-    delete config.pendingAccounts[accountId];
-
-    if (saveAccountsConfig(config)) {
-      // Create disabled master configuration for copy control
+    if (!userAccounts.masterAccounts) userAccounts.masterAccounts = {};
+    userAccounts.masterAccounts[accountId] = masterAccount;
+    if (userAccounts.pendingAccounts) delete userAccounts.pendingAccounts[accountId];
+    if (saveUserAccounts(apiKey, userAccounts)) {
       createDisabledMasterConfig(accountId);
-
-      console.log(
-        `✅ Pending account ${accountId} converted to master (copying disabled by default)`
-      );
       res.json({
         message: 'Pending account successfully converted to master (copying disabled by default)',
         accountId,
@@ -940,38 +937,39 @@ export const convertPendingToMaster = (req, res) => {
 export const convertPendingToSlave = (req, res) => {
   const { accountId } = req.params;
   const { name, description, broker, platform, masterAccountId } = req.body;
-
+  const apiKey = req.apiKey;
+  if (!apiKey) {
+    return res
+      .status(401)
+      .json({ error: 'API Key required - use requireValidSubscription middleware' });
+  }
   if (!accountId) {
     return res.status(400).json({ error: 'Account ID is required' });
   }
-
   try {
-    const config = loadAccountsConfig();
-
+    const userAccounts = getUserAccounts(apiKey);
     // Check if account exists in pending
-    if (!config.pendingAccounts[accountId]) {
-      return res.status(404).json({
-        error: `Pending account ${accountId} not found`,
-      });
+    if (!userAccounts.pendingAccounts || !userAccounts.pendingAccounts[accountId]) {
+      return res.status(404).json({ error: `Pending account ${accountId} not found` });
     }
-
     // Check if account already exists as master or slave
-    if (config.masterAccounts[accountId] || config.slaveAccounts[accountId]) {
-      return res.status(409).json({
-        error: `Account ${accountId} already exists as master or slave`,
-      });
+    if (
+      (userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) ||
+      (userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId])
+    ) {
+      return res
+        .status(409)
+        .json({ error: `Account ${accountId} already exists as master or slave` });
     }
-
     // If masterAccountId provided, validate it exists
-    if (masterAccountId && !config.masterAccounts[masterAccountId]) {
-      return res.status(400).json({
-        error: `Master account ${masterAccountId} not found`,
-      });
+    if (
+      masterAccountId &&
+      (!userAccounts.masterAccounts || !userAccounts.masterAccounts[masterAccountId])
+    ) {
+      return res.status(400).json({ error: `Master account ${masterAccountId} not found` });
     }
-
     // Get pending account data
-    const pendingAccount = config.pendingAccounts[accountId];
-
+    const pendingAccount = userAccounts.pendingAccounts[accountId];
     // Create slave account
     const slaveAccount = {
       id: accountId,
@@ -985,23 +983,17 @@ export const convertPendingToSlave = (req, res) => {
       lastActivity: pendingAccount.lastActivity,
       status: 'active',
     };
-
     // Move from pending to slave
-    config.slaveAccounts[accountId] = slaveAccount;
-    delete config.pendingAccounts[accountId];
-
+    if (!userAccounts.slaveAccounts) userAccounts.slaveAccounts = {};
+    userAccounts.slaveAccounts[accountId] = slaveAccount;
+    if (userAccounts.pendingAccounts) delete userAccounts.pendingAccounts[accountId];
     // If masterAccountId provided, establish connection
     if (masterAccountId) {
-      config.connections[accountId] = masterAccountId;
+      if (!userAccounts.connections) userAccounts.connections = {};
+      userAccounts.connections[accountId] = masterAccountId;
     }
-
-    if (saveAccountsConfig(config)) {
-      // Create disabled slave configuration for copy control
+    if (saveUserAccounts(apiKey, userAccounts)) {
       createDisabledSlaveConfig(accountId);
-
-      console.log(
-        `✅ Pending account ${accountId} converted to slave${masterAccountId ? ` and connected to master ${masterAccountId}` : ''} (copying disabled by default)`
-      );
       res.json({
         message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''} (copying disabled by default)`,
         accountId,
@@ -1022,24 +1014,31 @@ export const convertPendingToSlave = (req, res) => {
 // Delete pending account
 export const deletePendingAccount = (req, res) => {
   const { accountId } = req.params;
+  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API Key required - use requireValidSubscription middleware',
+    });
+  }
 
   if (!accountId) {
     return res.status(400).json({ error: 'Account ID is required' });
   }
 
   try {
-    const config = loadAccountsConfig();
+    const userAccounts = getUserAccounts(apiKey);
 
-    if (!config.pendingAccounts[accountId]) {
+    if (!userAccounts.pendingAccounts || !userAccounts.pendingAccounts[accountId]) {
       return res.status(404).json({
         error: `Pending account ${accountId} not found`,
       });
     }
 
     // Remove from pending accounts
-    delete config.pendingAccounts[accountId];
+    delete userAccounts.pendingAccounts[accountId];
 
-    if (saveAccountsConfig(config)) {
+    if (saveUserAccounts(apiKey, userAccounts)) {
       console.log(`🗑️ Pending account ${accountId} deleted`);
       res.json({
         message: 'Pending account deleted successfully',
@@ -1070,13 +1069,15 @@ export const getAllAccountsForAdmin = (req, res) => {
     };
 
     // Process master accounts - add null checks
-    response.totalMasterAccounts = config.masterAccounts ? Object.keys(config.masterAccounts).length : 0;
+    response.totalMasterAccounts = config.masterAccounts
+      ? Object.keys(config.masterAccounts).length
+      : 0;
 
     // Process master accounts if they exist
     if (config.masterAccounts) {
       for (const [accountId, account] of Object.entries(config.masterAccounts)) {
         // Find connected slaves for this master
-        const connectedSlaves = config.connections 
+        const connectedSlaves = config.connections
           ? Object.entries(config.connections)
               .filter(([, masterId]) => masterId === accountId)
               .map(([slaveId]) => config.slaveAccounts && config.slaveAccounts[slaveId])
@@ -1098,12 +1099,16 @@ export const getAllAccountsForAdmin = (req, res) => {
         .map(slave => ({ id: slave.id, ...slave }));
     } else if (config.slaveAccounts) {
       // If no connections exist, all slaves are unconnected
-      response.unconnectedSlaves = Object.values(config.slaveAccounts)
-        .map(slave => ({ id: slave.id, ...slave }));
+      response.unconnectedSlaves = Object.values(config.slaveAccounts).map(slave => ({
+        id: slave.id,
+        ...slave,
+      }));
     }
 
     // Count totals with null checks
-    response.totalSlaveAccounts = config.slaveAccounts ? Object.keys(config.slaveAccounts).length : 0;
+    response.totalSlaveAccounts = config.slaveAccounts
+      ? Object.keys(config.slaveAccounts).length
+      : 0;
     response.totalConnections = config.connections ? Object.keys(config.connections).length : 0;
 
     res.json(response);
@@ -1195,7 +1200,7 @@ export const getAccountActivityStats = (req, res) => {
           lastActivity: account.lastActivity,
           timeSinceActivity,
           isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
-          connectedTo: config.connections && config.connections[accountId] || null,
+          connectedTo: (config.connections && config.connections[accountId]) || null,
         });
       }
     }

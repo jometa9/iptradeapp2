@@ -13,3 +13,7 @@ Server   : MetaQuotes-Demo
 Login    : 94424443
 Password : NaS-PaK4
 Investor : @5JtCkQp
+
+cuentas de otras apikeys que se limpien todas si pasa una semana o algo similar
+documentations
+legals

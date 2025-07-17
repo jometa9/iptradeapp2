@@ -18,11 +18,6 @@ class CtraderApiService {
       demo: 'wss://demo.ctraderapi.com:5035',
     };
 
-    console.log(`🌐 cTrader WebSocket Live: ${this.wsEndpoints.live}`);
-    console.log(`🌐 cTrader WebSocket Demo: ${this.wsEndpoints.demo}`);
-    console.log(`⏰ Keep alive interval: ${this.keepAliveInterval}ms`);
-
-    // Verify cTrader credentials
     this.verifyCredentials();
   }
 
@@ -31,25 +26,17 @@ class CtraderApiService {
     const clientId = process.env.CTRADER_CLIENT_ID;
     const clientSecret = process.env.CTRADER_CLIENT_SECRET;
 
-    console.log(`🔍 Verifying cTrader credentials...`);
-    console.log(`📋 CTRADER_CLIENT_ID: ${clientId ? '✅ configured' : '❌ missing'}`);
-    console.log(`📋 CTRADER_CLIENT_SECRET: ${clientSecret ? '✅ configured' : '❌ missing'}`);
-
     if (!clientId || !clientSecret) {
       console.error(`❌ cTrader credentials not properly configured!`);
       console.error(
         `Please ensure CTRADER_CLIENT_ID and CTRADER_CLIENT_SECRET are set in server/.env`
       );
-    } else {
-      console.log(`✅ cTrader credentials verified`);
     }
   }
 
   // Get all user accounts via WebSocket + Protobuf (OFFICIAL METHOD)
   async getAllUserAccountsWebSocket(userId, useDemo = true) {
     try {
-      console.log(`🔍 Getting all accounts via WebSocket+Protobuf for user ${userId}`);
-
       const accessToken = await CtraderAuthService.getValidAccessToken(userId);
       if (!accessToken) {
         throw new Error('No access token available for user');
@@ -60,7 +47,6 @@ class CtraderApiService {
 
       // Create connection if it doesn't exist or is not connected
       if (!connection || !connection.connected) {
-        console.log(`🔌 Creating new WebSocket connection for user ${userId}`);
         connection = await this.createConnection(userId, useDemo);
 
         if (!connection || !connection.connected) {
@@ -72,20 +58,17 @@ class CtraderApiService {
       }
 
       // Send Application Auth message first
-      console.log(`🔐 Sending Application Auth request`);
       await this.sendApplicationAuth(userId);
 
       // Wait for application auth to complete
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Request accounts list using access token
-      console.log(`📋 Requesting accounts list with access token`);
       await this.requestAccountsListByAccessToken(userId);
 
       // Wait for response and return accounts
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          console.warn(`⚠️ Timeout waiting for accounts response for user ${userId}`);
           // Return stored accounts if available
           const storedAccounts = CtraderAuthService.getUserAccounts(userId);
           resolve(storedAccounts);
@@ -96,7 +79,6 @@ class CtraderApiService {
           const conn = this.connections.get(userId);
           if (conn && conn.accounts && conn.accounts.length > 0) {
             clearTimeout(timeout);
-            console.log(`✅ Received ${conn.accounts.length} accounts via WebSocket`);
             // Update stored accounts
             CtraderAuthService.updateUserAccounts(userId, conn.accounts);
             resolve(conn.accounts);
@@ -114,7 +96,6 @@ class CtraderApiService {
       // Fallback to stored accounts
       const storedAccounts = CtraderAuthService.getUserAccounts(userId);
       if (storedAccounts.length > 0) {
-        console.log(`📋 Returning ${storedAccounts.length} stored accounts as fallback`);
         return storedAccounts;
       }
       throw error;
@@ -125,7 +106,6 @@ class CtraderApiService {
   processAccountsFromProtobuf(accountsData, isDemo = true) {
     try {
       if (!accountsData || !Array.isArray(accountsData)) {
-        console.log(`📋 No accounts data received`);
         return [];
       }
 
@@ -150,11 +130,8 @@ class CtraderApiService {
   // Create WebSocket connection for user using correct cTrader Open API protocol
   async createConnection(userId, useDemo = true) {
     try {
-      console.log(`🔌 Creating cTrader WebSocket connection for user ${userId}`);
-
       // Choose endpoint based on demo/live preference
       const endpoint = useDemo ? this.wsEndpoints.demo : this.wsEndpoints.live;
-      console.log(`🌐 Connecting to: ${endpoint}`);
 
       // Create WebSocket connection with correct endpoint
       const wsOptions = {};
@@ -190,7 +167,6 @@ class CtraderApiService {
 
         ws.on('open', () => {
           clearTimeout(timeout);
-          console.log(`✅ cTrader WebSocket connected for user ${userId}`);
           const connection = this.connections.get(userId);
           if (connection) {
             connection.connected = true;
@@ -215,7 +191,6 @@ class CtraderApiService {
   // Setup WebSocket event handlers
   setupConnectionHandlers(ws, userId) {
     ws.on('open', () => {
-      console.log(`cTrader WebSocket opened for user ${userId}`);
       this.startKeepAlive(userId);
       this.sendApplicationAuth(userId);
     });
@@ -230,7 +205,6 @@ class CtraderApiService {
     });
 
     ws.on('close', (code, reason) => {
-      console.log(`cTrader WebSocket closed for user ${userId}:`, code, reason);
       this.handleDisconnection(userId);
     });
 
@@ -246,9 +220,6 @@ class CtraderApiService {
       const connection = this.connections.get(userId);
       if (!connection?.ws) return;
 
-      // Test different message formats to see which one works
-      console.log(`🔬 Testing different auth message formats...`);
-
       const authMessage = {
         clientMsgId: `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         payloadType: 2100, // ProtoOAApplicationAuthReq
@@ -258,20 +229,11 @@ class CtraderApiService {
         },
       };
 
-      console.log(`🔐 Sending application authentication for user ${userId}`);
-      console.log(`🔍 Auth payload:`, JSON.stringify(authMessage.payload, null, 2));
-      console.log(`🔍 ClientId length: ${process.env.CTRADER_CLIENT_ID?.length}`);
-      console.log(`🔍 ClientSecret length: ${process.env.CTRADER_CLIENT_SECRET?.length}`);
-
       this.sendMessage(userId, authMessage);
 
       // Set a timeout to detect if we don't get a response
       setTimeout(() => {
         const conn = this.connections.get(userId);
-        if (conn?.connected) {
-          console.log(`⚠️  No authentication response received after 5 seconds`);
-          console.log(`💡 This suggests the credentials or message format might be incorrect`);
-        }
       }, 5000);
     } catch (error) {
       console.error(`Failed to send application auth for user ${userId}:`, error);
@@ -282,11 +244,6 @@ class CtraderApiService {
   handleMessage(userId, message) {
     const connection = this.connections.get(userId);
     if (!connection) return;
-
-    console.log(`📨 cTrader message for user ${userId}:`, message.payloadType);
-    if (message.payload && Object.keys(message.payload).length > 0) {
-      console.log(`📋 Message payload:`, JSON.stringify(message.payload, null, 2));
-    }
 
     switch (message.payloadType) {
       case 2101: // ProtoOAApplicationAuthRes
@@ -314,23 +271,16 @@ class CtraderApiService {
         this.handleErrorResponse(userId, message.payload);
         break;
       default:
-        console.log(`🔄 Unhandled message type ${message.payloadType} for user ${userId}`);
-        if (message.payload) {
-          console.log(`🔍 Payload details:`, JSON.stringify(message.payload, null, 2));
-        }
     }
   }
 
   // Handle application authentication response
   handleApplicationAuthResponse(userId, payload) {
-    console.log(`✅ Application authenticated for user ${userId}`);
     this.requestAccountsListByAccessToken(userId);
   }
 
   // Handle account authentication response
-  handleAccountAuthResponse(userId, payload) {
-    console.log(`✅ Account authenticated for user ${userId}:`, payload.ctidTraderAccountId);
-  }
+  handleAccountAuthResponse(userId, payload) {}
 
   // Handle accounts list response (legacy)
   handleAccountsListResponse(userId, payload) {
@@ -350,19 +300,13 @@ class CtraderApiService {
 
     // Update stored accounts in auth service
     CtraderAuthService.updateUserAccounts(userId, connection.accounts);
-
-    console.log(`📋 Updated accounts for user ${userId}:`, connection.accounts.length);
   }
 
   // Handle accounts list by access token response
   async handleAccountsListByAccessTokenResponse(userId, payload) {
-    console.log(`📋 Received accounts list by access token for user ${userId}`);
-    console.log(`📋 Raw payload:`, JSON.stringify(payload, null, 2));
-
     try {
       const connection = this.connections.get(userId);
       if (!connection) {
-        console.warn(`⚠️ No connection found for user ${userId}`);
         return;
       }
 
@@ -373,14 +317,6 @@ class CtraderApiService {
         const isDemo = connection.isDemo || true;
         connection.accounts = this.processAccountsFromProtobuf(accountsData, isDemo);
 
-        console.log(`✅ Updated connection with ${connection.accounts.length} accounts`);
-        console.log(
-          `📋 Accounts:`,
-          connection.accounts.map(
-            acc => `${acc.brokerName} ${acc.accountNumber} (${acc.environment})`
-          )
-        );
-
         // Store accounts in auth service too
         CtraderAuthService.updateUserAccounts(userId, connection.accounts);
 
@@ -388,9 +324,6 @@ class CtraderApiService {
         if (connection.accounts.length > 0) {
           const accessToken = await CtraderAuthService.getValidAccessToken(userId);
           if (accessToken) {
-            console.log(
-              `🔐 Auto-authenticating first account: ${connection.accounts[0].accountId}`
-            );
             this.authenticateAccountWithToken(
               userId,
               connection.accounts[0].accountId,
@@ -398,9 +331,6 @@ class CtraderApiService {
             );
           }
         }
-      } else {
-        console.log(`⚠️ No accounts received in response for user ${userId}`);
-        console.log(`📋 Available payload fields:`, Object.keys(payload));
       }
     } catch (error) {
       console.error(`❌ Error handling accounts list response for user ${userId}:`, error);
@@ -409,14 +339,12 @@ class CtraderApiService {
 
   // Handle execution events (trades)
   handleExecutionEvent(userId, payload) {
-    console.log(`🔄 Execution event for user ${userId}:`, payload);
     // Here you would implement your copy trading logic
     // This is where trades from master accounts would be detected and copied
   }
 
   // Handle order events
   handleOrderEvent(userId, payload) {
-    console.log(`📋 Order event for user ${userId}:`, payload);
     // Handle order status changes, modifications, cancellations
   }
 
@@ -432,21 +360,11 @@ class CtraderApiService {
   handleErrorResponse(userId, payload) {
     console.error(`❌ cTrader error for user ${userId}:`, payload);
 
-    if (payload?.errorCode) {
-      console.error(`📍 Error code: ${payload.errorCode}`);
-    }
-
-    if (payload?.description) {
-      console.error(`📝 Error description: ${payload.description}`);
-    }
-
-    // Check if this is a critical error that should disconnect the user
     if (
       payload?.errorCode === 'INVALID_CLIENT_CREDENTIALS' ||
       payload?.errorCode === 'UNAUTHORIZED' ||
       payload?.errorCode === 'INVALID_ACCESS_TOKEN'
     ) {
-      console.error(`🚨 Critical authentication error, disconnecting user ${userId}`);
       this.disconnect(userId);
     }
   }
@@ -464,17 +382,12 @@ class CtraderApiService {
   // Request accounts list by access token (used after app authentication)
   async requestAccountsListByAccessToken(userId) {
     try {
-      console.log(`🔍 Getting access token for user ${userId}...`);
       const accessToken = await CtraderAuthService.getValidAccessToken(userId);
 
       if (!accessToken) {
         console.error(`❌ No access token available for user ${userId}`);
         return;
       }
-
-      console.log(
-        `✅ Access token obtained for user ${userId}: ${accessToken.substring(0, 10)}...`
-      );
 
       const message = {
         clientMsgId: `acc_list_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -484,12 +397,8 @@ class CtraderApiService {
         },
       };
 
-      console.log(`📋 Requesting accounts list by access token for user ${userId}`);
-      console.log(`📋 Message payload:`, JSON.stringify(message.payload, null, 2));
-
       const sent = this.sendMessage(userId, message);
       if (sent) {
-        console.log(`✅ Accounts list request sent successfully for user ${userId}`);
       } else {
         console.error(`❌ Failed to send accounts list request for user ${userId}`);
       }
@@ -522,7 +431,6 @@ class CtraderApiService {
       },
     };
 
-    console.log(`🔐 Authenticating account ${accountId} for user ${userId}`);
     this.sendMessage(userId, message);
   }
 
@@ -542,8 +450,6 @@ class CtraderApiService {
 
     try {
       const messageString = JSON.stringify(message);
-      console.log(`📤 Sending message to user ${userId}:`, message.payloadType);
-      console.log(`📤 Message details:`, messageString);
       connection.ws.send(messageString);
       return true;
     } catch (error) {
@@ -662,13 +568,11 @@ class CtraderApiService {
     }
 
     connection.connected = false;
-    console.log(`🔌 User ${userId} disconnected from cTrader`);
 
     // Clean up dead connections after a short delay
     setTimeout(() => {
       const conn = this.connections.get(userId);
       if (conn && (!conn.ws || conn.ws.readyState === WebSocket.CLOSED)) {
-        console.log(`🧹 Cleaning up dead connection for user ${userId}`);
         this.connections.delete(userId);
       }
     }, 5000); // 5 seconds delay

@@ -77,11 +77,9 @@ class Mt5AuthService {
       if (existingIndex >= 0) {
         // Update existing account
         this.accounts[userId].accounts[existingIndex] = accountEntry;
-        console.log(`✅ Updated MT5 account ${accountData.account} for user ${userId}`);
       } else {
         // Add new account
         this.accounts[userId].accounts.push(accountEntry);
-        console.log(`✅ Stored new MT5 account ${accountData.account} for user ${userId}`);
       }
 
       this.accounts[userId].lastLogin = new Date().toISOString();
@@ -162,7 +160,6 @@ class Mt5AuthService {
 
       if (userData.accounts.length < initialLength) {
         this.saveAccounts();
-        console.log(`✅ Removed MT5 account ${account}@${server} for user ${userId}`);
         return true;
       }
 
@@ -283,7 +280,6 @@ class Mt5AuthService {
 
           if (userData.accounts.length < initialLength) {
             cleaned = true;
-            console.log(`🧹 Cleaned up old MT5 accounts for user ${userId}`);
           }
         }
       }
@@ -354,7 +350,6 @@ class Mt5AuthService {
       };
 
       this.saveAccounts();
-      console.log(`✅ Imported MT5 data for user ${userId}`);
       return true;
     } catch (error) {
       console.error('Error importing user data:', error);

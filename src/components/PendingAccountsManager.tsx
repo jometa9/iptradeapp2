@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 
 import { Cable, Clock, UserCheck, Users, XCircle } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+import {
+  canCreateMoreAccounts,
+  getAccountLimitMessage,
+  getSubscriptionLimits,
+} from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -10,7 +16,6 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
-import { useAuth } from '../context/AuthContext';
 
 interface PendingAccount {
   id: string;
@@ -48,7 +53,7 @@ interface ConversionForm {
 
 export const PendingAccountsManager: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const { secretKey } = useAuth();
+  const { secretKey, userInfo, isAuthenticated } = useAuth();
   const [pendingAccounts, setPendingAccounts] = useState<PendingAccountsData | null>(null);
   const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
@@ -66,16 +71,25 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+  // Estados para confirmaciones visuales
+  const [successfulConversions, setSuccessfulConversions] = useState<Set<string>>(new Set());
+  const [conversionType, setConversionType] = useState<'master' | 'slave' | null>(null);
+
+  // Obtener total de cuentas (masters + slaves) para el usuario
+  const [totalAccounts, setTotalAccounts] = useState<number>(0);
+  const [accountLimit, setAccountLimit] = useState<number | null>(null);
+
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Load pending accounts
   const loadPendingAccounts = async () => {
     try {
+      console.log('API KEY ENVIADO (pending):', secretKey);
       const response = await fetch(`${baseUrl}/accounts/pending`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
       if (response.ok) {
         const data = await response.json();
@@ -96,10 +110,10 @@ export const PendingAccountsManager: React.FC = () => {
   // Load master accounts for slave connection
   const loadMasterAccounts = async () => {
     try {
-      const response = await fetch(`${baseUrl}/accounts/admin/all`, {
+      const response = await fetch(`${baseUrl}/accounts/all`, {
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
       if (response.ok) {
         const data = await response.json();
@@ -113,19 +127,49 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
+  // Cargar cuentas totales y límite
+  const loadAccountStats = async () => {
+    try {
+      const response = await fetch(`${baseUrl}/accounts/all`, {
+        headers: {
+          'x-api-key': secretKey || '',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const masters = data.totalMasterAccounts || 0;
+        const slaves = data.totalSlaveAccounts || 0;
+        setTotalAccounts(masters + slaves);
+        if (userInfo) {
+          const limits = getSubscriptionLimits(userInfo.subscriptionType);
+          setAccountLimit(limits.maxAccounts);
+        }
+      }
+    } catch (error) {
+      setTotalAccounts(0);
+      setAccountLimit(null);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadPendingAccounts(), loadMasterAccounts()]);
+      await Promise.all([loadPendingAccounts(), loadMasterAccounts(), loadAccountStats()]);
       setLoading(false);
     };
-    loadData();
-
-    // Auto-refresh every 30 seconds to catch new pending accounts
-    const interval = setInterval(loadPendingAccounts, 30000);
+    if (isAuthenticated && secretKey) {
+      loadData();
+    }
+    // Auto-refresh every 1 second to catch new pending accounts AND account changes
+    const interval = setInterval(() => {
+      if (isAuthenticated && secretKey) {
+        loadPendingAccounts();
+        loadAccountStats(); // También actualizar el conteo de cuentas
+      }
+    }, 1000);
     return () => clearInterval(interval);
-  }, [secretKey]); // Add secretKey as dependency
+  }, [secretKey, isAuthenticated]); // Add secretKey and isAuthenticated as dependencies
 
   // Open conversion form inline or master confirmation
   const openConversionForm = (account: PendingAccount, type: 'master' | 'slave') => {
@@ -182,7 +226,7 @@ export const PendingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': secretKey || ''
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify(payload),
       });
@@ -193,8 +237,31 @@ export const PendingAccountsManager: React.FC = () => {
           description: `Account ${accountId} successfully converted to master`,
         });
 
+        // Agregar confirmación visual
+        setSuccessfulConversions(prev => new Set([...prev, accountId]));
+        setConversionType('master');
         setConfirmingMasterId(null);
-        loadPendingAccounts(); // Refresh the list
+
+        // Remover la confirmación después de 2 segundos
+        setTimeout(() => {
+          setSuccessfulConversions(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(accountId);
+            return newSet;
+          });
+          setConversionType(null);
+        }, 2000);
+
+        // Actualizar estado local eliminando la cuenta convertida
+        if (pendingAccounts) {
+          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+          delete updatedPendingAccounts[accountId];
+          setPendingAccounts({
+            ...pendingAccounts,
+            pendingAccounts: updatedPendingAccounts,
+            totalPending: pendingAccounts.totalPending - 1,
+          });
+        }
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account to master');
@@ -236,7 +303,7 @@ export const PendingAccountsManager: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': secretKey || ''
+          'x-api-key': secretKey || '',
         },
         body: JSON.stringify(payload),
       });
@@ -251,8 +318,31 @@ export const PendingAccountsManager: React.FC = () => {
           }`,
         });
 
+        // Agregar confirmación visual
+        setSuccessfulConversions(prev => new Set([...prev, expandedAccountId]));
+        setConversionType('slave');
         setExpandedAccountId(null);
-        loadPendingAccounts(); // Refresh the list
+
+        // Remover la confirmación después de 2 segundos
+        setTimeout(() => {
+          setSuccessfulConversions(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(expandedAccountId);
+            return newSet;
+          });
+          setConversionType(null);
+        }, 2000);
+
+        // Actualizar estado local eliminando la cuenta convertida
+        if (pendingAccounts) {
+          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+          delete updatedPendingAccounts[expandedAccountId];
+          setPendingAccounts({
+            ...pendingAccounts,
+            pendingAccounts: updatedPendingAccounts,
+            totalPending: pendingAccounts.totalPending - 1,
+          });
+        }
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account');
@@ -276,8 +366,8 @@ export const PendingAccountsManager: React.FC = () => {
       const response = await fetch(`${baseUrl}/accounts/pending/${accountId}`, {
         method: 'DELETE',
         headers: {
-          'x-api-key': secretKey || ''
-        }
+          'x-api-key': secretKey || '',
+        },
       });
 
       if (response.ok) {
@@ -286,7 +376,17 @@ export const PendingAccountsManager: React.FC = () => {
           description: 'Pending account deleted successfully',
         });
         setConfirmingDeleteId(null);
-        loadPendingAccounts();
+
+        // Actualizar estado local eliminando la cuenta borrada
+        if (pendingAccounts) {
+          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+          delete updatedPendingAccounts[accountId];
+          setPendingAccounts({
+            ...pendingAccounts,
+            pendingAccounts: updatedPendingAccounts,
+            totalPending: pendingAccounts.totalPending - 1,
+          });
+        }
       } else {
         throw new Error('Failed to delete pending account');
       }
@@ -363,288 +463,344 @@ export const PendingAccountsManager: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {Object.entries(accounts).map(([id, account]) => (
-                <div
-                  key={id}
-                  className="border rounded-lg p-4 bg-orange-50 border-orange-200 shadow"
-                >
-                  <div className="flex items-start justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-orange-900">Account {id}</h3>
-                      <Badge
-                        variant="outline"
-                        className="bg-orange-100 text-orange-800 border-orange-300"
-                      >
-                        Pending
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
-                      {confirmingMasterId === id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                            onClick={() => convertToMaster(id, account.platform)}
-                            disabled={isConverting}
-                          >
-                            {isConverting ? (
-                              <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mr-1" />
-                                Converting...
-                              </>
-                            ) : (
-                              <>
-                                <UserCheck className="h-4 w-4 mr-1" />
-                                Confirm
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                            onClick={cancelConversion}
-                            disabled={isConverting}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : confirmingDeleteId === id ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                            onClick={() => deletePendingAccount(id)}
-                            disabled={isConverting}
-                          >
-                            {isConverting ? (
-                              <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
-                                Deleting...
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Delete
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
-                            onClick={cancelConversion}
-                            disabled={isConverting}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        // Normal buttons
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                            onClick={() => openConversionForm(account, 'master')}
-                            disabled={isConverting}
-                          >
-                            <UserCheck className="h-4 w-4 mr-1" />
-                            Make Master
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                            onClick={() => openConversionForm(account, 'slave')}
-                            disabled={isConverting}
-                          >
-                            <Users className="h-4 w-4 mr-1" />
-                            Make Slave
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                            onClick={() => openDeleteConfirmation(id)}
-                            disabled={isConverting}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
+              {Object.entries(accounts).map(([id, account]) => {
+                const isSuccessfullyConverted = successfulConversions.has(id);
+                const isMasterConversion = conversionType === 'master' && isSuccessfullyConverted;
+                const isSlaveConversion = conversionType === 'slave' && isSuccessfullyConverted;
 
-                  <div className="text-sm text-gray-600 space-y-1 mt-2 ">
-                    <p>
-                      <strong>Platform:</strong> {account.platform || 'Unknown'}
-                    </p>
-                    <p className="text-orange-600">
-                      <strong>Waiting since:</strong> {getTimeSinceFirstSeen(account.firstSeen)}
-                    </p>
-                  </div>
-
-                  {/* Inline Conversion Form */}
-                  {expandedAccountId === id && (
-                    <div className="mt-4 p-4 border rounded-lg border-green-400 bg-green-50 shadow">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-lg font-medium text-green-700">
-                          Convert {id} to Slave Account
-                        </h3>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={cancelConversion}
-                          className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                          disabled={isConverting}
+                return (
+                  <div
+                    key={id}
+                    className={`border rounded-lg p-4 shadow transition-all duration-500 ${
+                      isSuccessfullyConverted
+                        ? 'bg-green-50 border-green-200 scale-105'
+                        : 'bg-orange-50 border-orange-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <h3
+                          className={`font-semibold ${
+                            isSuccessfullyConverted ? 'text-green-900' : 'text-orange-900'
+                          }`}
                         >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
+                          Account {id}
+                        </h3>
+                        <Badge
+                          variant="outline"
+                          className={
+                            isSuccessfullyConverted
+                              ? 'bg-green-100 text-green-800 border-green-300'
+                              : 'bg-orange-100 text-orange-800 border-orange-300'
+                          }
+                        >
+                          {isSuccessfullyConverted
+                            ? isMasterConversion
+                              ? 'Master Account'
+                              : 'Slave Account'
+                            : 'Pending'}
+                        </Badge>
                       </div>
-
-                      <form
-                        onSubmit={e => {
-                          e.preventDefault();
-                          convertAccount();
-                        }}
-                        className="space-y-4"
-                      >
-                        {/* Trading Configuration */}
-                        <div className="space-y-4">
-                          {/* First Row: Master Connection + Lot Multiplier */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Master Connection Section */}
-                            {masterAccounts.length > 0 && (
-                              <div>
-                                <Label htmlFor="convert-master">Connect to Master account</Label>
-                                <Select
-                                  value={conversionForm.masterAccountId}
-                                  onValueChange={value =>
-                                    setConversionForm(prev => ({ ...prev, masterAccountId: value }))
-                                  }
-                                >
-                                  <SelectTrigger className="bg-white border border-gray-200">
-                                    <SelectValue placeholder="Select master..." />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-white border border-gray-200">
-                                    <SelectItem value="none">
-                                      Not connected (configure later)
-                                    </SelectItem>
-                                    {masterAccounts.map(master => (
-                                      <SelectItem
-                                        key={master.id}
-                                        value={master.id}
-                                        className=" hover:bg-gray-50 cursor-pointer"
-                                      >
-                                        {master.name || master.id} ({master.platform})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-
-                            <div>
-                              <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>
-                              <Input
-                                id="lotCoefficient"
-                                type="number"
-                                min="0.01"
-                                max="100"
-                                step="0.01"
-                                value={conversionForm.lotCoefficient.toString()}
-                                onChange={e =>
-                                  setConversionForm(prev => ({
-                                    ...prev,
-                                    lotCoefficient:
-                                      e.target.value === '' ? 1 : parseFloat(e.target.value),
-                                  }))
-                                }
-                                className="bg-white border border-gray-200"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Multiplies the lot size from the master account
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Second Row: Fixed Lot + Reverse Trading */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                            <div>
-                              <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
-                              <Input
-                                id="forceLot"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                value={conversionForm.forceLot.toString()}
-                                onChange={e =>
-                                  setConversionForm(prev => ({
-                                    ...prev,
-                                    forceLot:
-                                      e.target.value === '' ? 0 : parseFloat(e.target.value),
-                                  }))
-                                }
-                                className="bg-white border border-gray-200"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1">
-                                If greater than 0, uses this fixed lot instead of copying
-                              </p>
-                            </div>
-
-                            <div className="flex items-center space-x-2 pt-1">
-                              <Switch
-                                id="reverseTrade"
-                                checked={conversionForm.reverseTrade}
-                                onCheckedChange={checked =>
-                                  setConversionForm(prev => ({
-                                    ...prev,
-                                    reverseTrade: checked,
-                                  }))
-                                }
-                              />
-                              <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                                Reverse trades (Buy → Sell, Sell → Buy)
-                              </Label>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end space-x-2">
-                          <Button
-                            type="button"
-                            onClick={cancelConversion}
-                            variant="outline"
-                            disabled={isConverting}
-                            className="bg-white border border-gray-200 hover:bg-gray-50"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="submit"
-                            disabled={isConverting}
-                            className="bg-white border border-gray-200 hover:bg-gray-50"
-                          >
-                            {isConverting ? (
-                              <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                                Converting...
-                              </>
-                            ) : (
-                              'Convert to Slave'
-                            )}
-                          </Button>
-                        </div>
-                      </form>
+                      <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
+                        {confirmingMasterId === id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                              onClick={() => convertToMaster(id, account.platform)}
+                              disabled={isConverting}
+                            >
+                              {isConverting ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mr-1" />
+                                  Converting...
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                  Confirm
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                              onClick={cancelConversion}
+                              disabled={isConverting}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : confirmingDeleteId === id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                              onClick={() => deletePendingAccount(id)}
+                              disabled={isConverting}
+                            >
+                              {isConverting ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                  Deleting...
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-4 w-4 mr-1" />
+                                  Delete
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                              onClick={cancelConversion}
+                              disabled={isConverting}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          // Normal buttons
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                              onClick={() => openConversionForm(account, 'master')}
+                              disabled={
+                                isConverting ||
+                                (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts))
+                              }
+                            >
+                              <UserCheck className="h-4 w-4 mr-1" />
+                              Make Master
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                              onClick={() => openConversionForm(account, 'slave')}
+                              disabled={
+                                isConverting ||
+                                (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts))
+                              }
+                            >
+                              <Users className="h-4 w-4 mr-1" />
+                              Make Slave
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                              onClick={() => openDeleteConfirmation(id)}
+                              disabled={isConverting}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {isSuccessfullyConverted && (
+                      <div className="mt-2 p-3 bg-green-100 border border-green-300 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <p className="text-green-800 font-medium">
+                            ✅ Successfully converted to {isMasterConversion ? 'Master' : 'Slave'}{' '}
+                            Account
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-600 space-y-1 mt-2 ">
+                      <p>
+                        <strong>Platform:</strong> {account.platform || 'Unknown'}
+                      </p>
+                      <p className={isSuccessfullyConverted ? 'text-green-600' : 'text-orange-600'}>
+                        <strong>Waiting since:</strong> {getTimeSinceFirstSeen(account.firstSeen)}
+                      </p>
+                    </div>
+
+                    {/* Inline Conversion Form */}
+                    {expandedAccountId === id && (
+                      <div className="mt-4 p-4 border rounded-lg border-green-400 bg-green-50 shadow">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-lg font-medium text-green-700">
+                            Convert {id} to Slave Account
+                          </h3>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={cancelConversion}
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                            disabled={isConverting}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <form
+                          onSubmit={e => {
+                            e.preventDefault();
+                            convertAccount();
+                          }}
+                          className="space-y-4"
+                        >
+                          {/* Trading Configuration */}
+                          <div className="space-y-4">
+                            {/* First Row: Master Connection + Lot Multiplier */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Master Connection Section */}
+                              {masterAccounts.length > 0 && (
+                                <div>
+                                  <Label htmlFor="convert-master">Connect to Master account</Label>
+                                  <Select
+                                    value={conversionForm.masterAccountId}
+                                    onValueChange={value =>
+                                      setConversionForm(prev => ({
+                                        ...prev,
+                                        masterAccountId: value,
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="bg-white border border-gray-200">
+                                      <SelectValue placeholder="Select master..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white border border-gray-200">
+                                      <SelectItem value="none">
+                                        Not connected (configure later)
+                                      </SelectItem>
+                                      {masterAccounts.map(master => (
+                                        <SelectItem
+                                          key={master.id}
+                                          value={master.id}
+                                          className=" hover:bg-gray-50 cursor-pointer"
+                                        >
+                                          {master.name || master.id} ({master.platform})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+
+                              <div>
+                                <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>
+                                <Input
+                                  id="lotCoefficient"
+                                  type="number"
+                                  min="0.01"
+                                  max="100"
+                                  step="0.01"
+                                  value={conversionForm.lotCoefficient.toString()}
+                                  onChange={e =>
+                                    setConversionForm(prev => ({
+                                      ...prev,
+                                      lotCoefficient:
+                                        e.target.value === '' ? 1 : parseFloat(e.target.value),
+                                    }))
+                                  }
+                                  className="bg-white border border-gray-200"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Multiplies the lot size from the master account
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Second Row: Fixed Lot + Reverse Trading */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                              <div>
+                                <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
+                                <Input
+                                  id="forceLot"
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  step="0.01"
+                                  value={conversionForm.forceLot.toString()}
+                                  onChange={e =>
+                                    setConversionForm(prev => ({
+                                      ...prev,
+                                      forceLot:
+                                        e.target.value === '' ? 0 : parseFloat(e.target.value),
+                                    }))
+                                  }
+                                  className="bg-white border border-gray-200"
+                                />
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  If greater than 0, uses this fixed lot instead of copying
+                                </p>
+                              </div>
+
+                              <div className="flex items-center space-x-2 pt-1">
+                                <Switch
+                                  id="reverseTrade"
+                                  checked={conversionForm.reverseTrade}
+                                  onCheckedChange={checked =>
+                                    setConversionForm(prev => ({
+                                      ...prev,
+                                      reverseTrade: checked,
+                                    }))
+                                  }
+                                />
+                                <Label
+                                  htmlFor="reverseTrade"
+                                  className="font-medium cursor-pointer"
+                                >
+                                  Reverse trades (Buy → Sell, Sell → Buy)
+                                </Label>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end space-x-2">
+                            <Button
+                              type="button"
+                              onClick={cancelConversion}
+                              variant="outline"
+                              disabled={isConverting}
+                              className="bg-white border border-gray-200 hover:bg-gray-50"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={isConverting}
+                              className="bg-white border border-gray-200 hover:bg-gray-50"
+                            >
+                              {isConverting ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                                  Converting...
+                                </>
+                              ) : (
+                                'Convert to Slave'
+                              )}
+                            </Button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+                    {/* Show limit message if reached */}
+                    {userInfo && accountLimit !== null && totalAccounts >= accountLimit && (
+                      <div className="mt-2 text-xs text-red-600 font-semibold">
+                        {getAccountLimitMessage(userInfo, totalAccounts)}
+                        <br />
+                        Delete an account to add another one.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

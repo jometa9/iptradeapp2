@@ -126,6 +126,10 @@ export const getAccountLimitMessage = (userInfo: UserInfo, currentAccountCount: 
     return `Account limit reached (${currentAccountCount}/${limits.maxAccounts}).`;
   }
 
+  if (currentAccountCount === 0) {
+    return `You can add up to ${limits.maxAccounts} accounts.`;
+  }
+
   return `You have ${remaining} of ${limits.maxAccounts} accounts remaining.`;
 };
 

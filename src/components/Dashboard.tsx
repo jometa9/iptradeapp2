@@ -27,9 +27,7 @@ export const Dashboard: React.FC = () => {
       const response = await fetch('https://api.ipify.org?format=json');
       const data = await response.json();
       setUserIP(data.ip);
-      console.log('🌐 User IP detected:', data.ip);
     } catch {
-      console.log('⚠️ Could not get user IP, using default');
       setUserIP('Unknown');
     }
   };
@@ -43,7 +41,6 @@ export const Dashboard: React.FC = () => {
 
     // Después de 10 segundos, no es un login reciente
     const loginTimer = setTimeout(() => {
-      console.log('⏱️ 10 segundos transcurridos - ocultando tarjeta temporal');
       setIsRecentLogin(false);
     }, 10000);
 
@@ -58,17 +55,12 @@ export const Dashboard: React.FC = () => {
     if (!loginTimerStarted) {
       setIsRecentLogin(true);
       setLoginTimerStarted(true);
-      console.log('🚀 isRecentLogin establecido a: true (inicio de sesión)');
       const loginTimer = setTimeout(() => {
         setIsRecentLogin(false);
-        console.log('⏱️ 10 segundos transcurridos - ocultando tarjeta temporal');
       }, 10000);
       return () => clearTimeout(loginTimer);
     }
   }, [userInfo, loginTimerStarted]);
-
-  // Debug render
-  console.log('Dashboard render', { isRecentLogin, userInfo, loginTimerStarted });
 
   const handleLogout = () => {
     logout();
