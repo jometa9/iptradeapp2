@@ -30,10 +30,13 @@ interface AccountsData {
       id: string;
       name: string;
       platform: string;
+      status: string;
       connectedSlaves: Array<{
         id: string;
         name: string;
         platform: string;
+        status: string;
+        masterOnline?: boolean;
       }>;
       totalSlaves: number;
     }
@@ -42,6 +45,7 @@ interface AccountsData {
     id: string;
     name: string;
     platform: string;
+    status: string;
   }>;
 }
 
@@ -433,7 +437,20 @@ export const CopierStatusControls: React.FC = () => {
                         <Switch
                           checked={masterStatus?.masterStatus || false}
                           onCheckedChange={enabled => toggleMasterStatus(masterId, enabled)}
-                          disabled={isUpdating || !copierStatus?.globalStatus}
+                          disabled={
+                            isUpdating ||
+                            !copierStatus?.globalStatus ||
+                            masterStatus?.status === 'offline'
+                          }
+                          title={
+                            masterStatus?.status === 'offline'
+                              ? 'Account is offline - copy trading disabled'
+                              : !copierStatus?.globalStatus
+                                ? 'Global copier is OFF'
+                                : masterStatus?.effectiveStatus
+                                  ? 'Stop sending signals to slaves'
+                                  : 'Start sending signals to slaves'
+                          }
                         />
                       </div>
                     </div>
@@ -474,7 +491,21 @@ export const CopierStatusControls: React.FC = () => {
                                       isSlaveUpdating ||
                                       !copierStatus?.globalStatus ||
                                       !masterStatus?.masterStatus ||
-                                      !slave.masterOnline
+                                      !slave.masterOnline ||
+                                      slave.status === 'offline'
+                                    }
+                                    title={
+                                      slave.status === 'offline'
+                                        ? 'Account is offline - copy trading disabled'
+                                        : !slave.masterOnline
+                                          ? 'Master account is offline - copy trading disabled'
+                                          : !copierStatus?.globalStatus
+                                            ? 'Global copier is OFF'
+                                            : !masterStatus?.masterStatus
+                                              ? 'Master is not sending signals'
+                                              : effectiveSlaveStatus
+                                                ? 'Stop following master signals'
+                                                : 'Start following master signals'
                                     }
                                   />
                                 </div>
@@ -515,7 +546,20 @@ export const CopierStatusControls: React.FC = () => {
                         <Switch
                           checked={slaveEnabled}
                           onCheckedChange={enabled => toggleSlaveStatus(slave.id, enabled)}
-                          disabled={isSlaveUpdating || !copierStatus?.globalStatus}
+                          disabled={
+                            isSlaveUpdating ||
+                            !copierStatus?.globalStatus ||
+                            slave.status === 'offline'
+                          }
+                          title={
+                            slave.status === 'offline'
+                              ? 'Account is offline - copy trading disabled'
+                              : !copierStatus?.globalStatus
+                                ? 'Global copier is OFF'
+                                : slaveEnabled
+                                  ? 'Disable copy trading'
+                                  : 'Enable copy trading (no master connected)'
+                          }
                         />
                       </div>
                     </div>

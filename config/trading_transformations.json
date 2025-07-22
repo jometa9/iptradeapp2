@@ -1,1 +1,12 @@
-{}
+{
+  "TEST_MASTER_001": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_MASTER_002": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  }
+}

@@ -1,22 +1,29 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import {
-    getUserAccounts,
-    loadAccountsConfig,
-    saveAccountsConfig,
-    saveUserAccounts,
+  getUserAccounts,
+  loadAccountsConfig,
+  saveAccountsConfig,
+  saveUserAccounts,
 } from './configManager.js';
 import {
-    createDisabledMasterConfig,
-    loadUserCopierStatus,
-    saveUserCopierStatus,
+  createDisabledMasterConfig,
+  loadUserCopierStatus,
+  saveUserCopierStatus,
 } from './copierStatusController.js';
 import {
-    createDisabledSlaveConfig,
-    loadSlaveConfigs,
-    saveSlaveConfigs,
+  createDisabledSlaveConfig,
+  loadSlaveConfigs,
+  saveSlaveConfigs,
 } from './slaveConfigController.js';
+import { createDefaultTradingConfig } from './tradingConfigController.js';
+import {
+  notifyAccountConverted,
+  notifyAccountCreated,
+  notifyAccountDeleted,
+  notifyTradingConfigCreated
+} from './eventNotifier.js';
 
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -39,8 +46,6 @@ const initializeAccountsConfig = () => {
     writeFileSync(accountsFilePath, JSON.stringify(defaultConfig, null, 2));
   }
 };
-
-
 
 // Validation helpers - now user-specific
 export const isMasterAccountRegistered = (apiKey, masterAccountId) => {
@@ -86,6 +91,12 @@ const checkAccountActivity = () => {
 
     // Check all users' accounts
     for (const [apiKey, userAccounts] of Object.entries(config.userAccounts)) {
+      // Skip if apiKey is undefined or null
+      if (!apiKey) {
+        console.warn('⚠️ Skipping user accounts with undefined apiKey');
+        continue;
+      }
+
       let userHasChanges = false;
 
       // Check master accounts for this user
@@ -99,7 +110,7 @@ const checkAccountActivity = () => {
               account.status = 'offline';
               userHasChanges = true;
               console.log(
-                `📴 Master account ${accountId} (user: ${apiKey.substring(0, 8)}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+                `📴 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
               );
 
               // Disable copy trading for offline master
@@ -123,14 +134,18 @@ const checkAccountActivity = () => {
                   if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
                     slaveConfigs[slaveId].enabled = false;
                     slavesUpdated = true;
-                    console.log(`🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`);
+                    console.log(
+                      `🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`
+                    );
                   }
                 });
 
                 if (slavesUpdated) {
                   saveSlaveConfigs(slaveConfigs);
                 }
-                console.log(`📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`);
+                console.log(
+                  `📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`
+                );
               }
             }
           } else {
@@ -138,7 +153,7 @@ const checkAccountActivity = () => {
               account.status = 'active';
               userHasChanges = true;
               console.log(
-                `📡 Master account ${accountId} (user: ${apiKey.substring(0, 8)}...) back online`
+                `📡 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
               );
             }
           }
@@ -147,7 +162,7 @@ const checkAccountActivity = () => {
             account.status = 'offline';
             userHasChanges = true;
             console.log(
-              `📴 Master account ${accountId} (user: ${apiKey.substring(0, 8)}...) has no activity, marked as offline`
+              `📴 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
             );
 
             // Disable copy trading for offline master
@@ -171,14 +186,18 @@ const checkAccountActivity = () => {
                 if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
                   slaveConfigs[slaveId].enabled = false;
                   slavesUpdated = true;
-                  console.log(`🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`);
+                  console.log(
+                    `🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`
+                  );
                 }
               });
 
               if (slavesUpdated) {
                 saveSlaveConfigs(slaveConfigs);
               }
-              console.log(`📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`);
+              console.log(
+                `📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`
+              );
             }
           }
         }
@@ -195,7 +214,7 @@ const checkAccountActivity = () => {
               account.status = 'offline';
               userHasChanges = true;
               console.log(
-                `📴 Slave account ${accountId} (user: ${apiKey.substring(0, 8)}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+                `📴 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
               );
 
               // Disable copy trading for offline slave
@@ -211,7 +230,7 @@ const checkAccountActivity = () => {
               account.status = 'active';
               userHasChanges = true;
               console.log(
-                `📡 Slave account ${accountId} (user: ${apiKey.substring(0, 8)}...) back online`
+                `📡 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
               );
             }
           }
@@ -220,7 +239,7 @@ const checkAccountActivity = () => {
             account.status = 'offline';
             userHasChanges = true;
             console.log(
-              `📴 Slave account ${accountId} (user: ${apiKey.substring(0, 8)}...) has no activity, marked as offline`
+              `📴 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
             );
 
             // Disable copy trading for offline slave
@@ -245,7 +264,7 @@ const checkAccountActivity = () => {
               account.status = 'offline';
               userHasChanges = true;
               console.log(
-                `📴 Pending account ${accountId} (user: ${apiKey.substring(0, 8)}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+                `📴 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
               );
             }
           } else {
@@ -253,7 +272,7 @@ const checkAccountActivity = () => {
               account.status = 'pending';
               userHasChanges = true;
               console.log(
-                `📡 Pending account ${accountId} (user: ${apiKey.substring(0, 8)}...) back online`
+                `📡 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
               );
             }
           }
@@ -262,7 +281,7 @@ const checkAccountActivity = () => {
             account.status = 'offline';
             userHasChanges = true;
             console.log(
-              `📴 Pending account ${accountId} (user: ${apiKey.substring(0, 8)}...) has no activity, marked as offline`
+              `📴 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
             );
           }
         }
@@ -345,9 +364,15 @@ export const registerMasterAccount = (req, res) => {
   if (saveUserAccounts(apiKey, userAccounts)) {
     // Create disabled master configuration for copy control
     createDisabledMasterConfig(masterAccountId, apiKey);
+    // Create default trading configuration
+    createDefaultTradingConfig(masterAccountId);
+
+    // Notify about account creation
+    notifyAccountCreated(masterAccountId, 'master', apiKey);
+    notifyTradingConfigCreated(masterAccountId, { lotMultiplier: 1.0, forceLot: null, reverseTrading: false });
 
     console.log(
-      `Master account registered: ${masterAccountId} (user: ${apiKey.substring(0, 8)}...) (copying disabled by default)`
+      `Master account registered: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) (copying disabled by default)`
     );
     res.json({
       message: 'Master account registered successfully (copying disabled by default)',
@@ -423,7 +448,7 @@ export const registerSlaveAccount = (req, res) => {
     createDisabledSlaveConfig(slaveAccountId);
 
     console.log(
-      `Slave account registered: ${slaveAccountId}${masterAccountId ? ` -> ${masterAccountId}` : ''} (user: ${apiKey.substring(0, 8)}...) (copying disabled by default)`
+      `Slave account registered: ${slaveAccountId}${masterAccountId ? ` -> ${masterAccountId}` : ''} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) (copying disabled by default)`
     );
     res.json({
       message: 'Slave account registered successfully (copying disabled by default)',
@@ -599,7 +624,7 @@ export const getAllAccounts = (req, res) => {
       .map(([slaveId]) => ({
         id: slaveId,
         ...userAccounts.slaveAccounts[slaveId],
-        masterOnline: masterData.status !== 'offline' // Include master online status
+        masterOnline: masterData.status !== 'offline', // Include master online status
       }));
 
     masterAccountsWithSlaves[masterId] = {
@@ -614,7 +639,7 @@ export const getAllAccounts = (req, res) => {
     .map(([slaveId, slaveData]) => ({
       id: slaveId,
       ...slaveData,
-      masterOnline: false // Unconnected slaves have no master
+      masterOnline: false, // Unconnected slaves have no master
     }));
 
   res.json({
@@ -739,7 +764,7 @@ export const deleteMasterAccount = (req, res) => {
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(
-      `Master account deleted: ${masterAccountId} (user: ${apiKey.substring(0, 8)}...), disconnected slaves: ${connectedSlaves.join(', ')}`
+      `Master account deleted: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...), disconnected slaves: ${connectedSlaves.join(', ')}`
     );
     res.json({
       message: 'Master account deleted successfully',
@@ -782,7 +807,7 @@ export const deleteSlaveAccount = (req, res) => {
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(
-      `Slave account deleted: ${slaveAccountId} (user: ${apiKey.substring(0, 8)}...)${wasConnectedTo ? ` (was connected to ${wasConnectedTo})` : ''}`
+      `Slave account deleted: ${slaveAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)${wasConnectedTo ? ` (was connected to ${wasConnectedTo})` : ''}`
     );
     res.json({
       message: 'Slave account deleted successfully',
@@ -916,7 +941,13 @@ export const convertPendingToMaster = (req, res) => {
     userAccounts.masterAccounts[accountId] = masterAccount;
     if (userAccounts.pendingAccounts) delete userAccounts.pendingAccounts[accountId];
     if (saveUserAccounts(apiKey, userAccounts)) {
-      createDisabledMasterConfig(accountId);
+      createDisabledMasterConfig(accountId, apiKey);
+      createDefaultTradingConfig(accountId);
+
+      // Notify about account conversion
+      notifyAccountConverted(accountId, 'pending', 'master', apiKey);
+      notifyTradingConfigCreated(accountId, { lotMultiplier: 1.0, forceLot: null, reverseTrading: false });
+
       res.json({
         message: 'Pending account successfully converted to master (copying disabled by default)',
         accountId,
@@ -994,6 +1025,10 @@ export const convertPendingToSlave = (req, res) => {
     }
     if (saveUserAccounts(apiKey, userAccounts)) {
       createDisabledSlaveConfig(accountId);
+
+      // Notify about account conversion
+      notifyAccountConverted(accountId, 'pending', 'slave', apiKey);
+
       res.json({
         message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''} (copying disabled by default)`,
         accountId,

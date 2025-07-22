@@ -75,6 +75,18 @@ export const saveAccountsConfig = config => {
 
 // Get user-specific accounts structure
 export const getUserAccounts = apiKey => {
+  if (!apiKey) {
+    console.error('❌ getUserAccounts called with undefined apiKey');
+    return {
+      masterAccounts: {},
+      slaveAccounts: {},
+      pendingAccounts: {},
+      connections: {},
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+    };
+  }
+
   const config = loadAccountsConfig();
 
   if (!config.userAccounts[apiKey]) {
@@ -94,6 +106,11 @@ export const getUserAccounts = apiKey => {
 
 // Save user-specific accounts
 export const saveUserAccounts = (apiKey, userAccounts) => {
+  if (!apiKey) {
+    console.error('❌ saveUserAccounts called with undefined apiKey');
+    return false;
+  }
+
   const config = loadAccountsConfig();
   config.userAccounts[apiKey] = {
     ...userAccounts,

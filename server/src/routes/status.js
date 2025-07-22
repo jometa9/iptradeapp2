@@ -114,7 +114,9 @@ router.post('/clear-subscription-cache', (req, res) => {
     // Clear specific API key's cache
     if (subscriptionCache.has(apiKey)) {
       subscriptionCache.delete(apiKey);
-      console.log(`🧹 Cleared subscription cache for key: ${apiKey.substring(0, 8)}...`);
+      console.log(
+        `🧹 Cleared subscription cache for key: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...`
+      );
       return res.status(200).json({
         message: 'Cache cleared for specific API key',
         cleared: true,

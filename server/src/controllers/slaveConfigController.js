@@ -150,6 +150,23 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
     return null; // Slave is disabled, don't process order
   }
 
+  // CRITICAL: Check if slave account is offline - never allow copy trading for offline accounts
+  const { loadAccountsConfig } = require('./accountsController.js');
+  const accountsConfig = loadAccountsConfig();
+
+  // Find the slave account across all users (this is a global check)
+  let slaveAccount = null;
+  Object.values(accountsConfig.userAccounts || {}).forEach(userAccounts => {
+    if (userAccounts.slaveAccounts && userAccounts.slaveAccounts[slaveAccountId]) {
+      slaveAccount = userAccounts.slaveAccounts[slaveAccountId];
+    }
+  });
+
+  if (slaveAccount && slaveAccount.status === 'offline') {
+    console.log(`🚫 Slave account ${slaveAccountId} is offline, not processing order`);
+    return null; // Slave is offline, don't process order
+  }
+
   let transformedData = { ...orderData };
 
   // Symbol filtering

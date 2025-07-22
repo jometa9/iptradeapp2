@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+
 import { getUserAccounts, loadAccountsConfig, saveUserAccounts } from './configManager.js';
 
 // Copier status configuration file management
@@ -86,6 +87,13 @@ export const isCopierEnabled = (masterAccountId, apiKey) => {
     return false;
   }
 
+  // Check if account is offline - CRITICAL: Never allow copy trading for offline accounts
+  const userAccounts = getUserAccounts(apiKey);
+  const masterAccount = userAccounts.masterAccounts[masterAccountId];
+  if (masterAccount && masterAccount.status === 'offline') {
+    return false;
+  }
+
   // Check specific master account status (default to true if not configured)
   const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
   return masterStatus !== undefined ? masterStatus : true;
@@ -93,6 +101,13 @@ export const isCopierEnabled = (masterAccountId, apiKey) => {
 
 // Create disabled master configuration for new account (user-based)
 export const createDisabledMasterConfig = (masterAccountId, apiKey) => {
+  if (!apiKey) {
+    console.error(
+      `❌ Cannot create master copier configuration: apiKey is undefined for ${masterAccountId}`
+    );
+    return false;
+  }
+
   const userCopierStatus = loadUserCopierStatus(apiKey);
 
   // Only create if it doesn't exist
@@ -101,12 +116,12 @@ export const createDisabledMasterConfig = (masterAccountId, apiKey) => {
 
     if (saveUserCopierStatus(apiKey, userCopierStatus)) {
       console.log(
-        `✅ Created disabled master copier configuration for ${masterAccountId} (user: ${apiKey.substring(0, 8)}...)`
+        `✅ Created disabled master copier configuration for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)`
       );
       return true;
     } else {
       console.error(
-        `❌ Failed to create master copier configuration for ${masterAccountId} (user: ${apiKey.substring(0, 8)}...)`
+        `❌ Failed to create master copier configuration for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)`
       );
       return false;
     }
@@ -232,7 +247,7 @@ export const setMasterStatus = (req, res) => {
       userCopierStatus.masterAccounts[masterAccountId];
 
     console.log(
-      `Copier status for ${masterAccountId} (user: ${apiKey.substring(0, 8)}...) changed to: ${status}`
+      `Copier status for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) changed to: ${status}`
     );
     res.json({
       message: `Copier status for ${masterAccountId} set to ${status}`,
@@ -258,15 +273,32 @@ export const getAllStatuses = (req, res) => {
 
   const userCopierStatus = loadUserCopierStatus(apiKey);
   const globalConfig = loadCopierStatus();
+  const userAccounts = getUserAccounts(apiKey);
 
-  // Calculate effective status for each master account
+  // Calculate effective status for ALL master accounts (not just configured ones)
   const masterAccountsWithEffectiveStatus = {};
-  for (const [masterAccountId, masterStatus] of Object.entries(userCopierStatus.masterAccounts)) {
+
+  // Process all master accounts from userAccounts
+  for (const [masterAccountId, accountData] of Object.entries(userAccounts.masterAccounts || {})) {
+    const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
+    const defaultMasterStatus = masterStatus !== undefined ? masterStatus : true; // Default to true if not configured
+    const accountStatus = accountData ? accountData.status : 'offline';
+
     masterAccountsWithEffectiveStatus[masterAccountId] = {
-      masterStatus,
-      effectiveStatus: globalConfig.globalStatus && userCopierStatus.globalStatus && masterStatus,
-      status:
-        globalConfig.globalStatus && userCopierStatus.globalStatus && masterStatus ? 'ON' : 'OFF',
+      masterStatus: defaultMasterStatus,
+      effectiveStatus:
+        globalConfig.globalStatus &&
+        userCopierStatus.globalStatus &&
+        defaultMasterStatus &&
+        accountStatus !== 'offline',
+      status: accountStatus, // Include the actual account status (online/offline)
+      copierStatus:
+        globalConfig.globalStatus &&
+        userCopierStatus.globalStatus &&
+        defaultMasterStatus &&
+        accountStatus !== 'offline'
+          ? 'ON'
+          : 'OFF',
     };
   }
 
@@ -275,7 +307,7 @@ export const getAllStatuses = (req, res) => {
     userGlobalStatus: userCopierStatus.globalStatus,
     globalStatusText: globalConfig.globalStatus ? 'ON' : 'OFF',
     masterAccounts: masterAccountsWithEffectiveStatus,
-    totalMasterAccounts: Object.keys(userCopierStatus.masterAccounts).length,
+    totalMasterAccounts: Object.keys(userAccounts.masterAccounts || {}).length,
   });
 };
 

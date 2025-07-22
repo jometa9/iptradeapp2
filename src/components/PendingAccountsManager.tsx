@@ -456,9 +456,20 @@ export const PendingAccountsManager: React.FC = () => {
         <CardContent>
           {pendingCount === 0 ? (
             <div className="text-center py-4">
-              <p className="text-muted-foreground text-gray-400">No pending accounts</p>
+              <p className="text-muted-foreground text-gray-600">No pending accounts</p>
               <p className="text-sm text-muted-foreground mt-2 text-gray-400">
                 New accounts connected to the server will appear here automatically
+              </p>
+              <p className="text-sm text-muted-foreground mt-2 text-gray-400">
+                See how to connect your accounts to the app{' '}
+                <a
+                  href="https://iptradecopier.com/docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-600 "
+                >
+                  here
+                </a>
               </p>
             </div>
           ) : (

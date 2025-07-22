@@ -46,6 +46,31 @@ const getDefaultConfig = () => ({
   reverseTrading: false,
 });
 
+// Create default trading configuration for new master account
+export const createDefaultTradingConfig = masterAccountId => {
+  if (!masterAccountId) {
+    console.error('❌ Cannot create trading configuration: masterAccountId is undefined');
+    return false;
+  }
+
+  const configs = loadTradingConfig();
+
+  // Only create if it doesn't exist
+  if (!configs[masterAccountId]) {
+    configs[masterAccountId] = getDefaultConfig();
+
+    if (saveTradingConfig(configs)) {
+      console.log(`✅ Created default trading configuration for master ${masterAccountId}`);
+      return true;
+    } else {
+      console.error(`❌ Failed to create trading configuration for master ${masterAccountId}`);
+      return false;
+    }
+  }
+
+  return true; // Already exists
+};
+
 // Reverse trading type mappings
 const reverseTypeMapping = {
   BUY: 'SELL',

@@ -66,7 +66,7 @@ export const authenticateAccount = (req, res, next) => {
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
     saveUserAccounts(tempApiKey, userAccounts);
 
-    console.log(`🔄 New account detected and registered as pending: ${accountId} (user: ${tempApiKey.substring(0, 8)}...)`);
+    console.log(`🔄 New account detected and registered as pending: ${accountId} (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`);
   }
 
   // Determine account type

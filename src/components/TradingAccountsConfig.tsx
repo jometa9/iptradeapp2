@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useRealTimeEvents } from '../hooks/useRealTimeEvents';
 import {
   canCreateMoreAccounts,
   canCustomizeLotSizes,
@@ -123,6 +124,48 @@ export function TradingAccountsConfig() {
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
   const canCustomizeLotSizesValue = userInfo ? canCustomizeLotSizes(userInfo) : false;
+
+  // Real-time events system
+  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(event => {
+    console.log('📨 Evento recibido:', event);
+
+    // Manejar diferentes tipos de eventos
+    switch (event.type) {
+      case 'account_converted':
+      case 'account_created':
+      case 'account_deleted':
+      case 'trading_config_created':
+        // Actualizar cuentas inmediatamente cuando hay cambios
+        fetchAccounts(false);
+        fetchPendingAccountsCount();
+        loadCopierData();
+
+        // Mostrar notificación
+        if (event.type === 'account_converted') {
+          toastUtil({
+            title: 'Cuenta Convertida',
+            description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
+          });
+        } else if (event.type === 'account_created') {
+          toastUtil({
+            title: 'Cuenta Creada',
+            description: `Nueva cuenta ${event.data.accountType}: ${event.data.accountId}`,
+          });
+        } else if (event.type === 'trading_config_created') {
+          toastUtil({
+            title: 'Configuración Creada',
+            description: `Configuración de trading creada para ${event.data.accountId}`,
+          });
+        }
+        break;
+
+      case 'account_status_changed':
+      case 'copier_status_changed':
+        // Actualizar datos de copier cuando cambie el estado
+        loadCopierData();
+        break;
+    }
+  });
 
   const [formState, setFormState] = useState({
     accountNumber: '',
@@ -301,14 +344,18 @@ export function TradingAccountsConfig() {
     fetchPendingAccountsCount();
     loadCopierData();
 
-    // Auto-refresh every 10 seconds to catch new conversions
+    // Polling de respaldo cada 30 segundos (solo por seguridad)
+    // Los eventos en tiempo real manejan la mayoría de actualizaciones
     const interval = setInterval(() => {
-      fetchAccounts(false);
-      fetchPendingAccountsCount();
-    }, 10000);
+      if (!isEventsConnected) {
+        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
+        fetchAccounts(false);
+        fetchPendingAccountsCount();
+      }
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isEventsConnected]);
 
   // Load copier status on component mount
   useEffect(() => {
@@ -320,7 +367,7 @@ export function TradingAccountsConfig() {
     if (accounts.length > 0) {
       loadCopierData();
     }
-  }, [accounts]);
+  }, [accounts.length, accounts]);
 
   // Load copier status and slave configurations
   const loadCopierData = async () => {
