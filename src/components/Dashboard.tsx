@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, LogOut } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, LogOut, MessageCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
@@ -80,6 +80,11 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleCommunity = () => {
+    const urlCommunity = 'https://t.me/iptradecopier';
+    openExternalLink(urlCommunity);
+  };
+
   return (
     <UpdateTestProvider>
       <div className="min-h-screen bg-gray-50">
@@ -123,6 +128,15 @@ export const Dashboard: React.FC = () => {
                   onClick={handleHelp}
                 >
                   <HelpCircle className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  title="Community"
+                  onClick={handleCommunity}
+                >
+                  <MessageCircle className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="ghost"
