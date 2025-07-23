@@ -22,6 +22,7 @@ import {
   updateMasterAccount,
   updateSlaveAccount,
 } from '../controllers/accountsController.js';
+import { getUserAccounts, saveUserAccounts } from '../controllers/configManager.js';
 import { authenticateAccount } from '../middleware/roleAuth.js';
 import {
   allowPendingConversions,
@@ -325,6 +326,94 @@ router.post('/ping', authenticateAccount, pingAccount);
  *         description: List of pending accounts
  */
 router.get('/pending', requireValidSubscription, getPendingAccounts);
+
+/**
+ * @swagger
+ * /accounts/register-pending:
+ *   post:
+ *     summary: Register a new pending account (internal API)
+ *     tags: [Accounts]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               accountId:
+ *                 type: string
+ *                 description: Account ID to register
+ *     responses:
+ *       200:
+ *         description: Account registered as pending
+ */
+router.post('/register-pending', (req, res) => {
+  const { accountId } = req.body;
+  const apiKey = req.headers['x-api-key'];
+
+  // Validate IPTRADE_APIKEY
+  if (apiKey !== 'IPTRADE_APIKEY') {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Invalid API key for account registration',
+    });
+  }
+
+  if (!accountId) {
+    return res.status(400).json({
+      error: 'Account ID is required',
+      message: 'Please provide accountId in request body',
+    });
+  }
+
+  try {
+    // Use the same logic as authenticateAccount middleware
+    const userAccounts = getUserAccounts('iptrade_89536f5b9e643c0433f3'); // Default user API key
+
+    // Check if account already exists
+    const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
+    const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
+    const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
+
+    if (isMaster || isSlave || isPending) {
+      return res.status(409).json({
+        error: 'Account already exists',
+        message: `Account ${accountId} is already registered`,
+      });
+    }
+
+    // Register as pending
+    const newPendingAccount = {
+      id: accountId,
+      name: `Account ${accountId}`,
+      description: 'Automatically detected account - awaiting configuration',
+      firstSeen: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      status: 'pending',
+      apiKey: 'iptrade_89536f5b9e643c0433f3',
+    };
+
+    if (!userAccounts.pendingAccounts) {
+      userAccounts.pendingAccounts = {};
+    }
+    userAccounts.pendingAccounts[accountId] = newPendingAccount;
+    saveUserAccounts('iptrade_89536f5b9e643c0433f3', userAccounts);
+
+    console.log(`🔄 New account registered as pending: ${accountId}`);
+
+    res.json({
+      message: 'Account successfully registered as pending',
+      accountId,
+      status: 'pending',
+    });
+  } catch (error) {
+    console.error('Error registering pending account:', error);
+    res.status(500).json({
+      error: 'Failed to register pending account',
+      message: error.message,
+    });
+  }
+});
 /**
  * @swagger
  * /accounts/pending/{accountId}/to-master:

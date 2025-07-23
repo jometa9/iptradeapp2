@@ -47,14 +47,14 @@ const registerPendingAccount = async accountId => {
   try {
     console.log(`🔄 Registering account: ${accountId}`);
 
-    // Make a call to the orders endpoint to trigger automatic registration
-    const response = await fetch(`${API_BASE_URL}/orders/account-type`, {
-      method: 'GET',
+    // Use the new register-pending endpoint
+    const response = await fetch(`${API_BASE_URL}/accounts/register-pending`, {
+      method: 'POST',
       headers: {
-        'x-account-id': accountId,
         'x-api-key': API_KEY,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ accountId }),
     });
 
     if (response.ok) {

@@ -24,7 +24,7 @@ const router = express.Router();
  *       200:
  *         description: Client registered successfully
  */
-router.post('/events/register', (req, res) => {
+router.post('/register', (req, res) => {
   const { clientId } = req.body;
 
   if (!clientId) {
@@ -60,7 +60,7 @@ router.post('/events/register', (req, res) => {
  *       200:
  *         description: Client unregistered successfully
  */
-router.post('/events/unregister', (req, res) => {
+router.post('/unregister', (req, res) => {
   const { clientId } = req.body;
 
   if (!clientId) {
@@ -103,8 +103,8 @@ router.post('/events/unregister', (req, res) => {
  *       200:
  *         description: Events retrieved
  */
-router.get('/events/poll', (req, res) => {
-  const { clientId, lastEventId, timeout = 30000 } = req.query;
+router.get('/poll', (req, res) => {
+  const { clientId, lastEventId, timeout = 15000 } = req.query;
 
   if (!clientId) {
     return res.status(400).json({ error: 'clientId is required' });
@@ -188,7 +188,7 @@ router.get('/events/poll', (req, res) => {
  *       200:
  *         description: Events retrieved immediately
  */
-router.get('/events/immediate', (req, res) => {
+router.get('/immediate', (req, res) => {
   const { clientId, lastEventId } = req.query;
 
   if (!clientId) {

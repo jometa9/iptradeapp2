@@ -216,7 +216,7 @@ export function TradingAccountsConfig() {
         setIsLoading(true);
       }
 
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/all`, {
         headers: {
           'x-api-key': secretKey || '',
@@ -321,7 +321,7 @@ export function TradingAccountsConfig() {
   // Fetch pending accounts count
   const fetchPendingAccountsCount = async () => {
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
         headers: {
           'x-api-key': secretKey || '',
@@ -344,7 +344,7 @@ export function TradingAccountsConfig() {
     fetchPendingAccountsCount();
     loadCopierData();
 
-    // Polling de respaldo cada 30 segundos (solo por seguridad)
+    // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
     // Los eventos en tiempo real manejan la mayoría de actualizaciones
     const interval = setInterval(() => {
       if (!isEventsConnected) {
@@ -352,10 +352,20 @@ export function TradingAccountsConfig() {
         fetchAccounts(false);
         fetchPendingAccountsCount();
       }
-    }, 30000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [isEventsConnected]);
+
+  // Polling adicional cada 3 segundos para asegurar actualizaciones rápidas
+  useEffect(() => {
+    const quickInterval = setInterval(() => {
+      fetchAccounts(false);
+      fetchPendingAccountsCount();
+    }, 3000);
+
+    return () => clearInterval(quickInterval);
+  }, []);
 
   // Load copier status on component mount
   useEffect(() => {
@@ -372,7 +382,7 @@ export function TradingAccountsConfig() {
   // Load copier status and slave configurations
   const loadCopierData = async () => {
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const baseUrl = `http://localhost:${serverPort}/api`;
 
       // Load copier status
@@ -428,7 +438,7 @@ export function TradingAccountsConfig() {
   const performGlobalToggle = async (enabled: boolean) => {
     try {
       setUpdatingCopier('global');
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
 
       // If disabling global copier, first disable all individual accounts
       if (!enabled) {
@@ -564,7 +574,7 @@ export function TradingAccountsConfig() {
   const toggleMasterStatus = async (masterAccountId: string, enabled: boolean) => {
     try {
       setUpdatingCopier(`master-${masterAccountId}`);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/copier/master`, {
         method: 'POST',
         headers: {
@@ -600,7 +610,7 @@ export function TradingAccountsConfig() {
   const toggleSlaveStatus = async (slaveAccountId: string, enabled: boolean) => {
     try {
       setUpdatingCopier(`slave-${slaveAccountId}`);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
         method: 'POST',
         headers: {
@@ -705,7 +715,7 @@ export function TradingAccountsConfig() {
         setIsSubmitting(true);
         setIsDeletingAccount(deleteConfirmId);
 
-        const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
 
         // Find the account to determine if it's master or slave
         const accountToDelete = accounts.find(acc => acc.id === deleteConfirmId);
@@ -758,7 +768,7 @@ export function TradingAccountsConfig() {
   const disconnectSlaveAccount = async (slaveAccountId: string) => {
     try {
       setIsDisconnecting(slaveAccountId);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(
         `http://localhost:${serverPort}/api/accounts/disconnect/${slaveAccountId}`,
         {
@@ -798,7 +808,7 @@ export function TradingAccountsConfig() {
         .filter(acc => acc.accountType === 'slave' && acc.connectedToMaster === masterAccountId)
         .map(acc => acc.id);
 
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const disconnectPromises = slaveIds.map(slaveId =>
         fetch(`http://localhost:${serverPort}/api/accounts/disconnect/${slaveId}`, {
           method: 'DELETE',
@@ -875,7 +885,7 @@ export function TradingAccountsConfig() {
     }
 
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       let response;
       let payload;
 

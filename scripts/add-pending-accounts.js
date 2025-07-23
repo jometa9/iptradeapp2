@@ -113,14 +113,30 @@ const addPendingAccounts = () => {
 
   // Show current state
   console.log('📊 Current accounts state:');
-  console.log(`   - Master accounts: ${Object.keys(config.masterAccounts || {}).length}`);
-  console.log(`   - Slave accounts: ${Object.keys(config.slaveAccounts || {}).length}`);
-  console.log(`   - Pending accounts: ${Object.keys(config.pendingAccounts || {}).length}`);
+  console.log(
+    `   - Master accounts: ${Object.keys(config.userAccounts?.['iptrade_89536f5b9e643c0433f3']?.masterAccounts || {}).length}`
+  );
+  console.log(
+    `   - Slave accounts: ${Object.keys(config.userAccounts?.['iptrade_89536f5b9e643c0433f3']?.slaveAccounts || {}).length}`
+  );
+  console.log(
+    `   - Pending accounts: ${Object.keys(config.userAccounts?.['iptrade_89536f5b9e643c0433f3']?.pendingAccounts || {}).length}`
+  );
   console.log(`   - Connections: ${Object.keys(config.connections || {}).length}\n`);
 
-  // Initialize pendingAccounts if it doesn't exist
-  if (!config.pendingAccounts) {
-    config.pendingAccounts = {};
+  // Initialize userAccounts structure if it doesn't exist
+  if (!config.userAccounts) {
+    config.userAccounts = {};
+  }
+  if (!config.userAccounts['iptrade_89536f5b9e643c0433f3']) {
+    config.userAccounts['iptrade_89536f5b9e643c0433f3'] = {
+      masterAccounts: {},
+      slaveAccounts: {},
+      pendingAccounts: {},
+    };
+  }
+  if (!config.userAccounts['iptrade_89536f5b9e643c0433f3'].pendingAccounts) {
+    config.userAccounts['iptrade_89536f5b9e643c0433f3'].pendingAccounts = {};
   }
 
   // Add new pending accounts
@@ -129,9 +145,10 @@ const addPendingAccounts = () => {
 
   for (const [accountId, accountData] of Object.entries(pendingAccountsToAdd)) {
     // Check if account already exists in any category
-    const existsAsMaster = config.masterAccounts && config.masterAccounts[accountId];
-    const existsAsSlave = config.slaveAccounts && config.slaveAccounts[accountId];
-    const existsAsPending = config.pendingAccounts[accountId];
+    const userAccount = config.userAccounts['iptrade_89536f5b9e643c0433f3'];
+    const existsAsMaster = userAccount.masterAccounts && userAccount.masterAccounts[accountId];
+    const existsAsSlave = userAccount.slaveAccounts && userAccount.slaveAccounts[accountId];
+    const existsAsPending = userAccount.pendingAccounts && userAccount.pendingAccounts[accountId];
 
     if (existsAsMaster || existsAsSlave || existsAsPending) {
       console.log(`⚠️  Skipping ${accountId} - already exists`);
@@ -140,7 +157,7 @@ const addPendingAccounts = () => {
     }
 
     // Add to pending accounts
-    config.pendingAccounts[accountId] = accountData;
+    config.userAccounts['iptrade_89536f5b9e643c0433f3'].pendingAccounts[accountId] = accountData;
     console.log(
       `✅ Added pending account: ${accountId} (${accountData.platform} - ${accountData.broker})`
     );
@@ -156,10 +173,14 @@ const addPendingAccounts = () => {
       }
 
       console.log('\n📋 New pending accounts summary:');
-      Object.entries(config.pendingAccounts).forEach(([id, account]) => {
-        const timeDiff = Math.round((new Date() - new Date(account.firstSeen)) / (1000 * 60));
-        console.log(`   • ${id} - ${account.platform} (${account.broker}) - Waiting ${timeDiff}m`);
-      });
+      Object.entries(config.userAccounts['iptrade_89536f5b9e643c0433f3'].pendingAccounts).forEach(
+        ([id, account]) => {
+          const timeDiff = Math.round((new Date() - new Date(account.firstSeen)) / (1000 * 60));
+          console.log(
+            `   • ${id} - ${account.platform} (${account.broker}) - Waiting ${timeDiff}m`
+          );
+        }
+      );
 
       console.log('\n🌐 You can now test the following features:');
       console.log('   1. View pending accounts in the UI');
