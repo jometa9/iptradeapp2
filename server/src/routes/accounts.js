@@ -11,6 +11,7 @@ import {
   getAccountActivityStats,
   getAllAccounts,
   getAllAccountsForAdmin,
+  getConnectivityStats,
   getMasterAccount,
   // Pending accounts management
   getPendingAccounts,
@@ -475,5 +476,31 @@ router.post(
  *         description: Pending account deleted
  */
 router.delete('/pending/:accountId', requireValidSubscription, deletePendingAccount);
+
+// Get account activity statistics
+/**
+ * @swagger
+ * /accounts/stats:
+ *   get:
+ *     summary: Get account activity statistics
+ *     tags: [Accounts]
+ *     responses:
+ *       200:
+ *         description: Account activity statistics
+ */
+router.get('/stats', requireValidSubscription, getAccountActivityStats);
+
+// Get connectivity statistics (real synchronization status)
+/**
+ * @swagger
+ * /accounts/connectivity:
+ *   get:
+ *     summary: Get connectivity statistics based on real connections
+ *     tags: [Accounts]
+ *     responses:
+ *       200:
+ *         description: Connectivity statistics
+ */
+router.get('/connectivity', requireValidSubscription, getConnectivityStats);
 
 export default router;

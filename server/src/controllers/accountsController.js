@@ -1195,7 +1195,20 @@ export const getAccountActivityStats = (req, res) => {
         stats.masters.total++;
 
         let status = account.status || 'active';
-        if (status === 'active') status = 'synchronized';
+
+        // Check if master has connected slaves (real synchronization)
+        const connectedSlaves = config.connections
+          ? Object.entries(config.connections)
+              .filter(([, masterId]) => masterId === accountId)
+              .map(([slaveId]) => slaveId)
+          : [];
+
+        // Master is synchronized if it has at least one connected slave
+        if (connectedSlaves.length > 0) {
+          status = 'synchronized';
+        } else if (status === 'active') {
+          status = 'pending'; // Master without slaves is pending
+        }
 
         stats[status] = (stats[status] || 0) + 1;
         stats.masters[status] = (stats.masters[status] || 0) + 1;
@@ -1213,6 +1226,7 @@ export const getAccountActivityStats = (req, res) => {
           lastActivity: account.lastActivity,
           timeSinceActivity,
           isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+          connectedSlaves: connectedSlaves.length,
         });
       }
     }
@@ -1224,7 +1238,16 @@ export const getAccountActivityStats = (req, res) => {
         stats.slaves.total++;
 
         let status = account.status || 'active';
-        if (status === 'active') status = 'synchronized';
+
+        // Check if slave is connected to a master (real synchronization)
+        const connectedToMaster = config.connections && config.connections[accountId];
+
+        // Slave is synchronized if it's connected to a master
+        if (connectedToMaster) {
+          status = 'synchronized';
+        } else if (status === 'active') {
+          status = 'pending'; // Slave without master is pending
+        }
 
         stats[status] = (stats[status] || 0) + 1;
         stats.slaves[status] = (stats.slaves[status] || 0) + 1;
@@ -1242,7 +1265,7 @@ export const getAccountActivityStats = (req, res) => {
           lastActivity: account.lastActivity,
           timeSinceActivity,
           isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
-          connectedTo: (config.connections && config.connections[accountId]) || null,
+          connectedTo: connectedToMaster || null,
         });
       }
     }
@@ -1305,3 +1328,156 @@ export const pingAccount = (req, res) => {
 };
 
 export { checkAccountActivity };
+
+// Get connectivity statistics (real synchronization status)
+export const getConnectivityStats = (req, res) => {
+  try {
+    const apiKey = req.apiKey;
+    if (!apiKey) {
+      return res.status(401).json({
+        error: 'API Key required - use requireValidSubscription middleware',
+      });
+    }
+
+    const userAccounts = getUserAccounts(apiKey);
+    const now = new Date();
+
+    const stats = {
+      total: 0,
+      synchronized: 0,
+      pending: 0,
+      offline: 0,
+      error: 0,
+      masters: {
+        total: 0,
+        synchronized: 0,
+        pending: 0,
+        offline: 0,
+        error: 0,
+      },
+      slaves: {
+        total: 0,
+        synchronized: 0,
+        pending: 0,
+        offline: 0,
+        error: 0,
+      },
+      connectivityDetails: [],
+    };
+
+    // Process master accounts
+    if (userAccounts.masterAccounts) {
+      for (const [accountId, account] of Object.entries(userAccounts.masterAccounts)) {
+        stats.total++;
+        stats.masters.total++;
+
+        // Check if master has connected slaves (real synchronization)
+        const connectedSlaves = Object.entries(userAccounts.connections || {})
+          .filter(([, masterId]) => masterId === accountId)
+          .map(([slaveId]) => slaveId);
+
+        // For connectivity stats, we only care about real connections, not activity status
+        let status;
+        if (connectedSlaves.length > 0) {
+          status = 'synchronized';
+        } else {
+          status = 'pending'; // Master without slaves is pending (not connected)
+        }
+
+        stats[status] = (stats[status] || 0) + 1;
+        stats.masters[status] = (stats.masters[status] || 0) + 1;
+
+        // Calculate time since last activity for reference
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.connectivityDetails.push({
+          accountId,
+          type: 'master',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+          connectedSlaves: connectedSlaves.length,
+          connectedSlaveIds: connectedSlaves,
+        });
+      }
+    }
+
+    // Process slave accounts
+    if (userAccounts.slaveAccounts) {
+      for (const [accountId, account] of Object.entries(userAccounts.slaveAccounts)) {
+        stats.total++;
+        stats.slaves.total++;
+
+        // Check if slave is connected to a master (real synchronization)
+        const connectedToMaster = userAccounts.connections && userAccounts.connections[accountId];
+
+        // For connectivity stats, we only care about real connections, not activity status
+        let status;
+        if (connectedToMaster) {
+          status = 'synchronized';
+        } else {
+          status = 'pending'; // Slave without master is pending (not connected)
+        }
+
+        stats[status] = (stats[status] || 0) + 1;
+        stats.slaves[status] = (stats.slaves[status] || 0) + 1;
+
+        // Calculate time since last activity for reference
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.connectivityDetails.push({
+          accountId,
+          type: 'slave',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+          connectedTo: connectedToMaster || null,
+        });
+      }
+    }
+
+    // Process pending accounts
+    if (userAccounts.pendingAccounts) {
+      for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
+        stats.total++;
+
+        let status = account.status || 'pending';
+
+        stats[status] = (stats[status] || 0) + 1;
+
+        // Calculate time since last activity
+        let timeSinceActivity = null;
+        if (account.lastActivity) {
+          timeSinceActivity = now - new Date(account.lastActivity);
+        }
+
+        stats.connectivityDetails.push({
+          accountId,
+          type: 'pending',
+          status,
+          lastActivity: account.lastActivity,
+          timeSinceActivity,
+          isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
+        });
+      }
+    }
+
+    res.json({
+      message: 'Connectivity statistics retrieved successfully',
+      stats,
+      activityTimeout: ACTIVITY_TIMEOUT,
+      timestamp: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('Error getting connectivity stats:', error);
+    res.status(500).json({ error: 'Failed to get connectivity statistics' });
+  }
+};
