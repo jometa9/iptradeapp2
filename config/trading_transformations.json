@@ -1,4 +1,9 @@
 {
+  "101010": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
   "111111": {
     "lotMultiplier": 1,
     "forceLot": null,

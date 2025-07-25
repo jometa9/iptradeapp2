@@ -16,6 +16,7 @@ import {
   Shield,
   Trash,
   Unlink,
+  Unplug,
   WifiOff,
   XCircle,
   Zap,
@@ -1260,7 +1261,7 @@ export function TradingAccountsConfig() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {getStatusBadge(copierStatus?.globalStatus || false)}
+                {!showGlobalConfirm && getStatusBadge(copierStatus?.globalStatus || false)}
                 {showGlobalConfirm ? (
                   <div className="flex gap-2">
                     <Button
@@ -1270,14 +1271,8 @@ export function TradingAccountsConfig() {
                       onClick={() => performGlobalToggle(false)}
                       disabled={updatingCopier === 'global'}
                     >
-                      {updatingCopier === 'global' ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
-                          Stopping...
-                        </>
-                      ) : (
-                        'Stop Copier'
-                      )}
+                      <Unplug className="h-4 w-4 mr-2" />
+                      {updatingCopier === 'global' ? 'Stopping...' : 'Stop'}
                     </Button>
                     <Button
                       size="sm"
@@ -1298,19 +1293,6 @@ export function TradingAccountsConfig() {
                 )}
               </div>
             </div>
-            {!copierStatus?.globalStatus && (
-              <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700 flex items-center">
-                <AlertTriangle className="w-4 h-4 inline mr-3 ml-1" />
-                Global copier is OFF - No signals will be copied regardless of individual settings
-              </div>
-            )}
-            {showGlobalConfirm && (
-              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center">
-                <AlertTriangle className="w-4 h-4 inline mr-3" />
-                <strong>Warning:</strong> This will turn OFF copy trading for ALL master and slave
-                accounts. No signals will be copied until re-enabled.
-              </div>
-            )}
           </div>
 
           {/* Server Status Bar */}
