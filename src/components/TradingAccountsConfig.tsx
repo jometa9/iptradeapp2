@@ -1951,24 +1951,26 @@ export function TradingAccountsConfig() {
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
-                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        setDisconnectAllConfirmId(masterAccount.id);
-                                      }}
-                                      title="Disconnect All Slaves"
-                                      disabled={
-                                        isDeletingAccount === masterAccount.id ||
-                                        isDisconnecting === masterAccount.id
-                                      }
-                                    >
-                                      <Unlink className="h-4 w-4 text-orange-600" />
-                                    </Button>
-                                  ) : null}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={`h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 ${
+                                      !(masterAccount.totalSlaves && masterAccount.totalSlaves > 0)
+                                        ? 'invisible'
+                                        : ''
+                                    }`}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setDisconnectAllConfirmId(masterAccount.id);
+                                    }}
+                                    title="Disconnect All Slaves"
+                                    disabled={
+                                      isDeletingAccount === masterAccount.id ||
+                                      isDisconnecting === masterAccount.id
+                                    }
+                                  >
+                                    <Unlink className="h-4 w-4 text-orange-600" />
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1982,6 +1984,8 @@ export function TradingAccountsConfig() {
                                   >
                                     <Trash className="h-4 w-4 text-red-600" />
                                   </Button>
+                                  {/* Espacio invisible para mantener consistencia con slave accounts que tienen 3 botones */}
+                                  <div className="h-9 w-9 invisible"></div>
                                 </div>
                               )}
                             </td>
@@ -2214,7 +2218,7 @@ export function TradingAccountsConfig() {
                           {orphanSlave.accountNumber}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          <span className="text-orange-600">Slave (Unconnected)</span>
+                          <span className="text-orange-600">Slave unconnected</span>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
                           {orphanSlave.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
