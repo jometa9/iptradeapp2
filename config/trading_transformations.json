@@ -1,4 +1,19 @@
 {
+  "111111": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "222222": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "444444": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
   "TEST_MASTER_001": {
     "lotMultiplier": 1,
     "forceLot": null,
@@ -25,6 +40,26 @@
     "reverseTrading": false
   },
   "PENDING_CTRADER_003": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "PENDING_USER_002": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "ADMIN_PENDING_001": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "ADMIN_PENDING_002": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "ADMIN_PENDING_005": {
     "lotMultiplier": 1,
     "forceLot": null,
     "reverseTrading": false

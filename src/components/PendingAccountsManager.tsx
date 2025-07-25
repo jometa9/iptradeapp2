@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Cable, Clock, UserCheck, Users, XCircle } from 'lucide-react';
+import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -146,6 +146,7 @@ export const PendingAccountsManager: React.FC = () => {
         }
       }
     } catch (error) {
+      console.error('Error loading account stats:', error);
       setTotalAccounts(0);
       setAccountLimit(null);
     }
@@ -179,7 +180,7 @@ export const PendingAccountsManager: React.FC = () => {
       setConfirmingDeleteId(null);
       setConfirmingMasterId(account.id);
     } else {
-      // For slave, show simplified form and hide master confirmation if open
+      // For slave, show form directly and hide master confirmation if open
       setConfirmingMasterId(null);
       setConfirmingDeleteId(null);
       setExpandedAccountId(account.id);
@@ -402,20 +403,6 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  const getTimeSinceFirstSeen = (dateString: string) => {
-    const now = new Date();
-    const firstSeen = new Date(dateString);
-    const diffInMinutes = Math.floor((now.getTime() - firstSeen.getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes} min ago`;
-    } else if (diffInMinutes < 1440) {
-      return `${Math.floor(diffInMinutes / 60)} hours ago`;
-    } else {
-      return `${Math.floor(diffInMinutes / 1440)} days ago`;
-    }
-  };
-
   if (loading) {
     return (
       <Card className="bg-white">
@@ -446,7 +433,10 @@ export const PendingAccountsManager: React.FC = () => {
               <Cable className="h-5 w-5" />
               Pending Accounts
               {pendingCount > 0 && (
-                <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                <Badge
+                  variant="secondary"
+                  className="bg-orange-50 text-orange-800 border border-orange-300"
+                >
                   {pendingCount}
                 </Badge>
               )}
@@ -477,48 +467,61 @@ export const PendingAccountsManager: React.FC = () => {
               {Object.entries(accounts).map(([id, account]) => {
                 const isSuccessfullyConverted = successfulConversions.has(id);
                 const isMasterConversion = conversionType === 'master' && isSuccessfullyConverted;
-                const isSlaveConversion = conversionType === 'slave' && isSuccessfullyConverted;
 
                 return (
                   <div
                     key={id}
-                    className={`border rounded-lg p-4 shadow transition-all duration-500 ${
+                    className={`border rounded-lg p-2 shadow transition-all duration-500 ${
                       isSuccessfullyConverted
                         ? 'bg-green-50 border-green-200 scale-105'
                         : 'bg-orange-50 border-orange-200'
                     }`}
                   >
-                    <div className="flex items-start justify-between flex-wrap gap-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <h3
-                          className={`font-semibold ${
+                          className={`font-semibold ml-2 ${
                             isSuccessfullyConverted ? 'text-green-900' : 'text-orange-900'
                           }`}
                         >
-                          Account {id}
+                          {id}
                         </h3>
                         <Badge
                           variant="outline"
                           className={
                             isSuccessfullyConverted
                               ? 'bg-green-100 text-green-800 border-green-300'
-                              : 'bg-orange-100 text-orange-800 border-orange-300'
+                              : account.status === 'offline'
+                                ? 'bg-red-50 text-red-800 border-red-300'
+                                : 'bg-orange-100 text-orange-800 border-orange-300'
                           }
                         >
                           {isSuccessfullyConverted
                             ? isMasterConversion
                               ? 'Master Account'
                               : 'Slave Account'
-                            : 'Pending'}
+                            : account.status === 'offline'
+                              ? 'Pending Offline'
+                              : 'Pending'}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="bg-gray-50 text-gray-800 border border-gray-300"
+                        >
+                          {account.platform || 'Unknown'}
                         </Badge>
                       </div>
+
+                      {/* aca agregar otro badgegt para la plataforma */}
+
                       <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
+                        {/* debo agregar botones de confirmacion para slave y master */}
                         {confirmingMasterId === id ? (
                           <>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                              className="bg-blue-50 h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
                               onClick={() => convertToMaster(id, account.platform)}
                               disabled={isConverting}
                             >
@@ -529,15 +532,15 @@ export const PendingAccountsManager: React.FC = () => {
                                 </>
                               ) : (
                                 <>
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                  Confirm
+                                  <HousePlug className="h-4 w-4 mr-2" />
+                                  Convert to Master
                                 </>
                               )}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                              className="bg-gray-50 h-9  rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
                               onClick={cancelConversion}
                               disabled={isConverting}
                             >
@@ -549,7 +552,7 @@ export const PendingAccountsManager: React.FC = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                              className="bg-red-50 h-9 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
                               onClick={() => deletePendingAccount(id)}
                               disabled={isConverting}
                             >
@@ -560,7 +563,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 </>
                               ) : (
                                 <>
-                                  <XCircle className="h-4 w-4 mr-1" />
+                                  <XCircle className="h-4 w-4 p-0 mr-2" />
                                   Delete
                                 </>
                               )}
@@ -568,7 +571,39 @@ export const PendingAccountsManager: React.FC = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                              className="bg-gray-50 h-9 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
+                              onClick={cancelConversion}
+                              disabled={isConverting}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : expandedAccountId === id ? (
+                          // Show conversion form buttons when form is open
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-green-50 h-9 rounded-lg border-green-200 text-green-700 hover:bg-green-100"
+                              onClick={convertAccount}
+                              disabled={isConverting}
+                            >
+                              {isConverting ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent mr-1" />
+                                  Converting...
+                                </>
+                              ) : (
+                                <>
+                                  <Unplug className="h-4 w-4 mr-2" />
+                                  Convert to Slave
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-gray-50 h-9 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
                               onClick={cancelConversion}
                               disabled={isConverting}
                             >
@@ -576,44 +611,64 @@ export const PendingAccountsManager: React.FC = () => {
                             </Button>
                           </>
                         ) : (
-                          // Normal buttons
+                          // Normal buttons - only show if account is online (status !== 'offline')
                           <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-                              onClick={() => openConversionForm(account, 'master')}
-                              disabled={
-                                isConverting ||
-                                (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts))
-                              }
-                            >
-                              <UserCheck className="h-4 w-4 mr-1" />
-                              Make Master
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
-                              onClick={() => openConversionForm(account, 'slave')}
-                              disabled={
-                                isConverting ||
-                                (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts))
-                              }
-                            >
-                              <Users className="h-4 w-4 mr-1" />
-                              Make Slave
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                              onClick={() => openDeleteConfirmation(id)}
-                              disabled={isConverting}
-                            >
-                              <XCircle className="h-4 w-4 mr-1" />
-                              Delete
-                            </Button>
+                            {account.status === 'offline' ? (
+                              // Show offline status and delete only
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                  onClick={() => openDeleteConfirmation(id)}
+                                  disabled={isConverting}
+                                  title="Delete Pending Offline Account"
+                                >
+                                  <Trash className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </>
+                            ) : (
+                              // Show normal buttons for online accounts
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-blue-50 h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
+                                  onClick={() => openConversionForm(account, 'master')}
+                                  title="Make Master"
+                                  disabled={
+                                    isConverting ||
+                                    (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts)) ||
+                                    false
+                                  }
+                                >
+                                  <HousePlug className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-green-50 h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-green-100"
+                                  onClick={() => openConversionForm(account, 'slave')}
+                                  title="Make Slave"
+                                  disabled={
+                                    isConverting ||
+                                    (userInfo && !canCreateMoreAccounts(userInfo, totalAccounts)) ||
+                                    false
+                                  }
+                                >
+                                  <Unplug className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-red-50 h-9 w-9 p-0 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
+                                  onClick={() => openDeleteConfirmation(id)}
+                                  disabled={isConverting}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
@@ -624,46 +679,27 @@ export const PendingAccountsManager: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
                           <p className="text-green-800 font-medium">
-                            ✅ Successfully converted to {isMasterConversion ? 'Master' : 'Slave'}{' '}
+                            Successfully converted to {isMasterConversion ? 'Master' : 'Slave'}{' '}
                             Account
                           </p>
                         </div>
                       </div>
                     )}
 
-                    <div className="text-sm text-gray-600 space-y-1 mt-2 ">
-                      <p>
-                        <strong>Platform:</strong> {account.platform || 'Unknown'}
-                      </p>
-                      <p className={isSuccessfullyConverted ? 'text-green-600' : 'text-orange-600'}>
-                        <strong>Waiting since:</strong> {getTimeSinceFirstSeen(account.firstSeen)}
-                      </p>
-                    </div>
-
                     {/* Inline Conversion Form */}
                     {expandedAccountId === id && (
-                      <div className="mt-4 p-4 border rounded-lg border-green-400 bg-green-50 shadow">
-                        <div className="flex justify-between items-center">
-                          <h3 className="text-lg font-medium text-green-700">
-                            Convert {id} to Slave Account
-                          </h3>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={cancelConversion}
-                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
-                            disabled={isConverting}
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <div className="p-2">
+                        <h2 className="text-lg flex items-center font-medium ">
+                          <Unplug className="h-4 w-4 mr-2" />
+                          Convert to Slave
+                        </h2>
 
                         <form
                           onSubmit={e => {
                             e.preventDefault();
                             convertAccount();
                           }}
-                          className="space-y-4"
+                          className="space-y-4 pt-2"
                         >
                           {/* Trading Configuration */}
                           <div className="space-y-4">
@@ -672,7 +708,7 @@ export const PendingAccountsManager: React.FC = () => {
                               {/* Master Connection Section */}
                               {masterAccounts.length > 0 && (
                                 <div>
-                                  <Label htmlFor="convert-master">Connect to Master account</Label>
+                                  <Label htmlFor="convert-master">Connect to</Label>
                                   <Select
                                     value={conversionForm.masterAccountId}
                                     onValueChange={value =>
@@ -700,6 +736,9 @@ export const PendingAccountsManager: React.FC = () => {
                                       ))}
                                     </SelectContent>
                                   </Select>
+                                  <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                    Set the master account to convert to
+                                  </p>
                                 </div>
                               )}
 
@@ -721,7 +760,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   }
                                   className="bg-white border border-gray-200"
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                   Multiplies the lot size from the master account
                                 </p>
                               </div>
@@ -747,7 +786,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   }
                                   className="bg-white border border-gray-200"
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                   If greater than 0, uses this fixed lot instead of copying
                                 </p>
                               </div>
@@ -767,36 +806,13 @@ export const PendingAccountsManager: React.FC = () => {
                                   htmlFor="reverseTrade"
                                   className="font-medium cursor-pointer"
                                 >
-                                  Reverse trades (Buy → Sell, Sell → Buy)
+                                  Reverse trades
                                 </Label>
+                                <p className="text-xs text-muted-foreground text-gray-500">
+                                  Reverse the trade direction (buy/sell)
+                                </p>
                               </div>
                             </div>
-                          </div>
-
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              type="button"
-                              onClick={cancelConversion}
-                              variant="outline"
-                              disabled={isConverting}
-                              className="bg-white border border-gray-200 hover:bg-gray-50"
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="submit"
-                              disabled={isConverting}
-                              className="bg-white border border-gray-200 hover:bg-gray-50"
-                            >
-                              {isConverting ? (
-                                <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                                  Converting...
-                                </>
-                              ) : (
-                                'Convert to Slave'
-                              )}
-                            </Button>
                           </div>
                         </form>
                       </div>

@@ -13,17 +13,16 @@ import {
   saveUserCopierStatus,
 } from './copierStatusController.js';
 import {
+  notifyAccountConverted,
+  notifyAccountCreated,
+  notifyTradingConfigCreated,
+} from './eventNotifier.js';
+import {
   createDisabledSlaveConfig,
   loadSlaveConfigs,
   saveSlaveConfigs,
 } from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
-import {
-  notifyAccountConverted,
-  notifyAccountCreated,
-  notifyAccountDeleted,
-  notifyTradingConfigCreated
-} from './eventNotifier.js';
 
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -80,7 +79,7 @@ export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
 // Activity monitoring configuration
-const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
+const ACTIVITY_TIMEOUT = 500000; // 5 seconds in milliseconds
 
 // Check and update account status based on activity
 const checkAccountActivity = () => {
@@ -369,7 +368,11 @@ export const registerMasterAccount = (req, res) => {
 
     // Notify about account creation
     notifyAccountCreated(masterAccountId, 'master', apiKey);
-    notifyTradingConfigCreated(masterAccountId, { lotMultiplier: 1.0, forceLot: null, reverseTrading: false });
+    notifyTradingConfigCreated(masterAccountId, {
+      lotMultiplier: 1.0,
+      forceLot: null,
+      reverseTrading: false,
+    });
 
     console.log(
       `Master account registered: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) (copying disabled by default)`
@@ -946,7 +949,11 @@ export const convertPendingToMaster = (req, res) => {
 
       // Notify about account conversion
       notifyAccountConverted(accountId, 'pending', 'master', apiKey);
-      notifyTradingConfigCreated(accountId, { lotMultiplier: 1.0, forceLot: null, reverseTrading: false });
+      notifyTradingConfigCreated(accountId, {
+        lotMultiplier: 1.0,
+        forceLot: null,
+        reverseTrading: false,
+      });
 
       res.json({
         message: 'Pending account successfully converted to master (copying disabled by default)',
