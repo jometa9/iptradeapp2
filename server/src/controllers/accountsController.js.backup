@@ -1367,7 +1367,7 @@ export const getConnectivityStats = (req, res) => {
 
     // Process master accounts
     if (userAccounts.masterAccounts) {
-      for (const [accountId, account] of Object.entries(userAccounts.masterAccounts)) {
+      for (const [accountId, account] = Object.entries(userAccounts.masterAccounts)) {
         stats.total++;
         stats.masters.total++;
 
@@ -1383,8 +1383,8 @@ export const getConnectivityStats = (req, res) => {
 
         // Check if copy trading is disabled for this master
         const copierStatus = loadUserCopierStatus(apiKey);
-        const isCopyTradingDisabled =
-          copierStatus.masterAccounts && copierStatus.masterAccounts[accountId] === false;
+        const isCopyTradingDisabled = copierStatus.masterAccounts &&
+          copierStatus.masterAccounts[accountId] === false;
 
         let status;
         if (isOffline || isCopyTradingDisabled) {
@@ -1419,7 +1419,7 @@ export const getConnectivityStats = (req, res) => {
 
     // Process slave accounts
     if (userAccounts.slaveAccounts) {
-      for (const [accountId, account] of Object.entries(userAccounts.slaveAccounts)) {
+      for (const [accountId, account] = Object.entries(userAccounts.slaveAccounts)) {
         stats.total++;
         stats.slaves.total++;
 
@@ -1427,14 +1427,13 @@ export const getConnectivityStats = (req, res) => {
         const connectedToMaster = userAccounts.connections && userAccounts.connections[accountId];
 
         // First check if account is offline due to inactivity
-        const isOffline =
-          account.status === 'offline' ||
-          (account.lastActivity && now - new Date(account.lastActivity) > ACTIVITY_TIMEOUT);
+        const isOffline = account.status === 'offline' ||
+          (account.lastActivity && (now - new Date(account.lastActivity)) > ACTIVITY_TIMEOUT);
 
         // Check if copy trading is disabled for this slave
         const slaveConfigs = loadSlaveConfigs();
-        const isCopyTradingDisabled =
-          slaveConfigs[accountId] && slaveConfigs[accountId].enabled === false;
+        const isCopyTradingDisabled = slaveConfigs[accountId] &&
+          slaveConfigs[accountId].enabled === false;
 
         let status;
         if (isOffline || isCopyTradingDisabled) {

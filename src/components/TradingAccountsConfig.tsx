@@ -9,10 +9,12 @@ import {
   Clock,
   Eye,
   EyeOff,
+  HousePlug,
   Info,
   Pencil,
   Power,
   PowerOff,
+  SaveIcon,
   Shield,
   Trash,
   Unlink,
@@ -234,11 +236,21 @@ export function TradingAccountsConfig() {
         }),
       ]);
 
+      console.log('🔍 Response status:', {
+        accounts: accountsResponse.status,
+        connectivity: connectivityResponse.status,
+      });
+
       if (!accountsResponse.ok) {
         throw new Error('Failed to fetch trading accounts');
       }
 
       if (!connectivityResponse.ok) {
+        console.error(
+          '❌ Connectivity endpoint failed:',
+          connectivityResponse.status,
+          connectivityResponse.statusText
+        );
         throw new Error('Failed to fetch connectivity statistics');
       }
 
@@ -965,7 +977,21 @@ export function TradingAccountsConfig() {
           platform: formState.platform.toUpperCase(),
         };
 
-        if (editingAccount) {
+        // Si estamos editando una cuenta slave y la convertimos a master
+        if (editingAccount && editingAccount.accountType === 'slave') {
+          // Primero eliminamos la cuenta slave
+          await fetch(`http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          // Luego creamos la cuenta master
+          response = await fetch(`http://localhost:${serverPort}/api/accounts/master`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } else if (editingAccount) {
           response = await fetch(
             `http://localhost:${serverPort}/api/accounts/master/${editingAccount.id}`,
             {
@@ -995,7 +1021,21 @@ export function TradingAccountsConfig() {
             }),
         };
 
-        if (editingAccount && editingAccount.accountType === 'slave') {
+        // Si estamos editando una cuenta master y la convertimos a slave
+        if (editingAccount && editingAccount.accountType === 'master') {
+          // Primero eliminamos la cuenta master
+          await fetch(`http://localhost:${serverPort}/api/accounts/master/${editingAccount.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          // Luego creamos la cuenta slave
+          response = await fetch(`http://localhost:${serverPort}/api/accounts/slave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        } else if (editingAccount && editingAccount.accountType === 'slave') {
           // Para edición de cuentas slave, solo enviamos los datos de conexión
           payload = {
             slaveAccountId: editingAccount.accountNumber,
@@ -1008,9 +1048,7 @@ export function TradingAccountsConfig() {
                 masterAccountId: formState.connectedToMaster,
               }),
           };
-        }
 
-        if (editingAccount) {
           response = await fetch(
             `http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`,
             {
@@ -1581,9 +1619,7 @@ export function TradingAccountsConfig() {
               {/* Offline */}
               <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
                 <div className="text-2xl font-bold text-orange-600">
-                  {connectivityStats
-                    ? connectivityStats.offline
-                    : accounts.filter(acc => acc.status === 'offline').length}
+                  {connectivityStats ? connectivityStats.offline : 0}
                 </div>
                 <div className="text-xs text-orange-600 text-center">Offline</div>
               </div>
@@ -1608,9 +1644,41 @@ export function TradingAccountsConfig() {
 
           {/* Add/Edit Account Form */}
           {(isAddingAccount || editingAccount) && (
-            <Card>
+            <Card
+              className={
+                editingAccount
+                  ? formState.accountType === 'master'
+                    ? 'border-blue-200 bg-blue-50/30'
+                    : 'border-green-200 bg-green-50/30'
+                  : ''
+              }
+            >
               <CardHeader>
-                <CardTitle>{editingAccount ? 'Edit Account' : 'Add New Account'}</CardTitle>
+                <CardTitle
+                  className={
+                    editingAccount
+                      ? formState.accountType === 'master'
+                        ? 'text-blue-700'
+                        : 'text-green-700'
+                      : ''
+                  }
+                >
+                  {editingAccount ? (
+                    <div className="flex items-center gap-2">
+                      {formState.accountType === 'master' ? (
+                        <HousePlug className="h-5 w-5" />
+                      ) : (
+                        <Unplug className="h-5 w-5" />
+                      )}
+                      <span>
+                        {editingAccount.accountNumber}{' '}
+                        {formState.accountType === 'master' ? 'Master' : 'Slave'} Configuration
+                      </span>
+                    </div>
+                  ) : (
+                    'Add New Account'
+                  )}
+                </CardTitle>
                 {!canAddMoreAccounts && !editingAccount && (
                   <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                     <div className="flex">
@@ -1633,9 +1701,11 @@ export function TradingAccountsConfig() {
                 {canAddMoreAccounts || editingAccount ? (
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Para cuentas nuevas o cuentas master, mostrar todos los campos */}
+                      {/* Para cuentas nuevas o cuentas master existentes, mostrar todos los campos */}
                       {(!editingAccount ||
-                        (editingAccount && formState.accountType === 'master')) && (
+                        (editingAccount &&
+                          editingAccount.accountType === 'master' &&
+                          formState.accountType === 'master')) && (
                         <>
                           <div>
                             <Label htmlFor="accountNumber">Account Number</Label>
@@ -1727,136 +1797,137 @@ export function TradingAccountsConfig() {
                         </Select>
                       </div>
 
-                      {formState.accountType === 'slave' && (
-                        <>
-                          <div>
-                            <Label htmlFor="connectedToMaster">Connect to Master Account</Label>
-                            <Select
-                              name="connectedToMaster"
-                              value={formState.connectedToMaster}
-                              onValueChange={value =>
-                                handleSelectChange('connectedToMaster', value)
-                              }
-                            >
-                              <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
-                                <SelectValue
-                                  placeholder="Select Master Account (Optional)"
-                                  className="bg-white"
-                                />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border border-gray-200">
-                                <SelectItem value="none">Not Connected (Independent)</SelectItem>
-                                {accounts
-                                  .filter(acc => acc.accountType === 'master')
-                                  .map(masterAcc => (
-                                    <SelectItem
-                                      key={masterAcc.id}
-                                      value={masterAcc.accountNumber}
-                                      className="bg-white"
-                                    >
-                                      {masterAcc.accountNumber} ({masterAcc.platform.toUpperCase()}{' '}
-                                      - {masterAcc.server})
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                      {formState.accountType === 'slave' &&
+                        (!editingAccount || editingAccount.accountType === 'slave') && (
+                          <>
+                            <div>
+                              <Label htmlFor="connectedToMaster">Connect to Master Account</Label>
+                              <Select
+                                name="connectedToMaster"
+                                value={formState.connectedToMaster}
+                                onValueChange={value =>
+                                  handleSelectChange('connectedToMaster', value)
+                                }
+                              >
+                                <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
+                                  <SelectValue
+                                    placeholder="Select Master Account (Optional)"
+                                    className="bg-white"
+                                  />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border border-gray-200">
+                                  <SelectItem value="none">Not Connected</SelectItem>
+                                  {accounts
+                                    .filter(acc => acc.accountType === 'master')
+                                    .map(masterAcc => (
+                                      <SelectItem
+                                        key={masterAcc.id}
+                                        value={masterAcc.accountNumber}
+                                        className="bg-white"
+                                      >
+                                        {masterAcc.accountNumber} (
+                                        {masterAcc.platform.toUpperCase()} - {masterAcc.server})
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
 
-                          <div>
-                            <Label htmlFor="lotCoefficient">
-                              Lot Size Coefficient
-                              {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
-                            </Label>
-                            <Input
-                              id="lotCoefficient"
-                              name="lotCoefficient"
-                              type="number"
-                              min="0.01"
-                              max="100"
-                              step="0.01"
-                              value={
-                                canCustomizeLotSizesValue
-                                  ? formState.lotCoefficient?.toString() || '1'
-                                  : '1'
-                              }
-                              onChange={e =>
-                                setFormState({
-                                  ...formState,
-                                  lotCoefficient: canCustomizeLotSizesValue
-                                    ? e.target.value === ''
-                                      ? 1
-                                      : parseFloat(e.target.value)
-                                    : 1,
-                                })
-                              }
-                              disabled={!canCustomizeLotSizesValue}
-                              className="bg-white border border-gray-200 shadow-sm"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizesValue
-                                ? 'Multiplies the lot size from the master account'
-                                : 'Free plan users cannot customize lot multipliers'}
-                            </p>
-                          </div>
+                            <div>
+                              <Label htmlFor="lotCoefficient">
+                                Lot Size Coefficient
+                                {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
+                              </Label>
+                              <Input
+                                id="lotCoefficient"
+                                name="lotCoefficient"
+                                type="number"
+                                min="0.01"
+                                max="100"
+                                step="0.01"
+                                value={
+                                  canCustomizeLotSizesValue
+                                    ? formState.lotCoefficient?.toString() || '1'
+                                    : '1'
+                                }
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    lotCoefficient: canCustomizeLotSizesValue
+                                      ? e.target.value === ''
+                                        ? 1
+                                        : parseFloat(e.target.value)
+                                      : 1,
+                                  })
+                                }
+                                disabled={!canCustomizeLotSizesValue}
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {canCustomizeLotSizesValue
+                                  ? 'Multiplies the lot size from the master account'
+                                  : 'Free plan users cannot customize lot multipliers'}
+                              </p>
+                            </div>
 
-                          <div>
-                            <Label htmlFor="forceLot">
-                              Force Fixed Lot Size
-                              {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
-                            </Label>
-                            <Input
-                              id="forceLot"
-                              name="forceLot"
-                              type="number"
-                              min="0"
-                              max={canCustomizeLotSizesValue ? '100' : '0.01'}
-                              step="0.01"
-                              value={
-                                canCustomizeLotSizesValue
-                                  ? formState.forceLot?.toString() || '0'
-                                  : formState.forceLot > 0
-                                    ? '0.01'
-                                    : '0'
-                              }
-                              onChange={e => {
-                                const value =
-                                  e.target.value === '' ? 0 : parseFloat(e.target.value);
-                                setFormState({
-                                  ...formState,
-                                  forceLot: canCustomizeLotSizesValue
-                                    ? value
-                                    : value > 0
-                                      ? 0.01
-                                      : 0,
-                                });
-                              }}
-                              disabled={!canCustomizeLotSizesValue}
-                              className="bg-white border border-gray-200 shadow-sm"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {canCustomizeLotSizesValue
-                                ? 'If set above 0, uses this fixed lot size instead of copying'
-                                : 'Free plan users are limited to 0.01 lot size'}
-                            </p>
-                          </div>
+                            <div>
+                              <Label htmlFor="forceLot">
+                                Force Fixed Lot Size
+                                {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
+                              </Label>
+                              <Input
+                                id="forceLot"
+                                name="forceLot"
+                                type="number"
+                                min="0"
+                                max={canCustomizeLotSizesValue ? '100' : '0.01'}
+                                step="0.01"
+                                value={
+                                  canCustomizeLotSizesValue
+                                    ? formState.forceLot?.toString() || '0'
+                                    : formState.forceLot > 0
+                                      ? '0.01'
+                                      : '0'
+                                }
+                                onChange={e => {
+                                  const value =
+                                    e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  setFormState({
+                                    ...formState,
+                                    forceLot: canCustomizeLotSizesValue
+                                      ? value
+                                      : value > 0
+                                        ? 0.01
+                                        : 0,
+                                  });
+                                }}
+                                disabled={!canCustomizeLotSizesValue}
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {canCustomizeLotSizesValue
+                                  ? 'If set above 0, uses this fixed lot size instead of copying'
+                                  : 'Free plan users are limited to 0.01 lot size'}
+                              </p>
+                            </div>
 
-                          <div className="flex items-center space-x-2 pt-1">
-                            <Switch
-                              id="reverseTrade"
-                              checked={formState.reverseTrade}
-                              onCheckedChange={checked =>
-                                setFormState({
-                                  ...formState,
-                                  reverseTrade: checked,
-                                })
-                              }
-                            />
-                            <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                              Reverse trades (Buy → Sell, Sell → Buy)
-                            </Label>
-                          </div>
-                        </>
-                      )}
+                            <div className="flex items-center space-x-2 pt-1">
+                              <Switch
+                                id="reverseTrade"
+                                checked={formState.reverseTrade}
+                                onCheckedChange={checked =>
+                                  setFormState({
+                                    ...formState,
+                                    reverseTrade: checked,
+                                  })
+                                }
+                              />
+                              <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
+                                Reverse trades (Buy → Sell, Sell → Buy)
+                              </Label>
+                            </div>
+                          </>
+                        )}
                     </div>
 
                     <div className="flex justify-end space-x-2 pt-2">
@@ -1865,15 +1936,16 @@ export function TradingAccountsConfig() {
                         onClick={handleCancel}
                         variant="outline"
                         disabled={isSubmitting}
-                        className="bg-white border border-gray-200 shadow-sm"
+                        className="bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
                       >
                         Cancel
                       </Button>
                       <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="bg-white border border-gray-200 shadow-sm"
+                        className="bg-white border border-blue-200 shadow-sm h-9 hover:bg-blue-50"
                       >
+                        <SaveIcon className="h-4 w-4 mr-2" />
                         {isSubmitting ? (
                           <>
                             <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
@@ -2059,7 +2131,7 @@ export function TradingAccountsConfig() {
                                       confirmDeleteAccount();
                                     }}
                                     disabled={isDeletingAccount === masterAccount.id}
-                                    className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                    className="bg-red-50 h-9  border border-red-200 text-red-700 hover:bg-red-100"
                                   >
                                     {isDeletingAccount === masterAccount.id
                                       ? 'Deleting...'
@@ -2073,7 +2145,7 @@ export function TradingAccountsConfig() {
                                       cancelDeleteAccount();
                                     }}
                                     disabled={isDeletingAccount === masterAccount.id}
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                    className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
                                   >
                                     Cancel
                                   </Button>
