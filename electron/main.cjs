@@ -165,6 +165,8 @@ function createWindow() {
     minHeight: 750,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
     title: 'IPTRADE',
+    titleBarStyle: 'hidden',
+    frame: false,
     autoHideMenuBar: true, // Oculta la barra de menú en Windows/Linux
     webPreferences: {
       nodeIntegration: false,
