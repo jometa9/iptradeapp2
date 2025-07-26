@@ -1700,7 +1700,24 @@ export function TradingAccountsConfig() {
               <CardContent>
                 {canAddMoreAccounts || editingAccount ? (
                   <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div
+                      className={`grid gap-4 ${
+                        // Si estamos editando y solo se muestra el selector de tipo, usar una columna
+                        editingAccount &&
+                        !(
+                          !editingAccount ||
+                          (editingAccount &&
+                            editingAccount.accountType === 'master' &&
+                            formState.accountType === 'master')
+                        ) &&
+                        !(
+                          formState.accountType === 'slave' &&
+                          (!editingAccount || editingAccount.accountType === 'slave')
+                        )
+                          ? 'grid-cols-1'
+                          : 'grid-cols-1 md:grid-cols-2'
+                      }`}
+                    >
                       {/* Para cuentas nuevas o cuentas master existentes, mostrar todos los campos */}
                       {(!editingAccount ||
                         (editingAccount &&
@@ -1773,7 +1790,24 @@ export function TradingAccountsConfig() {
                         </>
                       )}
 
-                      <div>
+                      <div
+                        className={
+                          // Si estamos editando y solo se muestra el selector de tipo, hacer que ocupe todo el ancho
+                          editingAccount &&
+                          !(
+                            !editingAccount ||
+                            (editingAccount &&
+                              editingAccount.accountType === 'master' &&
+                              formState.accountType === 'master')
+                          ) &&
+                          !(
+                            formState.accountType === 'slave' &&
+                            (!editingAccount || editingAccount.accountType === 'slave')
+                          )
+                            ? 'col-span-1'
+                            : ''
+                        }
+                      >
                         <Label htmlFor="accountType">Account Type</Label>
                         <Select
                           name="accountType"
