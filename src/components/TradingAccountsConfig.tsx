@@ -1744,7 +1744,7 @@ export function TradingAccountsConfig() {
                               value={formState.platform}
                               onValueChange={value => handlePlatformChange(value)}
                             >
-                              <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
+                              <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
                                 <SelectValue placeholder="Select Platform" className="bg-white" />
                               </SelectTrigger>
                               <SelectContent className="bg-white border border-gray-200">
@@ -1752,7 +1752,7 @@ export function TradingAccountsConfig() {
                                   <SelectItem
                                     key={option.value}
                                     value={option.value}
-                                    className="bg-white"
+                                    className="bg-white cursor-pointer hover:bg-gray-50"
                                   >
                                     {option.label}
                                   </SelectItem>
@@ -1814,7 +1814,7 @@ export function TradingAccountsConfig() {
                           value={formState.accountType}
                           onValueChange={value => handleSelectChange('accountType', value)}
                         >
-                          <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
+                          <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
                             <SelectValue placeholder="Select Type" className="bg-white" />
                           </SelectTrigger>
                           <SelectContent className="bg-white border border-gray-200">
@@ -1822,7 +1822,7 @@ export function TradingAccountsConfig() {
                               <SelectItem
                                 key={option.value}
                                 value={option.value}
-                                className="bg-white "
+                                className="bg-white cursor-pointer hover:bg-gray-50"
                               >
                                 {option.label}
                               </SelectItem>
@@ -1843,21 +1843,21 @@ export function TradingAccountsConfig() {
                                   handleSelectChange('connectedToMaster', value)
                                 }
                               >
-                                <SelectTrigger className="bg-white border border-gray-200 shadow-sm">
+                                <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
                                   <SelectValue
                                     placeholder="Select Master Account (Optional)"
                                     className="bg-white"
                                   />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border border-gray-200">
-                                  <SelectItem value="none">Not Connected</SelectItem>
+                                  <SelectItem value="none" className="cursor-pointer hover:bg-gray-50">Not Connected</SelectItem>
                                   {accounts
                                     .filter(acc => acc.accountType === 'master')
                                     .map(masterAcc => (
                                       <SelectItem
                                         key={masterAcc.id}
                                         value={masterAcc.accountNumber}
-                                        className="bg-white"
+                                        className="bg-white cursor-pointer hover:bg-gray-50"
                                       >
                                         {masterAcc.accountNumber} (
                                         {masterAcc.platform.toUpperCase()} - {masterAcc.server})
