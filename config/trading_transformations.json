@@ -24,6 +24,11 @@
     "forceLot": null,
     "reverseTrading": false
   },
+  "555555": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
   "666666": {
     "lotMultiplier": 1,
     "forceLot": null,

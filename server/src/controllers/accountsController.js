@@ -76,7 +76,7 @@ export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
 };
 
 // Define supported platforms
-const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
+const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader'];
 
 // Activity monitoring configuration
 const ACTIVITY_TIMEOUT = 500000; // 5 seconds in milliseconds
@@ -936,7 +936,7 @@ export const convertPendingToMaster = (req, res) => {
       registeredAt: new Date().toISOString(),
       convertedFrom: 'pending',
       firstSeen: pendingAccount.firstSeen,
-      lastActivity: pendingAccount.lastActivity,
+      lastActivity: pendingAccount.lastActivity || new Date().toISOString(), // Set current time if no lastActivity
       status: 'active',
     };
     // Move from pending to master
@@ -1018,7 +1018,7 @@ export const convertPendingToSlave = (req, res) => {
       registeredAt: new Date().toISOString(),
       convertedFrom: 'pending',
       firstSeen: pendingAccount.firstSeen,
-      lastActivity: pendingAccount.lastActivity,
+      lastActivity: pendingAccount.lastActivity || new Date().toISOString(), // Set current time if no lastActivity
       status: 'active',
     };
     // Move from pending to slave
@@ -1340,7 +1340,12 @@ export const getConnectivityStats = (req, res) => {
     }
 
     const userAccounts = getUserAccounts(apiKey);
+    console.log(`🔍 Using API key: ${apiKey.substring(0, 8)}...`);
+    console.log(
+      `📊 Found ${Object.keys(userAccounts.masterAccounts || {}).length} master accounts, ${Object.keys(userAccounts.slaveAccounts || {}).length} slave accounts, ${Object.keys(userAccounts.pendingAccounts || {}).length} pending accounts`
+    );
     const now = new Date();
+    let userHasChanges = false;
 
     const stats = {
       total: 0,
@@ -1377,32 +1382,54 @@ export const getConnectivityStats = (req, res) => {
           .map(([slaveId]) => slaveId);
 
         // First check if account is offline due to inactivity
-        const isOffline =
-          account.status === 'offline' ||
-          (account.lastActivity && now - new Date(account.lastActivity) > ACTIVITY_TIMEOUT);
+        // Prioritize recent activity over stored status
+        const timeSinceActivity = account.lastActivity
+          ? now - new Date(account.lastActivity)
+          : null;
+        const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
 
-        // Check if copy trading is disabled for this master
+        console.log(
+          `🔍 Master ${accountId}: timeSinceActivity=${timeSinceActivity}ms, ACTIVITY_TIMEOUT=${ACTIVITY_TIMEOUT}ms, isOffline=${isOffline}, lastActivity=${account.lastActivity}`
+        );
+
+        // Update account status in database if it has recent activity
+        if (
+          timeSinceActivity &&
+          timeSinceActivity < ACTIVITY_TIMEOUT &&
+          account.status === 'offline'
+        ) {
+          console.log(
+            `🔄 Reactivating master ${accountId} (${timeSinceActivity}ms < ${ACTIVITY_TIMEOUT}ms)`
+          );
+          account.status = 'active';
+          userHasChanges = true;
+        }
+
+        // Check if copy trading is disabled for this master (for reference only)
         const copierStatus = loadUserCopierStatus(apiKey);
         const isCopyTradingDisabled =
           copierStatus.masterAccounts && copierStatus.masterAccounts[accountId] === false;
 
+        console.log(
+          `🔍 Master ${accountId}: isOffline=${isOffline}, isCopyTradingDisabled=${isCopyTradingDisabled}, connectedSlaves=${connectedSlaves.length}`
+        );
+
         let status;
-        if (isOffline || isCopyTradingDisabled) {
+        if (isOffline) {
           status = 'offline';
+          console.log(`📴 Master ${accountId} marked as offline: isOffline=${isOffline}`);
         } else if (connectedSlaves.length > 0) {
           status = 'synchronized';
+          console.log(
+            `🔗 Master ${accountId} marked as synchronized: ${connectedSlaves.length} slaves`
+          );
         } else {
-          status = 'pending'; // Master without slaves is pending (not connected)
+          status = 'active'; // Master without slaves is active (not connected)
+          console.log(`✅ Master ${accountId} marked as active: no slaves connected`);
         }
 
         stats[status] = (stats[status] || 0) + 1;
         stats.masters[status] = (stats.masters[status] || 0) + 1;
-
-        // Calculate time since last activity for reference
-        let timeSinceActivity = null;
-        if (account.lastActivity) {
-          timeSinceActivity = now - new Date(account.lastActivity);
-        }
 
         stats.connectivityDetails.push({
           accountId,
@@ -1427,17 +1454,32 @@ export const getConnectivityStats = (req, res) => {
         const connectedToMaster = userAccounts.connections && userAccounts.connections[accountId];
 
         // First check if account is offline due to inactivity
-        const isOffline =
-          account.status === 'offline' ||
-          (account.lastActivity && now - new Date(account.lastActivity) > ACTIVITY_TIMEOUT);
+        // Prioritize recent activity over stored status
+        const timeSinceActivity = account.lastActivity
+          ? now - new Date(account.lastActivity)
+          : null;
+        const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
 
-        // Check if copy trading is disabled for this slave
+        // Update account status in database if it has recent activity
+        if (
+          timeSinceActivity &&
+          timeSinceActivity < ACTIVITY_TIMEOUT &&
+          account.status === 'offline'
+        ) {
+          console.log(
+            `🔄 Reactivating slave ${accountId} (${timeSinceActivity}ms < ${ACTIVITY_TIMEOUT}ms)`
+          );
+          account.status = 'active';
+          userHasChanges = true;
+        }
+
+        // Check if copy trading is disabled for this slave (for reference only)
         const slaveConfigs = loadSlaveConfigs();
         const isCopyTradingDisabled =
           slaveConfigs[accountId] && slaveConfigs[accountId].enabled === false;
 
         let status;
-        if (isOffline || isCopyTradingDisabled) {
+        if (isOffline) {
           status = 'offline';
         } else if (connectedToMaster) {
           status = 'synchronized';
@@ -1447,12 +1489,6 @@ export const getConnectivityStats = (req, res) => {
 
         stats[status] = (stats[status] || 0) + 1;
         stats.slaves[status] = (stats.slaves[status] || 0) + 1;
-
-        // Calculate time since last activity for reference
-        let timeSinceActivity = null;
-        if (account.lastActivity) {
-          timeSinceActivity = now - new Date(account.lastActivity);
-        }
 
         stats.connectivityDetails.push({
           accountId,
@@ -1492,6 +1528,12 @@ export const getConnectivityStats = (req, res) => {
           isRecent: timeSinceActivity ? timeSinceActivity < ACTIVITY_TIMEOUT : false,
         });
       }
+    }
+
+    // Save changes if any were made
+    if (userHasChanges) {
+      console.log(`💾 Saving account status changes for user ${apiKey.substring(0, 8)}...`);
+      saveUserAccounts(apiKey, userAccounts);
     }
 
     res.json({
