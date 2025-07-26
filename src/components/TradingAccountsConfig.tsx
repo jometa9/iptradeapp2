@@ -21,7 +21,6 @@ import {
   Unplug,
   WifiOff,
   XCircle,
-  Zap,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -1393,19 +1392,6 @@ export function TradingAccountsConfig() {
             <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
             <p className="text-sm mt-1.5 text-yellow-800">
               {getAccountLimitMessage(userInfo, accounts.length)} {getLotSizeMessage(userInfo)}
-            </p>
-          </div>
-        </Card>
-      )}
-
-      {/* Información de plan premium */}
-      {userInfo && userInfo.subscriptionType === 'premium' && (
-        <Card className="border-purple-400 bg-purple-50 flex items-center p-4 gap-3">
-          <Zap className="w-6 h-6 text-purple-900" />
-          <div className="gap-3">
-            <CardTitle className="text-purple-800 mt-1">Premium Plan Active</CardTitle>
-            <p className="text-sm mt-1.5 text-purple-800">
-              Enhanced features: Up to 5 accounts, custom lot sizes, and reverse trading options.
             </p>
           </div>
         </Card>

@@ -819,10 +819,9 @@ export const PendingAccountsManager: React.FC = () => {
                     )}
                     {/* Show limit message if reached */}
                     {userInfo && accountLimit !== null && totalAccounts >= accountLimit && (
-                      <div className="mt-2 text-xs text-red-600 font-semibold">
-                        {getAccountLimitMessage(userInfo, totalAccounts)}
-                        <br />
-                        Delete an account to add another one.
+                      <div className="p-2 text-xs text-orange-800 font-semibold">
+                        {getAccountLimitMessage(userInfo, totalAccounts)} Delete an account to add
+                        another one.
                       </div>
                     )}
                   </div>

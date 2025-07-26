@@ -34,6 +34,16 @@
     "forceLot": null,
     "reverseTrading": false
   },
+  "888888": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "999999": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
   "TEST_MASTER_001": {
     "lotMultiplier": 1,
     "forceLot": null,
