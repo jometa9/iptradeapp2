@@ -380,7 +380,7 @@ export const TradingAccountsManager: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Subscription Info Card para planes con límites */}
-      {userInfo && !isUnlimitedPlan(userInfo) && (
+      {userInfo && shouldShowSubscriptionLimitsCard(userInfo, totalAccounts) && (
         <Card>
           <CardHeader>
             <CardTitle>Account Limits</CardTitle>

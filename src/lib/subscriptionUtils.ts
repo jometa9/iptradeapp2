@@ -145,14 +145,29 @@ export const getLotSizeMessage = (userInfo: UserInfo): string => {
 };
 
 // Check if user should see subscription limits card
-export const shouldShowSubscriptionLimitsCard = (userInfo: UserInfo): boolean => {
+export const shouldShowSubscriptionLimitsCard = (
+  userInfo: UserInfo,
+  currentAccountCount: number = 0
+): boolean => {
   if (!userInfo) {
     return false;
   }
 
-  // Only show limits card for plans with restrictions
-  const plansWithLimits = ['free', 'premium'];
-  return plansWithLimits.includes(userInfo.subscriptionType);
+  // Usuarios free siempre ven la tarjeta
+  if (userInfo.subscriptionType === 'free') {
+    return true;
+  }
+
+  // Para otros usuarios, solo mostrar cuando alcancen su límite
+  const limits = getSubscriptionLimits(userInfo.subscriptionType);
+
+  // Si no hay límite (unlimited, managed_vps, admin), no mostrar tarjeta
+  if (limits.maxAccounts === null) {
+    return false;
+  }
+
+  // Solo mostrar cuando alcancen el límite
+  return currentAccountCount >= limits.maxAccounts;
 };
 
 export type { LotValidation, SubscriptionLimits, UserInfo };

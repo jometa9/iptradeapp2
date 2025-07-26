@@ -113,7 +113,6 @@ export function TradingAccountsConfig() {
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
-  const [showLimitsCard, setShowLimitsCard] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
 
   // Copier status management
@@ -198,20 +197,7 @@ export function TradingAccountsConfig() {
     { value: 'slave', label: 'Slave Account (Signal Follower)' },
   ];
 
-  useEffect(() => {
-    setShowLimitsCard(true);
-    setIsLeaving(false);
-    const fadeTimer = setTimeout(() => {
-      setIsLeaving(true);
-    }, 9750); // Iniciar fade out medio segundo antes
-    const hideTimer = setTimeout(() => {
-      setShowLimitsCard(false);
-    }, 10000);
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(hideTimer);
-    };
-  }, [userInfo]);
+  // Eliminado el useEffect que ocultaba la tarjeta automáticamente
 
   // Fetch accounts from API
   const fetchAccounts = async (showLoadingState = false) => {
@@ -1387,13 +1373,17 @@ export function TradingAccountsConfig() {
           console.log('🔍 TradingAccountsConfig - Render', {
             subscriptionType: userInfo.subscriptionType,
             isUnlimitedPlan: isUnlimitedPlan(userInfo),
-            shouldShowSubscriptionLimitsCard: shouldShowSubscriptionLimitsCard(userInfo),
+            shouldShowSubscriptionLimitsCard: shouldShowSubscriptionLimitsCard(
+              userInfo,
+              accounts.length
+            ),
+            currentAccountCount: accounts.length,
           });
           return null;
         })()}
 
       {/* Subscription Info Card para planes con límites */}
-      {userInfo && shouldShowSubscriptionLimitsCard(userInfo) && showLimitsCard && (
+      {userInfo && shouldShowSubscriptionLimitsCard(userInfo, accounts.length) && (
         <Card
           className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3"
           style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
@@ -1421,18 +1411,7 @@ export function TradingAccountsConfig() {
         </Card>
       )}
 
-      {/* Información de plan sin límites para planes unlimited */}
-      {userInfo && isUnlimitedPlan(userInfo) && (
-        <Card className="border-green-400 bg-green-50 flex items-center p-4 gap-3">
-          <CheckCircle className="w-6 h-6 text-green-900" />
-          <div className="gap-3">
-            <CardTitle className="text-green-800 mt-1">Unlimited Plan Active</CardTitle>
-            <p className="text-sm mt-1.5 text-green-800">
-              Your {planDisplayName} plan includes unlimited accounts and all advanced features.
-            </p>
-          </div>
-        </Card>
-      )}
+      {/* Eliminada la tarjeta verde para usuarios ilimitados según requisitos */}
 
       <Card className="bg-white rounded-xl shadow-sm">
         <CardHeader>
@@ -1850,7 +1829,12 @@ export function TradingAccountsConfig() {
                                   />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white border border-gray-200">
-                                  <SelectItem value="none" className="cursor-pointer hover:bg-gray-50">Not Connected</SelectItem>
+                                  <SelectItem
+                                    value="none"
+                                    className="cursor-pointer hover:bg-gray-50"
+                                  >
+                                    Not Connected
+                                  </SelectItem>
                                   {accounts
                                     .filter(acc => acc.accountType === 'master')
                                     .map(masterAcc => (

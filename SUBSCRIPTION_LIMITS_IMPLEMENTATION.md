@@ -22,19 +22,19 @@ The subscription limits system has been implemented to enforce account and lot s
 - **Max Accounts**: Unlimited
 - **Lot Size**: Unlimited
 - **Features**: All advanced features
-- **UI**: Shows unlimited plan active card
+- **UI**: No subscription limits card shown
 
 ### Managed VPS Plan (`managed_vps`)
 - **Max Accounts**: Unlimited
 - **Lot Size**: Unlimited
 - **Features**: All advanced features + VPS management
-- **UI**: Shows unlimited plan active card
+- **UI**: No subscription limits card shown
 
 ### Admin Plan (`admin`)
 - **Max Accounts**: Unlimited
 - **Lot Size**: Unlimited
 - **Features**: All features + admin access
-- **UI**: Shows unlimited plan active card
+- **UI**: No subscription limits card shown
 
 ## Implementation Details
 
