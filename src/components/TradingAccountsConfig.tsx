@@ -15,6 +15,7 @@ import {
   Power,
   PowerOff,
   SaveIcon,
+  Settings,
   Shield,
   Trash,
   Unlink,
@@ -1548,7 +1549,10 @@ export function TradingAccountsConfig() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Trading Accounts Configuration</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Trading Accounts Configuration
+              </CardTitle>
               <CardDescription className="text-sm text-gray-400 mt-2">
                 Manage your trading accounts and copy trading configuration
               </CardDescription>

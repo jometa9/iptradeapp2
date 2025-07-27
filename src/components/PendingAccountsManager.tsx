@@ -11,7 +11,7 @@ import {
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -500,18 +500,23 @@ export const PendingAccountsManager: React.FC = () => {
       <Card className="bg-white">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Cable className="h-5 w-5" />
-              Pending Accounts
-              {pendingCount > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="bg-orange-50 text-orange-800 border border-orange-300"
-                >
-                  {pendingCount}
-                </Badge>
-              )}
-            </CardTitle>
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Cable className="h-5 w-5" />
+                Pending Accounts
+                {pendingCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-orange-50 text-orange-800 border border-orange-300"
+                  >
+                    {pendingCount}
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription className="text-sm text-gray-400 mt-2">
+                New accounts connected to the server will appear here for configuration
+              </CardDescription>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -868,7 +873,11 @@ export const PendingAccountsManager: React.FC = () => {
                                   min="0"
                                   max="100"
                                   step="0.01"
-                                  value={conversionForm.forceLot > 0 ? conversionForm.forceLot.toFixed(2) : '0.00'}
+                                  value={
+                                    conversionForm.forceLot > 0
+                                      ? conversionForm.forceLot.toFixed(2)
+                                      : '0.00'
+                                  }
                                   onChange={e => {
                                     const inputValue = e.target.value;
                                     let value = 0;
