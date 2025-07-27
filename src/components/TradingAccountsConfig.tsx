@@ -2090,7 +2090,7 @@ export function TradingAccountsConfig() {
                             <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
                               {masterAccount.accountNumber}
                             </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-yellow-700 align-middle">
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-blue-700 align-middle">
                               Master
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
@@ -2100,7 +2100,7 @@ export function TradingAccountsConfig() {
                               {accounts.filter(
                                 acc => acc.connectedToMaster === masterAccount.accountNumber
                               ).length > 0 ? (
-                                <div className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 border border-yellow-400 text-yellow-800 inline-block">
+                                <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
                                   {
                                     accounts.filter(
                                       acc => acc.connectedToMaster === masterAccount.accountNumber

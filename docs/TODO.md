@@ -18,6 +18,8 @@ cuentas de otras apikeys que se limpien todas si pasa una semana o algo similar
 documentations
 legals
 
-validar los estados y como se muestra y usa el trading configuration
 
-el color del type en todos los estados debe estar acorde
+go dino coffee
+- trading account configurarion
+- probar que copier ande bien y se comporte de una forma correcta
+- ui mejorar y cerrar
