@@ -1,4 +1,4 @@
-# IPTRADE APP
+# IPTRADE
 
 ```bash
 npm i

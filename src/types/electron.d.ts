@@ -17,6 +17,14 @@ export interface DownloadProgress {
   total: number;
 }
 
+export interface WindowConfig {
+  platform: string;
+  isMacOS: boolean;
+  hasTitleBar: boolean;
+  hasFrame: boolean;
+  hasMenuBar: boolean;
+}
+
 export interface ElectronAPI {
   checkForUpdates: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
@@ -24,9 +32,13 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<string>;
   openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
   quitApp: () => Promise<void>;
+  getFullscreenState: () => Promise<boolean>;
+  getPlatform: () => Promise<string>;
+  getWindowConfig: () => Promise<WindowConfig>;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => void;
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => void;
+  onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => void;
   removeAllListeners: (channel: string) => void;
 }
 
@@ -45,10 +57,22 @@ declare global {
       // API para cerrar la aplicación
       quitApp: () => Promise<void>;
 
+      // API para obtener el estado de fullscreen
+      getFullscreenState: () => Promise<boolean>;
+
+      // API para obtener la plataforma del sistema operativo
+      getPlatform: () => Promise<string>;
+
+      // API para obtener la configuración de la ventana
+      getWindowConfig: () => Promise<WindowConfig>;
+
       // Listeners para eventos de actualización
       onUpdateAvailable: (callback: (info: any) => void) => void;
       onDownloadProgress: (callback: (progress: any) => void) => void;
       onUpdateDownloaded: (callback: (info: any) => void) => void;
+
+      // Listener para cambios de fullscreen
+      onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => void;
 
       // Remover listeners
       removeAllListeners: (channel: string) => void;

@@ -106,7 +106,7 @@ if (!isDev) {
 {
   "build": {
     "appId": "com.iptradeapp.app",
-    "productName": "IPTRADE APP",
+    "productName": "IPTRADE",
     "publish": [
       {
         "provider": "github",

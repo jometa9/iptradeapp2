@@ -38,7 +38,7 @@ export const LoginScreen: React.FC = () => {
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
           <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
           <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE APP</CardTitle>
+            <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
               Insert your API Key to access the application
             </CardDescription>

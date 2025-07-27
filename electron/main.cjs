@@ -109,6 +109,31 @@ ipcMain.handle('quit-app', () => {
   app.quit();
 });
 
+// Handler para obtener el estado de fullscreen
+ipcMain.handle('get-fullscreen-state', () => {
+  if (mainWindow) {
+    return mainWindow.isFullScreen();
+  }
+  return false;
+});
+
+// Handler para obtener la plataforma del sistema operativo
+ipcMain.handle('get-platform', () => {
+  return process.platform;
+});
+
+// Handler para obtener la configuración de la ventana
+ipcMain.handle('get-window-config', () => {
+  const isMacOS = process.platform === 'darwin';
+  return {
+    platform: process.platform,
+    isMacOS,
+    hasTitleBar: isMacOS,
+    hasFrame: isMacOS,
+    hasMenuBar: !isMacOS, // En macOS se muestra, en otros se oculta
+  };
+});
+
 async function startServer() {
   try {
     console.log('[ELECTRON] Development mode:', isDev);
@@ -253,7 +278,7 @@ async function createTray() {
         // Crear el menú del tray con el estado actual
         const contextMenu = Menu.buildFromTemplate([
           {
-            label: `IPTRADE APP COPIER ${copierStatus}`,
+            label: `IPTRADE COPIER ${copierStatus}`,
             enabled: false, // Solo para mostrar el estado, no clickeable
             type: 'normal',
           },
@@ -290,7 +315,7 @@ async function createTray() {
         // En caso de error, usar estado por defecto
         const contextMenu = Menu.buildFromTemplate([
           {
-            label: 'IPTRADE APP COPIER OFF',
+            label: 'IPTRADE COPIER OFF',
             enabled: false,
             type: 'normal',
           },
@@ -346,22 +371,48 @@ async function createTray() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  // Configuración de la ventana según el sistema operativo
+  const isMacOS = process.platform === 'darwin';
+
+  const windowConfig = {
     width: 1000,
     minWidth: 1000,
     height: 750,
     minHeight: 750,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
     title: 'IPTRADE',
-    titleBarStyle: 'hidden',
-    frame: false,
-    autoHideMenuBar: true, // Oculta la barra de menú en Windows/Linux
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
-  });
+  };
+
+  // Configuración específica según el sistema operativo
+  if (isMacOS) {
+    // En macOS: mostrar barra de título nativa
+    Object.assign(windowConfig, {
+      titleBarStyle: 'default', // Barra de título nativa de macOS
+      frame: true, // Frame nativo
+      autoHideMenuBar: false, // Mostrar barra de menú
+    });
+  } else {
+    // En Windows/Linux: ventana sin frame personalizada
+    Object.assign(windowConfig, {
+      titleBarStyle: 'hidden',
+      frame: false,
+      autoHideMenuBar: true,
+    });
+  }
+
+  mainWindow = new BrowserWindow(windowConfig);
+
+  // Log de la configuración aplicada
+  console.log(`[WINDOW] Platform: ${process.platform}`);
+  console.log(`[WINDOW] macOS detected: ${isMacOS}`);
+  console.log(`[WINDOW] Frame: ${windowConfig.frame ? 'Native' : 'Custom'}`);
+  console.log(`[WINDOW] Title bar: ${windowConfig.titleBarStyle}`);
+  console.log(`[WINDOW] Menu bar: ${windowConfig.autoHideMenuBar ? 'Hidden' : 'Visible'}`);
 
   // Manejar enlaces externos
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -393,6 +444,15 @@ function createWindow() {
     if (process.platform === 'darwin') {
       app.dock.hide();
     }
+  });
+
+  // Manejar eventos de fullscreen
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-changed', true);
+  });
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow.webContents.send('fullscreen-changed', false);
   });
 
   if (isDev) {

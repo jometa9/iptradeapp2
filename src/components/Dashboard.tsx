@@ -15,7 +15,7 @@ export const Dashboard: React.FC = () => {
   const { logout, userInfo } = useAuth();
   const { openExternalLink } = useExternalLink();
   const [userIP, setUserIP] = useState<string>('Loading...');
-  const [showIP, setShowIP] = useState<boolean>(false);
+  const [showIP, setShowIP] = useState<boolean>(true);
   // Estado para controlar si se acaba de iniciar sesión
   const [isRecentLogin, setIsRecentLogin] = useState<boolean>(true);
   // Estado para saber si ya se disparó el temporizador
@@ -87,13 +87,13 @@ export const Dashboard: React.FC = () => {
 
   return (
     <UpdateTestProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-100">
         <header>
           <div className="mx-auto px-4">
-            <div className="flex justify-between items-center h-16">
+            <div className="flex justify-between items-center py-4">
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <h1 className=" text-xl font-semibold text-gray-900">IPTRADE APP</h1>
+                  <h1 className=" text-xl font-semibold text-gray-900 ">IPTRADE</h1>
                 </div>
               </div>
 
@@ -152,7 +152,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </header>
 
-        <main className="mx-auto px-4 gap-6 flex flex-col pb-6">
+        <main className="mx-auto px-4 gap-4 flex flex-col">
           {/* Update notification appears here when available */}
           <UpdateCard />
 
@@ -163,7 +163,7 @@ export const Dashboard: React.FC = () => {
           <TradingAccountsConfig />
 
           {/* footer */}
-          <div className="flex justify-center items-center">
+          <div className="flex justify-center items-center pb-4">
             <VersionInfo />
           </div>
         </main>

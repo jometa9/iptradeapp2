@@ -14,6 +14,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API para cerrar la aplicación
   quitApp: () => ipcRenderer.invoke('quit-app'),
 
+  // API para obtener el estado de fullscreen
+  getFullscreenState: () => ipcRenderer.invoke('get-fullscreen-state'),
+
+  // API para obtener la plataforma del sistema operativo
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
+
+  // API para obtener la configuración de la ventana
+  getWindowConfig: () => ipcRenderer.invoke('get-window-config'),
+
   // Listeners para eventos de actualización
   onUpdateAvailable: callback => {
     ipcRenderer.on('update-available', (event, info) => callback(info));
@@ -25,6 +34,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onUpdateDownloaded: callback => {
     ipcRenderer.on('update-downloaded', (event, info) => callback(info));
+  },
+
+  // Listener para cambios de fullscreen
+  onFullscreenChanged: callback => {
+    ipcRenderer.on('fullscreen-changed', (event, isFullscreen) => callback(isFullscreen));
   },
 
   // Remover listeners

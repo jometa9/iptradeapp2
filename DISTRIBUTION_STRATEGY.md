@@ -145,11 +145,11 @@ https://apps.apple.com/app/id1234567890
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Download IPTRADE APP</title>
+    <title>Download IPTRADE</title>
 </head>
 <body>
     <div class="download-section">
-        <h2>Download IPTRADE APP</h2>
+        <h2>Download IPTRADE</h2>
         <div id="download-buttons">
             <!-- Se genera dinámicamente según OS del usuario -->
         </div>
