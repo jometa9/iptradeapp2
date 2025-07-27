@@ -98,28 +98,23 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
           console.log(`📨 Recibidos ${result.events.length} eventos`);
 
           // Procesar cada evento
-          result.events.forEach(event => {
-            // Llamar callback si existe
+          for (const event of result.events) {
+            setEvents(prev => [...prev, event]);
+            setLastEventId(event.id);
+
+            // Llamar al callback si está definido
             if (onEvent) {
               onEvent(event);
             }
-
-            // Actualizar último event ID
-            setLastEventId(event.id);
-          });
-
-          // Agregar eventos al estado
-          setEvents(prev => [...prev, ...result.events]);
+          }
         }
       }
     } catch (error) {
       if (error.name !== 'AbortError') {
-        console.error('❌ Error en polling:', error);
+        console.error('❌ Error polling events:', error);
       }
-    } finally {
-      pollingRef.current = null;
     }
-  }, [baseUrl, isConnected, lastEventId, onEvent]);
+  }, [isConnected, lastEventId, baseUrl, onEvent]);
 
   // Long polling mejorado
   const startLongPolling = useCallback(async () => {
@@ -191,21 +186,25 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
     };
   }, [registerClient, unregisterClient, cleanup]);
 
-  // Iniciar polling cuando esté conectado
+  // Iniciar polling más frecuente
   useEffect(() => {
-    if (isConnected) {
-      // Hacer un poll inmediato primero
+    if (!isConnected) return;
+
+    // Polling inmediato al conectar
+    pollForEvents();
+
+    // Polling cada 500ms para eventos en tiempo real
+    const interval = setInterval(() => {
       pollForEvents();
+    }, 500);
 
-      // Luego iniciar long polling
-      const delay = setTimeout(startLongPolling, 1000);
-
-      return () => {
-        clearTimeout(delay);
-        cleanup();
-      };
-    }
-  }, [isConnected, pollForEvents, startLongPolling, cleanup]);
+    return () => {
+      clearInterval(interval);
+      if (pollingRef.current) {
+        pollingRef.current.abort();
+      }
+    };
+  }, [isConnected, pollForEvents]);
 
   // Función para refrescar manualmente
   const refresh = useCallback(() => {

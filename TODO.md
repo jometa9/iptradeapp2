@@ -19,4 +19,13 @@ documentations
 legals
 
 
-que cuando agrego un amaster, por alguna razon demora mas en reflejarse que cuando se agrega una slave en el trading configurations
+
+el platform type en el pending no anda
+
+el plataform type en columna de trasing conifigurations platform, no anda
+
+validar el mensaje de server status y como cambia de color dependiendo de los estados de las cuentas
+
+validar los estados y como se muestra y usa el trading configuration
+
+el color del type en todos los estados debe estar acorde

@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useRealTimeEvents } from '../hooks/useRealTimeEvents';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
@@ -70,10 +71,6 @@ export const PendingAccountsManager: React.FC = () => {
     forceLot: 0,
     reverseTrade: false,
   });
-
-  // Estados para confirmaciones visuales
-  const [successfulConversions, setSuccessfulConversions] = useState<Set<string>>(new Set());
-  const [conversionType, setConversionType] = useState<'master' | 'slave' | null>(null);
 
   // Obtener total de cuentas (masters + slaves) para el usuario
   const [totalAccounts, setTotalAccounts] = useState<number>(0);
@@ -152,6 +149,30 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
+  // Real-time events system
+  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(event => {
+    console.log('📨 Evento recibido en PendingAccountsManager:', event);
+
+    // Manejar diferentes tipos de eventos
+    switch (event.type) {
+      case 'account_converted':
+      case 'account_created':
+      case 'account_deleted':
+      case 'trading_config_created':
+        // Actualizar inmediatamente sin mostrar notificaciones
+        loadPendingAccounts();
+        loadMasterAccounts();
+        loadAccountStats();
+        break;
+
+      case 'account_status_changed':
+        // Actualizar datos cuando cambie el estado de las cuentas
+        loadPendingAccounts();
+        loadMasterAccounts();
+        break;
+    }
+  });
+
   // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
@@ -162,15 +183,19 @@ export const PendingAccountsManager: React.FC = () => {
     if (isAuthenticated && secretKey) {
       loadData();
     }
-    // Auto-refresh every 1 second to catch new pending accounts AND account changes
+
+    // Polling de respaldo cada 10 segundos cuando los eventos no están conectados
+    // Los eventos en tiempo real manejan la mayoría de actualizaciones
     const interval = setInterval(() => {
-      if (isAuthenticated && secretKey) {
+      if (isAuthenticated && secretKey && !isEventsConnected) {
+        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
         loadPendingAccounts();
-        loadAccountStats(); // También actualizar el conteo de cuentas
+        loadAccountStats();
       }
-    }, 1000);
+    }, 10000);
+
     return () => clearInterval(interval);
-  }, [secretKey, isAuthenticated]); // Add secretKey and isAuthenticated as dependencies
+  }, [secretKey, isAuthenticated, isEventsConnected]); // Add isEventsConnected as dependency
 
   // Open conversion form inline or master confirmation
   const openConversionForm = (account: PendingAccount, type: 'master' | 'slave') => {
@@ -215,6 +240,18 @@ export const PendingAccountsManager: React.FC = () => {
   // Convert directly to master (no form needed)
   const convertToMaster = async (accountId: string, accountPlatform: string) => {
     setIsConverting(true);
+
+    // Actualización optimista: remover inmediatamente de pending
+    if (pendingAccounts && pendingAccounts.pendingAccounts) {
+      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+      delete updatedPendingAccounts[accountId];
+      setPendingAccounts({
+        ...pendingAccounts,
+        pendingAccounts: updatedPendingAccounts,
+        totalPending: pendingAccounts.totalPending - 1,
+      });
+    }
+
     try {
       const endpoint = `${baseUrl}/accounts/pending/${accountId}/to-master`;
       const payload = {
@@ -233,41 +270,22 @@ export const PendingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
-          description: `Account ${accountId} successfully converted to master`,
-        });
-
-        // Agregar confirmación visual
-        setSuccessfulConversions(prev => new Set([...prev, accountId]));
-        setConversionType('master');
+        // Conversión exitosa - solo cerrar el modal sin mostrar mensaje
         setConfirmingMasterId(null);
-
-        // Remover la confirmación después de 2 segundos
-        setTimeout(() => {
-          setSuccessfulConversions(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(accountId);
-            return newSet;
-          });
-          setConversionType(null);
-        }, 2000);
-
-        // Actualizar estado local eliminando la cuenta convertida
-        if (pendingAccounts) {
-          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-          delete updatedPendingAccounts[accountId];
-          setPendingAccounts({
-            ...pendingAccounts,
-            pendingAccounts: updatedPendingAccounts,
-            totalPending: pendingAccounts.totalPending - 1,
-          });
-        }
+        // Los eventos en tiempo real se encargarán de actualizar automáticamente
       } else {
+        // Si falla, revertir la actualización optimista
+        if (pendingAccounts) {
+          loadPendingAccounts();
+        }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account to master');
       }
     } catch (error) {
+      // Si falla, revertir la actualización optimista
+      if (pendingAccounts) {
+        loadPendingAccounts();
+      }
       console.error('Error converting account to master:', error);
       toast({
         title: 'Error',
@@ -283,21 +301,31 @@ export const PendingAccountsManager: React.FC = () => {
   const convertAccount = async () => {
     if (!expandedAccountId) return;
 
-    const pendingAccount = pendingAccounts?.pendingAccounts[expandedAccountId];
-    if (!pendingAccount) return;
-
     setIsConverting(true);
+
+    // Actualización optimista: remover inmediatamente de pending
+    if (pendingAccounts && pendingAccounts.pendingAccounts) {
+      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+      delete updatedPendingAccounts[expandedAccountId];
+      setPendingAccounts({
+        ...pendingAccounts,
+        pendingAccounts: updatedPendingAccounts,
+        totalPending: pendingAccounts.totalPending - 1,
+      });
+    }
+
     try {
       const endpoint = `${baseUrl}/accounts/pending/${expandedAccountId}/to-slave`;
-
       const payload = {
-        name: `Account ${expandedAccountId}`,
-        broker: 'MetaQuotes',
-        platform: pendingAccount.platform || 'MT5',
-        ...(conversionForm.masterAccountId &&
-          conversionForm.masterAccountId !== 'none' && {
-            masterAccountId: conversionForm.masterAccountId,
-          }),
+        name: conversionForm.name,
+        description: conversionForm.description,
+        broker: conversionForm.broker,
+        platform: conversionForm.platform,
+        masterAccountId:
+          conversionForm.masterAccountId === 'none' ? null : conversionForm.masterAccountId,
+        lotCoefficient: conversionForm.lotCoefficient,
+        forceLot: conversionForm.forceLot,
+        reverseTrade: conversionForm.reverseTrade,
       };
 
       const response = await fetch(endpoint, {
@@ -310,45 +338,22 @@ export const PendingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
-          description: `Account successfully converted to slave${
-            conversionForm.masterAccountId && conversionForm.masterAccountId !== 'none'
-              ? ` and connected to master ${conversionForm.masterAccountId}`
-              : ''
-          }`,
-        });
-
-        // Agregar confirmación visual
-        setSuccessfulConversions(prev => new Set([...prev, expandedAccountId]));
-        setConversionType('slave');
+        // Conversión exitosa - solo cerrar el formulario sin mostrar mensaje
         setExpandedAccountId(null);
-
-        // Remover la confirmación después de 2 segundos
-        setTimeout(() => {
-          setSuccessfulConversions(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(expandedAccountId);
-            return newSet;
-          });
-          setConversionType(null);
-        }, 2000);
-
-        // Actualizar estado local eliminando la cuenta convertida
-        if (pendingAccounts) {
-          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-          delete updatedPendingAccounts[expandedAccountId];
-          setPendingAccounts({
-            ...pendingAccounts,
-            pendingAccounts: updatedPendingAccounts,
-            totalPending: pendingAccounts.totalPending - 1,
-          });
-        }
+        // Los eventos en tiempo real se encargarán de actualizar automáticamente
       } else {
+        // Si falla, revertir la actualización optimista
+        if (pendingAccounts) {
+          loadPendingAccounts();
+        }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account');
       }
     } catch (error) {
+      // Si falla, revertir la actualización optimista
+      if (pendingAccounts) {
+        loadPendingAccounts();
+      }
       console.error('Error converting account:', error);
       toast({
         title: 'Error',
@@ -363,6 +368,18 @@ export const PendingAccountsManager: React.FC = () => {
   // Delete pending account
   const deletePendingAccount = async (accountId: string) => {
     setIsConverting(true);
+
+    // Actualización optimista: remover inmediatamente de pending
+    if (pendingAccounts && pendingAccounts.pendingAccounts) {
+      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
+      delete updatedPendingAccounts[accountId];
+      setPendingAccounts({
+        ...pendingAccounts,
+        pendingAccounts: updatedPendingAccounts,
+        totalPending: pendingAccounts.totalPending - 1,
+      });
+    }
+
     try {
       const response = await fetch(`${baseUrl}/accounts/pending/${accountId}`, {
         method: 'DELETE',
@@ -372,26 +389,21 @@ export const PendingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'Pending account deleted successfully',
-        });
+        // Eliminación exitosa - solo cerrar el modal sin mostrar mensaje
         setConfirmingDeleteId(null);
-
-        // Actualizar estado local eliminando la cuenta borrada
-        if (pendingAccounts) {
-          const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-          delete updatedPendingAccounts[accountId];
-          setPendingAccounts({
-            ...pendingAccounts,
-            pendingAccounts: updatedPendingAccounts,
-            totalPending: pendingAccounts.totalPending - 1,
-          });
-        }
+        // Los eventos en tiempo real se encargarán de actualizar automáticamente
       } else {
+        // Si falla, revertir la actualización optimista
+        if (pendingAccounts) {
+          loadPendingAccounts();
+        }
         throw new Error('Failed to delete pending account');
       }
     } catch (error) {
+      // Si falla, revertir la actualización optimista
+      if (pendingAccounts) {
+        loadPendingAccounts();
+      }
       console.error('Error deleting pending account:', error);
       toast({
         title: 'Error',
@@ -465,8 +477,8 @@ export const PendingAccountsManager: React.FC = () => {
           ) : (
             <div className="space-y-4">
               {Object.entries(accounts).map(([id, account]) => {
-                const isSuccessfullyConverted = successfulConversions.has(id);
-                const isMasterConversion = conversionType === 'master' && isSuccessfullyConverted;
+                const isSuccessfullyConverted = false; // No longer tracking successful conversions
+                const isMasterConversion = false; // No longer tracking conversion type
 
                 return (
                   <div
@@ -673,18 +685,6 @@ export const PendingAccountsManager: React.FC = () => {
                         )}
                       </div>
                     </div>
-
-                    {isSuccessfullyConverted && (
-                      <div className="mt-2 p-3 bg-green-100 border border-green-300 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                          <p className="text-green-800 font-medium">
-                            Successfully converted to {isMasterConversion ? 'Master' : 'Slave'}{' '}
-                            Account
-                          </p>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Inline Conversion Form */}
                     {expandedAccountId === id && (

@@ -1120,23 +1120,20 @@ export function TradingAccountsConfig() {
 
     // Use connectivity stats from backend if available, otherwise fallback to frontend calculation
     if (connectivityStats) {
-      const { synchronized, pending, offline, error, total } = connectivityStats;
+      const { slaves, masters, pending, offline } = connectivityStats;
+      const relevantTotal = slaves.total + masters.total + pending + offline;
 
-      if (total === 0) return 'none';
+      if (relevantTotal === 0) return 'none';
 
-      const errorPercentage = (error / total) * 100;
-      const offlinePercentage = (offline / total) * 100;
-      const pendingPercentage = (pending / total) * 100;
+      const offlinePercentage = (offline / relevantTotal) * 100;
+      const pendingPercentage = (pending / relevantTotal) * 100;
 
-      if (errorPercentage > 30 || (error > 0 && total < 5)) {
-        return 'error';
-      }
-
-      if (offlinePercentage > 50 || offline > synchronized) {
+      // Priority: offline > pending > mixed > optimal
+      if (offlinePercentage > 50 || offline > slaves.total + masters.total) {
         return 'offline';
       }
 
-      if (pendingPercentage > 40 || pending > synchronized) {
+      if (pendingPercentage > 40 || pending > slaves.total + masters.total) {
         return 'pending';
       }
 
@@ -1144,7 +1141,7 @@ export function TradingAccountsConfig() {
         return 'mixed';
       }
 
-      if (synchronized === total) {
+      if (offline === 0 && pending === 0) {
         return 'optimal';
       }
 
@@ -1152,25 +1149,23 @@ export function TradingAccountsConfig() {
     }
 
     // Fallback to frontend calculation
-    const syncedCount = accounts.filter(acc => acc.status === 'synchronized').length;
-    const errorCount = accounts.filter(acc => acc.status === 'error').length;
+    const slavesCount = accounts.filter(acc => acc.accountType === 'slave').length;
+    const mastersCount = accounts.filter(acc => acc.accountType === 'master').length;
     const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
     const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
-    const totalAccounts = accounts.length;
+    const relevantTotal = slavesCount + mastersCount + offlineCount + pendingCount;
 
-    const errorPercentage = (errorCount / totalAccounts) * 100;
-    const offlinePercentage = (offlineCount / totalAccounts) * 100;
-    const pendingPercentage = (pendingCount / totalAccounts) * 100;
+    if (relevantTotal === 0) return 'none';
 
-    if (errorPercentage > 30 || (errorCount > 0 && totalAccounts < 5)) {
-      return 'error';
-    }
+    const offlinePercentage = (offlineCount / relevantTotal) * 100;
+    const pendingPercentage = (pendingCount / relevantTotal) * 100;
 
-    if (offlinePercentage > 50 || offlineCount > syncedCount) {
+    // Priority: offline > pending > mixed > optimal
+    if (offlinePercentage > 50 || offlineCount > slavesCount + mastersCount) {
       return 'offline';
     }
 
-    if (pendingPercentage > 40 || pendingCount > syncedCount) {
+    if (pendingPercentage > 40 || pendingCount > slavesCount + mastersCount) {
       return 'pending';
     }
 
@@ -1178,7 +1173,7 @@ export function TradingAccountsConfig() {
       return 'mixed';
     }
 
-    if (syncedCount === totalAccounts) {
+    if (offlineCount === 0 && pendingCount === 0) {
       return 'optimal';
     }
 
@@ -1196,19 +1191,28 @@ export function TradingAccountsConfig() {
 
     // Use connectivity stats from backend if available
     if (connectivityStats) {
-      const { synchronized, pending, offline, error, total } = connectivityStats;
+      const { slaves, masters, pending, offline } = connectivityStats;
+      const relevantTotal = slaves.total + masters.total + pending + offline;
 
-      const syncedPercentage = Math.round((synchronized / total) * 100);
-      const errorPercentage = Math.round((error / total) * 100);
-      const offlinePercentage = Math.round((offline / total) * 100);
-      const pendingPercentage = Math.round((pending / total) * 100);
+      if (relevantTotal === 0) {
+        return {
+          message: 'No relevant accounts found',
+          recommendation: 'Add master or slave accounts to get started',
+          severity: 'info',
+        };
+      }
+
+      const slavesPercentage = Math.round((slaves.total / relevantTotal) * 100);
+      const mastersPercentage = Math.round((masters.total / relevantTotal) * 100);
+      const offlinePercentage = Math.round((offline / relevantTotal) * 100);
+      const pendingPercentage = Math.round((pending / relevantTotal) * 100);
 
       const status = getServerStatus();
 
       switch (status) {
         case 'optimal':
           return {
-            message: `${syncedPercentage}% of accounts are connected and synchronized`,
+            message: `${mastersPercentage}% masters, ${slavesPercentage}% slaves - All operational`,
             recommendation: 'All systems operational - copy trading active',
             severity: 'success',
           };
@@ -1220,19 +1224,13 @@ export function TradingAccountsConfig() {
           };
         case 'pending':
           return {
-            message: `${pendingPercentage}% of accounts are not connected`,
+            message: `${pendingPercentage}% of accounts are pending`,
             recommendation: 'Connect slaves to masters to enable copy trading',
             severity: 'warning',
           };
-        case 'error':
-          return {
-            message: `${errorPercentage}% of accounts have errors`,
-            recommendation: 'Review account settings and resolve errors',
-            severity: 'error',
-          };
         case 'mixed':
           return {
-            message: `Mixed status: ${syncedPercentage}% connected, ${offlinePercentage}% offline, ${pendingPercentage}% not connected`,
+            message: `Mixed status: ${mastersPercentage}% masters, ${slavesPercentage}% slaves, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
             recommendation: 'Connect slaves to masters and address offline accounts',
             severity: 'warning',
           };
@@ -1252,23 +1250,31 @@ export function TradingAccountsConfig() {
     }
 
     // Fallback to frontend calculation
-    const syncedCount = accounts.filter(acc => acc.status === 'synchronized').length;
-    const errorCount = accounts.filter(acc => acc.status === 'error').length;
+    const slavesCount = accounts.filter(acc => acc.accountType === 'slave').length;
+    const mastersCount = accounts.filter(acc => acc.accountType === 'master').length;
     const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
     const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
-    const totalAccounts = accounts.length;
+    const relevantTotal = slavesCount + mastersCount + offlineCount + pendingCount;
 
-    const syncedPercentage = Math.round((syncedCount / totalAccounts) * 100);
-    const errorPercentage = Math.round((errorCount / totalAccounts) * 100);
-    const offlinePercentage = Math.round((offlineCount / totalAccounts) * 100);
-    const pendingPercentage = Math.round((pendingCount / totalAccounts) * 100);
+    if (relevantTotal === 0) {
+      return {
+        message: 'No relevant accounts found',
+        recommendation: 'Add master or slave accounts to get started',
+        severity: 'info',
+      };
+    }
+
+    const slavesPercentage = Math.round((slavesCount / relevantTotal) * 100);
+    const mastersPercentage = Math.round((mastersCount / relevantTotal) * 100);
+    const offlinePercentage = Math.round((offlineCount / relevantTotal) * 100);
+    const pendingPercentage = Math.round((pendingCount / relevantTotal) * 100);
 
     const status = getServerStatus();
 
     switch (status) {
       case 'optimal':
         return {
-          message: `${syncedPercentage}% of accounts are connected and synchronized`,
+          message: `${mastersPercentage}% masters, ${slavesPercentage}% slaves - All operational`,
           recommendation: 'All systems operational - copy trading active',
           severity: 'success',
         };
@@ -1280,19 +1286,13 @@ export function TradingAccountsConfig() {
         };
       case 'pending':
         return {
-          message: `${pendingPercentage}% of accounts are not connected`,
+          message: `${pendingPercentage}% of accounts are pending`,
           recommendation: 'Connect slaves to masters to enable copy trading',
           severity: 'warning',
         };
-      case 'error':
-        return {
-          message: `${errorPercentage}% of accounts have errors`,
-          recommendation: 'Review account settings and resolve errors',
-          severity: 'error',
-        };
       case 'mixed':
         return {
-          message: `Mixed status: ${syncedPercentage}% connected, ${offlinePercentage}% offline, ${pendingPercentage}% not connected`,
+          message: `Mixed status: ${mastersPercentage}% masters, ${slavesPercentage}% slaves, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
           recommendation: 'Connect slaves to masters and address offline accounts',
           severity: 'warning',
         };
@@ -1532,48 +1532,30 @@ export function TradingAccountsConfig() {
 
             {/* Stats Row */}
             <div className="border-b border-gray-200 mx-4"></div>
-            <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-4 p-4 px-6">
-              {/* Total */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="text-2xl font-bold text-gray-600">
-                  {connectivityStats ? connectivityStats.total : accounts.length}
-                </div>
-                <div className="text-xs text-gray-600 text-center">Total</div>
-              </div>
-
-              {/* Masters */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-purple-200 shadow-sm">
-                <div className="text-2xl font-bold text-purple-600">
-                  {connectivityStats
-                    ? connectivityStats.masters.total
-                    : accounts.filter(acc => acc.accountType === 'master').length}
-                </div>
-                <div className="text-xs text-purple-600 text-center">Masters</div>
-              </div>
-
+            <div className="grid grid-cols-5 gap-4 p-4 px-6">
               {/* Slaves */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-indigo-200 shadow-sm">
-                <div className="text-2xl font-bold text-indigo-600">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
+                <div className="text-2xl font-bold text-green-700">
                   {connectivityStats
                     ? connectivityStats.slaves.total
                     : accounts.filter(acc => acc.accountType === 'slave').length}
                 </div>
-                <div className="text-xs text-indigo-600 text-center">Slaves</div>
+                <div className="text-xs text-green-700 text-center">Slaves</div>
               </div>
 
-              {/* Synchronized */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
-                <div className="text-2xl font-bold text-green-600">
+              {/* Masters */}
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-blue-200 shadow-sm">
+                <div className="text-2xl font-bold text-blue-700">
                   {connectivityStats
-                    ? connectivityStats.synchronized
-                    : accounts.filter(acc => acc.status === 'synchronized').length}
+                    ? connectivityStats.masters.total
+                    : accounts.filter(acc => acc.accountType === 'master').length}
                 </div>
-                <div className="text-xs text-green-600 text-center">Connected</div>
+                <div className="text-xs text-blue-700 text-center">Masters</div>
               </div>
 
               {/* Pending */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-blue-200 shadow-sm">
-                <div className="text-2xl font-bold text-blue-600">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
+                <div className="text-2xl font-bold text-orange-700">
                   {(() => {
                     const pendingValue = connectivityStats
                       ? connectivityStats.pending
@@ -1587,31 +1569,23 @@ export function TradingAccountsConfig() {
                     return pendingValue;
                   })()}
                 </div>
-                <div className="text-xs text-blue-600 text-center">Unconnected</div>
+                <div className="text-xs text-orange-700 text-center">Pendings</div>
               </div>
 
               {/* Offline */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
-                <div className="text-2xl font-bold text-orange-600">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
+                <div className="text-2xl font-bold text-red-700">
                   {connectivityStats ? connectivityStats.offline : 0}
                 </div>
-                <div className="text-xs text-orange-600 text-center">Offline</div>
+                <div className="text-xs text-red-700 text-center">Offline</div>
               </div>
 
-              {/* Error */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
-                <div className="text-2xl font-bold text-red-600">
-                  {connectivityStats
-                    ? connectivityStats.error
-                    : accounts.filter(acc => acc.status === 'error').length}
+              {/* Total */}
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="text-2xl font-bold text-gray-700">
+                  {connectivityStats ? connectivityStats.total : accounts.length}
                 </div>
-                <div className="text-xs text-red-600 text-center">Error</div>
-              </div>
-
-              {/* Pending Accounts */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
-                <div className="text-2xl font-bold text-orange-600">{pendingAccountsCount}</div>
-                <div className="text-xs text-orange-600 text-center">Pending</div>
+                <div className="text-xs text-gray-700 text-center">Total</div>
               </div>
             </div>
           </div>
