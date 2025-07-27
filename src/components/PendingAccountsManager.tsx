@@ -414,7 +414,7 @@ export const PendingAccountsManager: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+            <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent"></div>
           </div>
         </CardContent>
       </Card>
@@ -471,9 +471,9 @@ export const PendingAccountsManager: React.FC = () => {
                 return (
                   <div
                     key={id}
-                    className={`border rounded-lg p-2 shadow transition-all duration-500 ${
+                    className={`border rounded-lg p-2 shadow ${
                       isSuccessfullyConverted
-                        ? 'bg-green-50 border-green-200 scale-105'
+                        ? 'bg-green-50 border-green-200'
                         : 'bg-orange-50 border-orange-200'
                     }`}
                   >
@@ -527,7 +527,7 @@ export const PendingAccountsManager: React.FC = () => {
                             >
                               {isConverting ? (
                                 <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mr-1" />
+                                  <div className="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent mr-1" />
                                   Converting...
                                 </>
                               ) : (
@@ -558,7 +558,7 @@ export const PendingAccountsManager: React.FC = () => {
                             >
                               {isConverting ? (
                                 <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                  <div className="h-4 w-4 rounded-full border-2 border-red-600 border-t-transparent mr-1" />
                                   Deleting...
                                 </>
                               ) : (
@@ -590,7 +590,7 @@ export const PendingAccountsManager: React.FC = () => {
                             >
                               {isConverting ? (
                                 <>
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent mr-1" />
+                                  <div className="h-4 w-4 rounded-full border-2 border-green-600 border-t-transparent mr-1" />
                                   Converting...
                                 </>
                               ) : (
@@ -677,7 +677,7 @@ export const PendingAccountsManager: React.FC = () => {
                     {isSuccessfullyConverted && (
                       <div className="mt-2 p-3 bg-green-100 border border-green-300 rounded-lg">
                         <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <div className="h-2 w-2 bg-green-500 rounded-full"></div>
                           <p className="text-green-800 font-medium">
                             Successfully converted to {isMasterConversion ? 'Master' : 'Slave'}{' '}
                             Account
