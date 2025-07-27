@@ -125,6 +125,12 @@ export function TradingAccountsConfig() {
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
+  const collapsedMastersRef = useRef<{ [key: string]: boolean }>({});
+
+  // Sync ref with state
+  useEffect(() => {
+    collapsedMastersRef.current = collapsedMasters;
+  }, [collapsedMasters]);
   const [isLeaving, setIsLeaving] = useState(false);
 
   // Copier status management
@@ -364,18 +370,23 @@ export function TradingAccountsConfig() {
 
         setAccounts(allAccounts);
 
-        // Auto-expand masters that have connected slaves
+        // Only auto-expand masters that have connected slaves and don't have a collapse state defined yet
         const mastersWithSlaves = allAccounts.filter(
           acc =>
             acc.accountType === 'master' && acc.connectedSlaves && acc.connectedSlaves.length > 0
         );
 
         if (mastersWithSlaves.length > 0) {
-          const newCollapsedMasters = { ...collapsedMasters };
+          const newCollapsedMasters = { ...collapsedMastersRef.current };
           mastersWithSlaves.forEach(master => {
-            newCollapsedMasters[master.id] = false; // Expand masters with slaves
+            // Only expand if this master doesn't have a collapse state defined yet
+            // AND this is the first time loading accounts (not a refresh)
+            if (collapsedMastersRef.current[master.id] === undefined && showLoadingState) {
+              newCollapsedMasters[master.id] = false; // Expand masters with slaves
+            }
           });
           setCollapsedMasters(newCollapsedMasters);
+          collapsedMastersRef.current = newCollapsedMasters;
         }
       } catch (error) {
         console.error('Error fetching accounts:', error);
@@ -1437,10 +1448,14 @@ export function TradingAccountsConfig() {
   };
 
   const toggleMasterCollapse = (masterId: string) => {
-    setCollapsedMasters(prev => ({
-      ...prev,
-      [masterId]: !prev[masterId],
-    }));
+    setCollapsedMasters(prev => {
+      const newState = {
+        ...prev,
+        [masterId]: !prev[masterId],
+      };
+      collapsedMastersRef.current = newState;
+      return newState;
+    });
   };
 
   // Helper function to get status display text
