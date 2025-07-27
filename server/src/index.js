@@ -1,8 +1,8 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import { join } from 'path';
 import { existsSync } from 'fs';
+import { join } from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 import { killProcessOnPort } from './controllers/ordersController.js';

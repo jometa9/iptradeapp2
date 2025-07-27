@@ -233,57 +233,107 @@ async function createTray() {
 
     console.log('[TRAY] Tray created successfully');
 
-    // Crear el menú del tray
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: 'Mostrar IPTRADE',
-        click: () => {
-          console.log('[TRAY] Show IPTRADE clicked');
-          if (mainWindow) {
-            mainWindow.show();
-            mainWindow.focus();
+    // Función para actualizar el menú del tray con el estado real
+    const updateTrayMenu = async () => {
+      try {
+        // Obtener el estado del copier desde el servidor
+        const serverPort = process.env.VITE_SERVER_PORT || '30';
+        const response = await fetch(`http://localhost:${serverPort}/api/copier/status`, {
+          headers: {
+            'x-api-key': process.env.API_KEY || 'iptrade_89536f5b9e643c0433f3',
+          },
+        });
 
-            // En macOS, mostrar el icono del dock cuando la ventana está visible
-            if (process.platform === 'darwin') {
-              app.dock.show();
-            }
-          }
-        },
-      },
-      {
-        label: 'Minimizar',
-        click: () => {
-          console.log('[TRAY] Minimize clicked');
-          if (mainWindow) {
-            mainWindow.hide();
-          }
-        },
-      },
-      { type: 'separator' },
-      {
-        label: 'Salir',
-        click: () => {
-          console.log('[TRAY] Quit clicked');
-          app.quit();
-        },
-      },
-    ]);
-
-    tray.setContextMenu(contextMenu);
-    console.log('[TRAY] Context menu set');
-
-    // Hacer clic en el icono del tray para mostrar la ventana
-    tray.on('click', () => {
-      console.log('[TRAY] Tray icon clicked');
-      if (mainWindow) {
-        mainWindow.show();
-        mainWindow.focus();
-
-        // En macOS, mostrar el icono del dock cuando la ventana está visible
-        if (process.platform === 'darwin') {
-          app.dock.show();
+        let copierStatus = 'OFF';
+        if (response.ok) {
+          const data = await response.json();
+          copierStatus = data.globalStatus ? 'ON' : 'OFF';
         }
+
+        // Crear el menú del tray con el estado actual
+        const contextMenu = Menu.buildFromTemplate([
+          {
+            label: `IPTRADE APP COPIER ${copierStatus}`,
+            enabled: false, // Solo para mostrar el estado, no clickeable
+            type: 'normal',
+          },
+          { type: 'separator' },
+          {
+            label: 'Go to the dashboard',
+            click: () => {
+              console.log('[TRAY] Go to dashboard clicked');
+              if (mainWindow) {
+                mainWindow.show();
+                mainWindow.focus();
+
+                // En macOS, mostrar el icono del dock cuando la ventana está visible
+                if (process.platform === 'darwin') {
+                  app.dock.show();
+                }
+              }
+            },
+          },
+          { type: 'separator' },
+          {
+            label: 'Quit',
+            click: () => {
+              console.log('[TRAY] Quit clicked');
+              app.quit();
+            },
+          },
+        ]);
+
+        tray.setContextMenu(contextMenu);
+        console.log(`[TRAY] Menu updated - Copier status: ${copierStatus}`);
+      } catch (error) {
+        console.error('[TRAY] Error updating menu:', error);
+        // En caso de error, usar estado por defecto
+        const contextMenu = Menu.buildFromTemplate([
+          {
+            label: 'IPTRADE APP COPIER OFF',
+            enabled: false,
+            type: 'normal',
+          },
+          { type: 'separator' },
+          {
+            label: 'Go to the dashboard',
+            click: () => {
+              console.log('[TRAY] Go to dashboard clicked');
+              if (mainWindow) {
+                mainWindow.show();
+                mainWindow.focus();
+
+                if (process.platform === 'darwin') {
+                  app.dock.show();
+                }
+              }
+            },
+          },
+          { type: 'separator' },
+          {
+            label: 'Quit',
+            click: () => {
+              console.log('[TRAY] Quit clicked');
+              app.quit();
+            },
+          },
+        ]);
+        tray.setContextMenu(contextMenu);
       }
+    };
+
+    // Actualizar el menú inicialmente
+    await updateTrayMenu();
+
+    // Actualizar el menú cada 30 segundos para mantener el estado actualizado
+    setInterval(updateTrayMenu, 30000);
+
+    // NO hacer nada al hacer clic en el icono del tray
+    // Solo mostrar el menú contextual
+    tray.on('click', () => {
+      console.log('[TRAY] Tray icon clicked - showing context menu');
+      // El menú se muestra automáticamente al hacer clic en macOS
+      // En Windows/Linux, el menú se muestra automáticamente
     });
 
     // En macOS, el icono se adapta automáticamente gracias a setTemplateImage(true)
