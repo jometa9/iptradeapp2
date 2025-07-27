@@ -76,7 +76,7 @@ export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
 };
 
 // Define supported platforms
-const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader'];
+const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
 // Activity monitoring configuration
 const ACTIVITY_TIMEOUT = 500000; // 5 seconds in milliseconds

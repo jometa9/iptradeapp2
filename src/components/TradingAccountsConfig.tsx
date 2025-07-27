@@ -127,6 +127,21 @@ export function TradingAccountsConfig() {
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
   const canCustomizeLotSizesValue = userInfo ? canCustomizeLotSizes(userInfo) : false;
 
+  // Platform mapping function
+  const getPlatformDisplayName = (platform: string): string => {
+    const platformMap: Record<string, string> = {
+      MT4: 'MetaTrader 4',
+      MT5: 'MetaTrader 5',
+      cTrader: 'cTrader',
+      TradingView: 'TradingView',
+      NinjaTrader: 'NinjaTrader',
+      Other: 'Other Platform',
+      mt4: 'MetaTrader 4',
+      mt5: 'MetaTrader 5',
+    };
+    return platformMap[platform] || platform || 'Unknown';
+  };
+
   // Real-time events system
   const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(event => {
     console.log('📨 Evento recibido:', event);
@@ -171,7 +186,7 @@ export function TradingAccountsConfig() {
 
   const [formState, setFormState] = useState({
     accountNumber: '',
-    platform: 'mt4',
+    platform: 'MT5',
     serverIp: '',
     password: '',
     accountType: 'master',
@@ -186,8 +201,12 @@ export function TradingAccountsConfig() {
 
   // Platform options
   const platformOptions = [
-    { value: 'mt4', label: 'MetaTrader 4' },
-    { value: 'mt5', label: 'MetaTrader 5' },
+    { value: 'MT4', label: 'MetaTrader 4' },
+    { value: 'MT5', label: 'MetaTrader 5' },
+    { value: 'cTrader', label: 'cTrader' },
+    { value: 'TradingView', label: 'TradingView' },
+    { value: 'NinjaTrader', label: 'NinjaTrader' },
+    { value: 'Other', label: 'Other Platform' },
   ];
 
   // Account types
@@ -1327,8 +1346,6 @@ export function TradingAccountsConfig() {
         return 'Not Connected';
       case 'offline':
         return 'Offline';
-      case 'error':
-        return 'Error';
       default:
         return 'Not Connected'; // Default for unknown statuses
     }
@@ -1339,11 +1356,9 @@ export function TradingAccountsConfig() {
       case 'synchronized':
         return <CheckCircle className="text-green-700" />;
       case 'pending':
-        return <Clock className="text-blue-500" />;
+        return <Clock className="text-orange-500" />;
       case 'offline':
         return <XCircle className="text-red-700" />;
-      case 'error':
-        return <AlertTriangle className="text-red-700" />;
       default:
         return <CheckCircle className="text-green-700" />;
     }
@@ -1475,13 +1490,11 @@ export function TradingAccountsConfig() {
                   ? 'bg-red-50 border-red-200'
                   : getServerStatus() === 'pending'
                     ? 'bg-blue-50 border-blue-200'
-                    : getServerStatus() === 'error'
-                      ? 'bg-red-50 border-red-200'
-                      : getServerStatus() === 'mixed'
-                        ? 'bg-orange-50 border-orange-200'
-                        : getServerStatus() === 'warning'
-                          ? 'bg-yellow-50 border-yellow-200'
-                          : 'bg-gray-50 border-gray-200'
+                    : getServerStatus() === 'mixed'
+                      ? 'bg-orange-50 border-orange-200'
+                      : getServerStatus() === 'warning'
+                        ? 'bg-yellow-50 border-yellow-200'
+                        : 'bg-gray-50 border-gray-200'
             }`}
           >
             <div className="flex items-center justify-between p-4 px-6">
@@ -1495,9 +1508,7 @@ export function TradingAccountsConfig() {
                       case 'offline':
                         return <WifiOff className="h-4 w-4 text-red-500" />;
                       case 'pending':
-                        return <Clock className="h-4 w-4 text-blue-500" />;
-                      case 'error':
-                        return <XCircle className="h-4 w-4 text-red-500" />;
+                        return <Clock className="h-4 w-4 text-orange-500" />;
                       case 'mixed':
                         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
                       case 'warning':
@@ -1513,13 +1524,11 @@ export function TradingAccountsConfig() {
                         ? 'Mostly Offline'
                         : getServerStatus() === 'pending'
                           ? 'Not Connected'
-                          : getServerStatus() === 'error'
-                            ? 'Critical Errors'
-                            : getServerStatus() === 'mixed'
-                              ? 'Mixed Status'
-                              : getServerStatus() === 'warning'
-                                ? 'Some Issues'
-                                : 'No Accounts'}
+                          : getServerStatus() === 'mixed'
+                            ? 'Mixed Status'
+                            : getServerStatus() === 'warning'
+                              ? 'Some Issues'
+                              : 'No Accounts'}
                   </div>
                 </div>
 
@@ -2085,7 +2094,7 @@ export function TradingAccountsConfig() {
                               Master
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                              {masterAccount.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
+                              {getPlatformDisplayName(masterAccount.platform)}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
                               {accounts.filter(
@@ -2276,9 +2285,7 @@ export function TradingAccountsConfig() {
                                   Slave
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                  {slaveAccount.platform === 'mt4'
-                                    ? 'MetaTrader 4'
-                                    : 'MetaTrader 5'}
+                                  {getPlatformDisplayName(slaveAccount.platform)}
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
                                   <div className="flex gap-2">
@@ -2447,7 +2454,7 @@ export function TradingAccountsConfig() {
                           <span className="text-orange-600">Slave</span>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {orphanSlave.platform === 'mt4' ? 'MetaTrader 4' : 'MetaTrader 5'}
+                          {getPlatformDisplayName(orphanSlave.platform)}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
                           <div className="rounded-full px-2 py-0.5 text-xs bg-orange-100 border border-orange-300 text-orange-800 inline-block">

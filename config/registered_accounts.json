@@ -1,0 +1,70 @@
+{
+  "userAccounts": {
+    "iptrade_89536f5b9e643c0433f3": {
+      "pendingAccounts": {
+        "PENDING_MT4_001": {
+          "id": "PENDING_MT4_001",
+          "name": "MT4 Test Account 001",
+          "description": "High frequency scalping EA detected",
+          "firstSeen": "2025-07-27T14:53:22.718Z",
+          "lastActivity": "2025-07-27T15:08:22.719Z",
+          "status": "pending",
+          "platform": "MT4",
+          "broker": "IC Markets"
+        },
+        "PENDING_MT5_002": {
+          "id": "PENDING_MT5_002",
+          "name": "MT5 Test Account 002",
+          "description": "Swing trading EA - awaiting configuration",
+          "firstSeen": "2025-07-27T14:58:22.719Z",
+          "lastActivity": "2025-07-27T15:08:22.719Z",
+          "status": "pending",
+          "platform": "MT5",
+          "broker": "FTMO"
+        },
+        "PENDING_CTRADER_003": {
+          "id": "PENDING_CTRADER_003",
+          "name": "cTrader Test Account 003",
+          "description": "Grid trading strategy detected",
+          "firstSeen": "2025-07-27T15:03:22.719Z",
+          "lastActivity": "2025-07-27T15:08:22.719Z",
+          "status": "pending",
+          "platform": "cTrader",
+          "broker": "Pepperstone"
+        },
+        "PENDING_NINJA_004": {
+          "id": "PENDING_NINJA_004",
+          "name": "NinjaTrader Test Account 004",
+          "description": "Futures trading algorithm",
+          "firstSeen": "2025-07-27T15:06:22.719Z",
+          "lastActivity": "2025-07-27T15:08:22.719Z",
+          "status": "pending",
+          "platform": "NinjaTrader",
+          "broker": "AMP Futures"
+        },
+        "PENDING_TV_005": {
+          "id": "PENDING_TV_005",
+          "name": "TradingView Test Account 005",
+          "description": "Web-based trading strategy",
+          "firstSeen": "2025-07-27T15:07:22.719Z",
+          "lastActivity": "2025-07-27T15:08:22.719Z",
+          "status": "pending",
+          "platform": "TradingView",
+          "broker": "TradingView"
+        }
+      },
+      "masterAccounts": {
+        "999999": {
+          "id": "999999",
+          "name": "Test Master Account",
+          "description": "Test master account for platform testing",
+          "broker": "Test Broker",
+          "platform": "MT5",
+          "registeredAt": "2025-07-27T15:08:22.719Z",
+          "status": "active"
+        }
+      },
+      "slaveAccounts": {}
+    }
+  }
+}

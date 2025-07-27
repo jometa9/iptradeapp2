@@ -20,7 +20,7 @@ import { toast } from './ui/use-toast';
 
 interface PendingAccount {
   id: string;
-  platform: string;
+  platform: string | null;
   firstSeen: string;
   lastActivity: string;
   status: string;
@@ -78,6 +78,25 @@ export const PendingAccountsManager: React.FC = () => {
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
+
+  // Platform mapping function
+  const getPlatformDisplayName = (platform: string | null | undefined): string => {
+    if (!platform) {
+      return 'Unknown Platform';
+    }
+
+    const platformMap: Record<string, string> = {
+      MT4: 'MetaTrader 4',
+      MT5: 'MetaTrader 5',
+      cTrader: 'cTrader',
+      TradingView: 'TradingView',
+      NinjaTrader: 'NinjaTrader',
+      Other: 'Other Platform',
+      mt4: 'MetaTrader 4',
+      mt5: 'MetaTrader 5',
+    };
+    return platformMap[platform] || platform || 'Unknown Platform';
+  };
 
   // Load pending accounts
   const loadPendingAccounts = async () => {
@@ -213,7 +232,7 @@ export const PendingAccountsManager: React.FC = () => {
         name: `Account ${account.id}`,
         description: '',
         broker: 'MetaQuotes',
-        platform: account.platform || 'MT5',
+        platform: account.platform || 'Unknown',
         masterAccountId: 'none',
         lotCoefficient: 1,
         forceLot: 0,
@@ -257,7 +276,7 @@ export const PendingAccountsManager: React.FC = () => {
       const payload = {
         name: `Account ${accountId}`,
         broker: 'MetaQuotes',
-        platform: accountPlatform || 'MT5',
+        platform: accountPlatform || 'Unknown',
       };
 
       const response = await fetch(endpoint, {
@@ -520,7 +539,7 @@ export const PendingAccountsManager: React.FC = () => {
                           variant="outline"
                           className="bg-gray-50 text-gray-800 border border-gray-300"
                         >
-                          {account.platform || 'Unknown'}
+                          {getPlatformDisplayName(account.platform)}
                         </Badge>
                       </div>
 

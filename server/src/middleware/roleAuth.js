@@ -6,9 +6,17 @@ const updateAccountActivity = (accountId, accountType, apiKey) => {
     const userAccounts = getUserAccounts(apiKey);
     const now = new Date().toISOString();
 
-    if (accountType === 'master' && userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) {
+    if (
+      accountType === 'master' &&
+      userAccounts.masterAccounts &&
+      userAccounts.masterAccounts[accountId]
+    ) {
       userAccounts.masterAccounts[accountId].lastActivity = now;
-    } else if (accountType === 'slave' && userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId]) {
+    } else if (
+      accountType === 'slave' &&
+      userAccounts.slaveAccounts &&
+      userAccounts.slaveAccounts[accountId]
+    ) {
       userAccounts.slaveAccounts[accountId].lastActivity = now;
     } else if (
       accountType === 'pending' &&
@@ -48,6 +56,20 @@ export const authenticateAccount = (req, res, next) => {
   const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
   const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
 
+  // Determine platform based on account ID pattern or default to MT5
+  let platform = 'MT5'; // Default platform
+  if (accountId.includes('MT4') || accountId.includes('mt4')) {
+    platform = 'MT4';
+  } else if (accountId.includes('MT5') || accountId.includes('mt5')) {
+    platform = 'MT5';
+  } else if (accountId.includes('CTRADER') || accountId.includes('cTrader')) {
+    platform = 'cTrader';
+  } else if (accountId.includes('NINJA') || accountId.includes('NinjaTrader')) {
+    platform = 'NinjaTrader';
+  } else if (accountId.includes('TV') || accountId.includes('TradingView')) {
+    platform = 'TradingView';
+  }
+
   // If account doesn't exist anywhere, register as pending
   if (!isMaster && !isSlave && !isPending) {
     const newPendingAccount = {
@@ -57,6 +79,8 @@ export const authenticateAccount = (req, res, next) => {
       firstSeen: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       status: 'pending',
+      platform: platform,
+      broker: 'Unknown',
       apiKey: tempApiKey,
     };
 
@@ -66,7 +90,21 @@ export const authenticateAccount = (req, res, next) => {
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
     saveUserAccounts(tempApiKey, userAccounts);
 
-    console.log(`🔄 New account detected and registered as pending: ${accountId} (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`);
+    console.log(
+      `🔄 New account detected and registered as pending: ${accountId} (${platform}) (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`
+    );
+  } else if (isPending && userAccounts.pendingAccounts[accountId]) {
+    // Update existing pending account with platform information if missing
+    const pendingAccount = userAccounts.pendingAccounts[accountId];
+    if (!pendingAccount.platform || pendingAccount.platform === null) {
+      pendingAccount.platform = platform;
+      pendingAccount.broker = pendingAccount.broker || 'Unknown';
+      saveUserAccounts(tempApiKey, userAccounts);
+
+      console.log(
+        `🔄 Updated existing pending account with platform: ${accountId} (${platform}) (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`
+      );
+    }
   }
 
   // Determine account type

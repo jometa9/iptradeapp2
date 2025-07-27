@@ -98,5 +98,25 @@
     "lotMultiplier": 1,
     "forceLot": null,
     "reverseTrading": false
+  },
+  "TEST_MT4_DETECTION": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "PENDING_NINJA_004": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_MT5_DETECTION": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_CTRADER_008": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
   }
 }

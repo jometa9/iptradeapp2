@@ -1,37 +1,204 @@
-# 🧪 Testing Scripts
+# 🧪 Scripts de Testing y Mantenimiento
 
-Scripts útiles para probar las funcionalidades del sistema de copy trading.
+Scripts útiles para probar las funcionalidades del sistema de copy trading y realizar tareas de mantenimiento.
 
 ## 📋 Scripts Disponibles
 
-### 1. 🆕 Agregar Cuentas Pendientes
+### 🆕 **Scripts de Agregar Cuentas**
+
+#### 1. Agregar Cuentas Pendientes (Básico)
 ```bash
 node scripts/add-pending-accounts.js
 ```
 
-**Qué hace:**
-- Agrega 6 cuentas pendientes de prueba con diferentes plataformas
-- Incluye MT4, MT5, cTrader y NinjaTrader
-- Cada cuenta tiene diferentes tiempos de actividad para simular EAs reales
-- Las cuentas aparecerán en el panel "Pending Accounts" del UI
+#### 2. Agregar Cuentas Pendientes (Nuevo)
+```bash
+node scripts/add-pending-accounts-new.js
+```
 
-**Cuentas que agrega:**
-- `PENDING_MT4_001` - IC Markets (MT4) - Scalping EA
-- `PENDING_MT5_002` - FTMO (MT5) - Swing Trading EA
-- `PENDING_CTRADER_003` - Pepperstone (cTrader) - Grid Trading
-- `PENDING_MT4_004` - XM (MT4) - EUR/USD Specialist
-- `PENDING_MT5_005` - Admiral Markets (MT5) - Multi-Currency EA
-- `PENDING_NINJA_006` - AMP Futures (NinjaTrader) - Futures Algorithm
+#### 3. Agregar Cuentas Pendientes de Prueba
+```bash
+node scripts/add-test-pending-accounts.js
+```
 
-### 2. 🧹 Limpiar Cuentas Pendientes
+#### 4. Agregar Cuentas Pendientes con Plataformas
+```bash
+node scripts/add-old-accounts-with-platforms.js
+```
+
+#### 5. Agregar Cuentas Pendientes Correctas
+```bash
+node scripts/add-correct-pending-accounts.js
+```
+
+#### 6. Agregar Test Slaves
+```bash
+node scripts/add-test-slaves.js
+```
+
+### 🧹 **Scripts de Limpieza**
+
+#### 1. Limpiar Cuentas Pendientes
 ```bash
 node scripts/clear-pending-accounts.js
 ```
 
-**Qué hace:**
-- Elimina todas las cuentas pendientes existentes
-- Útil para resetear el estado y hacer pruebas frescas
-- No afecta cuentas master/slave ya configuradas
+#### 2. Limpiar Cuentas Antiguas
+```bash
+node scripts/clean-old-accounts.js
+```
+
+#### 3. Limpieza Final
+```bash
+node scripts/final-cleanup.js
+```
+
+### 🔧 **Scripts de Actualización y Configuración**
+
+#### 1. Actualizar Configuración del Servidor con Cuentas Correctas
+```bash
+node scripts/update-server-config-with-correct-accounts.js
+```
+
+#### 2. Actualizar Configuración del Servidor con Plataformas
+```bash
+node scripts/update-server-config-with-platforms.js
+```
+
+#### 3. Actualizar Cuentas Antiguas con Plataformas
+```bash
+node scripts/update-old-accounts-platforms.js
+```
+
+#### 4. Actualizar Todas las Cuentas con Plataformas
+```bash
+node scripts/update-all-accounts-with-platforms.js
+```
+
+#### 5. Arreglar Cuentas Antiguas Directamente
+```bash
+node scripts/fix-old-accounts-direct.js
+```
+
+### 🔗 **Scripts de Conectividad**
+
+#### 1. Arreglar Función de Conectividad
+```bash
+node scripts/fix-connectivity-function.js
+```
+
+#### 2. Arreglar Estadísticas de Conectividad
+```bash
+node scripts/fix-connectivity-stats.js
+```
+
+#### 3. Obtener Estadísticas de Conectividad (Temporal)
+```bash
+node scripts/temp-getConnectivityStats.js
+```
+
+### 🧪 **Scripts de Testing**
+
+#### 1. Testing de Plataforma
+```bash
+node scripts/test-platform-fix.js
+```
+
+#### 2. Testing de Agregar Pendientes con Plataformas
+```bash
+node scripts/test-add-pending-with-platforms.js
+```
+
+#### 3. Testing de Conectividad
+```bash
+node scripts/test-connectivity-simple.js
+node scripts/test-connectivity-simple.cjs
+node scripts/test-connectivity-fix.js
+node scripts/test-connectivity-stats.js
+```
+
+#### 4. Testing de Cuentas Pendientes
+```bash
+node scripts/test-pending-accounts.cjs
+node scripts/test-pending-accounts-limits.js
+```
+
+#### 5. Testing de Suscripciones
+```bash
+node scripts/test-subscription.js
+node scripts/test-subscription-limits.cjs
+node scripts/test-new-subscription-structure.js
+```
+
+#### 6. Testing de Límites
+```bash
+node scripts/test-account-limit-message.js
+node scripts/test-managed-vps-limits.js
+```
+
+#### 7. Testing de Eliminación
+```bash
+node scripts/test-delete-accounts.js
+```
+
+#### 8. Testing de Endpoints
+```bash
+node scripts/test-endpoint-simple.js
+```
+
+#### 9. Testing de Frontend
+```bash
+node scripts/test-frontend-numbers.js
+```
+
+#### 10. Testing de Tray
+```bash
+node scripts/test-tray.js
+```
+
+#### 11. Testing de Configuración
+```bash
+node scripts/test-load-config.cjs
+```
+
+#### 12. Testing de Offline
+```bash
+node scripts/test-offline-never-enabled.cjs
+```
+
+### 🐛 **Scripts de Debug**
+
+#### 1. Debug de Números
+```bash
+node scripts/debug-numbers.js
+```
+
+#### 2. Debug de Conteo Offline
+```bash
+node scripts/debug-offline-count.cjs
+```
+
+### 🛠️ **Scripts de Utilidad**
+
+#### 1. Arreglo Simple
+```bash
+node scripts/simple-fix.js
+```
+
+#### 2. Reemplazar Función
+```bash
+node scripts/replace-function.cjs
+```
+
+#### 3. Generar Entorno de Trading Realista
+```bash
+node scripts/generate-realistic-trading-environment.js
+```
+
+#### 4. Release
+```bash
+node scripts/release.js
+```
 
 ## 🚀 Flujo de Testing Recomendado
 
