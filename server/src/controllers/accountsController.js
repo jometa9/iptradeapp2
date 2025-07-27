@@ -622,12 +622,19 @@ export const getAllAccounts = (req, res) => {
 
   const masterAccountsWithSlaves = {};
   Object.entries(userAccounts.masterAccounts).forEach(([masterId, masterData]) => {
+    // Calculate real online status based on recent activity (same logic as getConnectivityStats)
+    const timeSinceActivity = masterData.lastActivity
+      ? Date.now() - new Date(masterData.lastActivity)
+      : null;
+    const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
+    const isMasterOnline = !isOffline; // Master is online if not offline due to inactivity
+
     const connectedSlaves = Object.entries(userAccounts.connections)
       .filter(([, connectedMasterId]) => connectedMasterId === masterId)
       .map(([slaveId]) => ({
         id: slaveId,
         ...userAccounts.slaveAccounts[slaveId],
-        masterOnline: masterData.status !== 'offline', // Include master online status
+        masterOnline: isMasterOnline, // Use calculated online status
       }));
 
     masterAccountsWithSlaves[masterId] = {

@@ -261,7 +261,7 @@ export const getSlaveConfig = (req, res) => {
 };
 
 // Set slave configuration
-export const setSlaveConfig = (req, res) => {
+export const setSlaveConfig = async (req, res) => {
   const {
     slaveAccountId,
     lotMultiplier,
@@ -298,16 +298,21 @@ export const setSlaveConfig = (req, res) => {
 
   // Check if account is offline before enabling
   if (enabled) {
-    const { loadAccountsConfig } = require('./accountsController.js');
-    const accountsConfig = loadAccountsConfig();
-    const slaveAccount = accountsConfig.slaveAccounts[slaveAccountId];
+    try {
+      const { loadAccountsConfig } = await import('./accountsController.js');
+      const accountsConfig = loadAccountsConfig();
+      const slaveAccount = accountsConfig.slaveAccounts[slaveAccountId];
 
-    if (slaveAccount && slaveAccount.status === 'offline') {
-      return res.status(400).json({
-        error: 'Cannot enable copy trading for offline account',
-        message: 'Account must be online to enable copy trading',
-        accountStatus: 'offline',
-      });
+      if (slaveAccount && slaveAccount.status === 'offline') {
+        return res.status(400).json({
+          error: 'Cannot enable copy trading for offline account',
+          message: 'Account must be online to enable copy trading',
+          accountStatus: 'offline',
+        });
+      }
+    } catch (error) {
+      console.error('Error checking account status:', error);
+      // Continue without the offline check if there's an error
     }
   }
 

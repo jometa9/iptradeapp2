@@ -59,6 +59,7 @@ interface TradingAccount {
   connectedToMaster?: string;
   connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
   totalSlaves?: number;
+  masterOnline?: boolean;
 }
 
 interface MasterAccountStatus {
@@ -362,6 +363,7 @@ export function TradingAccountsConfig() {
                   master.id
                 ),
                 connectedToMaster: master.id,
+                masterOnline: (slave as any).masterOnline || false, // Include masterOnline from backend
               });
             });
           }
@@ -1489,7 +1491,7 @@ export function TradingAccountsConfig() {
                 : getServerStatus() === 'offline'
                   ? 'bg-red-50 border-red-200'
                   : getServerStatus() === 'pending'
-                    ? 'bg-blue-50 border-blue-200'
+                    ? 'bg-orange-50 border-orange-200'
                     : getServerStatus() === 'mixed'
                       ? 'bg-orange-50 border-orange-200'
                       : getServerStatus() === 'warning'
