@@ -658,33 +658,44 @@ export const getAllAccounts = (req, res) => {
 export const updateMasterAccount = (req, res) => {
   const { masterAccountId } = req.params;
   const { name, description, broker, platform, status } = req.body;
+  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API Key required - use requireValidSubscription middleware',
+    });
+  }
 
   if (!masterAccountId) {
     return res.status(400).json({ error: 'Master account ID is required' });
   }
 
-  const config = loadAccountsConfig();
+  // Get user-specific accounts
+  const userAccounts = getUserAccounts(apiKey);
 
-  if (!config.masterAccounts[masterAccountId]) {
+  if (!userAccounts.masterAccounts[masterAccountId]) {
     return res.status(404).json({
-      error: `Master account ${masterAccountId} not found`,
+      error: `Master account ${masterAccountId} not found in your accounts`,
     });
   }
 
   // Update fields if provided
-  if (name !== undefined) config.masterAccounts[masterAccountId].name = name;
-  if (description !== undefined) config.masterAccounts[masterAccountId].description = description;
-  if (broker !== undefined) config.masterAccounts[masterAccountId].broker = broker;
-  if (platform !== undefined) config.masterAccounts[masterAccountId].platform = platform;
-  if (status !== undefined) config.masterAccounts[masterAccountId].status = status;
+  if (name !== undefined) userAccounts.masterAccounts[masterAccountId].name = name;
+  if (description !== undefined)
+    userAccounts.masterAccounts[masterAccountId].description = description;
+  if (broker !== undefined) userAccounts.masterAccounts[masterAccountId].broker = broker;
+  if (platform !== undefined) userAccounts.masterAccounts[masterAccountId].platform = platform;
+  if (status !== undefined) userAccounts.masterAccounts[masterAccountId].status = status;
 
-  config.masterAccounts[masterAccountId].lastUpdated = new Date().toISOString();
+  userAccounts.masterAccounts[masterAccountId].lastUpdated = new Date().toISOString();
 
-  if (saveAccountsConfig(config)) {
-    console.log(`Master account updated: ${masterAccountId}`);
+  if (saveUserAccounts(apiKey, userAccounts)) {
+    console.log(
+      `Master account updated: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)`
+    );
     res.json({
       message: 'Master account updated successfully',
-      account: config.masterAccounts[masterAccountId],
+      account: userAccounts.masterAccounts[masterAccountId],
       status: 'success',
     });
   } else {
@@ -695,34 +706,65 @@ export const updateMasterAccount = (req, res) => {
 // Update slave account
 export const updateSlaveAccount = (req, res) => {
   const { slaveAccountId } = req.params;
-  const { name, description, broker, platform, status } = req.body;
+  const { name, description, broker, platform, status, masterAccountId } = req.body;
+  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API Key required - use requireValidSubscription middleware',
+    });
+  }
 
   if (!slaveAccountId) {
     return res.status(400).json({ error: 'Slave account ID is required' });
   }
 
-  const config = loadAccountsConfig();
+  // Get user-specific accounts
+  const userAccounts = getUserAccounts(apiKey);
 
-  if (!config.slaveAccounts[slaveAccountId]) {
+  if (!userAccounts.slaveAccounts[slaveAccountId]) {
     return res.status(404).json({
-      error: `Slave account ${slaveAccountId} not found`,
+      error: `Slave account ${slaveAccountId} not found in your accounts`,
     });
   }
 
   // Update fields if provided
-  if (name !== undefined) config.slaveAccounts[slaveAccountId].name = name;
-  if (description !== undefined) config.slaveAccounts[slaveAccountId].description = description;
-  if (broker !== undefined) config.slaveAccounts[slaveAccountId].broker = broker;
-  if (platform !== undefined) config.slaveAccounts[slaveAccountId].platform = platform;
-  if (status !== undefined) config.slaveAccounts[slaveAccountId].status = status;
+  if (name !== undefined) userAccounts.slaveAccounts[slaveAccountId].name = name;
+  if (description !== undefined)
+    userAccounts.slaveAccounts[slaveAccountId].description = description;
+  if (broker !== undefined) userAccounts.slaveAccounts[slaveAccountId].broker = broker;
+  if (platform !== undefined) userAccounts.slaveAccounts[slaveAccountId].platform = platform;
+  if (status !== undefined) userAccounts.slaveAccounts[slaveAccountId].status = status;
 
-  config.slaveAccounts[slaveAccountId].lastUpdated = new Date().toISOString();
+  userAccounts.slaveAccounts[slaveAccountId].lastUpdated = new Date().toISOString();
 
-  if (saveAccountsConfig(config)) {
-    console.log(`Slave account updated: ${slaveAccountId}`);
+  // Handle master connection if provided
+  if (masterAccountId !== undefined) {
+    if (masterAccountId && masterAccountId !== 'none' && masterAccountId !== '') {
+      // Validate that the master account exists in user's accounts
+      if (!userAccounts.masterAccounts[masterAccountId]) {
+        return res.status(400).json({
+          error: `Master account ${masterAccountId} is not registered in your accounts`,
+        });
+      }
+      // Establish connection
+      userAccounts.connections[slaveAccountId] = masterAccountId;
+      console.log(`Connection established: ${slaveAccountId} -> ${masterAccountId}`);
+    } else {
+      // Remove connection if masterAccountId is empty, 'none', or null
+      delete userAccounts.connections[slaveAccountId];
+      console.log(`Connection removed for slave: ${slaveAccountId}`);
+    }
+  }
+
+  if (saveUserAccounts(apiKey, userAccounts)) {
+    console.log(
+      `Slave account updated: ${slaveAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)`
+    );
     res.json({
       message: 'Slave account updated successfully',
-      account: config.slaveAccounts[slaveAccountId],
+      account: userAccounts.slaveAccounts[slaveAccountId],
+      connectedTo: userAccounts.connections[slaveAccountId] || null,
       status: 'success',
     });
   } else {

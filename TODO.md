@@ -17,3 +17,6 @@ Investor : @5JtCkQp
 cuentas de otras apikeys que se limpien todas si pasa una semana o algo similar
 documentations
 legals
+
+animaciones cuando se agregan las pendings
+alinamiento de trading configuration

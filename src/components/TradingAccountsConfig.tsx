@@ -1038,14 +1038,20 @@ export function TradingAccountsConfig() {
             `http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`,
             {
               method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
               body: JSON.stringify(payload),
             }
           );
         } else {
           response = await fetch(`http://localhost:${serverPort}/api/accounts/slave`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': secretKey || '',
+            },
             body: JSON.stringify(payload),
           });
         }
@@ -1066,7 +1072,10 @@ export function TradingAccountsConfig() {
 
           await fetch(`http://localhost:${serverPort}/api/slave-config`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': secretKey || '',
+            },
             body: JSON.stringify(slaveConfigPayload),
           });
         }
@@ -1523,9 +1532,9 @@ export function TradingAccountsConfig() {
 
             {/* Stats Row */}
             <div className="border-b border-gray-200 mx-4"></div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 p-4 px-6">
+            <div className="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-8 gap-4 p-4 px-6">
               {/* Total */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
                 <div className="text-2xl font-bold text-gray-600">
                   {connectivityStats ? connectivityStats.total : accounts.length}
                 </div>
@@ -1533,7 +1542,7 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Masters */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-purple-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-purple-200 shadow-sm">
                 <div className="text-2xl font-bold text-purple-600">
                   {connectivityStats
                     ? connectivityStats.masters.total
@@ -1543,7 +1552,7 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Slaves */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-indigo-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-indigo-200 shadow-sm">
                 <div className="text-2xl font-bold text-indigo-600">
                   {connectivityStats
                     ? connectivityStats.slaves.total
@@ -1553,7 +1562,7 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Synchronized */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-green-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
                 <div className="text-2xl font-bold text-green-600">
                   {connectivityStats
                     ? connectivityStats.synchronized
@@ -1563,7 +1572,7 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Pending */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-blue-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-blue-200 shadow-sm">
                 <div className="text-2xl font-bold text-blue-600">
                   {(() => {
                     const pendingValue = connectivityStats
@@ -1578,11 +1587,11 @@ export function TradingAccountsConfig() {
                     return pendingValue;
                   })()}
                 </div>
-                <div className="text-xs text-blue-600 text-center">Not Connected</div>
+                <div className="text-xs text-blue-600 text-center">Unconnected</div>
               </div>
 
               {/* Offline */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
                 <div className="text-2xl font-bold text-orange-600">
                   {connectivityStats ? connectivityStats.offline : 0}
                 </div>
@@ -1590,7 +1599,7 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Error */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-red-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
                 <div className="text-2xl font-bold text-red-600">
                   {connectivityStats
                     ? connectivityStats.error
@@ -1600,9 +1609,9 @@ export function TradingAccountsConfig() {
               </div>
 
               {/* Pending Accounts */}
-              <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-orange-200 shadow-sm">
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
                 <div className="text-2xl font-bold text-orange-600">{pendingAccountsCount}</div>
-                <div className="text-xs text-orange-600 text-center">New Pending</div>
+                <div className="text-xs text-orange-600 text-center">Pending</div>
               </div>
             </div>
           </div>
