@@ -827,8 +827,8 @@ export function TradingAccountsConfig() {
     setIsAddingAccount(true);
     setEditingAccount(account);
 
-    // Preparar el formulario con los datos de la cuenta
-    setFormState({
+    // Preparar el formulario con los datos básicos de la cuenta
+    let formData = {
       accountNumber: account.accountNumber,
       platform: account.platform.toLowerCase(),
       serverIp: account.server,
@@ -839,7 +839,39 @@ export function TradingAccountsConfig() {
       forceLot: account.forceLot || 0,
       reverseTrade: account.reverseTrade || false,
       connectedToMaster: account.connectedToMaster || 'none',
-    });
+    };
+
+    // Si es una cuenta slave, cargar la configuración específica
+    if (account.accountType === 'slave') {
+      try {
+        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+        const response = await fetch(
+          `http://localhost:${serverPort}/api/slave-config/${account.accountNumber}`,
+          {
+            headers: {
+              'x-api-key': secretKey || '',
+            },
+          }
+        );
+
+        if (response.ok) {
+          const slaveConfig = await response.json();
+          console.log('Loaded slave config for editing:', slaveConfig);
+
+          // Actualizar el formulario con la configuración específica del slave
+          formData = {
+            ...formData,
+            lotCoefficient: slaveConfig.config?.lotMultiplier || 1,
+            forceLot: slaveConfig.config?.forceLot || 0,
+            reverseTrade: slaveConfig.config?.reverseTrading || false,
+          };
+        }
+      } catch (error) {
+        console.error('Error loading slave config for editing:', error);
+      }
+    }
+
+    setFormState(formData);
 
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1905,7 +1937,7 @@ export function TradingAccountsConfig() {
 
                             <div>
                               <Label htmlFor="lotCoefficient">
-                                Lot Size Coefficient
+                                Lot Size Multiplier
                                 {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
                               </Label>
                               <Input
@@ -1917,19 +1949,29 @@ export function TradingAccountsConfig() {
                                 step="0.01"
                                 value={
                                   canCustomizeLotSizesValue
-                                    ? formState.lotCoefficient?.toString() || '1'
-                                    : '1'
+                                    ? formState.lotCoefficient && formState.lotCoefficient !== 1
+                                      ? formState.lotCoefficient.toFixed(2)
+                                      : '1.00'
+                                    : '1.00'
                                 }
-                                onChange={e =>
+                                onChange={e => {
+                                  const inputValue = e.target.value;
+                                  let value = 1;
+
+                                  if (inputValue !== '') {
+                                    // Permitir valores con hasta 2 decimales
+                                    const parsedValue = parseFloat(inputValue);
+                                    if (!isNaN(parsedValue) && parsedValue > 0) {
+                                      // Redondear a 2 decimales para evitar problemas de precisión
+                                      value = Math.round(parsedValue * 100) / 100;
+                                    }
+                                  }
+
                                   setFormState({
                                     ...formState,
-                                    lotCoefficient: canCustomizeLotSizesValue
-                                      ? e.target.value === ''
-                                        ? 1
-                                        : parseFloat(e.target.value)
-                                      : 1,
-                                  })
-                                }
+                                    lotCoefficient: canCustomizeLotSizesValue ? value : 1,
+                                  });
+                                }}
                                 disabled={!canCustomizeLotSizesValue}
                                 className="bg-white border border-gray-200 shadow-sm"
                               />
@@ -1954,14 +1996,26 @@ export function TradingAccountsConfig() {
                                 step="0.01"
                                 value={
                                   canCustomizeLotSizesValue
-                                    ? formState.forceLot?.toString() || '0'
+                                    ? formState.forceLot && formState.forceLot > 0
+                                      ? formState.forceLot.toFixed(2)
+                                      : '0.00'
                                     : formState.forceLot > 0
                                       ? '0.01'
-                                      : '0'
+                                      : '0.00'
                                 }
                                 onChange={e => {
-                                  const value =
-                                    e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  const inputValue = e.target.value;
+                                  let value = 0;
+
+                                  if (inputValue !== '') {
+                                    // Permitir valores con hasta 2 decimales
+                                    const parsedValue = parseFloat(inputValue);
+                                    if (!isNaN(parsedValue)) {
+                                      // Redondear a 2 decimales para evitar problemas de precisión
+                                      value = Math.round(parsedValue * 100) / 100;
+                                    }
+                                  }
+
                                   setFormState({
                                     ...formState,
                                     forceLot: canCustomizeLotSizesValue
@@ -2383,38 +2437,36 @@ export function TradingAccountsConfig() {
                                       const labels = [];
 
                                       if (config) {
-                                        // Lot multiplier (solo si no es 1.0)
-                                        if (config.lotMultiplier && config.lotMultiplier !== 1.0) {
-                                          labels.push(
-                                            <div
-                                              key="lotMultiplier"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 inline-block"
-                                            >
-                                              Lot ×{config.lotMultiplier}
-                                            </div>
-                                          );
-                                        }
-
-                                        // Force lot (solo si está configurado)
+                                        // Fixed lot tiene prioridad sobre multiplier
                                         if (config.forceLot && config.forceLot > 0) {
                                           labels.push(
                                             <div
                                               key="forceLot"
                                               className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 inline-block"
                                             >
-                                              Force {config.forceLot}
+                                              Fixed Lot {config.forceLot}
+                                            </div>
+                                          );
+                                        } else if (config.lotMultiplier) {
+                                          // Solo mostrar multiplier si no hay fixed lot
+                                          labels.push(
+                                            <div
+                                              key="lotMultiplier"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 inline-block"
+                                            >
+                                              Multiplier {config.lotMultiplier}
                                             </div>
                                           );
                                         }
 
-                                        // Reverse trading (solo si está habilitado)
+                                        // Reverse trading (siempre mostrar si está habilitado)
                                         if (config.reverseTrading) {
                                           labels.push(
                                             <div
                                               key="reverseTrading"
                                               className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 inline-block"
                                             >
-                                              Reverse
+                                              Reverse Trading
                                             </div>
                                           );
                                         }
@@ -2485,17 +2537,8 @@ export function TradingAccountsConfig() {
                                         }
                                       }
 
-                                      // Si no hay configuraciones específicas, mostrar configuración por defecto
-                                      if (labels.length === 0) {
-                                        labels.push(
-                                          <div
-                                            key="default"
-                                            className="rounded-full px-2 py-0.5 text-xs bg-gray-100 text-gray-800 inline-block"
-                                          >
-                                            Default
-                                          </div>
-                                        );
-                                      }
+                                      // Si no hay configuraciones específicas, no mostrar nada
+                                      return labels;
 
                                       return labels;
                                     })()}

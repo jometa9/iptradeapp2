@@ -22,13 +22,13 @@ Se ha implementado una mejora en la sección de **Configurations** para mostrar 
 Los siguientes labels se muestran **solo si están configurados y activos**:
 
 #### Configuraciones de Lotes:
-- **Lot ×{multiplier}** - Multiplicador de lotes (solo si no es 1.0)
-- **Force {value}** - Lote forzado (solo si está configurado)
+- **Fixed Lot {value}** - Lote fijo (prioridad sobre multiplier, solo si está configurado)
+- **Multiplier {value}** - Multiplicador de lotes (solo si no hay fixed lot configurado)
 - **Max {value}** - Lote máximo (solo si está configurado)
 - **Min {value}** - Lote mínimo (solo si está configurado)
 
 #### Configuraciones de Trading:
-- **Reverse** - Trading inverso (solo si está habilitado)
+- **Reverse Trading** - Trading inverso (siempre mostrar si está habilitado)
 - **Hours** - Horarios de trading (solo si está habilitado)
 
 #### Configuraciones de Filtros:
@@ -36,42 +36,38 @@ Los siguientes labels se muestran **solo si están configurados y activos**:
 - **{count} blocked** - Símbolos bloqueados (solo si hay símbolos bloqueados)
 
 #### Configuración por Defecto:
-- **Default** - Se muestra cuando no hay configuraciones específicas
+- **Sin labels** - No se muestra nada cuando no hay configuraciones específicas
 
 ### 3. Colores de Labels
 
 Cada tipo de configuración tiene su propio color para fácil identificación:
 
-- **Verde** (`bg-green-100 text-green-800`): Lot multiplier
-- **Azul** (`bg-blue-100 text-blue-800`): Force lot
-- **Púrpura** (`bg-purple-100 text-purple-800`): Reverse trading
+- **Verde** (`bg-green-100 text-green-800`): Multiplier
+- **Azul** (`bg-blue-100 text-blue-800`): Fixed Lot
+- **Púrpura** (`bg-purple-100 text-purple-800`): Reverse Trading
 - **Naranja** (`bg-orange-100 text-orange-800`): Max lot size
 - **Amarillo** (`bg-yellow-100 text-yellow-800`): Min lot size
 - **Índigo** (`bg-indigo-100 text-indigo-800`): Allowed symbols
 - **Rojo** (`bg-red-100 text-red-800`): Blocked symbols
 - **Teal** (`bg-teal-100 text-teal-800`): Trading hours
-- **Gris** (`bg-gray-100 text-gray-800`): Default configuration
+- **Sin color** - No se muestra nada cuando no hay configuraciones específicas
 
 ### 4. Lógica de Visualización
 
 ```typescript
 // Solo se muestran configuraciones activas
-if (config.lotMultiplier && config.lotMultiplier !== 1.0) {
-  // Mostrar lot multiplier
-}
-
 if (config.forceLot && config.forceLot > 0) {
-  // Mostrar force lot
+  // Mostrar Fixed Lot (prioridad)
+} else if (config.lotMultiplier) {
+  // Mostrar Multiplier (solo si no hay fixed lot)
 }
 
 if (config.reverseTrading) {
-  // Mostrar reverse trading
+  // Mostrar Reverse Trading
 }
 
-// Si no hay configuraciones específicas, mostrar "Default"
-if (labels.length === 0) {
-  labels.push("Default");
-}
+// Si no hay configuraciones específicas, no mostrar nada
+return labels;
 ```
 
 ## Archivos Modificados
@@ -117,19 +113,24 @@ if (labels.length === 0) {
 
 ## Ejemplo de Visualización
 
-**Configuración Completa:**
+**Configuración Completa (solo multiplier):**
 ```
-Lot ×2.0 | Force 0.1 | Reverse | Max 1.0 | Min 0.01 | 2 symbols | 1 blocked | Hours
+Multiplier 2.0 | Reverse Trading | Max 1.0 | Min 0.01 | 2 symbols | 1 blocked | Hours
+```
+
+**Configuración con Fixed Lot:**
+```
+Fixed Lot 0.36
 ```
 
 **Configuración Simple:**
 ```
-Force 0.05
+Fixed Lot 0.05
 ```
 
 **Configuración por Defecto:**
 ```
-Default
+(No se muestra nada)
 ```
 
 ## Pruebas

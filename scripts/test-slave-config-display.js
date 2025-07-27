@@ -24,7 +24,7 @@ const testSlaveConfigs = {
   SLAVE002: {
     config: {
       enabled: true,
-      lotMultiplier: 1.0, // No se mostrará porque es el valor por defecto
+      lotMultiplier: 1.0, // No se mostrará porque tiene fixed lot
       forceLot: 0.05,
       reverseTrading: false, // No se mostrará porque está desactivado
       maxLotSize: null,
@@ -39,7 +39,7 @@ const testSlaveConfigs = {
         endTime: '23:59',
         timezone: 'UTC',
       },
-      description: 'Config simple con force lot',
+      description: 'Config simple con force lot (multiplier no se muestra)',
     },
   },
   SLAVE003: {
@@ -60,7 +60,7 @@ const testSlaveConfigs = {
         endTime: '23:59',
         timezone: 'UTC',
       },
-      description: 'Config con lot multiplier y max lot',
+      description: 'Config con solo lot multiplier (sin fixed lot)',
     },
   },
 };
@@ -72,19 +72,17 @@ function getSlaveConfigLabels(slaveAccountId) {
   const labels = [];
 
   if (config) {
-    // Lot multiplier (solo si no es 1.0)
-    if (config.lotMultiplier && config.lotMultiplier !== 1.0) {
-      labels.push(`Lot ×${config.lotMultiplier}`);
-    }
-
-    // Force lot (solo si está configurado)
+    // Fixed lot tiene prioridad sobre multiplier
     if (config.forceLot && config.forceLot > 0) {
-      labels.push(`Force ${config.forceLot}`);
+      labels.push(`Fixed Lot ${config.forceLot}`);
+    } else if (config.lotMultiplier) {
+      // Solo mostrar multiplier si no hay fixed lot
+      labels.push(`Multiplier ${config.lotMultiplier}`);
     }
 
-    // Reverse trading (solo si está habilitado)
+    // Reverse trading (siempre mostrar si está habilitado)
     if (config.reverseTrading) {
-      labels.push('Reverse');
+      labels.push('Reverse Trading');
     }
 
     // Max lot size (solo si está configurado)
@@ -112,10 +110,7 @@ function getSlaveConfigLabels(slaveAccountId) {
     }
   }
 
-  // Si no hay configuraciones específicas, mostrar configuración por defecto
-  if (labels.length === 0) {
-    labels.push('Default');
-  }
+  // Si no hay configuraciones específicas, no mostrar nada
 
   return labels;
 }

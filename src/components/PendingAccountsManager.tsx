@@ -831,14 +831,25 @@ export const PendingAccountsManager: React.FC = () => {
                                   min="0.01"
                                   max="100"
                                   step="0.01"
-                                  value={conversionForm.lotCoefficient.toString()}
-                                  onChange={e =>
+                                  value={conversionForm.lotCoefficient.toFixed(2)}
+                                  onChange={e => {
+                                    const inputValue = e.target.value;
+                                    let value = 1;
+
+                                    if (inputValue !== '') {
+                                      // Permitir valores con hasta 2 decimales
+                                      const parsedValue = parseFloat(inputValue);
+                                      if (!isNaN(parsedValue) && parsedValue > 0) {
+                                        // Redondear a 2 decimales para evitar problemas de precisión
+                                        value = Math.round(parsedValue * 100) / 100;
+                                      }
+                                    }
+
                                     setConversionForm(prev => ({
                                       ...prev,
-                                      lotCoefficient:
-                                        e.target.value === '' ? 1 : parseFloat(e.target.value),
-                                    }))
-                                  }
+                                      lotCoefficient: value,
+                                    }));
+                                  }}
                                   className="bg-white border border-gray-200"
                                 />
                                 <p className="text-xs text-muted-foreground mt-1 text-gray-500">
@@ -857,14 +868,25 @@ export const PendingAccountsManager: React.FC = () => {
                                   min="0"
                                   max="100"
                                   step="0.01"
-                                  value={conversionForm.forceLot.toString()}
-                                  onChange={e =>
+                                  value={conversionForm.forceLot > 0 ? conversionForm.forceLot.toFixed(2) : '0.00'}
+                                  onChange={e => {
+                                    const inputValue = e.target.value;
+                                    let value = 0;
+
+                                    if (inputValue !== '') {
+                                      // Permitir valores con hasta 2 decimales
+                                      const parsedValue = parseFloat(inputValue);
+                                      if (!isNaN(parsedValue)) {
+                                        // Redondear a 2 decimales para evitar problemas de precisión
+                                        value = Math.round(parsedValue * 100) / 100;
+                                      }
+                                    }
+
                                     setConversionForm(prev => ({
                                       ...prev,
-                                      forceLot:
-                                        e.target.value === '' ? 0 : parseFloat(e.target.value),
-                                    }))
-                                  }
+                                      forceLot: value,
+                                    }));
+                                  }}
                                   className="bg-white border border-gray-200"
                                 />
                                 <p className="text-xs text-muted-foreground mt-1 text-gray-500">

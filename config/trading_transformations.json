@@ -121,7 +121,7 @@
   },
   "TEST_NINJA_009": {
     "lotMultiplier": 1,
-    "forceLot": null,
+    "forceLot": 0.36,
     "reverseTrading": false
   },
   "TEST_NINJA_DETECTION": {
