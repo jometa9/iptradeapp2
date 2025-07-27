@@ -118,5 +118,30 @@
     "lotMultiplier": 1,
     "forceLot": null,
     "reverseTrading": false
+  },
+  "TEST_NINJA_009": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_NINJA_DETECTION": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_UNKNOWN_PLATFORM": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "PENDING_MT4_001": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
+  },
+  "TEST_TV_010": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
   }
 }

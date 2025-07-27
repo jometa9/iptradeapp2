@@ -178,10 +178,13 @@ export const TradingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+
         toast({
           title: 'Success',
-          description: 'Slave account registered successfully',
+          description: `Slave account registered successfully${slaveForm.masterAccountId && slaveForm.masterAccountId !== 'none' ? ' and connected to master' : ''}`,
         });
+
         setShowSlaveDialog(false);
         setSlaveForm({
           slaveAccountId: '',
@@ -191,7 +194,17 @@ export const TradingAccountsManager: React.FC = () => {
           platform: '',
           masterAccountId: 'none',
         });
-        loadAccounts();
+
+        // Reload accounts to show the new slave account
+        await loadAccounts();
+
+        // If the slave was connected to a master, show a success message
+        if (slaveForm.masterAccountId && slaveForm.masterAccountId !== 'none') {
+          toast({
+            title: 'Slave Account Deployed',
+            description: `Slave account ${slaveForm.slaveAccountId} has been deployed under master ${slaveForm.masterAccountId}`,
+          });
+        }
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to register slave account');

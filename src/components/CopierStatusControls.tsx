@@ -435,7 +435,7 @@ export const CopierStatusControls: React.FC = () => {
                       <div className="flex items-center gap-3">
                         {getStatusBadge(masterStatus?.effectiveStatus || false)}
                         <Switch
-                          checked={masterStatus?.masterStatus || false}
+                          checked={masterStatus?.masterStatus === true}
                           onCheckedChange={enabled => toggleMasterStatus(masterId, enabled)}
                           disabled={
                             isUpdating ||
@@ -462,11 +462,11 @@ export const CopierStatusControls: React.FC = () => {
                         <div className="space-y-2">
                           {master.connectedSlaves.map(slave => {
                             const slaveConfig = slaveConfigs[slave.id];
-                            const slaveEnabled = slaveConfig?.config?.enabled !== false;
+                            const slaveEnabled = slaveConfig?.config?.enabled === true;
                             const isSlaveUpdating = updating === `slave-${slave.id}`;
                             const effectiveSlaveStatus =
                               copierStatus?.globalStatus &&
-                              masterStatus?.masterStatus &&
+                              masterStatus?.masterStatus === true &&
                               slaveEnabled;
 
                             return (
@@ -490,7 +490,7 @@ export const CopierStatusControls: React.FC = () => {
                                     disabled={
                                       isSlaveUpdating ||
                                       !copierStatus?.globalStatus ||
-                                      !masterStatus?.masterStatus ||
+                                      masterStatus?.masterStatus !== true ||
                                       !slave.masterOnline ||
                                       slave.status === 'offline'
                                     }
@@ -501,7 +501,7 @@ export const CopierStatusControls: React.FC = () => {
                                           ? 'Master account is offline - copy trading disabled'
                                           : !copierStatus?.globalStatus
                                             ? 'Global copier is OFF'
-                                            : !masterStatus?.masterStatus
+                                            : masterStatus?.masterStatus !== true
                                               ? 'Master is not sending signals'
                                               : effectiveSlaveStatus
                                                 ? 'Stop following master signals'
@@ -528,7 +528,7 @@ export const CopierStatusControls: React.FC = () => {
               <div className="space-y-2">
                 {accounts.unconnectedSlaves.map(slave => {
                   const slaveConfig = slaveConfigs[slave.id];
-                  const slaveEnabled = slaveConfig?.config?.enabled !== false;
+                  const slaveEnabled = slaveConfig?.config?.enabled === true;
                   const isSlaveUpdating = updating === `slave-${slave.id}`;
 
                   return (

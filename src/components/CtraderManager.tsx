@@ -434,10 +434,18 @@ export const CtraderManager: React.FC = () => {
         if (registerResponse.ok) {
           toast({
             title: 'Success',
-            description: 'cTrader slave account registered',
+            description: `cTrader slave account registered${slaveForm.masterAccountId ? ' and deployed under master' : ''}`,
           });
           setShowSlaveDialog(false);
           setSlaveForm({ accountId: '', name: '', description: '', masterAccountId: '' });
+
+          // If the slave was connected to a master, show deployment message
+          if (slaveForm.masterAccountId) {
+            toast({
+              title: 'Slave Account Deployed',
+              description: `cTrader slave account ${slaveForm.accountId} has been deployed under master ${slaveForm.masterAccountId}`,
+            });
+          }
         }
       }
     } catch (error) {

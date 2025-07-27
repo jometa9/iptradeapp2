@@ -94,9 +94,9 @@ export const isCopierEnabled = (masterAccountId, apiKey) => {
     return false;
   }
 
-  // Check specific master account status (default to true if not configured)
+  // Check specific master account status (default to false if not configured)
   const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
-  return masterStatus !== undefined ? masterStatus : true;
+  return masterStatus === true;
 };
 
 // Create disabled master configuration for new account (user-based)
@@ -186,7 +186,8 @@ export const getMasterStatus = (req, res) => {
   const globalStatus = globalConfig.globalStatus;
   const userGlobalStatus = userCopierStatus.globalStatus;
   const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
-  const effectiveStatus = masterStatus !== undefined ? masterStatus : true;
+  // Default to false if no config exists (new accounts should be disabled by default)
+  const effectiveStatus = masterStatus === true;
   const finalStatus = globalStatus && userGlobalStatus && effectiveStatus;
 
   res.json({
@@ -281,7 +282,8 @@ export const getAllStatuses = (req, res) => {
   // Process all master accounts from userAccounts
   for (const [masterAccountId, accountData] of Object.entries(userAccounts.masterAccounts || {})) {
     const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
-    const defaultMasterStatus = masterStatus !== undefined ? masterStatus : true; // Default to true if not configured
+    // Default to false if no config exists (new accounts should be disabled by default)
+    const defaultMasterStatus = masterStatus === true;
     const accountStatus = accountData ? accountData.status : 'offline';
 
     masterAccountsWithEffectiveStatus[masterAccountId] = {

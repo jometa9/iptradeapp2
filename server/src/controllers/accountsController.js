@@ -130,7 +130,7 @@ const checkAccountActivity = () => {
                 let slavesUpdated = false;
 
                 connectedSlaves.forEach(slaveId => {
-                  if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
+                  if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled === true) {
                     slaveConfigs[slaveId].enabled = false;
                     slavesUpdated = true;
                     console.log(
@@ -182,7 +182,7 @@ const checkAccountActivity = () => {
               let slavesUpdated = false;
 
               connectedSlaves.forEach(slaveId => {
-                if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled !== false) {
+                if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled === false) {
                   slaveConfigs[slaveId].enabled = false;
                   slavesUpdated = true;
                   console.log(
@@ -218,8 +218,13 @@ const checkAccountActivity = () => {
 
               // Disable copy trading for offline slave
               const slaveConfigs = loadSlaveConfigs();
-              if (slaveConfigs[accountId] && slaveConfigs[accountId].enabled !== false) {
-                slaveConfigs[accountId].enabled = false;
+              if (
+                slaveConfigs[accountId] &&
+                slaveConfigs[accountId].config &&
+                slaveConfigs[accountId].config.enabled === true
+              ) {
+                slaveConfigs[accountId].config.enabled = false;
+                slaveConfigs[accountId].lastUpdated = new Date().toISOString();
                 saveSlaveConfigs(slaveConfigs);
                 console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
               }
@@ -243,8 +248,13 @@ const checkAccountActivity = () => {
 
             // Disable copy trading for offline slave
             const slaveConfigs = loadSlaveConfigs();
-            if (slaveConfigs[accountId] && slaveConfigs[accountId].enabled !== false) {
-              slaveConfigs[accountId].enabled = false;
+            if (
+              slaveConfigs[accountId] &&
+              slaveConfigs[accountId].config &&
+              slaveConfigs[accountId].config.enabled === true
+            ) {
+              slaveConfigs[accountId].config.enabled = false;
+              slaveConfigs[accountId].lastUpdated = new Date().toISOString();
               saveSlaveConfigs(slaveConfigs);
               console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
             }
@@ -453,13 +463,23 @@ export const registerSlaveAccount = (req, res) => {
     console.log(
       `Slave account registered: ${slaveAccountId}${masterAccountId ? ` -> ${masterAccountId}` : ''} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) (copying disabled by default)`
     );
-    res.json({
+
+    // Prepare response with deployment information
+    const responseData = {
       message: 'Slave account registered successfully (copying disabled by default)',
       account: userAccounts.slaveAccounts[slaveAccountId],
       connectedTo: masterAccountId || null,
       status: 'success',
       copyingEnabled: false,
-    });
+    };
+
+    // Add deployment information if connected to master
+    if (masterAccountId) {
+      responseData.deployed = true;
+      responseData.deploymentMessage = `Slave account ${slaveAccountId} has been deployed under master ${masterAccountId}`;
+    }
+
+    res.json(responseData);
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
   }
@@ -1085,14 +1105,23 @@ export const convertPendingToSlave = (req, res) => {
       // Notify about account conversion
       notifyAccountConverted(accountId, 'pending', 'slave', apiKey);
 
-      res.json({
+      // Prepare response with deployment information
+      const responseData = {
         message: `Pending account successfully converted to slave${masterAccountId ? ' and connected to master' : ''} (copying disabled by default)`,
         accountId,
         account: slaveAccount,
         connectedTo: masterAccountId || null,
         status: 'converted_to_slave',
         copyingEnabled: false,
-      });
+      };
+
+      // Add deployment information if connected to master
+      if (masterAccountId) {
+        responseData.deployed = true;
+        responseData.deploymentMessage = `Pending account ${accountId} has been converted to slave and deployed under master ${masterAccountId}`;
+      }
+
+      res.json(responseData);
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }

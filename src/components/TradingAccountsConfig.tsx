@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   AlertCircle,
@@ -80,6 +80,18 @@ interface SlaveConfig {
     lotMultiplier?: number;
     forceLot?: number | null;
     reverseTrading?: boolean;
+    maxLotSize?: number | null;
+    minLotSize?: number | null;
+    allowedSymbols?: string[];
+    blockedSymbols?: string[];
+    allowedOrderTypes?: string[];
+    blockedOrderTypes?: string[];
+    tradingHours?: {
+      enabled: boolean;
+      startTime: string;
+      endTime: string;
+      timezone: string;
+    };
     description?: string;
   };
 }
@@ -122,6 +134,7 @@ export function TradingAccountsConfig() {
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
   const [pendingAccountsCount, setPendingAccountsCount] = useState<number>(0);
   const [connectivityStats, setConnectivityStats] = useState<any>(null);
+  const [recentlyDeployedSlaves, setRecentlyDeployedSlaves] = useState<Set<string>>(new Set());
 
   // Derived values for subscription limits
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
@@ -142,48 +155,6 @@ export function TradingAccountsConfig() {
     };
     return platformMap[platform] || platform || 'Unknown';
   };
-
-  // Real-time events system
-  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(event => {
-    console.log('📨 Evento recibido:', event);
-
-    // Manejar diferentes tipos de eventos
-    switch (event.type) {
-      case 'account_converted':
-      case 'account_created':
-      case 'account_deleted':
-      case 'trading_config_created':
-        // Actualizar cuentas inmediatamente cuando hay cambios
-        fetchAccounts(false);
-        fetchPendingAccountsCount();
-        loadCopierData();
-
-        // Mostrar notificación
-        if (event.type === 'account_converted') {
-          toastUtil({
-            title: 'Cuenta Convertida',
-            description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
-          });
-        } else if (event.type === 'account_created') {
-          toastUtil({
-            title: 'Cuenta Creada',
-            description: `Nueva cuenta ${event.data.accountType}: ${event.data.accountId}`,
-          });
-        } else if (event.type === 'trading_config_created') {
-          toastUtil({
-            title: 'Configuración Creada',
-            description: `Configuración de trading creada para ${event.data.accountId}`,
-          });
-        }
-        break;
-
-      case 'account_status_changed':
-      case 'copier_status_changed':
-        // Actualizar datos de copier cuando cambie el estado
-        loadCopierData();
-        break;
-    }
-  });
 
   const [formState, setFormState] = useState({
     accountNumber: '',
@@ -219,192 +190,227 @@ export function TradingAccountsConfig() {
   // Eliminado el useEffect que ocultaba la tarjeta automáticamente
 
   // Fetch accounts from API
-  const fetchAccounts = async (showLoadingState = false) => {
-    try {
-      if (showLoadingState) {
-        setIsLoading(true);
-      }
-
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-
-      // Fetch both accounts data and connectivity stats
-      const [accountsResponse, connectivityResponse] = await Promise.all([
-        fetch(`http://localhost:${serverPort}/api/accounts/all`, {
-          headers: {
-            'x-api-key': secretKey || '',
-          },
-        }),
-        fetch(`http://localhost:${serverPort}/api/accounts/connectivity`, {
-          headers: {
-            'x-api-key': secretKey || '',
-          },
-        }),
-      ]);
-
-      console.log('🔍 Response status:', {
-        accounts: accountsResponse.status,
-        connectivity: connectivityResponse.status,
-      });
-
-      if (!accountsResponse.ok) {
-        throw new Error('Failed to fetch trading accounts');
-      }
-
-      if (!connectivityResponse.ok) {
-        console.error(
-          '❌ Connectivity endpoint failed:',
-          connectivityResponse.status,
-          connectivityResponse.statusText
-        );
-        throw new Error('Failed to fetch connectivity statistics');
-      }
-
-      const data: ApiResponse = await accountsResponse.json();
-      const connectivityData = await connectivityResponse.json();
-
-      // Store connectivity stats for use in status calculations
-      setConnectivityStats(connectivityData.stats);
-
-      // Debug logs
-      console.log('🔍 Connectivity Data:', connectivityData);
-      console.log('📊 Connectivity Stats:', connectivityData.stats);
-      console.log('📈 Pending count from backend:', connectivityData.stats.pending);
-
-      // Create a map of account statuses from connectivity data
-      const accountStatusMap = new Map();
-      connectivityData.stats.connectivityDetails.forEach((detail: any) => {
-        accountStatusMap.set(detail.accountId, detail.status);
-      });
-
-      console.log('🗺️ Account Status Map:', Object.fromEntries(accountStatusMap));
-
-      // Handle the actual format returned by the backend
-      const allAccounts: TradingAccount[] = [];
-
-      // Helper function to map backend status to frontend status
-      const mapStatus = (
-        accountId: string,
-        backendStatus: string,
-        accountType: string,
-        connectedSlaves?: any[],
-        connectedToMaster?: string
-      ) => {
-        // Use the status from connectivity data if available
-        if (accountStatusMap.has(accountId)) {
-          return accountStatusMap.get(accountId);
+  const fetchAccounts = useCallback(
+    async (showLoadingState = false) => {
+      try {
+        if (showLoadingState) {
+          setIsLoading(true);
         }
 
-        // Fallback to frontend calculation
-        if (accountType === 'master') {
-          if (connectedSlaves && connectedSlaves.length > 0) {
-            return 'synchronized';
-          } else if (backendStatus === 'active') {
-            return 'pending';
-          }
-        } else if (accountType === 'slave') {
-          if (connectedToMaster && connectedToMaster !== 'none') {
-            return 'synchronized';
-          } else if (backendStatus === 'active') {
-            return 'pending';
-          }
-        }
+        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
 
-        switch (backendStatus) {
-          case 'pending':
-            return 'pending';
-          case 'offline':
-            return 'offline';
-          case 'error':
-            return 'error';
-          default:
-            return 'pending';
-        }
-      };
+        // Fetch both accounts data and connectivity stats
+        const [accountsResponse, connectivityResponse] = await Promise.all([
+          fetch(`http://localhost:${serverPort}/api/accounts/all`, {
+            headers: {
+              'x-api-key': secretKey || '',
+            },
+          }),
+          fetch(`http://localhost:${serverPort}/api/accounts/connectivity`, {
+            headers: {
+              'x-api-key': secretKey || '',
+            },
+          }),
+        ]);
 
-      // Add master accounts
-      if (data.masterAccounts) {
-        Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
-          allAccounts.push({
-            id: master.id.toString(),
-            accountNumber: master.id,
-            platform: master.platform || 'MT4',
-            server: master.broker || '',
-            password: '••••••••',
-            accountType: 'master',
-            status: mapStatus(
-              master.id,
-              master.status || 'active',
-              'master',
-              master.connectedSlaves
-            ),
-            connectedSlaves: master.connectedSlaves || [],
-            totalSlaves: master.totalSlaves || 0,
-          });
+        console.log('🔍 Response status:', {
+          accounts: accountsResponse.status,
+          connectivity: connectivityResponse.status,
         });
-      }
 
-      // Add connected slaves
-      if (data.masterAccounts) {
-        Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
-          if (master.connectedSlaves && Array.isArray(master.connectedSlaves)) {
-            master.connectedSlaves.forEach((slave: ApiAccountData) => {
-              allAccounts.push({
-                id: slave.id.toString(),
-                accountNumber: slave.id,
+        if (!accountsResponse.ok) {
+          throw new Error('Failed to fetch trading accounts');
+        }
+
+        if (!connectivityResponse.ok) {
+          console.error(
+            '❌ Connectivity endpoint failed:',
+            connectivityResponse.status,
+            connectivityResponse.statusText
+          );
+          throw new Error('Failed to fetch connectivity statistics');
+        }
+
+        const data: ApiResponse = await accountsResponse.json();
+        const connectivityData = await connectivityResponse.json();
+
+        // Store connectivity stats for use in status calculations
+        setConnectivityStats(connectivityData.stats);
+
+        // Debug logs
+        console.log('🔍 Connectivity Data:', connectivityData);
+        console.log('📊 Connectivity Stats:', connectivityData.stats);
+        console.log('📈 Pending count from backend:', connectivityData.stats.pending);
+
+        // Create a map of account statuses from connectivity data
+        const accountStatusMap = new Map();
+        connectivityData.stats.connectivityDetails.forEach((detail: any) => {
+          accountStatusMap.set(detail.accountId, detail.status);
+        });
+
+        console.log('🗺️ Account Status Map:', Object.fromEntries(accountStatusMap));
+
+        // Handle the actual format returned by the backend
+        const allAccounts: TradingAccount[] = [];
+
+        // Helper function to map backend status to frontend status
+        const mapStatus = (
+          accountId: string,
+          backendStatus: string,
+          accountType: string,
+          connectedSlaves?: any[],
+          connectedToMaster?: string
+        ) => {
+          // Use the status from connectivity data if available
+          if (accountStatusMap.has(accountId)) {
+            return accountStatusMap.get(accountId);
+          }
+
+          // Fallback to frontend calculation
+          if (accountType === 'master') {
+            if (connectedSlaves && connectedSlaves.length > 0) {
+              return 'synchronized';
+            } else if (backendStatus === 'active') {
+              return 'pending';
+            }
+          } else if (accountType === 'slave') {
+            if (connectedToMaster && connectedToMaster !== 'none') {
+              return 'synchronized';
+            } else if (backendStatus === 'active') {
+              return 'pending';
+            }
+          }
+
+          switch (backendStatus) {
+            case 'pending':
+              return 'pending';
+            case 'offline':
+              return 'offline';
+            case 'error':
+              return 'error';
+            default:
+              return 'pending';
+          }
+        };
+
+        // Add master accounts
+        if (data.masterAccounts) {
+          Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
+            allAccounts.push({
+              id: master.id.toString(),
+              accountNumber: master.id,
+              platform: master.platform || 'MT4',
+              server: master.broker || '',
+              password: '••••••••',
+              accountType: 'master',
+              status: mapStatus(
+                master.id,
+                master.status || 'active',
+                'master',
+                master.connectedSlaves
+              ),
+              connectedSlaves: (master.connectedSlaves || []).map(slave => ({
+                id: slave.id,
+                name: slave.id, // Usar id como name si no está disponible
                 platform: slave.platform || 'MT4',
-                server: slave.broker || '',
-                password: '••••••••',
-                accountType: 'slave',
-                status: mapStatus(
-                  slave.id,
-                  slave.status || 'active',
-                  'slave',
-                  undefined,
-                  master.id
-                ),
-                connectedToMaster: master.id,
-                masterOnline: (slave as any).masterOnline || false, // Include masterOnline from backend
-              });
+              })),
+              totalSlaves: master.totalSlaves || 0,
             });
-          }
-        });
-      }
-
-      // Add unconnected slaves
-      if (data.unconnectedSlaves && Array.isArray(data.unconnectedSlaves)) {
-        data.unconnectedSlaves.forEach((slave: ApiAccountData) => {
-          allAccounts.push({
-            id: slave.id.toString(),
-            accountNumber: slave.id,
-            platform: slave.platform || 'MT4',
-            server: slave.broker || '',
-            password: '••••••••',
-            accountType: 'slave',
-            status: mapStatus(slave.id, slave.status || 'active', 'slave', undefined, 'none'),
-            connectedToMaster: 'none',
           });
-        });
-      }
+        }
 
-      setAccounts(allAccounts);
-    } catch (error) {
-      console.error('Error fetching accounts:', error);
-      if (showLoadingState) {
-        toastUtil({
-          title: 'Error',
-          description: 'Failed to load trading accounts. Please try again.',
-          variant: 'destructive',
-        });
+        // Add connected slaves
+        if (data.masterAccounts) {
+          Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
+            if (master.connectedSlaves && Array.isArray(master.connectedSlaves)) {
+              master.connectedSlaves.forEach((slave: ApiAccountData) => {
+                allAccounts.push({
+                  id: slave.id.toString(),
+                  accountNumber: slave.id,
+                  platform: slave.platform || 'MT4',
+                  server: slave.broker || '',
+                  password: '••••••••',
+                  accountType: 'slave',
+                  status: mapStatus(
+                    slave.id,
+                    slave.status || 'active',
+                    'slave',
+                    undefined,
+                    master.id
+                  ),
+                  connectedToMaster: master.id,
+                  masterOnline: (slave as any).masterOnline || false, // Include masterOnline from backend
+                });
+              });
+            }
+          });
+        }
+
+        // Add unconnected slaves
+        if (data.unconnectedSlaves && Array.isArray(data.unconnectedSlaves)) {
+          data.unconnectedSlaves.forEach((slave: ApiAccountData) => {
+            allAccounts.push({
+              id: slave.id.toString(),
+              accountNumber: slave.id,
+              platform: slave.platform || 'MT4',
+              server: slave.broker || '',
+              password: '••••••••',
+              accountType: 'slave',
+              status: mapStatus(slave.id, slave.status || 'active', 'slave', undefined, 'none'),
+              connectedToMaster: 'none',
+            });
+          });
+        }
+
+        setAccounts(allAccounts);
+
+        // Auto-expand masters that have connected slaves
+        const mastersWithSlaves = allAccounts.filter(
+          acc =>
+            acc.accountType === 'master' && acc.connectedSlaves && acc.connectedSlaves.length > 0
+        );
+
+        if (mastersWithSlaves.length > 0) {
+          const newCollapsedMasters = { ...collapsedMasters };
+          mastersWithSlaves.forEach(master => {
+            newCollapsedMasters[master.id] = false; // Expand masters with slaves
+          });
+          setCollapsedMasters(newCollapsedMasters);
+        }
+      } catch (error) {
+        console.error('Error fetching accounts:', error);
+        if (showLoadingState) {
+          toastUtil({
+            title: 'Error',
+            description: 'Failed to load trading accounts. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        if (showLoadingState) {
+          setIsLoading(false);
+        }
       }
-    } finally {
-      if (showLoadingState) {
-        setIsLoading(false);
-      }
-    }
+    },
+    [secretKey]
+  );
+
+  // Mark slave account as recently deployed
+  const markSlaveAsRecentlyDeployed = (slaveAccountId: string) => {
+    setRecentlyDeployedSlaves(prev => new Set([...prev, slaveAccountId]));
+
+    // Clear the "recently deployed" status after 5 seconds
+    setTimeout(() => {
+      setRecentlyDeployedSlaves(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(slaveAccountId);
+        return newSet;
+      });
+    }, 5000);
   };
 
   // Fetch pending accounts count
-  const fetchPendingAccountsCount = async () => {
+  const fetchPendingAccountsCount = useCallback(async () => {
     try {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
@@ -422,25 +428,7 @@ export function TradingAccountsConfig() {
     } catch (error) {
       console.error('Error loading pending accounts count:', error);
     }
-  };
-
-  useEffect(() => {
-    fetchAccounts(true);
-    fetchPendingAccountsCount();
-    loadCopierData();
-
-    // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
-    // Los eventos en tiempo real manejan la mayoría de actualizaciones
-    const interval = setInterval(() => {
-      if (!isEventsConnected) {
-        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
-        fetchAccounts(false);
-        fetchPendingAccountsCount();
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isEventsConnected]);
+  }, [secretKey]);
 
   // Polling adicional cada 3 segundos para asegurar actualizaciones rápidas
   useEffect(() => {
@@ -465,7 +453,7 @@ export function TradingAccountsConfig() {
   }, [accounts.length, accounts]);
 
   // Load copier status and slave configurations
-  const loadCopierData = async () => {
+  const loadCopierData = useCallback(async () => {
     try {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const baseUrl = `http://localhost:${serverPort}/api`;
@@ -506,7 +494,73 @@ export function TradingAccountsConfig() {
     } catch (error) {
       console.error('Error loading copier data:', error);
     }
-  };
+  }, [secretKey, accounts]);
+
+  // Real-time events system
+  const handleEvent = useCallback(
+    (event: any) => {
+      console.log('📨 Evento recibido:', event);
+
+      // Manejar diferentes tipos de eventos
+      switch (event.type) {
+        case 'account_converted':
+        case 'account_created':
+        case 'account_deleted':
+        case 'trading_config_created':
+          // Actualizar cuentas inmediatamente cuando hay cambios
+          fetchAccounts(false);
+          fetchPendingAccountsCount();
+          loadCopierData();
+
+          // Mostrar notificación
+          if (event.type === 'account_converted') {
+            toastUtil({
+              title: 'Cuenta Convertida',
+              description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
+            });
+          } else if (event.type === 'account_created') {
+            toastUtil({
+              title: 'Cuenta Creada',
+              description: `Nueva cuenta ${event.data.accountType}: ${event.data.accountId}`,
+            });
+          } else if (event.type === 'trading_config_created') {
+            toastUtil({
+              title: 'Configuración Creada',
+              description: `Configuración de trading creada para ${event.data.accountId}`,
+            });
+          }
+          break;
+
+        case 'account_status_changed':
+        case 'copier_status_changed':
+          // Actualizar datos de copier cuando cambie el estado
+          loadCopierData();
+          break;
+      }
+    },
+    [fetchAccounts, fetchPendingAccountsCount, loadCopierData]
+  );
+
+  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(handleEvent);
+
+  // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
+  useEffect(() => {
+    fetchAccounts(true);
+    fetchPendingAccountsCount();
+    loadCopierData();
+
+    // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
+    // Los eventos en tiempo real manejan la mayoría de actualizaciones
+    const interval = setInterval(() => {
+      if (!isEventsConnected) {
+        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
+        fetchAccounts(false);
+        fetchPendingAccountsCount();
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isEventsConnected]);
 
   // Toggle global copier status
   const toggleGlobalStatus = async (enabled: boolean) => {
@@ -730,14 +784,16 @@ export function TradingAccountsConfig() {
   const getMasterEffectiveStatus = (masterAccountId: string) => {
     if (!copierStatus) return false;
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
-    return copierStatus.globalStatus && masterStatus?.masterStatus !== false;
+    // Default to false if no config exists (new accounts should be disabled by default)
+    return copierStatus.globalStatus && masterStatus?.masterStatus === true;
   };
 
   // Get effective copier status for slave account
   const getSlaveEffectiveStatus = (slaveAccountId: string, masterAccountId?: string) => {
     if (!copierStatus) return false;
     const slaveConfig = slaveConfigs[slaveAccountId];
-    const slaveEnabled = slaveConfig?.config?.enabled !== false;
+    // Default to false if no config exists (new accounts should be disabled by default)
+    const slaveEnabled = slaveConfig?.config?.enabled === true;
     // If slave is not connected to a master, it can never be active
     if (!masterAccountId || masterAccountId === '' || masterAccountId === 'none') {
       return false;
@@ -1110,10 +1166,26 @@ export function TradingAccountsConfig() {
       await fetchAccounts();
       await fetchPendingAccountsCount();
 
-      toastUtil({
-        title: editingAccount ? 'Account Updated' : 'Account Created',
-        description: `Your trading account has been ${editingAccount ? 'updated' : 'created'} successfully.`,
-      });
+      // If we just created a slave account connected to a master, show deployment message
+      if (
+        !editingAccount &&
+        formState.accountType === 'slave' &&
+        formState.connectedToMaster &&
+        formState.connectedToMaster !== 'none'
+      ) {
+        toastUtil({
+          title: 'Slave Account Deployed',
+          description: `Slave account ${formState.accountNumber} has been deployed under master ${formState.connectedToMaster}`,
+        });
+
+        // Mark the slave account as recently deployed
+        markSlaveAsRecentlyDeployed(formState.accountNumber);
+      } else {
+        toastUtil({
+          title: editingAccount ? 'Account Updated' : 'Account Created',
+          description: `Your trading account has been ${editingAccount ? 'updated' : 'created'} successfully.`,
+        });
+      }
 
       handleCancel();
     } catch (error) {
@@ -2231,7 +2303,10 @@ export function TradingAccountsConfig() {
                           {/* Slave accounts connected to this master */}
                           {!collapsedMasters[masterAccount.id] &&
                             connectedSlaves.map(slaveAccount => (
-                              <tr key={slaveAccount.id} className="bg-white hover:bg-muted/50">
+                              <tr
+                                key={slaveAccount.id}
+                                className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(slaveAccount.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                              >
                                 <td className="w-8 px-2 py-1.5 align-middle"></td>
                                 <td className="w-20 px-4 py-1.5 align-middle">
                                   <div className="flex items-center justify-center h-full w-full">
@@ -2281,7 +2356,17 @@ export function TradingAccountsConfig() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                  {slaveAccount.accountNumber}
+                                  <div className="flex items-center gap-2">
+                                    {slaveAccount.accountNumber}
+                                    {recentlyDeployedSlaves.has(slaveAccount.accountNumber) && (
+                                      <div className="flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                        <span className="text-xs text-green-600 font-medium">
+                                          New
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-sm text-green-700 align-middle">
                                   Slave
@@ -2290,22 +2375,130 @@ export function TradingAccountsConfig() {
                                   {getPlatformDisplayName(slaveAccount.platform)}
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
-                                  <div className="flex gap-2">
-                                    {slaveAccount.forceLot &&
-                                    parseFloat(String(slaveAccount.forceLot)) > 0 ? (
-                                      <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 inline-block">
-                                        Force lot {slaveAccount.forceLot}
-                                      </div>
-                                    ) : slaveAccount.lotCoefficient ? (
-                                      <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 inline-block">
-                                        Lot multiplier {slaveAccount.lotCoefficient}
-                                      </div>
-                                    ) : null}
-                                    {slaveAccount.reverseTrade && (
-                                      <div className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 inline-block">
-                                        Reverse trades
-                                      </div>
-                                    )}
+                                  <div className="flex gap-2 flex-wrap">
+                                    {/* Mostrar configuraciones de slave usando slaveConfigs */}
+                                    {(() => {
+                                      const slaveConfig = slaveConfigs[slaveAccount.accountNumber];
+                                      const config = slaveConfig?.config;
+                                      const labels = [];
+
+                                      if (config) {
+                                        // Lot multiplier (solo si no es 1.0)
+                                        if (config.lotMultiplier && config.lotMultiplier !== 1.0) {
+                                          labels.push(
+                                            <div
+                                              key="lotMultiplier"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 inline-block"
+                                            >
+                                              Lot ×{config.lotMultiplier}
+                                            </div>
+                                          );
+                                        }
+
+                                        // Force lot (solo si está configurado)
+                                        if (config.forceLot && config.forceLot > 0) {
+                                          labels.push(
+                                            <div
+                                              key="forceLot"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 inline-block"
+                                            >
+                                              Force {config.forceLot}
+                                            </div>
+                                          );
+                                        }
+
+                                        // Reverse trading (solo si está habilitado)
+                                        if (config.reverseTrading) {
+                                          labels.push(
+                                            <div
+                                              key="reverseTrading"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 inline-block"
+                                            >
+                                              Reverse
+                                            </div>
+                                          );
+                                        }
+
+                                        // Max lot size (solo si está configurado)
+                                        if (config.maxLotSize && config.maxLotSize > 0) {
+                                          labels.push(
+                                            <div
+                                              key="maxLotSize"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 inline-block"
+                                            >
+                                              Max {config.maxLotSize}
+                                            </div>
+                                          );
+                                        }
+
+                                        // Min lot size (solo si está configurado)
+                                        if (config.minLotSize && config.minLotSize > 0) {
+                                          labels.push(
+                                            <div
+                                              key="minLotSize"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 inline-block"
+                                            >
+                                              Min {config.minLotSize}
+                                            </div>
+                                          );
+                                        }
+
+                                        // Symbol filtering (solo si hay símbolos permitidos o bloqueados)
+                                        if (
+                                          config.allowedSymbols &&
+                                          config.allowedSymbols.length > 0
+                                        ) {
+                                          labels.push(
+                                            <div
+                                              key="allowedSymbols"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 inline-block"
+                                            >
+                                              {config.allowedSymbols.length} symbols
+                                            </div>
+                                          );
+                                        }
+
+                                        if (
+                                          config.blockedSymbols &&
+                                          config.blockedSymbols.length > 0
+                                        ) {
+                                          labels.push(
+                                            <div
+                                              key="blockedSymbols"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 inline-block"
+                                            >
+                                              {config.blockedSymbols.length} blocked
+                                            </div>
+                                          );
+                                        }
+
+                                        // Trading hours (solo si está habilitado)
+                                        if (config.tradingHours && config.tradingHours.enabled) {
+                                          labels.push(
+                                            <div
+                                              key="tradingHours"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 inline-block"
+                                            >
+                                              Hours
+                                            </div>
+                                          );
+                                        }
+                                      }
+
+                                      // Si no hay configuraciones específicas, mostrar configuración por defecto
+                                      if (labels.length === 0) {
+                                        labels.push(
+                                          <div
+                                            key="default"
+                                            className="rounded-full px-2 py-0.5 text-xs bg-gray-100 text-gray-800 inline-block"
+                                          >
+                                            Default
+                                          </div>
+                                        );
+                                      }
+
+                                      return labels;
+                                    })()}
                                   </div>
                                 </td>
                                 <td className="w-32 px-4 py-1.5 whitespace-nowrap align-middle actions-column">

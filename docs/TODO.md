@@ -18,8 +18,8 @@ cuentas de otras apikeys que se limpien todas si pasa una semana o algo similar
 documentations
 legals
 
-go dino coffee
+
 - trading account configurarion
-- en configurations que se vea el settings de la slave
+- ✅ en configurations que se vea el settings de la slave
 - probar que copier ande bien y se comporte de una forma correcta
 - ui mejorar y cerrar

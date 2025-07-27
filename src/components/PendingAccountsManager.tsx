@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
 
@@ -59,6 +59,7 @@ export const PendingAccountsManager: React.FC = () => {
   const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
+  const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [conversionForm, setConversionForm] = useState<ConversionForm>({
@@ -99,7 +100,7 @@ export const PendingAccountsManager: React.FC = () => {
   };
 
   // Load pending accounts
-  const loadPendingAccounts = async () => {
+  const loadPendingAccounts = useCallback(async () => {
     try {
       console.log('API KEY ENVIADO (pending):', secretKey);
       const response = await fetch(`${baseUrl}/accounts/pending`, {
@@ -121,11 +122,12 @@ export const PendingAccountsManager: React.FC = () => {
         variant: 'destructive',
       });
     }
-  };
+  }, [secretKey, baseUrl]);
 
   // Load master accounts for slave connection
-  const loadMasterAccounts = async () => {
+  const loadMasterAccounts = useCallback(async () => {
     try {
+      setIsRefreshingMasters(true);
       const response = await fetch(`${baseUrl}/accounts/all`, {
         headers: {
           'x-api-key': secretKey || '',
@@ -140,11 +142,13 @@ export const PendingAccountsManager: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading master accounts:', error);
+    } finally {
+      setIsRefreshingMasters(false);
     }
-  };
+  }, [secretKey, baseUrl]);
 
   // Cargar cuentas totales y límite
-  const loadAccountStats = async () => {
+  const loadAccountStats = useCallback(async () => {
     try {
       const response = await fetch(`${baseUrl}/accounts/all`, {
         headers: {
@@ -166,31 +170,50 @@ export const PendingAccountsManager: React.FC = () => {
       setTotalAccounts(0);
       setAccountLimit(null);
     }
-  };
+  }, [secretKey, baseUrl, userInfo]);
 
   // Real-time events system
-  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(event => {
-    console.log('📨 Evento recibido en PendingAccountsManager:', event);
+  const handleEvent = useCallback(
+    (event: any) => {
+      console.log('📨 Evento recibido en PendingAccountsManager:', event);
 
-    // Manejar diferentes tipos de eventos
-    switch (event.type) {
-      case 'account_converted':
-      case 'account_created':
-      case 'account_deleted':
-      case 'trading_config_created':
-        // Actualizar inmediatamente sin mostrar notificaciones
-        loadPendingAccounts();
-        loadMasterAccounts();
-        loadAccountStats();
-        break;
+      // Manejar diferentes tipos de eventos
+      switch (event.type) {
+        case 'account_converted':
+          // Actualizar inmediatamente cuando se convierte una cuenta
+          loadPendingAccounts();
+          loadMasterAccounts();
+          loadAccountStats();
 
-      case 'account_status_changed':
-        // Actualizar datos cuando cambie el estado de las cuentas
-        loadPendingAccounts();
-        loadMasterAccounts();
-        break;
-    }
-  });
+          // Mostrar notificación específica para conversiones
+          if (event.data && event.data.fromType && event.data.toType) {
+            toast({
+              title: 'Cuenta Convertida',
+              description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
+            });
+          }
+          break;
+
+        case 'account_created':
+        case 'account_deleted':
+        case 'trading_config_created':
+          // Actualizar inmediatamente sin mostrar notificaciones
+          loadPendingAccounts();
+          loadMasterAccounts();
+          loadAccountStats();
+          break;
+
+        case 'account_status_changed':
+          // Actualizar datos cuando cambie el estado de las cuentas
+          loadPendingAccounts();
+          loadMasterAccounts();
+          break;
+      }
+    },
+    [loadPendingAccounts, loadMasterAccounts, loadAccountStats]
+  );
+
+  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(handleEvent);
 
   // Load data on component mount
   useEffect(() => {
@@ -214,10 +237,10 @@ export const PendingAccountsManager: React.FC = () => {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [secretKey, isAuthenticated, isEventsConnected]); // Add isEventsConnected as dependency
+  }, [secretKey, isAuthenticated, isEventsConnected, loadPendingAccounts, loadAccountStats]); // Add isEventsConnected as dependency
 
   // Open conversion form inline or master confirmation
-  const openConversionForm = (account: PendingAccount, type: 'master' | 'slave') => {
+  const openConversionForm = async (account: PendingAccount, type: 'master' | 'slave') => {
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
@@ -228,6 +251,10 @@ export const PendingAccountsManager: React.FC = () => {
       setConfirmingMasterId(null);
       setConfirmingDeleteId(null);
       setExpandedAccountId(account.id);
+
+      // Refresh master accounts list to ensure we have the latest data
+      await loadMasterAccounts();
+
       setConversionForm({
         name: `Account ${account.id}`,
         description: '',
@@ -291,6 +318,8 @@ export const PendingAccountsManager: React.FC = () => {
       if (response.ok) {
         // Conversión exitosa - solo cerrar el modal sin mostrar mensaje
         setConfirmingMasterId(null);
+        // Refresh master accounts immediately to ensure the new master appears in dropdowns
+        await loadMasterAccounts();
         // Los eventos en tiempo real se encargarán de actualizar automáticamente
       } else {
         // Si falla, revertir la actualización optimista
@@ -357,7 +386,18 @@ export const PendingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        // Conversión exitosa - solo cerrar el formulario sin mostrar mensaje
+        // Conversión exitosa - mostrar mensaje de despliegue si está conectada a un master
+        if (conversionForm.masterAccountId && conversionForm.masterAccountId !== 'none') {
+          toast({
+            title: 'Slave Account Deployed',
+            description: `Pending account ${expandedAccountId} has been converted to slave and deployed under master ${conversionForm.masterAccountId}`,
+          });
+        } else {
+          toast({
+            title: 'Account Converted',
+            description: `Pending account ${expandedAccountId} has been converted to slave successfully`,
+          });
+        }
         setExpandedAccountId(null);
         // Los eventos en tiempo real se encargarán de actualizar automáticamente
       } else {
@@ -665,7 +705,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   className="bg-blue-50 h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
-                                  onClick={() => openConversionForm(account, 'master')}
+                                  onClick={async () => await openConversionForm(account, 'master')}
                                   title="Make Master"
                                   disabled={
                                     isConverting ||
@@ -679,7 +719,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   className="bg-green-50 h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-green-100"
-                                  onClick={() => openConversionForm(account, 'slave')}
+                                  onClick={async () => await openConversionForm(account, 'slave')}
                                   title="Make Slave"
                                   disabled={
                                     isConverting ||
@@ -725,26 +765,42 @@ export const PendingAccountsManager: React.FC = () => {
                             {/* First Row: Master Connection + Lot Multiplier */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {/* Master Connection Section */}
-                              {masterAccounts.length > 0 && (
-                                <div>
+                              <div>
+                                <div className="flex items-center justify-between">
                                   <Label htmlFor="convert-master">Connect to</Label>
-                                  <Select
-                                    value={conversionForm.masterAccountId}
-                                    onValueChange={value =>
-                                      setConversionForm(prev => ({
-                                        ...prev,
-                                        masterAccountId: value,
-                                      }))
-                                    }
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={loadMasterAccounts}
+                                    disabled={isRefreshingMasters}
+                                    className="h-6 px-2 text-xs"
                                   >
-                                    <SelectTrigger className="bg-white border border-gray-200">
-                                      <SelectValue placeholder="Select master..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-white border border-gray-200">
-                                      <SelectItem value="none">
-                                        Not connected (configure later)
-                                      </SelectItem>
-                                      {masterAccounts.map(master => (
+                                    {isRefreshingMasters ? (
+                                      <div className="w-3 h-3 border border-gray-300 border-t-blue-600 rounded-full animate-spin" />
+                                    ) : (
+                                      '↻'
+                                    )}
+                                  </Button>
+                                </div>
+                                <Select
+                                  value={conversionForm.masterAccountId}
+                                  onValueChange={value =>
+                                    setConversionForm(prev => ({
+                                      ...prev,
+                                      masterAccountId: value,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger className="bg-white border border-gray-200">
+                                    <SelectValue placeholder="Select master..." />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white border border-gray-200">
+                                    <SelectItem value="none">
+                                      Not connected (configure later)
+                                    </SelectItem>
+                                    {masterAccounts.length > 0 ? (
+                                      masterAccounts.map(master => (
                                         <SelectItem
                                           key={master.id}
                                           value={master.id}
@@ -752,14 +808,20 @@ export const PendingAccountsManager: React.FC = () => {
                                         >
                                           {master.name || master.id} ({master.platform})
                                         </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                    Set the master account to convert to
-                                  </p>
-                                </div>
-                              )}
+                                      ))
+                                    ) : (
+                                      <SelectItem value="none" disabled>
+                                        No master accounts available
+                                      </SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                  {masterAccounts.length === 0
+                                    ? 'No master accounts available. Convert a pending account to master first.'
+                                    : 'Set the master account to convert to'}
+                                </p>
+                              </div>
 
                               <div>
                                 <Label htmlFor="lotCoefficient">Lot Multiplier (0.01 - 100)</Label>

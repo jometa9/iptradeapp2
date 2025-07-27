@@ -27,9 +27,15 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
   const clientIdRef = useRef<string>(generateClientId());
   const pollingRef = useRef<AbortController | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onEventRef = useRef(onEvent);
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
+
+  // Update the ref when the callback changes
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
 
   // Registrar cliente
   const registerClient = useCallback(async () => {
@@ -103,8 +109,8 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
             setLastEventId(event.id);
 
             // Llamar al callback si está definido
-            if (onEvent) {
-              onEvent(event);
+            if (onEventRef.current) {
+              onEventRef.current(event);
             }
           }
         }
@@ -114,7 +120,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
         console.error('❌ Error polling events:', error);
       }
     }
-  }, [isConnected, lastEventId, baseUrl, onEvent]);
+  }, [isConnected, lastEventId, baseUrl]);
 
   // Long polling mejorado
   const startLongPolling = useCallback(async () => {
@@ -143,8 +149,8 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
 
           // Procesar eventos
           result.events.forEach(event => {
-            if (onEvent) {
-              onEvent(event);
+            if (onEventRef.current) {
+              onEventRef.current(event);
             }
             setLastEventId(event.id);
           });
@@ -164,7 +170,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
         timeoutRef.current = setTimeout(startLongPolling, 1000);
       }
     }
-  }, [baseUrl, isConnected, lastEventId, onEvent]);
+  }, [baseUrl, isConnected, lastEventId]);
 
   // Cleanup
   const cleanup = useCallback(() => {

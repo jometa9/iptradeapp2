@@ -50,6 +50,11 @@ const categories = {
     'test-load-config.cjs',
     'test-offline-never-enabled.cjs',
   ],
+  '🚀 Test Completo': [
+    'test-complete-server-functionality.js',
+    'cleanup-test-data.js',
+    'run-complete-test.js',
+  ],
   '🐛 Debug': ['debug-numbers.js', 'debug-offline-count.cjs'],
   '🛠️ Utilidad': [
     'simple-fix.js',
