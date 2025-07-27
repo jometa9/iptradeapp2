@@ -370,7 +370,8 @@ export function TradingAccountsConfig() {
 
         setAccounts(allAccounts);
 
-        // Only auto-expand masters that have connected slaves and don't have a collapse state defined yet
+        // Initialize collapsed state for masters that don't have a state defined yet
+        // All masters start collapsed by default - only user clicks can expand them
         const mastersWithSlaves = allAccounts.filter(
           acc =>
             acc.accountType === 'master' && acc.connectedSlaves && acc.connectedSlaves.length > 0
@@ -379,10 +380,9 @@ export function TradingAccountsConfig() {
         if (mastersWithSlaves.length > 0) {
           const newCollapsedMasters = { ...collapsedMastersRef.current };
           mastersWithSlaves.forEach(master => {
-            // Only expand if this master doesn't have a collapse state defined yet
-            // AND this is the first time loading accounts (not a refresh)
-            if (collapsedMastersRef.current[master.id] === undefined && showLoadingState) {
-              newCollapsedMasters[master.id] = false; // Expand masters with slaves
+            // Only initialize if this master doesn't have a collapse state defined yet
+            if (collapsedMastersRef.current[master.id] === undefined) {
+              newCollapsedMasters[master.id] = true; // Start collapsed by default
             }
           });
           setCollapsedMasters(newCollapsedMasters);
@@ -2206,7 +2206,7 @@ export function TradingAccountsConfig() {
                                 </Tooltip>
                               </div>
                             </td>
-                            <td className="w-32 px-4 py-2 align-middle">
+                            <td className="w-32 px-4 py-2 align-middle actions-column">
                               <div className="flex items-center justify-center">
                                 <Switch
                                   checked={getMasterEffectiveStatus(masterAccount.accountNumber)}
@@ -2386,7 +2386,7 @@ export function TradingAccountsConfig() {
                                     </Tooltip>
                                   </div>
                                 </td>
-                                <td className="w-32 px-4 py-1.5 align-middle">
+                                <td className="w-32 px-4 py-1.5 align-middle actions-column">
                                   <div className="flex items-center justify-center">
                                     <Switch
                                       checked={getSlaveEffectiveStatus(

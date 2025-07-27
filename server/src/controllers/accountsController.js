@@ -488,6 +488,13 @@ export const registerSlaveAccount = (req, res) => {
 // Connect slave to master account
 export const connectSlaveToMaster = (req, res) => {
   const { slaveAccountId, masterAccountId } = req.body;
+  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API Key required - use requireValidSubscription middleware',
+    });
+  }
 
   if (!slaveAccountId || !masterAccountId) {
     return res.status(400).json({
@@ -495,23 +502,24 @@ export const connectSlaveToMaster = (req, res) => {
     });
   }
 
-  const config = loadAccountsConfig();
+  // Get user-specific accounts
+  const userAccounts = getUserAccounts(apiKey);
 
-  if (!config.slaveAccounts[slaveAccountId]) {
+  if (!userAccounts.slaveAccounts[slaveAccountId]) {
     return res.status(404).json({
       error: `Slave account ${slaveAccountId} is not registered`,
     });
   }
 
-  if (!config.masterAccounts[masterAccountId]) {
+  if (!userAccounts.masterAccounts[masterAccountId]) {
     return res.status(404).json({
       error: `Master account ${masterAccountId} is not registered`,
     });
   }
 
-  config.connections[slaveAccountId] = masterAccountId;
+  userAccounts.connections[slaveAccountId] = masterAccountId;
 
-  if (saveAccountsConfig(config)) {
+  if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(`Connection established: ${slaveAccountId} -> ${masterAccountId}`);
     res.json({
       message: 'Accounts connected successfully',
@@ -527,23 +535,31 @@ export const connectSlaveToMaster = (req, res) => {
 // Disconnect slave from master
 export const disconnectSlave = (req, res) => {
   const { slaveAccountId } = req.params;
+  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
+
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'API Key required - use requireValidSubscription middleware',
+    });
+  }
 
   if (!slaveAccountId) {
     return res.status(400).json({ error: 'Slave account ID is required' });
   }
 
-  const config = loadAccountsConfig();
+  // Get user-specific accounts
+  const userAccounts = getUserAccounts(apiKey);
 
-  if (!config.slaveAccounts[slaveAccountId]) {
+  if (!userAccounts.slaveAccounts[slaveAccountId]) {
     return res.status(404).json({
       error: `Slave account ${slaveAccountId} is not registered`,
     });
   }
 
-  const previousConnection = config.connections[slaveAccountId];
-  delete config.connections[slaveAccountId];
+  const previousConnection = userAccounts.connections[slaveAccountId];
+  delete userAccounts.connections[slaveAccountId];
 
-  if (saveAccountsConfig(config)) {
+  if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(`Slave ${slaveAccountId} disconnected from ${previousConnection || 'unconnected'}`);
     res.json({
       message: 'Slave account disconnected successfully',
