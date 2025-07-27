@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API para abrir enlaces externos
   openExternalLink: url => ipcRenderer.invoke('open-external-link', url),
 
+  // API para cerrar la aplicación
+  quitApp: () => ipcRenderer.invoke('quit-app'),
+
   // Listeners para eventos de actualización
   onUpdateAvailable: callback => {
     ipcRenderer.on('update-available', (event, info) => callback(info));

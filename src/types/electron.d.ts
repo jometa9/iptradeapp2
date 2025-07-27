@@ -22,6 +22,8 @@ export interface ElectronAPI {
   downloadUpdate: () => Promise<void>;
   restartApp: () => Promise<void>;
   getAppVersion: () => Promise<string>;
+  openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
+  quitApp: () => Promise<void>;
   onUpdateAvailable: (callback: (info: UpdateInfo) => void) => void;
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => void;
@@ -39,6 +41,9 @@ declare global {
 
       // API para abrir enlaces externos
       openExternalLink: (url: string) => Promise<{ success: boolean; error?: string }>;
+
+      // API para cerrar la aplicación
+      quitApp: () => Promise<void>;
 
       // Listeners para eventos de actualización
       onUpdateAvailable: (callback: (info: any) => void) => void;

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -20,6 +20,7 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let serverInstance;
 let serverProcess; // Para el proceso del servidor en desarrollo
 let mainWindow;
+let tray = null;
 
 // Configuración del autoUpdater
 if (!isDev) {
@@ -103,6 +104,11 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('quit-app', () => {
+  app.isQuiting = true;
+  app.quit();
+});
+
 async function startServer() {
   try {
     console.log('[ELECTRON] Development mode:', isDev);
@@ -157,6 +163,138 @@ async function startServer() {
   }
 }
 
+async function createAdaptiveIcon() {
+  console.log('[TRAY] Creating template icon for macOS');
+
+  // Crear canvas de ultra alta resolución (64x64) y escalar a 16x16
+  const size = 64;
+  const canvas = require('canvas').createCanvas(size, size);
+  const ctx = canvas.getContext('2d');
+
+  // Habilitar suavizado para mejor calidad
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Crear un icono monocromático para template (solo negro)
+  // Fondo transparente
+  ctx.clearRect(0, 0, size, size);
+
+  // Solo texto "IP" en negro (se invertirá automáticamente)
+  ctx.fillStyle = '#000000';
+  ctx.font = 'bold 54px Arial'; // Fuente más grande ya que no hay borde
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('IP', size / 2, size / 2);
+
+  const buffer = canvas.toBuffer('image/png');
+  const icon = nativeImage.createFromBuffer(buffer);
+
+  // Redimensionar a 16x16 con alta calidad
+  const resizedIcon = icon.resize({ width: 16, height: 16, quality: 'best' });
+
+  // En macOS, marcar como template para adaptación automática
+  if (process.platform === 'darwin') {
+    resizedIcon.setTemplateImage(true);
+    console.log('[TRAY] Icon marked as template - will auto-adapt to theme');
+  }
+
+  console.log('[TRAY] Template icon created successfully');
+  return resizedIcon;
+}
+
+async function createTray() {
+  try {
+    console.log('[TRAY] Starting tray creation...');
+
+    // Crear un icono adaptativo
+    let icon;
+
+    if (process.platform === 'darwin') {
+      // En macOS, crear icono adaptativo
+      icon = await createAdaptiveIcon();
+      console.log('[TRAY] Created adaptive icon for macOS');
+    } else {
+      // En otros sistemas, usar el archivo de icono
+      const iconPath = path.join(__dirname, '../public/iconShadow025.png');
+      if (require('fs').existsSync(iconPath)) {
+        icon = nativeImage.createFromPath(iconPath);
+      } else {
+        console.error('[TRAY] Icon file does not exist:', iconPath);
+        return;
+      }
+    }
+
+    console.log('[TRAY] Creating tray with icon...');
+    console.log('[TRAY] Icon size:', icon.getSize());
+    console.log('[TRAY] Icon is template:', icon.isTemplateImage());
+
+    tray = new Tray(icon);
+    tray.setToolTip('IPTRADE');
+
+    console.log('[TRAY] Tray created successfully');
+
+    // Crear el menú del tray
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Mostrar IPTRADE',
+        click: () => {
+          console.log('[TRAY] Show IPTRADE clicked');
+          if (mainWindow) {
+            mainWindow.show();
+            mainWindow.focus();
+
+            // En macOS, mostrar el icono del dock cuando la ventana está visible
+            if (process.platform === 'darwin') {
+              app.dock.show();
+            }
+          }
+        },
+      },
+      {
+        label: 'Minimizar',
+        click: () => {
+          console.log('[TRAY] Minimize clicked');
+          if (mainWindow) {
+            mainWindow.hide();
+          }
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Salir',
+        click: () => {
+          console.log('[TRAY] Quit clicked');
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    console.log('[TRAY] Context menu set');
+
+    // Hacer clic en el icono del tray para mostrar la ventana
+    tray.on('click', () => {
+      console.log('[TRAY] Tray icon clicked');
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+
+        // En macOS, mostrar el icono del dock cuando la ventana está visible
+        if (process.platform === 'darwin') {
+          app.dock.show();
+        }
+      }
+    });
+
+    // En macOS, el icono se adapta automáticamente gracias a setTemplateImage(true)
+    // No necesitamos verificar cambios de tema manualmente
+
+    console.log('[TRAY] Tray setup completed');
+  } catch (error) {
+    console.error('[TRAY] Error creating tray:', error);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -181,6 +319,32 @@ function createWindow() {
     return { action: 'deny' };
   });
 
+  // Manejar el evento de cierre de ventana
+  mainWindow.on('close', event => {
+    if (!app.isQuiting) {
+      event.preventDefault();
+      mainWindow.hide();
+
+      // En macOS, ocultar el icono del dock cuando la ventana está oculta
+      if (process.platform === 'darwin') {
+        app.dock.hide();
+      }
+
+      return false;
+    }
+  });
+
+  // Manejar el evento de minimizar
+  mainWindow.on('minimize', event => {
+    event.preventDefault();
+    mainWindow.hide();
+
+    // En macOS, ocultar el icono del dock cuando la ventana está oculta
+    if (process.platform === 'darwin') {
+      app.dock.hide();
+    }
+  });
+
   if (isDev) {
     // Try to load from the correct port (Vite might use different ports)
     const devServerPort = process.env.VITE_PORT || 5174;
@@ -203,9 +367,14 @@ app.whenReady().then(async () => {
   app.setName('IPTRADE');
   createWindow();
 
+  console.log('[APP] Creating tray...');
+  await createTray();
+  console.log('[APP] Tray creation completed');
+
   // Configurar el icono del dock en macOS
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, '../public/iconShadow025.png'));
+    console.log('[APP] Dock icon set for macOS');
   }
 
   app.on('activate', function () {
@@ -225,5 +394,14 @@ app.on('window-all-closed', function () {
     serverProcess.kill();
   }
 
-  if (process.platform !== 'darwin') app.quit();
+  // No cerrar la app, solo ocultar la ventana
+  // if (process.platform !== 'darwin') app.quit();
+});
+
+// Manejar el evento before-quit para limpiar el tray
+app.on('before-quit', () => {
+  app.isQuiting = true;
+  if (tray) {
+    tray.destroy();
+  }
 });
