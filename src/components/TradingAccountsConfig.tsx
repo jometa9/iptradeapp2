@@ -2024,7 +2024,7 @@ export function TradingAccountsConfig() {
                       return (
                         <React.Fragment key={`master-group-${masterAccount.id}`}>
                           <tr
-                            className="bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                            className="bg-blue-50 cursor-pointer"
                             onClick={e => {
                               if (!(e.target as HTMLElement).closest('.actions-column')) {
                                 toggleMasterCollapse(masterAccount.id);
