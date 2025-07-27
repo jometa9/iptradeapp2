@@ -42,14 +42,14 @@ Los siguientes labels se muestran **solo si están configurados y activos**:
 
 Cada tipo de configuración tiene su propio color para fácil identificación:
 
-- **Verde** (`bg-green-100 text-green-800`): Multiplier
-- **Azul** (`bg-blue-100 text-blue-800`): Fixed Lot
-- **Púrpura** (`bg-purple-100 text-purple-800`): Reverse Trading
-- **Naranja** (`bg-orange-100 text-orange-800`): Max lot size
-- **Amarillo** (`bg-yellow-100 text-yellow-800`): Min lot size
-- **Índigo** (`bg-indigo-100 text-indigo-800`): Allowed symbols
-- **Rojo** (`bg-red-100 text-red-800`): Blocked symbols
-- **Teal** (`bg-teal-100 text-teal-800`): Trading hours
+- **Verde** (`bg-green-100 text-green-800 border-green-300`): Multiplier
+- **Azul** (`bg-blue-100 text-blue-800 border-blue-300`): Fixed Lot
+- **Púrpura** (`bg-purple-100 text-purple-800 border-purple-300`): Reverse Trading
+- **Naranja** (`bg-orange-100 text-orange-800 border-orange-300`): Max lot size
+- **Amarillo** (`bg-yellow-100 text-yellow-800 border-yellow-300`): Min lot size
+- **Índigo** (`bg-indigo-100 text-indigo-800 border-indigo-300`): Allowed symbols
+- **Rojo** (`bg-red-100 text-red-800 border-red-300`): Blocked symbols
+- **Teal** (`bg-teal-100 text-teal-800 border-teal-300`): Trading hours
 - **Sin color** - No se muestra nada cuando no hay configuraciones específicas
 
 ### 4. Lógica de Visualización

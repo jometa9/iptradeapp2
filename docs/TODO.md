@@ -22,6 +22,5 @@ legals
 que muestr acuanod quiero agregar una slave y tengo el free version
 
 - trading account configurarion
-- ✅ en configurations que se vea el settings de la slave
 - probar que copier ande bien y se comporte de una forma correcta
 - ui mejorar y cerrar

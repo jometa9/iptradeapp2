@@ -2442,7 +2442,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="forceLot"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
                                             >
                                               Fixed Lot {config.forceLot}
                                             </div>
@@ -2452,7 +2452,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="lotMultiplier"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
                                             >
                                               Multiplier {config.lotMultiplier}
                                             </div>
@@ -2464,7 +2464,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="reverseTrading"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
                                             >
                                               Reverse Trading
                                             </div>
@@ -2476,7 +2476,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="maxLotSize"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 border border-orange-400 inline-block"
                                             >
                                               Max {config.maxLotSize}
                                             </div>
@@ -2488,7 +2488,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="minLotSize"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 border border-yellow-400 inline-block"
                                             >
                                               Min {config.minLotSize}
                                             </div>
@@ -2503,7 +2503,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="allowedSymbols"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 border border-indigo-400 inline-block"
                                             >
                                               {config.allowedSymbols.length} symbols
                                             </div>
@@ -2517,7 +2517,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="blockedSymbols"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 border border-red-400 inline-block"
                                             >
                                               {config.blockedSymbols.length} blocked
                                             </div>
@@ -2529,7 +2529,7 @@ export function TradingAccountsConfig() {
                                           labels.push(
                                             <div
                                               key="tradingHours"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 inline-block"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 border border-teal-400 inline-block"
                                             >
                                               Hours
                                             </div>
