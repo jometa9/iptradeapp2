@@ -213,7 +213,7 @@ export const PendingAccountsManager: React.FC = () => {
     [loadPendingAccounts, loadMasterAccounts, loadAccountStats]
   );
 
-  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(handleEvent);
+  const { isConnected: isEventsConnected } = useRealTimeEvents(handleEvent);
 
   // Load data on component mount
   useEffect(() => {
@@ -226,7 +226,7 @@ export const PendingAccountsManager: React.FC = () => {
       loadData();
     }
 
-    // Polling de respaldo cada 10 segundos cuando los eventos no están conectados
+    // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
     // Los eventos en tiempo real manejan la mayoría de actualizaciones
     const interval = setInterval(() => {
       if (isAuthenticated && secretKey && !isEventsConnected) {
@@ -234,7 +234,7 @@ export const PendingAccountsManager: React.FC = () => {
         loadPendingAccounts();
         loadAccountStats();
       }
-    }, 10000);
+    }, 2000); // Reducido de 10 segundos a 2 segundos
 
     return () => clearInterval(interval);
   }, [secretKey, isAuthenticated, isEventsConnected, loadPendingAccounts, loadAccountStats]); // Add isEventsConnected as dependency
@@ -513,9 +513,7 @@ export const PendingAccountsManager: React.FC = () => {
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription className="text-sm text-gray-400 mt-2">
-                New accounts connected to the server will appear here for configuration
-              </CardDescription>
+           
             </div>
           </div>
         </CardHeader>

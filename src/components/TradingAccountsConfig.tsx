@@ -555,13 +555,13 @@ export function TradingAccountsConfig() {
 
   const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(handleEvent);
 
-  // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
+  // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
   useEffect(() => {
     fetchAccounts(true);
     fetchPendingAccountsCount();
     loadCopierData();
 
-    // Polling de respaldo cada 5 segundos cuando los eventos no están conectados
+    // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
     // Los eventos en tiempo real manejan la mayoría de actualizaciones
     const interval = setInterval(() => {
       if (!isEventsConnected) {
@@ -569,7 +569,7 @@ export function TradingAccountsConfig() {
         fetchAccounts(false);
         fetchPendingAccountsCount();
       }
-    }, 5000);
+    }, 2000); // Reducido de 5 segundos a 2 segundos
 
     return () => clearInterval(interval);
   }, [isEventsConnected]);

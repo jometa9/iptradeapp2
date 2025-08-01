@@ -143,5 +143,10 @@
     "lotMultiplier": 1,
     "forceLot": null,
     "reverseTrading": false
+  },
+  "PENDING_TV_005": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false
   }
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface SystemEvent {
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: string;
   id: string;
 }
@@ -116,7 +116,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
         }
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error instanceof Error && error.name !== 'AbortError') {
         console.error('❌ Error polling events:', error);
       }
     }
@@ -159,7 +159,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
         }
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error instanceof Error && error.name !== 'AbortError') {
         console.error('❌ Error en long polling:', error);
       }
     } finally {
@@ -199,10 +199,10 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
     // Polling inmediato al conectar
     pollForEvents();
 
-    // Polling cada 500ms para eventos en tiempo real
+    // Polling cada 200ms para eventos en tiempo real (más frecuente)
     const interval = setInterval(() => {
       pollForEvents();
-    }, 500);
+    }, 200); // Reducido de 500ms a 200ms para mayor responsividad
 
     return () => {
       clearInterval(interval);

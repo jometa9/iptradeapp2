@@ -263,11 +263,19 @@ async function createTray() {
       try {
         // Obtener el estado del copier desde el servidor
         const serverPort = process.env.VITE_SERVER_PORT || '30';
+        
+        // Agregar timeout para evitar que la petición se cuelgue
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+        
         const response = await fetch(`http://localhost:${serverPort}/api/copier/status`, {
           headers: {
             'x-api-key': process.env.API_KEY || 'iptrade_89536f5b9e643c0433f3',
           },
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
 
         let copierStatus = 'OFF';
         if (response.ok) {
@@ -311,7 +319,15 @@ async function createTray() {
         tray.setContextMenu(contextMenu);
         console.log(`[TRAY] Menu updated - Copier status: ${copierStatus}`);
       } catch (error) {
-        console.error('[TRAY] Error updating menu:', error);
+        console.error('[TRAY] Error updating menu:', error.message || error);
+        
+        // Log específico para errores de conexión
+        if (error.code === 'ECONNREFUSED') {
+          console.log('[TRAY] Server not ready yet, will retry on next interval');
+        } else if (error.name === 'AbortError') {
+          console.log('[TRAY] Request timeout, server may be starting up');
+        }
+        
         // En caso de error, usar estado por defecto
         const contextMenu = Menu.buildFromTemplate([
           {
@@ -347,8 +363,10 @@ async function createTray() {
       }
     };
 
-    // Actualizar el menú inicialmente
-    await updateTrayMenu();
+    // Actualizar el menú inicialmente con retraso para asegurar que el servidor esté listo
+    setTimeout(async () => {
+      await updateTrayMenu();
+    }, 5000); // Esperar 5 segundos para que el servidor esté completamente listo
 
     // Actualizar el menú cada 30 segundos para mantener el estado actualizado
     setInterval(updateTrayMenu, 30000);
