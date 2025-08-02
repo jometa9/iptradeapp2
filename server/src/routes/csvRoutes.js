@@ -1,6 +1,7 @@
 import express from 'express';
 
 import {
+  connectPlatforms,
   emergencyShutdown,
   getAllAccounts,
   getConnectivityStats,
@@ -403,6 +404,18 @@ router.post('/csv/run-install-script', requireValidSubscription, runInstallScrip
  *         description: Platform accounts scanned
  */
 router.post('/csv/scan-platform-accounts', requireValidSubscription, scanPlatformAccounts);
+
+/**
+ * @swagger
+ * /csv/connect-platforms:
+ *   post:
+ *     summary: Scan and connect all trading platforms
+ *     tags: [CSV]
+ *     responses:
+ *       200:
+ *         description: Platform connection scan completed
+ */
+router.post('/csv/connect-platforms', requireValidSubscription, connectPlatforms);
 
 /**
  * @swagger

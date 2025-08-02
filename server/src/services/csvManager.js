@@ -8,6 +8,7 @@ class CSVManager extends EventEmitter {
     super();
     this.csvFiles = new Map(); // Cache de archivos CSV encontrados
     this.watchers = new Map(); // File watchers
+    this.scanTimer = null; // Timer para escaneo periódico
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.init();
   }
@@ -20,6 +21,7 @@ class CSVManager extends EventEmitter {
 
     this.scanCSVFiles();
     this.startFileWatching();
+    this.startPeriodicScan();
   }
 
   // Escanear todos los archivos IPTRADECSV2.csv en el sistema
@@ -109,6 +111,48 @@ class CSVManager extends EventEmitter {
 
       this.watchers.set(filePath, watcher);
     });
+  }
+
+  // Iniciar escaneo periódico para detectar nuevos archivos CSV
+  startPeriodicScan() {
+    // Cargar configuración para obtener el intervalo
+    const configPath = join(process.cwd(), 'server', 'config', 'csv_locations.json');
+    let scanInterval = 30000; // 30 segundos por defecto
+
+    try {
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        if (config.autoScan && config.scanInterval) {
+          scanInterval = config.scanInterval;
+        } else if (!config.autoScan) {
+          console.log('🔍 Auto-scan is disabled in configuration');
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading CSV scan configuration:', error);
+    }
+
+    console.log(`🔄 Starting periodic CSV scan every ${scanInterval / 1000} seconds`);
+
+    this.scanTimer = setInterval(async () => {
+      console.log('🔍 Scanning for new CSV files...');
+      const previousCount = this.csvFiles.size;
+
+      await this.scanCSVFiles();
+
+      const newCount = this.csvFiles.size;
+      if (newCount > previousCount) {
+        const foundFiles = newCount - previousCount;
+        console.log(`📁 Found ${foundFiles} new CSV file(s)`);
+
+        // Iniciar watchers para los nuevos archivos
+        this.startFileWatching();
+
+        // Emitir evento de archivos actualizados
+        this.emit('newFilesDetected', Array.from(this.csvFiles.keys()));
+      }
+    }, scanInterval);
   }
 
   // Refrescar datos de un archivo específico
@@ -465,12 +509,22 @@ class CSVManager extends EventEmitter {
     this.writeConfig('RESET', config);
   }
 
-  // Limpiar watchers al cerrar
+  // Limpiar recursos (para testing o shutdown)
   cleanup() {
+    // Limpiar timer de escaneo periódico
+    if (this.scanTimer) {
+      clearInterval(this.scanTimer);
+      this.scanTimer = null;
+      console.log('🔄 Periodic CSV scan stopped');
+    }
+
+    // Cerrar watchers
     this.watchers.forEach(watcher => {
       watcher.close();
     });
     this.watchers.clear();
+
+    console.log('🧹 CSV Manager cleanup completed');
   }
 }
 

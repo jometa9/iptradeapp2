@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, LogOut, MessageCircle } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, LogOut, MessageCircle, RefreshCw, Zap } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
@@ -10,16 +10,21 @@ import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
 import { VersionInfo } from './VersionInfo';
 import { Button } from './ui/button';
+import { useToast } from './ui/use-toast';
 
 export const Dashboard: React.FC = () => {
-  const { logout, userInfo } = useAuth();
+  const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
+  const { toast } = useToast();
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
+  const [isConnectingPlatforms, setIsConnectingPlatforms] = useState<boolean>(false);
   // Estado para controlar si se acaba de iniciar sesión
   // isRecentLogin not used
   // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
+  
+  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -80,6 +85,73 @@ export const Dashboard: React.FC = () => {
     openExternalLink(urlCommunity);
   };
 
+  const handleConnectPlatforms = async () => {
+    if (!secretKey) {
+      toast({
+        title: 'Error',
+        description: 'Authentication required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsConnectingPlatforms(true);
+
+    try {
+      console.log('🔍 Starting platform connection...');
+      
+      const response = await fetch(`${baseUrl}/api/csv/connect-platforms`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': secretKey,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Platform connection result:', data);
+
+        // Mostrar resultado detallado
+        const platformsList = data.platforms.join(', ');
+        const summary = data.summary;
+
+        toast({
+          title: '🚀 Platform Scan Complete',
+          description: `Found ${summary.totalAccounts} accounts across ${summary.totalFiles} files. Platforms: ${platformsList}`,
+        });
+
+        // Si se encontraron nuevos archivos, mostrar mensaje adicional
+        if (summary.newFiles > 0) {
+          setTimeout(() => {
+            toast({
+              title: '📁 New Files Detected',
+              description: `${summary.newFiles} new CSV files are now being monitored`,
+            });
+          }, 2000);
+        }
+
+      } else {
+        const error = await response.json();
+        console.error('❌ Platform connection failed:', error);
+        
+        toast({
+          title: 'Connection Failed',
+          description: error.details || 'Failed to scan trading platforms',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('❌ Platform connection error:', error);
+      toast({
+        title: 'Connection Error',
+        description: 'Unable to connect to trading platforms',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConnectingPlatforms(false);
+    }
+  };
+
   return (
     <UpdateTestProvider>
       <div className="min-h-screen bg-gray-100">
@@ -115,6 +187,20 @@ export const Dashboard: React.FC = () => {
                     {userInfo?.name || 'User'}
                   </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  title="Connect Trading Platforms"
+                  onClick={handleConnectPlatforms}
+                  disabled={isConnectingPlatforms}
+                >
+                  {isConnectingPlatforms ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Zap className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

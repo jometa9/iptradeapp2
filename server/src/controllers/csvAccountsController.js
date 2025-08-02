@@ -161,6 +161,68 @@ export const scanCSVFiles = (req, res) => {
   }
 };
 
+// Conectar plataformas - Escaneo completo del sistema
+export const connectPlatforms = async (req, res) => {
+  try {
+    console.log('🔍 Starting platform connection scan...');
+    
+    const previousCount = csvManager.csvFiles.size;
+    console.log(`📊 Current CSV files: ${previousCount}`);
+    
+    // Forzar escaneo completo
+    const files = await csvManager.scanCSVFiles();
+    
+    const newCount = csvManager.csvFiles.size;
+    const foundFiles = newCount - previousCount;
+    
+    // Obtener estadísticas por plataforma
+    const platformStats = {};
+    const allAccounts = csvManager.getAllActiveAccounts();
+    
+    // Contar por plataforma
+    Object.values(allAccounts.masterAccounts).forEach(account => {
+      const platform = account.platform || 'Unknown';
+      platformStats[platform] = (platformStats[platform] || 0) + 1;
+    });
+    
+    allAccounts.unconnectedSlaves.forEach(account => {
+      const platform = account.platform || 'Unknown';
+      platformStats[platform] = (platformStats[platform] || 0) + 1;
+    });
+    
+    // Reiniciar watchers para nuevos archivos
+    if (foundFiles > 0) {
+      csvManager.startFileWatching();
+      console.log(`📁 Started watching ${foundFiles} new CSV file(s)`);
+    }
+
+    const response = {
+      success: true,
+      message: foundFiles > 0 
+        ? `Platform scan complete! Found ${foundFiles} new CSV file(s)` 
+        : 'Platform scan complete! No new files found',
+      summary: {
+        totalFiles: newCount,
+        newFiles: foundFiles,
+        totalAccounts: Object.keys(allAccounts.masterAccounts).length + allAccounts.unconnectedSlaves.length,
+        platformStats
+      },
+      platforms: Object.keys(platformStats).length > 0 ? Object.keys(platformStats) : ['No platforms detected']
+    };
+
+    console.log('✅ Platform connection scan completed:', response.summary);
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error connecting platforms:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to connect platforms',
+      details: error.message 
+    });
+  }
+};
+
 // Instalar bot en plataforma
 export const installBot = (req, res) => {
   try {
