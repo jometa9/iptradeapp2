@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useRealTimeEvents } from '../hooks/useRealTimeEvents';
+import { useCSVData } from '../hooks/useCSVData';
 import {
   canCreateMoreAccounts,
   canCustomizeLotSizes,
@@ -113,8 +113,6 @@ interface ApiResponse {
 
 export function TradingAccountsConfig() {
   const { toast: toastUtil } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const { userInfo, secretKey } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState<string | null>(null);
@@ -134,14 +132,87 @@ export function TradingAccountsConfig() {
   }, [collapsedMasters]);
   const [isLeaving, setIsLeaving] = useState(false);
 
-  // Copier status management
-  const [copierStatus, setCopierStatus] = useState<CopierStatus | null>(null);
-  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
-  const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
-  const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
-  const [pendingAccountsCount, setPendingAccountsCount] = useState<number>(0);
-  const [connectivityStats, setConnectivityStats] = useState<any>(null);
-  const [recentlyDeployedSlaves, setRecentlyDeployedSlaves] = useState<Set<string>>(new Set());
+  // Usar el hook unificado SSE
+  const {
+    copierStatus,
+    accounts: csvAccounts,
+    loading: isLoading,
+    error,
+    updateGlobalStatus,
+    updateMasterStatus,
+    updateSlaveConfig,
+    emergencyShutdown,
+    resetAllToOn,
+    scanCSVFiles,
+    refresh,
+  } = useCSVData();
+
+  // Convertir datos CSV a formato esperado
+  const accounts = React.useMemo(() => {
+    if (!csvAccounts) return [];
+
+    const allAccounts: TradingAccount[] = [];
+
+    // Agregar master accounts
+    Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]) => {
+      allAccounts.push({
+        id,
+        accountNumber: master.accountNumber || id,
+        platform: master.platform || 'Unknown',
+        server: master.server || '',
+        password: master.password || '',
+        accountType: 'master',
+        status: master.status || 'offline',
+        lotCoefficient: master.lotCoefficient || 1,
+        forceLot: master.forceLot || 0,
+        reverseTrade: master.reverseTrade || false,
+        connectedSlaves: master.connectedSlaves || [],
+        totalSlaves: master.totalSlaves || 0,
+        masterOnline: master.masterOnline || false,
+      });
+    });
+
+    // Agregar unconnected slaves
+    (csvAccounts.unconnectedSlaves || []).forEach((slave) => {
+      allAccounts.push({
+        id: slave.id,
+        accountNumber: slave.accountNumber || slave.id,
+        platform: slave.platform || 'Unknown',
+        server: slave.server || '',
+        password: slave.password || '',
+        accountType: 'slave',
+        status: slave.status || 'offline',
+        lotCoefficient: slave.lotCoefficient || 1,
+        forceLot: slave.forceLot || 0,
+        reverseTrade: slave.reverseTrade || false,
+      });
+    });
+
+    return allAccounts;
+  }, [csvAccounts]);
+
+  // Pending accounts count
+  const pendingAccountsCount = React.useMemo(() => {
+    return csvAccounts?.unconnectedSlaves?.length || 0;
+  }, [csvAccounts]);
+
+  // Connectivity stats (simulado desde datos CSV)
+  const connectivityStats = React.useMemo(() => {
+    if (!csvAccounts) return null;
+
+    const totalMasters = Object.keys(csvAccounts.masterAccounts || {}).length;
+    const totalSlaves = csvAccounts.unconnectedSlaves?.length || 0;
+    const onlineMasters = Object.values(csvAccounts.masterAccounts || {}).filter(
+      (master: any) => master.status === 'online'
+    ).length;
+
+    return {
+      total: totalMasters + totalSlaves,
+      online: onlineMasters,
+      pending: totalSlaves,
+      offline: totalMasters - onlineMasters,
+    };
+  }, [csvAccounts]);
 
   // Derived values for subscription limits
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
@@ -196,62 +267,15 @@ export function TradingAccountsConfig() {
 
   // Eliminado el useEffect que ocultaba la tarjeta automáticamente
 
-  // Fetch accounts from API
+  // Los datos se cargan automáticamente via SSE
   const fetchAccounts = useCallback(
     async (showLoadingState = false) => {
-      try {
-        if (showLoadingState) {
-          setIsLoading(true);
-        }
-
-        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-
-        // Fetch both accounts data and connectivity stats
-        const [accountsResponse, connectivityResponse] = await Promise.all([
-          fetch(`http://localhost:${serverPort}/api/accounts/all`, {
-            headers: {
-              'x-api-key': secretKey || '',
-            },
-          }),
-          fetch(`http://localhost:${serverPort}/api/accounts/connectivity`, {
-            headers: {
-              'x-api-key': secretKey || '',
-            },
-          }),
-        ]);
-
-        console.log('🔍 Response status:', {
-          accounts: accountsResponse.status,
-          connectivity: connectivityResponse.status,
-        });
-
-        if (!accountsResponse.ok) {
-          throw new Error('Failed to fetch trading accounts');
-        }
-
-        if (!connectivityResponse.ok) {
-          console.error(
-            '❌ Connectivity endpoint failed:',
-            connectivityResponse.status,
-            connectivityResponse.statusText
-          );
-          throw new Error('Failed to fetch connectivity statistics');
-        }
-
-        const data: ApiResponse = await accountsResponse.json();
-        const connectivityData = await connectivityResponse.json();
-
-        // Store connectivity stats for use in status calculations
-        setConnectivityStats(connectivityData.stats);
-
-        // Debug logs
-        console.log('🔍 Connectivity Data:', connectivityData);
-        console.log('📊 Connectivity Stats:', connectivityData.stats);
-        console.log('📈 Pending count from backend:', connectivityData.stats.pending);
-
-        // Create a map of account statuses from connectivity data
-        const accountStatusMap = new Map();
-        connectivityData.stats.connectivityDetails.forEach((detail: any) => {
+      // Los datos ya están disponibles via SSE
+      // No necesitamos hacer fetch manual
+      console.log('📊 Datos cargados automáticamente via SSE');
+    },
+    []
+  );((detail: any) => {
           accountStatusMap.set(detail.accountId, detail.status);
         });
 
@@ -444,12 +468,8 @@ export function TradingAccountsConfig() {
 
   // Polling adicional cada 3 segundos para asegurar actualizaciones rápidas
   useEffect(() => {
-    const quickInterval = setInterval(() => {
-      fetchAccounts(false);
-      fetchPendingAccountsCount();
-    }, 3000);
-
-    return () => clearInterval(quickInterval);
+    // Los datos se actualizan automáticamente via SSE
+    console.log('📊 Datos actualizados automáticamente via SSE - no se necesita polling');
   }, []);
 
   // Load copier status on component mount
@@ -464,115 +484,22 @@ export function TradingAccountsConfig() {
     }
   }, [accounts.length, accounts]);
 
-  // Load copier status and slave configurations
+  // Los datos de copier se cargan automáticamente via SSE
   const loadCopierData = useCallback(async () => {
-    try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      const baseUrl = `http://localhost:${serverPort}/api`;
+    // Los datos ya están disponibles via SSE
+    console.log('📊 Datos de copier cargados automáticamente via SSE');
+  }, []);
 
-      // Load copier status
-      const copierResponse = await fetch(`${baseUrl}/copier/status`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (copierResponse.ok) {
-        const copierData = await copierResponse.json();
-        setCopierStatus(copierData);
-      }
-
-      // Load slave configurations for all slave accounts
-      const slaveAccounts = accounts.filter(acc => acc.accountType === 'slave');
-      const slaveConfigPromises = slaveAccounts.map(async slave => {
-        try {
-          const response = await fetch(`${baseUrl}/slave-config/${slave.accountNumber}`, {
-            headers: {
-              'x-api-key': secretKey || '',
-            },
-          });
-          if (response.ok) {
-            const config = await response.json();
-            return { [slave.accountNumber]: config };
-          }
-        } catch (error) {
-          console.error(`Failed to load config for slave ${slave.accountNumber}:`, error);
-        }
-        return {};
-      });
-
-      const slaveConfigResults = await Promise.all(slaveConfigPromises);
-      const mergedSlaveConfigs = Object.assign({}, ...slaveConfigResults);
-      setSlaveConfigs(mergedSlaveConfigs);
-    } catch (error) {
-      console.error('Error loading copier data:', error);
-    }
-  }, [secretKey, accounts]);
-
-  // Real-time events system
-  const handleEvent = useCallback(
-    (event: any) => {
-      console.log('📨 Evento recibido:', event);
-
-      // Manejar diferentes tipos de eventos
-      switch (event.type) {
-        case 'account_converted':
-        case 'account_created':
-        case 'account_deleted':
-        case 'trading_config_created':
-          // Actualizar cuentas inmediatamente cuando hay cambios
-          fetchAccounts(false);
-          fetchPendingAccountsCount();
-          loadCopierData();
-
-          // Mostrar notificación
-          if (event.type === 'account_converted') {
-            toastUtil({
-              title: 'Cuenta Convertida',
-              description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
-            });
-          } else if (event.type === 'account_created') {
-            toastUtil({
-              title: 'Cuenta Creada',
-              description: `Nueva cuenta ${event.data.accountType}: ${event.data.accountId}`,
-            });
-          } else if (event.type === 'trading_config_created') {
-            toastUtil({
-              title: 'Configuración Creada',
-              description: `Configuración de trading creada para ${event.data.accountId}`,
-            });
-          }
-          break;
-
-        case 'account_status_changed':
-        case 'copier_status_changed':
-          // Actualizar datos de copier cuando cambie el estado
-          loadCopierData();
-          break;
-      }
-    },
-    [fetchAccounts, fetchPendingAccountsCount, loadCopierData]
-  );
-
-  const { isConnected: isEventsConnected, refresh: refreshEvents } = useRealTimeEvents(handleEvent);
-
-  // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
+  // Los datos se actualizan automáticamente via SSE
   useEffect(() => {
-    fetchAccounts(true);
-    fetchPendingAccountsCount();
-    loadCopierData();
-
-    // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
-    // Los eventos en tiempo real manejan la mayoría de actualizaciones
-    const interval = setInterval(() => {
-      if (!isEventsConnected) {
-        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
-        fetchAccounts(false);
-        fetchPendingAccountsCount();
-      }
-    }, 2000); // Reducido de 5 segundos a 2 segundos
-
-    return () => clearInterval(interval);
-  }, [isEventsConnected]);
+    if (error) {
+      toastUtil({
+        title: 'Error',
+        description: error,
+        variant: 'destructive',
+      });
+    }
+  }, [error]);
 
   // Toggle global copier status
   const toggleGlobalStatus = async (enabled: boolean) => {
@@ -721,30 +648,14 @@ export function TradingAccountsConfig() {
     setShowGlobalConfirm(false);
   };
 
-  // Toggle master account copier status
+  // Toggle master account copier status usando SSE
   const toggleMasterStatus = async (masterAccountId: string, enabled: boolean) => {
     try {
-      setUpdatingCopier(`master-${masterAccountId}`);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      const response = await fetch(`http://localhost:${serverPort}/api/copier/master`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ masterAccountId, enabled }),
+      await updateMasterStatus(masterAccountId, enabled);
+      toastUtil({
+        title: 'Success',
+        description: `Master ${masterAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toastUtil({
-          title: 'Success',
-          description: result.message,
-        });
-        loadCopierData(); // Reload copier data
-      } else {
-        throw new Error('Failed to update master copier status');
-      }
     } catch (error) {
       console.error('Error updating master status:', error);
       toastUtil({
@@ -752,34 +663,17 @@ export function TradingAccountsConfig() {
         description: 'Failed to update master copier status',
         variant: 'destructive',
       });
-    } finally {
-      setUpdatingCopier(null);
     }
   };
 
-  // Toggle slave account copier status
+  // Toggle slave account copier status usando SSE
   const toggleSlaveStatus = async (slaveAccountId: string, enabled: boolean) => {
     try {
-      setUpdatingCopier(`slave-${slaveAccountId}`);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      const response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ slaveAccountId, enabled }),
+      await updateSlaveConfig(slaveAccountId, enabled);
+      toastUtil({
+        title: 'Success',
+        description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
-
-      if (response.ok) {
-        toastUtil({
-          title: 'Success',
-          description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
-        });
-        loadCopierData(); // Reload copier data
-      } else {
-        throw new Error('Failed to update slave status');
-      }
     } catch (error) {
       console.error('Error updating slave status:', error);
       toastUtil({
@@ -787,8 +681,6 @@ export function TradingAccountsConfig() {
         description: 'Failed to update slave status',
         variant: 'destructive',
       });
-    } finally {
-      setUpdatingCopier(null);
     }
   };
 

@@ -1,0 +1,7 @@
+timestamp,account_id,account_type,status,action,data,master_id,platform
+2024-01-15T10:30:00Z,MASTER001,master,online,ping,{},,MT4
+2024-01-15T10:30:01Z,MASTER001,master,online,config,{"enabled":true,"type":"master","balance":5000.00},,MT4
+2024-01-15T10:30:02Z,MASTER001,master,online,order,{"symbol":"EURUSD","type":"BUY","lot":0.1,"price":1.0850,"ticket":123456},,MT4
+2024-01-15T10:30:03Z,MASTER001,master,online,order,{"symbol":"GBPUSD","type":"SELL","lot":0.05,"price":1.2650,"ticket":123457},,MT4
+2024-01-15T10:30:04Z,MASTER001,master,online,ping,{},,MT4
+2024-01-15T10:30:05Z,MASTER001,master,online,order,{"symbol":"EURUSD","type":"CLOSE","ticket":123456,"profit":15.50},,MT4

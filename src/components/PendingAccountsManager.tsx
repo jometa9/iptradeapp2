@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useRealTimeEvents } from '../hooks/useRealTimeEvents';
+import { useCSVData } from '../hooks/useCSVData';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
@@ -11,7 +11,7 @@ import {
 } from '../lib/subscriptionUtils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -53,10 +53,7 @@ interface ConversionForm {
 }
 
 export const PendingAccountsManager: React.FC = () => {
-  const [loading, setLoading] = useState(false);
   const { secretKey, userInfo, isAuthenticated } = useAuth();
-  const [pendingAccounts, setPendingAccounts] = useState<PendingAccountsData | null>(null);
-  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
@@ -73,12 +70,57 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  // Obtener total de cuentas (masters + slaves) para el usuario
-  const [totalAccounts, setTotalAccounts] = useState<number>(0);
-  const [accountLimit, setAccountLimit] = useState<number | null>(null);
+  // Usar el hook unificado SSE
+  const { accounts: csvAccounts, loading, error, scanCSVFiles, refresh } = useCSVData();
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-  const baseUrl = `http://localhost:${serverPort}/api`;
+  // Convertir datos CSV a formato esperado
+  const pendingAccounts = React.useMemo(() => {
+    if (!csvAccounts?.unconnectedSlaves) return null;
+
+    const pendingData: PendingAccountsData = {
+      pendingAccounts: {},
+      totalPending: csvAccounts.unconnectedSlaves.length,
+      message: `Found ${csvAccounts.unconnectedSlaves.length} pending accounts`,
+    };
+
+    csvAccounts.unconnectedSlaves.forEach(slave => {
+      pendingData.pendingAccounts[slave.id] = {
+        id: slave.id,
+        platform: slave.platform || null,
+        firstSeen: slave.firstSeen || new Date().toISOString(),
+        lastActivity: slave.lastActivity || new Date().toISOString(),
+        status: slave.status || 'pending',
+      };
+    });
+
+    return pendingData;
+  }, [csvAccounts]);
+
+  const masterAccounts = React.useMemo(() => {
+    if (!csvAccounts?.masterAccounts) return [];
+
+    return Object.entries(csvAccounts.masterAccounts).map(([id, master]) => ({
+      id,
+      name: master.name || id,
+      broker: master.broker || 'Unknown',
+      platform: master.platform || 'Unknown',
+      registeredAt: master.registeredAt || new Date().toISOString(),
+      status: master.status || 'offline',
+    }));
+  }, [csvAccounts]);
+
+  // Obtener total de cuentas (masters + slaves) para el usuario
+  const totalAccounts = React.useMemo(() => {
+    if (!csvAccounts) return 0;
+    return (
+      Object.keys(csvAccounts.masterAccounts || {}).length +
+      (csvAccounts.unconnectedSlaves || []).length
+    );
+  }, [csvAccounts]);
+
+  const accountLimit = React.useMemo(() => {
+    return userInfo ? getSubscriptionLimits(userInfo).maxAccounts : null;
+  }, [userInfo]);
 
   // Platform mapping function
   const getPlatformDisplayName = (platform: string | null | undefined): string => {
@@ -213,31 +255,16 @@ export const PendingAccountsManager: React.FC = () => {
     [loadPendingAccounts, loadMasterAccounts, loadAccountStats]
   );
 
-  const { isConnected: isEventsConnected } = useRealTimeEvents(handleEvent);
-
-  // Load data on component mount
+  // Los datos se cargan automáticamente via SSE
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([loadPendingAccounts(), loadMasterAccounts(), loadAccountStats()]);
-      setLoading(false);
-    };
-    if (isAuthenticated && secretKey) {
-      loadData();
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error,
+        variant: 'destructive',
+      });
     }
-
-    // Polling de respaldo cada 2 segundos cuando los eventos no están conectados
-    // Los eventos en tiempo real manejan la mayoría de actualizaciones
-    const interval = setInterval(() => {
-      if (isAuthenticated && secretKey && !isEventsConnected) {
-        console.log('⚠️ Eventos desconectados, usando polling de respaldo');
-        loadPendingAccounts();
-        loadAccountStats();
-      }
-    }, 2000); // Reducido de 10 segundos a 2 segundos
-
-    return () => clearInterval(interval);
-  }, [secretKey, isAuthenticated, isEventsConnected, loadPendingAccounts, loadAccountStats]); // Add isEventsConnected as dependency
+  }, [error]);
 
   // Open conversion form inline or master confirmation
   const openConversionForm = async (account: PendingAccount, type: 'master' | 'slave') => {
@@ -513,7 +540,6 @@ export const PendingAccountsManager: React.FC = () => {
                   </Badge>
                 )}
               </CardTitle>
-           
             </div>
           </div>
         </CardHeader>

@@ -1,0 +1,7 @@
+timestamp,account_id,account_type,status,action,data,master_id,platform
+2024-01-15T10:30:00Z,SLAVE002,slave,online,ping,{},,cTrader
+2024-01-15T10:30:01Z,SLAVE002,slave,online,config,{"enabled":false,"description":"Unconnected slave - no master assigned","lotMultiplier":1.0},,cTrader
+2024-01-15T10:30:02Z,SLAVE002,slave,online,ping,{},,cTrader
+2024-01-15T10:30:03Z,SLAVE002,slave,online,ping,{},,cTrader
+2024-01-15T10:30:04Z,SLAVE002,slave,online,ping,{},,cTrader
+2024-01-15T10:30:05Z,SLAVE002,slave,online,ping,{},,cTrader

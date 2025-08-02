@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Power, PowerOff, RefreshCw, Shield, ShieldOff } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useCSVData } from '../hooks/useCSVData';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -59,112 +60,43 @@ interface SlaveConfig {
 }
 
 export const CopierStatusControls: React.FC = () => {
-  const [copierStatus, setCopierStatus] = useState<CopierStatus | null>(null);
-  const [accounts, setAccounts] = useState<AccountsData | null>(null);
-  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
-  const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const { secretKey, isAuthenticated } = useAuth();
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-  const baseUrl = `http://localhost:${serverPort}/api`;
-
-  // Load all data
-  const loadData = async () => {
-    try {
-      setLoading(true);
-
-      // Load copier status
-      const copierResponse = await fetch(`${baseUrl}/copier/status`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (copierResponse.ok) {
-        const copierData = await copierResponse.json();
-        setCopierStatus(copierData);
-      }
-
-      // Load accounts
-      const accountsResponse = await fetch(`${baseUrl}/accounts/all`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (accountsResponse.ok) {
-        const accountsData = await accountsResponse.json();
-        setAccounts(accountsData);
-
-        // Load slave configurations for all slaves
-        const allSlaves = [
-          ...Object.values(accountsData.masterAccounts || {}).flatMap(
-            master => (master as AccountsData['masterAccounts'][string]).connectedSlaves || []
-          ),
-          ...(accountsData.unconnectedSlaves || []),
-        ];
-
-        const slaveConfigPromises = allSlaves.map(async slave => {
-          try {
-            const response = await fetch(`${baseUrl}/slave-config/${slave.id}`, {
-              headers: {
-                'x-api-key': secretKey || '',
-              },
-            });
-            if (response.ok) {
-              const config = await response.json();
-              return { [slave.id]: config };
-            }
-          } catch (error) {
-            console.error(`Failed to load config for slave ${slave.id}:`, error);
-          }
-          return {};
-        });
-
-        const slaveConfigResults = await Promise.all(slaveConfigPromises);
-        const mergedSlaveConfigs = Object.assign({}, ...slaveConfigResults);
-        setSlaveConfigs(mergedSlaveConfigs);
-      }
-    } catch (error) {
-      console.error('Error loading copier data:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load copier status',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Usar el hook unificado que maneja todo con SSE
+  const {
+    copierStatus,
+    accounts,
+    loading,
+    error,
+    updateGlobalStatus,
+    updateMasterStatus,
+    updateSlaveConfig,
+    emergencyShutdown,
+    resetAllToOn,
+    scanCSVFiles,
+    refresh,
+  } = useCSVData();
 
   useEffect(() => {
-    if (isAuthenticated && secretKey) {
-      loadData();
+    if (error) {
+      toast({
+        title: 'Error',
+        description: error,
+        variant: 'destructive',
+      });
     }
-  }, [secretKey, isAuthenticated]); // Add secretKey as dependency
+  }, [error]);
 
-  // Toggle global copier status
+  // Toggle global copier status using SSE
   const toggleGlobalStatus = async (enabled: boolean) => {
     try {
       setUpdating('global');
-      const response = await fetch(`${baseUrl}/copier/global`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ enabled }),
+      await updateGlobalStatus(enabled);
+      toast({
+        title: 'Success',
+        description: `Global copier ${enabled ? 'enabled' : 'disabled'}`,
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast({
-          title: 'Success',
-          description: result.message,
-        });
-        loadData(); // Reload to get updated status
-      } else {
-        throw new Error('Failed to update global copier status');
-      }
     } catch (error) {
       console.error('Error updating global status:', error);
       toast({
@@ -177,29 +109,15 @@ export const CopierStatusControls: React.FC = () => {
     }
   };
 
-  // Toggle master account status
+  // Toggle master account status using SSE
   const toggleMasterStatus = async (masterAccountId: string, enabled: boolean) => {
     try {
       setUpdating(`master-${masterAccountId}`);
-      const response = await fetch(`${baseUrl}/copier/master`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ masterAccountId, enabled }),
+      await updateMasterStatus(masterAccountId, enabled);
+      toast({
+        title: 'Success',
+        description: `Master ${masterAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast({
-          title: 'Success',
-          description: result.message,
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to update master copier status');
-      }
     } catch (error) {
       console.error('Error updating master status:', error);
       toast({
@@ -212,28 +130,15 @@ export const CopierStatusControls: React.FC = () => {
     }
   };
 
-  // Toggle slave account status
+  // Toggle slave account status using SSE
   const toggleSlaveStatus = async (slaveAccountId: string, enabled: boolean) => {
     try {
       setUpdating(`slave-${slaveAccountId}`);
-      const response = await fetch(`${baseUrl}/slave-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ slaveAccountId, enabled }),
+      await updateSlaveConfig(slaveAccountId, enabled);
+      toast({
+        title: 'Success',
+        description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
-
-      if (response.ok) {
-        toast({
-          title: 'Success',
-          description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to update slave status');
-      }
     } catch (error) {
       console.error('Error updating slave status:', error);
       toast({
@@ -246,33 +151,20 @@ export const CopierStatusControls: React.FC = () => {
     }
   };
 
-  // Emergency shutdown
-  const emergencyShutdown = async () => {
+  // Emergency shutdown using SSE
+  const handleEmergencyShutdown = async () => {
     if (!confirm('⚠️ EMERGENCY SHUTDOWN: This will turn OFF all copiers immediately. Continue?')) {
       return;
     }
 
     try {
       setUpdating('emergency');
-      const response = await fetch(`${baseUrl}/copier/emergency-shutdown`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
+      await emergencyShutdown();
+      toast({
+        title: 'Emergency Shutdown Executed',
+        description: 'All copiers disabled',
+        variant: 'destructive',
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast({
-          title: 'Emergency Shutdown Executed',
-          description: result.message,
-          variant: 'destructive',
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to execute emergency shutdown');
-      }
     } catch (error) {
       console.error('Error executing emergency shutdown:', error);
       toast({
@@ -285,32 +177,19 @@ export const CopierStatusControls: React.FC = () => {
     }
   };
 
-  // Reset all to ON
-  const resetAllToOn = async () => {
+  // Reset all to ON using SSE
+  const handleResetAllToOn = async () => {
     if (!confirm('Reset all copier statuses to ON?')) {
       return;
     }
 
     try {
       setUpdating('reset');
-      const response = await fetch(`${baseUrl}/copier/reset-all-on`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
+      await resetAllToOn();
+      toast({
+        title: 'Success',
+        description: 'All copier statuses reset to ON',
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        toast({
-          title: 'Success',
-          description: result.message,
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to reset all statuses');
-      }
     } catch (error) {
       console.error('Error resetting statuses:', error);
       toast({
@@ -320,6 +199,24 @@ export const CopierStatusControls: React.FC = () => {
       });
     } finally {
       setUpdating(null);
+    }
+  };
+
+  // Scan CSV files using SSE
+  const handleScanCSVFiles = async () => {
+    try {
+      await scanCSVFiles();
+      toast({
+        title: 'CSV Scan Complete',
+        description: 'CSV files scanned successfully',
+      });
+    } catch (error) {
+      console.error('Error scanning CSV files:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to scan CSV files',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -341,7 +238,7 @@ export const CopierStatusControls: React.FC = () => {
     return (
       <Card className="bg-white">
         <CardHeader>
-          <CardTitle>Copier Status Controls</CardTitle>
+          <CardTitle>Copier Status Controls (CSV Mode)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -360,17 +257,21 @@ export const CopierStatusControls: React.FC = () => {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5" />
-              Copier Status Controls
+              Copier Status Controls (CSV Mode)
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+              <Button variant="outline" size="sm" onClick={handleScanCSVFiles}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Scan CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh
               </Button>
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={emergencyShutdown}
+                onClick={handleEmergencyShutdown}
                 disabled={updating === 'emergency'}
               >
                 <ShieldOff className="w-4 h-4 mr-2" />
@@ -379,7 +280,7 @@ export const CopierStatusControls: React.FC = () => {
               <Button
                 variant="default"
                 size="sm"
-                onClick={resetAllToOn}
+                onClick={handleResetAllToOn}
                 disabled={updating === 'reset'}
               >
                 <Power className="w-4 h-4 mr-2" />
@@ -395,8 +296,10 @@ export const CopierStatusControls: React.FC = () => {
               <div className="flex items-center gap-3">
                 <Shield className="w-6 h-6 text-blue-600" />
                 <div>
-                  <h3 className="font-semibold text-blue-900">Global Copier Status</h3>
-                  <p className="text-sm text-blue-700">Master control for all copying operations</p>
+                  <h3 className="font-semibold text-blue-900">Global Copier Status (CSV)</h3>
+                  <p className="text-sm text-blue-700">
+                    Master control for all copying operations via CSV
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -419,7 +322,7 @@ export const CopierStatusControls: React.FC = () => {
           {/* Master Accounts */}
           {accounts && Object.keys(accounts.masterAccounts).length > 0 && (
             <div className="space-y-4">
-              <h4 className="font-semibold text-gray-900">Master Accounts</h4>
+              <h4 className="font-semibold text-gray-900">Master Accounts (from CSV)</h4>
               {Object.entries(accounts.masterAccounts).map(([masterId, master]) => {
                 const masterStatus = copierStatus?.masterAccounts[masterId];
                 const isUpdating = updating === `master-${masterId}`;
@@ -524,7 +427,7 @@ export const CopierStatusControls: React.FC = () => {
           {/* Unconnected Slaves */}
           {accounts && accounts.unconnectedSlaves.length > 0 && (
             <div className="space-y-4 mt-6">
-              <h4 className="font-semibold text-gray-900">Unconnected Slave Accounts</h4>
+              <h4 className="font-semibold text-gray-900">Unconnected Slave Accounts (from CSV)</h4>
               <div className="space-y-2">
                 {accounts.unconnectedSlaves.map(slave => {
                   const slaveConfig = slaveConfigs[slave.id];

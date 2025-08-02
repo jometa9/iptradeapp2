@@ -1,0 +1,7 @@
+timestamp,account_id,account_type,status,action,data,master_id,platform
+2024-01-15T10:30:00Z,SLAVE001,slave,online,ping,{},MASTER001,MT5
+2024-01-15T10:30:01Z,SLAVE001,slave,online,config,{"enabled":true,"description":"Slave connected to MASTER001","lotMultiplier":1.0},MASTER001,MT5
+2024-01-15T10:30:02Z,SLAVE001,slave,online,order,{"symbol":"EURUSD","type":"BUY","lot":0.1,"price":1.0850,"ticket":654321,"masterTicket":123456},MASTER001,MT5
+2024-01-15T10:30:03Z,SLAVE001,slave,online,order,{"symbol":"GBPUSD","type":"SELL","lot":0.05,"price":1.2650,"ticket":654322,"masterTicket":123457},MASTER001,MT5
+2024-01-15T10:30:04Z,SLAVE001,slave,online,ping,{},MASTER001,MT5
+2024-01-15T10:30:05Z,SLAVE001,slave,online,order,{"symbol":"EURUSD","type":"CLOSE","ticket":654321,"profit":15.50,"masterTicket":123456},MASTER001,MT5

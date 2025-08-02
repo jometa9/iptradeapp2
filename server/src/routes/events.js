@@ -80,7 +80,7 @@ router.post('/unregister', (req, res) => {
  * @swagger
  * /events/poll:
  *   get:
- *     summary: Poll for new events (long polling)
+ *     summary: Poll for new events (DEPRECATED - Use SSE instead)
  *     tags: [Events]
  *     parameters:
  *       - in: query
@@ -104,66 +104,10 @@ router.post('/unregister', (req, res) => {
  *         description: Events retrieved
  */
 router.get('/poll', (req, res) => {
-  const { clientId, lastEventId, timeout = 15000 } = req.query;
-
-  if (!clientId) {
-    return res.status(400).json({ error: 'clientId is required' });
-  }
-
-  // Función para devolver eventos
-  const returnEvents = () => {
-    const events = getClientEvents(clientId, lastEventId);
-    res.json({
-      events,
-      hasEvents: events.length > 0,
-      clientId,
-      status: 'success',
-    });
-  };
-
-  // Verificar si hay eventos inmediatamente
-  const immediateEvents = getClientEvents(clientId, lastEventId);
-  if (immediateEvents.length > 0) {
-    return returnEvents();
-  }
-
-  // Long polling: esperar hasta que haya eventos o timeout
-  let pollingTimeout;
-  let eventListener;
-
-  const cleanup = () => {
-    if (pollingTimeout) clearTimeout(pollingTimeout);
-    if (eventListener) {
-      // En una implementación real, removerías el listener aquí
-      // Por simplicidad, usaremos timeout
-    }
-  };
-
-  // Configurar timeout
-  pollingTimeout = setTimeout(() => {
-    cleanup();
-    returnEvents(); // Devolver eventos vacíos después del timeout
-  }, parseInt(timeout));
-
-  // Verificar eventos cada 500ms durante el long polling
-  const checkInterval = setInterval(() => {
-    const events = getClientEvents(clientId, lastEventId);
-    if (events.length > 0) {
-      cleanup();
-      clearInterval(checkInterval);
-      returnEvents();
-    }
-  }, 500);
-
-  // Limpiar interval cuando termine el timeout
-  setTimeout(() => {
-    clearInterval(checkInterval);
-  }, parseInt(timeout));
-
-  // Manejar desconexión del cliente
-  req.on('close', () => {
-    cleanup();
-    clearInterval(checkInterval);
+  // DEPRECATED: Use SSE endpoint /csv/events instead
+  res.status(410).json({
+    error: 'This endpoint is deprecated. Use /csv/events for Server-Sent Events instead.',
+    message: 'Use SSE endpoint for real-time updates',
   });
 });
 
