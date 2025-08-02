@@ -67,43 +67,129 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
   };
 
   // Escuchar cambios en CSV files
-  const csvManager = require('../services/csvManager.js').default;
+  import('../services/csvManager.js')
+    .then(({ default: csvManager }) => {
+      const handleCSVUpdate = (filePath, data) => {
+        // Cuando un archivo CSV se actualiza, enviar datos procesados
+        const updatedData = {
+          type: 'csv_updated',
+          filePath,
+          timestamp: new Date().toISOString(),
+          ...processDataForFrontend({
+            copierStatus: csvManager.getCopierStatus(),
+            accounts: csvManager.getAllActiveAccounts(),
+          }),
+        };
 
-  const handleCSVUpdate = (filePath, data) => {
-    // Cuando un archivo CSV se actualiza, enviar datos procesados
-    const updatedData = {
-      type: 'csv_updated',
-      filePath,
-      timestamp: new Date().toISOString(),
-      ...processDataForFrontend({
-        copierStatus: csvManager.getCopierStatus(),
-        accounts: csvManager.getAllActiveAccounts(),
-      }),
-    };
+        sendUpdate(updatedData);
+      };
 
-    sendUpdate(updatedData);
-  };
+      // Agregar listener al CSV Manager
+      csvManager.on('fileUpdated', handleCSVUpdate);
 
-  // Agregar listener al CSV Manager
-  csvManager.on('fileUpdated', handleCSVUpdate);
+      // Enviar datos iniciales en formato correcto para el frontend
+      const initialData = {
+        type: 'initial_data',
+        timestamp: new Date().toISOString(),
+        ...processDataForFrontend({
+          copierStatus: csvManager.getCopierStatus(),
+          accounts: csvManager.getAllActiveAccounts(),
+        }),
+      };
 
-  // Enviar datos iniciales en formato correcto para el frontend
-  const initialData = {
-    type: 'initial_data',
-    timestamp: new Date().toISOString(),
-    ...processDataForFrontend({
-      copierStatus: csvManager.getCopierStatus(),
-      accounts: csvManager.getAllActiveAccounts(),
-    }),
-  };
+      sendUpdate(initialData);
 
-  sendUpdate(initialData);
+      // Cleanup cuando el cliente se desconecta
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        csvManager.off('fileUpdated', handleCSVUpdate);
+      });
+    })
+    .catch(error => {
+      console.error('Error importing csvManager:', error);
+    });
+});
 
-  // Cleanup cuando el cliente se desconecta
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    csvManager.off('fileUpdated', handleCSVUpdate);
+// Server-Sent Events para frontend (sin autenticación)
+router.get('/csv/events/frontend', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control',
   });
+
+  // Enviar heartbeat cada 30 segundos
+  const heartbeat = setInterval(() => {
+    res.write(
+      `data: ${JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() })}\n\n`
+    );
+  }, 30000);
+
+  // Función para procesar datos en formato correcto para el frontend
+  const processDataForFrontend = rawData => {
+    return {
+      copierStatus: {
+        globalStatus: rawData.copierStatus?.globalStatus || false,
+        globalStatusText: rawData.copierStatus?.globalStatusText || 'OFF',
+        masterAccounts: rawData.copierStatus?.masterAccounts || {},
+        totalMasterAccounts: rawData.copierStatus?.totalMasterAccounts || 0,
+      },
+      accounts: {
+        masterAccounts: rawData.accounts?.masterAccounts || {},
+        unconnectedSlaves: rawData.accounts?.unconnectedSlaves || [],
+      },
+    };
+  };
+
+  // Función para enviar actualizaciones
+  const sendUpdate = data => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Escuchar cambios en CSV files
+  import('../services/csvManager.js')
+    .then(({ default: csvManager }) => {
+      const handleCSVUpdate = (filePath, data) => {
+        // Cuando un archivo CSV se actualiza, enviar datos procesados
+        const updatedData = {
+          type: 'csv_updated',
+          filePath,
+          timestamp: new Date().toISOString(),
+          ...processDataForFrontend({
+            copierStatus: csvManager.getCopierStatus(),
+            accounts: csvManager.getAllActiveAccounts(),
+          }),
+        };
+
+        sendUpdate(updatedData);
+      };
+
+      // Agregar listener al CSV Manager
+      csvManager.on('fileUpdated', handleCSVUpdate);
+
+      // Enviar datos iniciales en formato correcto para el frontend
+      const initialData = {
+        type: 'initial_data',
+        timestamp: new Date().toISOString(),
+        ...processDataForFrontend({
+          copierStatus: csvManager.getCopierStatus(),
+          accounts: csvManager.getAllActiveAccounts(),
+        }),
+      };
+
+      sendUpdate(initialData);
+
+      // Cleanup cuando el cliente se desconecta
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        csvManager.off('fileUpdated', handleCSVUpdate);
+      });
+    })
+    .catch(error => {
+      console.error('Error importing csvManager:', error);
+    });
 });
 
 /**

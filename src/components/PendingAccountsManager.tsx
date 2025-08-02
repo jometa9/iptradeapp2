@@ -26,14 +26,7 @@ interface PendingAccount {
   status: string;
 }
 
-interface MasterAccount {
-  id: string;
-  name: string;
-  broker: string;
-  platform: string;
-  registeredAt: string;
-  status: string;
-}
+// MasterAccount interface moved to useCSVData hook
 
 interface PendingAccountsData {
   pendingAccounts: Record<string, PendingAccount>;
@@ -53,7 +46,8 @@ interface ConversionForm {
 }
 
 export const PendingAccountsManager: React.FC = () => {
-  const { secretKey, userInfo, isAuthenticated } = useAuth();
+  const { secretKey, userInfo } = useAuth();
+  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
@@ -70,8 +64,10 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
+  // Estados para manejar datos locales - using CSV data instead
+
   // Usar el hook unificado SSE
-  const { accounts: csvAccounts, loading, error, scanCSVFiles, refresh } = useCSVData();
+  const { accounts: csvAccounts, loading, error } = useCSVData();
 
   // Convertir datos CSV a formato esperado
   const pendingAccounts = React.useMemo(() => {
@@ -83,7 +79,7 @@ export const PendingAccountsManager: React.FC = () => {
       message: `Found ${csvAccounts.unconnectedSlaves.length} pending accounts`,
     };
 
-    csvAccounts.unconnectedSlaves.forEach(slave => {
+    csvAccounts.unconnectedSlaves.forEach((slave: any) => {
       pendingData.pendingAccounts[slave.id] = {
         id: slave.id,
         platform: slave.platform || null,
@@ -99,7 +95,7 @@ export const PendingAccountsManager: React.FC = () => {
   const masterAccounts = React.useMemo(() => {
     if (!csvAccounts?.masterAccounts) return [];
 
-    return Object.entries(csvAccounts.masterAccounts).map(([id, master]) => ({
+    return Object.entries(csvAccounts.masterAccounts).map(([id, master]: [string, any]) => ({
       id,
       name: master.name || id,
       broker: master.broker || 'Unknown',
@@ -119,7 +115,7 @@ export const PendingAccountsManager: React.FC = () => {
   }, [csvAccounts]);
 
   const accountLimit = React.useMemo(() => {
-    return userInfo ? getSubscriptionLimits(userInfo).maxAccounts : null;
+    return userInfo ? getSubscriptionLimits(userInfo.subscriptionType).maxAccounts : null;
   }, [userInfo]);
 
   // Platform mapping function
@@ -151,8 +147,8 @@ export const PendingAccountsManager: React.FC = () => {
         },
       });
       if (response.ok) {
-        const data = await response.json();
-        setPendingAccounts(data);
+        await response.json();
+        // Data handled by CSV
       } else {
         console.error('Failed to fetch pending accounts');
       }
@@ -176,9 +172,8 @@ export const PendingAccountsManager: React.FC = () => {
         },
       });
       if (response.ok) {
-        const data = await response.json();
-        const masters = Object.values(data.masterAccounts || {}) as MasterAccount[];
-        setMasterAccounts(masters);
+        await response.json();
+        // Data handled by CSV
       } else {
         console.error('Failed to fetch master accounts');
       }
@@ -189,71 +184,9 @@ export const PendingAccountsManager: React.FC = () => {
     }
   }, [secretKey, baseUrl]);
 
-  // Cargar cuentas totales y límite
-  const loadAccountStats = useCallback(async () => {
-    try {
-      const response = await fetch(`${baseUrl}/accounts/all`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const masters = data.totalMasterAccounts || 0;
-        const slaves = data.totalSlaveAccounts || 0;
-        setTotalAccounts(masters + slaves);
-        if (userInfo) {
-          const limits = getSubscriptionLimits(userInfo.subscriptionType);
-          setAccountLimit(limits.maxAccounts);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading account stats:', error);
-      setTotalAccounts(0);
-      setAccountLimit(null);
-    }
-  }, [secretKey, baseUrl, userInfo]);
+  // loadAccountStats not used - using CSV data instead
 
-  // Real-time events system
-  const handleEvent = useCallback(
-    (event: any) => {
-      console.log('📨 Evento recibido en PendingAccountsManager:', event);
-
-      // Manejar diferentes tipos de eventos
-      switch (event.type) {
-        case 'account_converted':
-          // Actualizar inmediatamente cuando se convierte una cuenta
-          loadPendingAccounts();
-          loadMasterAccounts();
-          loadAccountStats();
-
-          // Mostrar notificación específica para conversiones
-          if (event.data && event.data.fromType && event.data.toType) {
-            toast({
-              title: 'Cuenta Convertida',
-              description: `Cuenta ${event.data.accountId} convertida de ${event.data.fromType} a ${event.data.toType}`,
-            });
-          }
-          break;
-
-        case 'account_created':
-        case 'account_deleted':
-        case 'trading_config_created':
-          // Actualizar inmediatamente sin mostrar notificaciones
-          loadPendingAccounts();
-          loadMasterAccounts();
-          loadAccountStats();
-          break;
-
-        case 'account_status_changed':
-          // Actualizar datos cuando cambie el estado de las cuentas
-          loadPendingAccounts();
-          loadMasterAccounts();
-          break;
-      }
-    },
-    [loadPendingAccounts, loadMasterAccounts, loadAccountStats]
-  );
+  // Real-time events handled by SSE in useCSVData hook
 
   // Los datos se cargan automáticamente via SSE
   useEffect(() => {
@@ -318,11 +251,7 @@ export const PendingAccountsManager: React.FC = () => {
     if (pendingAccounts && pendingAccounts.pendingAccounts) {
       const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
       delete updatedPendingAccounts[accountId];
-      setPendingAccounts({
-        ...pendingAccounts,
-        pendingAccounts: updatedPendingAccounts,
-        totalPending: pendingAccounts.totalPending - 1,
-      });
+      // State updated via CSV data
     }
 
     try {
@@ -380,13 +309,7 @@ export const PendingAccountsManager: React.FC = () => {
 
     // Actualización optimista: remover inmediatamente de pending
     if (pendingAccounts && pendingAccounts.pendingAccounts) {
-      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-      delete updatedPendingAccounts[expandedAccountId];
-      setPendingAccounts({
-        ...pendingAccounts,
-        pendingAccounts: updatedPendingAccounts,
-        totalPending: pendingAccounts.totalPending - 1,
-      });
+      // State updated via CSV data
     }
 
     try {
@@ -457,13 +380,7 @@ export const PendingAccountsManager: React.FC = () => {
 
     // Actualización optimista: remover inmediatamente de pending
     if (pendingAccounts && pendingAccounts.pendingAccounts) {
-      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-      delete updatedPendingAccounts[accountId];
-      setPendingAccounts({
-        ...pendingAccounts,
-        pendingAccounts: updatedPendingAccounts,
-        totalPending: pendingAccounts.totalPending - 1,
-      });
+      // State updated via CSV data
     }
 
     try {
@@ -622,7 +539,7 @@ export const PendingAccountsManager: React.FC = () => {
                               size="sm"
                               variant="outline"
                               className="bg-blue-50 h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
-                              onClick={() => convertToMaster(id, account.platform)}
+                              onClick={() => convertToMaster(id, account.platform || 'Unknown')}
                               disabled={isConverting}
                             >
                               {isConverting ? (

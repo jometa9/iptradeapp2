@@ -1,14 +1,16 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
-import { join } from 'path';
 import { existsSync } from 'fs';
+import { join } from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
 import copierStatusRoutes from './routes/copierStatus.js';
+import csvRoutes from './routes/csvRoutes.js';
 // import ctraderRoutes from './routes/ctrader.js';
+import eventRoutes from './routes/events.js';
 import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
@@ -47,6 +49,8 @@ export function createServer() {
   app.use('/api', configRoutes);
   app.use('/api', tradingConfigRoutes);
   app.use('/api', copierStatusRoutes);
+  app.use('/api', csvRoutes);
+  app.use('/api', eventRoutes);
   app.use('/api/accounts', accountsRoutes);
   app.use('/api/slave-config', slaveConfigRoutes);
   // app.use('/api/ctrader', ctraderRoutes);

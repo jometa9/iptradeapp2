@@ -58,7 +58,7 @@ export const PlatformLinker: React.FC = () => {
   const [platforms, setPlatforms] = useState<Platform[]>(SUPPORTED_PLATFORMS);
   const [installing, setInstalling] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
-  const { secretKey, isAuthenticated } = useAuth();
+  const { secretKey } = useAuth();
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
@@ -168,7 +168,7 @@ export const PlatformLinker: React.FC = () => {
 
         toast({
           title: 'Platform Scan Complete',
-          description: `Found ${Object.values(result.accounts).reduce((a, b) => a + b, 0)} total accounts`,
+          description: `Found ${Object.values(result.accounts).length} total accounts`,
         });
       } else {
         throw new Error('Failed to scan platform accounts');

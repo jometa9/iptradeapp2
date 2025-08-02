@@ -34,7 +34,7 @@ export const useUpdater = () => {
 
     try {
       setState(prev => ({ ...prev, error: null }));
-      await window.electronAPI.checkForUpdates();
+      await window.electronAPI?.checkForUpdates();
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -48,7 +48,7 @@ export const useUpdater = () => {
 
     try {
       setState(prev => ({ ...prev, error: null, isDownloading: true }));
-      await window.electronAPI.downloadUpdate();
+      await window.electronAPI?.downloadUpdate();
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -62,7 +62,7 @@ export const useUpdater = () => {
     if (!isElectron || !isProduction) return;
 
     try {
-      await window.electronAPI.restartApp();
+      await window.electronAPI?.restartApp();
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -75,8 +75,8 @@ export const useUpdater = () => {
     if (!isElectron) return;
 
     try {
-      const version = await window.electronAPI.getAppVersion();
-      setState(prev => ({ ...prev, currentVersion: version }));
+      const version = await window.electronAPI?.getAppVersion();
+      setState(prev => ({ ...prev, currentVersion: version ?? null }));
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -92,7 +92,7 @@ export const useUpdater = () => {
 
     if (!isProduction) return;
 
-    window.electronAPI.onUpdateAvailable((info: UpdateInfo) => {
+    window.electronAPI?.onUpdateAvailable((info: UpdateInfo) => {
       setState(prev => ({
         ...prev,
         isUpdateAvailable: true,
@@ -101,7 +101,7 @@ export const useUpdater = () => {
       }));
     });
 
-    window.electronAPI.onDownloadProgress((progress: DownloadProgress) => {
+    window.electronAPI?.onDownloadProgress((progress: DownloadProgress) => {
       setState(prev => ({
         ...prev,
         downloadProgress: progress.percent,
@@ -111,7 +111,7 @@ export const useUpdater = () => {
       }));
     });
 
-    window.electronAPI.onUpdateDownloaded((info: UpdateInfo) => {
+    window.electronAPI?.onUpdateDownloaded((info: UpdateInfo) => {
       setState(prev => ({
         ...prev,
         isDownloading: false,
@@ -122,9 +122,9 @@ export const useUpdater = () => {
     });
 
     return () => {
-      window.electronAPI.removeAllListeners('update-available');
-      window.electronAPI.removeAllListeners('download-progress');
-      window.electronAPI.removeAllListeners('update-downloaded');
+      window.electronAPI?.removeAllListeners('update-available');
+      window.electronAPI?.removeAllListeners('download-progress');
+      window.electronAPI?.removeAllListeners('update-downloaded');
     };
   }, [isElectron, isProduction, getCurrentVersion]);
 

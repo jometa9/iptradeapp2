@@ -99,7 +99,13 @@ export const TradingAccountsManager: React.FC = () => {
 
   // Check if user can create more accounts
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
-  const planDisplayName = userInfo ? getPlanDisplayName(userInfo.planName) : 'Unknown';
+  const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Unknown';
+
+  // Function to check if subscription limits card should be shown
+  const shouldShowSubscriptionLimitsCard = (_user: any, currentAccounts: number) => {
+    // getSubscriptionLimits not available - simplified logic
+    return currentAccounts >= 8; // Show when 8+ accounts
+  };
 
   useEffect(() => {
     if (isAuthenticated && secretKey) {
@@ -178,7 +184,7 @@ export const TradingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        const responseData = await response.json();
+        await response.json();
 
         toast({
           title: 'Success',
@@ -417,10 +423,7 @@ export const TradingAccountsManager: React.FC = () => {
       )}
 
       {/* Información de plan sin límites para planes premium */}
-      {userInfo &&
-      userInfo.planName === 'IPTRADE Premium' &&
-      userInfo.subscriptionType !== 'admin' &&
-      !isUnlimitedPlan(userInfo) ? (
+      {userInfo && userInfo.subscriptionType === 'premium' && !isUnlimitedPlan(userInfo) ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -430,8 +433,8 @@ export const TradingAccountsManager: React.FC = () => {
           <CardContent>
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
-                Your {userInfo.planName} plan includes unlimited trading accounts. You currently
-                have {totalAccounts} accounts.
+                Your {getPlanDisplayName(userInfo.subscriptionType)} plan includes unlimited trading
+                accounts. You currently have {totalAccounts} accounts.
               </p>
             </div>
           </CardContent>

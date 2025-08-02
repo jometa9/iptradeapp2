@@ -63,17 +63,9 @@ interface TradingAccount {
   masterOnline?: boolean;
 }
 
-interface MasterAccountStatus {
-  masterStatus: boolean;
-  effectiveStatus: boolean;
-  status: string;
-}
+// MasterAccountStatus interface moved to useCSVData hook
 
-interface CopierStatus {
-  globalStatus: boolean;
-  globalStatusText: string;
-  masterAccounts: Record<string, MasterAccountStatus>;
-}
+// CopierStatus interface moved to useCSVData hook
 
 interface SlaveConfig {
   config: {
@@ -97,20 +89,6 @@ interface SlaveConfig {
   };
 }
 
-interface ApiAccountData {
-  id: string;
-  platform?: string;
-  broker?: string;
-  status?: string;
-  connectedSlaves?: ApiAccountData[];
-  totalSlaves?: number;
-}
-
-interface ApiResponse {
-  masterAccounts?: Record<string, ApiAccountData>;
-  unconnectedSlaves?: ApiAccountData[];
-}
-
 export function TradingAccountsConfig() {
   const { toast: toastUtil } = useToast();
   const { userInfo, secretKey } = useAuth();
@@ -130,7 +108,10 @@ export function TradingAccountsConfig() {
   useEffect(() => {
     collapsedMastersRef.current = collapsedMasters;
   }, [collapsedMasters]);
-  const [isLeaving, setIsLeaving] = useState(false);
+  const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
+  const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
+  const [recentlyDeployedSlaves, setRecentlyDeployedSlaves] = useState<Set<string>>(new Set());
+  const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
 
   // Usar el hook unificado SSE
   const {
@@ -138,13 +119,8 @@ export function TradingAccountsConfig() {
     accounts: csvAccounts,
     loading: isLoading,
     error,
-    updateGlobalStatus,
     updateMasterStatus,
     updateSlaveConfig,
-    emergencyShutdown,
-    resetAllToOn,
-    scanCSVFiles,
-    refresh,
   } = useCSVData();
 
   // Convertir datos CSV a formato esperado
@@ -154,7 +130,7 @@ export function TradingAccountsConfig() {
     const allAccounts: TradingAccount[] = [];
 
     // Agregar master accounts
-    Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]) => {
+    Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]: [string, any]) => {
       allAccounts.push({
         id,
         accountNumber: master.accountNumber || id,
@@ -173,7 +149,7 @@ export function TradingAccountsConfig() {
     });
 
     // Agregar unconnected slaves
-    (csvAccounts.unconnectedSlaves || []).forEach((slave) => {
+    (csvAccounts.unconnectedSlaves || []).forEach((slave: any) => {
       allAccounts.push({
         id: slave.id,
         accountNumber: slave.accountNumber || slave.id,
@@ -191,11 +167,6 @@ export function TradingAccountsConfig() {
     return allAccounts;
   }, [csvAccounts]);
 
-  // Pending accounts count
-  const pendingAccountsCount = React.useMemo(() => {
-    return csvAccounts?.unconnectedSlaves?.length || 0;
-  }, [csvAccounts]);
-
   // Connectivity stats (simulado desde datos CSV)
   const connectivityStats = React.useMemo(() => {
     if (!csvAccounts) return null;
@@ -211,6 +182,8 @@ export function TradingAccountsConfig() {
       online: onlineMasters,
       pending: totalSlaves,
       offline: totalMasters - onlineMasters,
+      slaves: { total: totalSlaves },
+      masters: { total: totalMasters },
     };
   }, [csvAccounts]);
 
@@ -265,171 +238,12 @@ export function TradingAccountsConfig() {
     { value: 'slave', label: 'Slave Account (Signal Follower)' },
   ];
 
-  // Eliminado el useEffect que ocultaba la tarjeta automáticamente
-
   // Los datos se cargan automáticamente via SSE
-  const fetchAccounts = useCallback(
-    async (showLoadingState = false) => {
-      // Los datos ya están disponibles via SSE
-      // No necesitamos hacer fetch manual
-      console.log('📊 Datos cargados automáticamente via SSE');
-    },
-    []
-  );((detail: any) => {
-          accountStatusMap.set(detail.accountId, detail.status);
-        });
-
-        console.log('🗺️ Account Status Map:', Object.fromEntries(accountStatusMap));
-
-        // Handle the actual format returned by the backend
-        const allAccounts: TradingAccount[] = [];
-
-        // Helper function to map backend status to frontend status
-        const mapStatus = (
-          accountId: string,
-          backendStatus: string,
-          accountType: string,
-          connectedSlaves?: any[],
-          connectedToMaster?: string
-        ) => {
-          // Use the status from connectivity data if available
-          if (accountStatusMap.has(accountId)) {
-            return accountStatusMap.get(accountId);
-          }
-
-          // Fallback to frontend calculation
-          if (accountType === 'master') {
-            if (connectedSlaves && connectedSlaves.length > 0) {
-              return 'synchronized';
-            } else if (backendStatus === 'active') {
-              return 'pending';
-            }
-          } else if (accountType === 'slave') {
-            if (connectedToMaster && connectedToMaster !== 'none') {
-              return 'synchronized';
-            } else if (backendStatus === 'active') {
-              return 'pending';
-            }
-          }
-
-          switch (backendStatus) {
-            case 'pending':
-              return 'pending';
-            case 'offline':
-              return 'offline';
-            case 'error':
-              return 'error';
-            default:
-              return 'pending';
-          }
-        };
-
-        // Add master accounts
-        if (data.masterAccounts) {
-          Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
-            allAccounts.push({
-              id: master.id.toString(),
-              accountNumber: master.id,
-              platform: master.platform || 'MT4',
-              server: master.broker || '',
-              password: '••••••••',
-              accountType: 'master',
-              status: mapStatus(
-                master.id,
-                master.status || 'active',
-                'master',
-                master.connectedSlaves
-              ),
-              connectedSlaves: (master.connectedSlaves || []).map(slave => ({
-                id: slave.id,
-                name: slave.id, // Usar id como name si no está disponible
-                platform: slave.platform || 'MT4',
-              })),
-              totalSlaves: master.totalSlaves || 0,
-            });
-          });
-        }
-
-        // Add connected slaves
-        if (data.masterAccounts) {
-          Object.values(data.masterAccounts).forEach((master: ApiAccountData) => {
-            if (master.connectedSlaves && Array.isArray(master.connectedSlaves)) {
-              master.connectedSlaves.forEach((slave: ApiAccountData) => {
-                allAccounts.push({
-                  id: slave.id.toString(),
-                  accountNumber: slave.id,
-                  platform: slave.platform || 'MT4',
-                  server: slave.broker || '',
-                  password: '••••••••',
-                  accountType: 'slave',
-                  status: mapStatus(
-                    slave.id,
-                    slave.status || 'active',
-                    'slave',
-                    undefined,
-                    master.id
-                  ),
-                  connectedToMaster: master.id,
-                  masterOnline: (slave as any).masterOnline || false, // Include masterOnline from backend
-                });
-              });
-            }
-          });
-        }
-
-        // Add unconnected slaves
-        if (data.unconnectedSlaves && Array.isArray(data.unconnectedSlaves)) {
-          data.unconnectedSlaves.forEach((slave: ApiAccountData) => {
-            allAccounts.push({
-              id: slave.id.toString(),
-              accountNumber: slave.id,
-              platform: slave.platform || 'MT4',
-              server: slave.broker || '',
-              password: '••••••••',
-              accountType: 'slave',
-              status: mapStatus(slave.id, slave.status || 'active', 'slave', undefined, 'none'),
-              connectedToMaster: 'none',
-            });
-          });
-        }
-
-        setAccounts(allAccounts);
-
-        // Initialize collapsed state for masters that don't have a state defined yet
-        // All masters start collapsed by default - only user clicks can expand them
-        const mastersWithSlaves = allAccounts.filter(
-          acc =>
-            acc.accountType === 'master' && acc.connectedSlaves && acc.connectedSlaves.length > 0
-        );
-
-        if (mastersWithSlaves.length > 0) {
-          const newCollapsedMasters = { ...collapsedMastersRef.current };
-          mastersWithSlaves.forEach(master => {
-            // Only initialize if this master doesn't have a collapse state defined yet
-            if (collapsedMastersRef.current[master.id] === undefined) {
-              newCollapsedMasters[master.id] = true; // Start collapsed by default
-            }
-          });
-          setCollapsedMasters(newCollapsedMasters);
-          collapsedMastersRef.current = newCollapsedMasters;
-        }
-      } catch (error) {
-        console.error('Error fetching accounts:', error);
-        if (showLoadingState) {
-          toastUtil({
-            title: 'Error',
-            description: 'Failed to load trading accounts. Please try again.',
-            variant: 'destructive',
-          });
-        }
-      } finally {
-        if (showLoadingState) {
-          setIsLoading(false);
-        }
-      }
-    },
-    [secretKey]
-  );
+  const fetchAccounts = useCallback(async () => {
+    // Los datos ya están disponibles via SSE
+    // No necesitamos hacer fetch manual
+    console.log('📊 Datos cargados automáticamente via SSE');
+  }, []);
 
   // Mark slave account as recently deployed
   const markSlaveAsRecentlyDeployed = (slaveAccountId: string) => {
@@ -456,8 +270,8 @@ export function TradingAccountsConfig() {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        setPendingAccountsCount(data.totalPending || 0);
+        await response.json();
+        // Data handled by SSE
       } else {
         console.error('Failed to fetch pending accounts count');
       }
@@ -522,7 +336,7 @@ export function TradingAccountsConfig() {
       if (!enabled) {
         // Get all master accounts that are currently enabled
         const enabledMasters = Object.entries(copierStatus?.masterAccounts || {})
-          .filter(([, status]) => status.masterStatus)
+          .filter(([, status]: [string, any]) => status.masterStatus)
           .map(([masterId]) => masterId);
 
         // Get all slave accounts that are currently enabled
@@ -554,27 +368,7 @@ export function TradingAccountsConfig() {
           });
         }
 
-        // Update local state to reflect all accounts are now disabled
-        setCopierStatus(prev => {
-          if (!prev) return null;
-
-          const updatedMasters: Record<string, MasterAccountStatus> = {};
-          Object.keys(prev.masterAccounts || {}).forEach(masterId => {
-            updatedMasters[masterId] = {
-              ...prev.masterAccounts[masterId],
-              masterStatus: false,
-              effectiveStatus: false,
-              status: 'OFF',
-            };
-          });
-
-          return {
-            ...prev,
-            globalStatus: false,
-            globalStatusText: 'OFF',
-            masterAccounts: updatedMasters,
-          };
-        });
+        // State updated automatically via SSE
 
         // Update slave configs to disabled
         setSlaveConfigs(prev => {
@@ -605,16 +399,7 @@ export function TradingAccountsConfig() {
       if (response.ok) {
         const result = await response.json();
 
-        // Immediately update local state for responsive UI
-        setCopierStatus(prev => {
-          if (!prev) return null;
-
-          return {
-            ...prev,
-            globalStatus: enabled,
-            globalStatusText: enabled ? 'ON' : 'OFF',
-          };
-        });
+        // State updated automatically via SSE
 
         toastUtil({
           title: 'Success',
@@ -1397,10 +1182,7 @@ export function TradingAccountsConfig() {
     animation: 'fadeInDown 0.25s ease-out',
     transition: 'opacity 0.3s, transform 0.3s',
   };
-  const fadeOutAnimation = {
-    opacity: 0,
-    transition: 'opacity 0.25s, transform 0.25s',
-  };
+  // fadeOutAnimation removed - not used
 
   return (
     <div className="space-y-6">
@@ -1423,7 +1205,7 @@ export function TradingAccountsConfig() {
       {userInfo && shouldShowSubscriptionLimitsCard(userInfo, accounts.length) && (
         <Card
           className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3"
-          style={isLeaving ? fadeOutAnimation : fadeInDownAnimation}
+          style={fadeInDownAnimation}
         >
           <AlertTriangle className="w-6 h-6 text-yellow-900" />
           <div className="gap-3">

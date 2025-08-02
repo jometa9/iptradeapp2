@@ -7,13 +7,6 @@ interface SystemEvent {
   id: string;
 }
 
-interface EventsResponse {
-  events: SystemEvent[];
-  hasEvents: boolean;
-  clientId: string;
-  status: string;
-}
-
 // Generar un clientId único
 const generateClientId = () => {
   return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -22,7 +15,6 @@ const generateClientId = () => {
 export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
   const [isConnected, setIsConnected] = useState(false);
   const [events, setEvents] = useState<SystemEvent[]>([]);
-  const [lastEventId, setLastEventId] = useState<string | null>(null);
 
   const clientIdRef = useRef<string>(generateClientId());
   const onEventRef = useRef(onEvent);

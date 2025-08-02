@@ -1,15 +1,28 @@
-import { EventEmitter } from 'events';
+// import { EventEmitter } from 'events';
 
-interface CSVData {
-  timestamp: string;
-  account_id: string;
-  account_type: string;
-  status: string;
-  action: string;
-  data: string;
-  master_id: string;
-  platform: string;
+// Simple EventEmitter implementation for browser
+class SimpleEventEmitter {
+  private events: { [key: string]: Function[] } = {};
+
+  on(event: string, callback: Function) {
+    if (!this.events[event]) {
+      this.events[event] = [];
+    }
+    this.events[event].push(callback);
+  }
+
+  emit(event: string, data?: any) {
+    if (this.events[event]) {
+      this.events[event].forEach(callback => callback(data));
+    }
+  }
+
+  removeAllListeners() {
+    this.events = {};
+  }
 }
+
+// CSVData interface moved to useCSVData hook
 
 interface CopierStatus {
   globalStatus: boolean;
@@ -23,11 +36,10 @@ interface AccountsData {
   unconnectedSlaves: Array<any>;
 }
 
-class CSVFrontendService extends EventEmitter {
-  private csvFiles: Map<string, CSVData[]> = new Map();
+class CSVFrontendService extends SimpleEventEmitter {
   private eventSource: EventSource | null = null;
-  private isConnected = false;
   private apiKey: string | null = null;
+  private serverPort: string;
 
   private getApiKey(): string {
     // Obtener API key del localStorage o context
@@ -40,6 +52,8 @@ class CSVFrontendService extends EventEmitter {
 
   constructor() {
     super();
+    // Configurar puerto del servidor
+    this.serverPort = import.meta.env.VITE_SERVER_PORT || '30';
     this.init();
   }
 
@@ -49,7 +63,9 @@ class CSVFrontendService extends EventEmitter {
   }
 
   private startEventSource() {
-    const eventSource = new EventSource('/api/csv/events');
+    const eventSource = new EventSource(
+      `http://localhost:${this.serverPort}/api/csv/events/frontend`
+    );
 
     eventSource.onmessage = event => {
       try {
@@ -61,29 +77,16 @@ class CSVFrontendService extends EventEmitter {
     };
 
     eventSource.onerror = error => {
-      console.error('SSE connection error:', error);
-      // Reconnect after 5 seconds
+      console.error('EventSource error:', error);
+      // Reintentar conexión después de un delay
       setTimeout(() => {
-        this.startEventSource();
+        if (this.eventSource) {
+          this.startEventSource();
+        }
       }, 5000);
     };
 
-    // Store the event source for cleanup
     this.eventSource = eventSource;
-  }
-
-  private async scanCSVFiles() {
-    try {
-      // En el frontend, simulamos la lectura de CSV
-      // En una implementación real, esto sería una API que lee los archivos
-      const response = await fetch('/api/csv/scan');
-      if (response.ok) {
-        const data = await response.json();
-        this.processCSVData(data);
-      }
-    } catch (error) {
-      console.error('Error scanning CSV files:', error);
-    }
   }
 
   private processCSVData(data: any) {
@@ -112,7 +115,7 @@ class CSVFrontendService extends EventEmitter {
   // Métodos públicos para el frontend
   public async getCopierStatus(): Promise<CopierStatus> {
     try {
-      const response = await fetch('/api/csv/copier/status', {
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/copier/status`, {
         headers: {
           'x-api-key': this.getApiKey(),
         },
@@ -133,7 +136,7 @@ class CSVFrontendService extends EventEmitter {
 
   public async getAllAccounts(): Promise<AccountsData> {
     try {
-      const response = await fetch('/api/csv/accounts/all', {
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/accounts/all`, {
         headers: {
           'x-api-key': this.getApiKey(),
         },
@@ -152,7 +155,7 @@ class CSVFrontendService extends EventEmitter {
 
   public async updateGlobalStatus(enabled: boolean): Promise<void> {
     try {
-      await fetch('/api/csv/copier/global', {
+      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/global`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,12 +170,13 @@ class CSVFrontendService extends EventEmitter {
 
   public async updateMasterStatus(masterId: string, enabled: boolean): Promise<void> {
     try {
-      await fetch('/api/csv/copier/master', {
+      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/master`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
         },
-        body: JSON.stringify({ masterAccountId: masterId, enabled }),
+        body: JSON.stringify({ masterId, enabled }),
       });
     } catch (error) {
       console.error('Error updating master status:', error);
@@ -181,12 +185,13 @@ class CSVFrontendService extends EventEmitter {
 
   public async updateSlaveConfig(slaveId: string, enabled: boolean): Promise<void> {
     try {
-      await fetch('/api/csv/slave-config', {
+      await fetch(`http://localhost:${this.serverPort}/api/csv/slave-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
         },
-        body: JSON.stringify({ slaveAccountId: slaveId, enabled }),
+        body: JSON.stringify({ slaveId, enabled }),
       });
     } catch (error) {
       console.error('Error updating slave config:', error);
@@ -195,35 +200,43 @@ class CSVFrontendService extends EventEmitter {
 
   public async emergencyShutdown(): Promise<void> {
     try {
-      await fetch('/api/csv/copier/emergency-shutdown', {
+      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/emergency-shutdown`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
         },
       });
     } catch (error) {
-      console.error('Error executing emergency shutdown:', error);
+      console.error('Error emergency shutdown:', error);
     }
   }
 
   public async resetAllToOn(): Promise<void> {
     try {
-      await fetch('/api/csv/copier/reset-all-on', {
+      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/reset-all-on`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
         },
       });
     } catch (error) {
-      console.error('Error resetting all to ON:', error);
+      console.error('Error reset all to on:', error);
     }
   }
 
   public async scanCSVFiles(): Promise<void> {
     try {
-      await fetch('/api/csv/scan', {
+      // En el frontend, simulamos la lectura de CSV
+      // En una implementación real, esto sería una API que lee los archivos
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/scan`, {
         method: 'POST',
       });
+      if (response.ok) {
+        const data = await response.json();
+        this.processCSVData(data);
+      }
     } catch (error) {
       console.error('Error scanning CSV files:', error);
     }
@@ -248,7 +261,7 @@ class CSVFrontendService extends EventEmitter {
       this.eventSource.close();
       this.eventSource = null;
     }
-    this.isConnected = false;
+    // this.isConnected = false; // This line was removed as per the new_code
   }
 }
 

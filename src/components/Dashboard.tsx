@@ -17,7 +17,7 @@ export const Dashboard: React.FC = () => {
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
   // Estado para controlar si se acaba de iniciar sesión
-  const [isRecentLogin, setIsRecentLogin] = useState<boolean>(true);
+  // isRecentLogin not used
   // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
 
@@ -37,14 +37,9 @@ export const Dashboard: React.FC = () => {
     fetchUserIP();
 
     // Log de información de plan para depuración
-    setIsRecentLogin(true);
+    // Recent login state removed
 
-    // Después de 10 segundos, no es un login reciente
-    const loginTimer = setTimeout(() => {
-      setIsRecentLogin(false);
-    }, 10000);
-
-    return () => clearTimeout(loginTimer);
+    // Timer cleanup removed
   }, [userInfo]);
 
   // Efecto para controlar la visibilidad de la tarjeta solo una vez por sesión
@@ -53,12 +48,7 @@ export const Dashboard: React.FC = () => {
 
     // Solo iniciar el temporizador si no se ha iniciado antes
     if (!loginTimerStarted) {
-      setIsRecentLogin(true);
       setLoginTimerStarted(true);
-      const loginTimer = setTimeout(() => {
-        setIsRecentLogin(false);
-      }, 10000);
-      return () => clearTimeout(loginTimer);
     }
   }, [userInfo, loginTimerStarted]);
 

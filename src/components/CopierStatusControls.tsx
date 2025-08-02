@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 import { AlertTriangle, Power, PowerOff, RefreshCw, Shield, ShieldOff } from 'lucide-react';
 
-import { useAuth } from '../context/AuthContext';
+// useAuth not used in this component
 import { useCSVData } from '../hooks/useCSVData';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -10,63 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
 
-interface CopierStatus {
-  globalStatus: boolean;
-  globalStatusText: string;
-  masterAccounts: Record<
-    string,
-    {
-      masterStatus: boolean;
-      effectiveStatus: boolean;
-      status: string;
-    }
-  >;
-  totalMasterAccounts: number;
-}
-
-interface AccountsData {
-  masterAccounts: Record<
-    string,
-    {
-      id: string;
-      name: string;
-      platform: string;
-      status: string;
-      connectedSlaves: Array<{
-        id: string;
-        name: string;
-        platform: string;
-        status: string;
-        masterOnline?: boolean;
-      }>;
-      totalSlaves: number;
-    }
-  >;
-  unconnectedSlaves: Array<{
-    id: string;
-    name: string;
-    platform: string;
-    status: string;
-  }>;
-}
-
-interface SlaveConfig {
-  slaveAccountId: string;
-  config: {
-    enabled: boolean;
-    description: string;
-    lastUpdated: string | null;
-  };
-}
+// Types moved to useCSVData hook
 
 export const CopierStatusControls: React.FC = () => {
   const [updating, setUpdating] = useState<string | null>(null);
-  const { secretKey, isAuthenticated } = useAuth();
+  // secretKey not used in this component
 
   // Usar el hook unificado que maneja todo con SSE
   const {
     copierStatus,
     accounts,
+    slaveConfigs,
     loading,
     error,
     updateGlobalStatus,
@@ -323,7 +277,7 @@ export const CopierStatusControls: React.FC = () => {
           {accounts && Object.keys(accounts.masterAccounts).length > 0 && (
             <div className="space-y-4">
               <h4 className="font-semibold text-gray-900">Master Accounts (from CSV)</h4>
-              {Object.entries(accounts.masterAccounts).map(([masterId, master]) => {
+              {Object.entries(accounts.masterAccounts).map(([masterId, master]: [string, any]) => {
                 const masterStatus = copierStatus?.masterAccounts[masterId];
                 const isUpdating = updating === `master-${masterId}`;
 
@@ -363,7 +317,7 @@ export const CopierStatusControls: React.FC = () => {
                       <div className="mt-3 pt-3 border-t">
                         <p className="text-sm font-medium mb-2 text-gray-600">Connected slaves:</p>
                         <div className="space-y-2">
-                          {master.connectedSlaves.map(slave => {
+                          {master.connectedSlaves.map((slave: any) => {
                             const slaveConfig = slaveConfigs[slave.id];
                             const slaveEnabled = slaveConfig?.config?.enabled === true;
                             const isSlaveUpdating = updating === `slave-${slave.id}`;
@@ -429,7 +383,7 @@ export const CopierStatusControls: React.FC = () => {
             <div className="space-y-4 mt-6">
               <h4 className="font-semibold text-gray-900">Unconnected Slave Accounts (from CSV)</h4>
               <div className="space-y-2">
-                {accounts.unconnectedSlaves.map(slave => {
+                {accounts.unconnectedSlaves.map((slave: any) => {
                   const slaveConfig = slaveConfigs[slave.id];
                   const slaveEnabled = slaveConfig?.config?.enabled === true;
                   const isSlaveUpdating = updating === `slave-${slave.id}`;

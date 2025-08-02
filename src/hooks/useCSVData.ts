@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
+import { useAuth } from '../context/AuthContext';
 import csvFrontendService from '../services/csvFrontendService';
 
 interface UseCSVDataReturn {
   copierStatus: any;
   accounts: any;
+  slaveConfigs: Record<string, any>;
   loading: boolean;
   error: string | null;
   updateGlobalStatus: (enabled: boolean) => Promise<void>;
@@ -19,6 +21,7 @@ interface UseCSVDataReturn {
 export const useCSVData = (): UseCSVDataReturn => {
   const [copierStatus, setCopierStatus] = useState<any>(null);
   const [accounts, setAccounts] = useState<any>(null);
+  const [slaveConfigs] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { secretKey } = useAuth();
@@ -151,6 +154,7 @@ export const useCSVData = (): UseCSVDataReturn => {
   return {
     copierStatus,
     accounts,
+    slaveConfigs,
     loading,
     error,
     updateGlobalStatus,

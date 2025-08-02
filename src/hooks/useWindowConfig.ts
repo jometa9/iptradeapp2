@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { WindowConfig } from '../types/electron';
+import type { WindowConfig } from '../types/electron';
 
 export const useWindowConfig = () => {
   const [windowConfig, setWindowConfig] = useState<WindowConfig | null>(null);
