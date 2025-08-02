@@ -1,4 +1,5 @@
 import csvManager from '../services/csvManager.js';
+import { getUserAccounts, saveUserAccounts } from './configManager.js';
 
 // Obtener todas las cuentas desde CSV
 export const getAllAccounts = (req, res) => {
@@ -218,5 +219,73 @@ export const scanPlatformAccounts = (req, res) => {
   } catch (error) {
     console.error('Error scanning platform accounts:', error);
     res.status(500).json({ error: 'Failed to scan platform accounts' });
+  }
+};
+
+// Registrar cuentas CSV como pending accounts
+export const registerCSVAsPending = (req, res) => {
+  try {
+    const apiKey = req.apiKey; // Set by requireValidSubscription middleware
+    if (!apiKey) {
+      return res
+        .status(401)
+        .json({ error: 'API Key required - use requireValidSubscription middleware' });
+    }
+
+    const userAccounts = getUserAccounts(apiKey);
+    let registeredCount = 0;
+
+    // Procesar todos los archivos CSV
+    csvManager.csvFiles.forEach((fileData, filePath) => {
+      fileData.data.forEach(row => {
+        if (row.account_id && row.account_type === 'unknown' && row.status === 'online') {
+          const accountId = row.account_id;
+          const platform = row.platform || 'Unknown';
+
+          // Verificar si ya existe como pending, master o slave
+          const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
+          const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
+          const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
+
+          if (!isPending && !isMaster && !isSlave) {
+            // Crear pending account
+            const pendingAccount = {
+              id: accountId,
+              name: accountId,
+              platform: platform,
+              status: 'online',
+              firstSeen: row.timestamp,
+              lastActivity: row.timestamp,
+              description: `Auto-detected ${platform} account`,
+              broker: 'Unknown',
+            };
+
+            // Agregar a pending accounts
+            if (!userAccounts.pendingAccounts) {
+              userAccounts.pendingAccounts = {};
+            }
+            userAccounts.pendingAccounts[accountId] = pendingAccount;
+            registeredCount++;
+
+            console.log(`🔄 CSV account ${accountId} registered as pending`);
+          }
+        }
+      });
+    });
+
+    // Guardar cambios
+    if (registeredCount > 0) {
+      saveUserAccounts(apiKey, userAccounts);
+    }
+
+    res.json({
+      success: true,
+      message: `Registered ${registeredCount} CSV accounts as pending`,
+      registeredCount,
+      totalPending: Object.keys(userAccounts.pendingAccounts || {}).length,
+    });
+  } catch (error) {
+    console.error('Error registering CSV accounts as pending:', error);
+    res.status(500).json({ error: 'Failed to register CSV accounts as pending' });
   }
 };

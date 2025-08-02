@@ -111,6 +111,13 @@ export const useCSVData = (): UseCSVDataReturn => {
     await loadData();
   };
 
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (secretKey) {
+      loadData();
+    }
+  }, [secretKey]);
+
   useEffect(() => {
     // Configurar listeners para actualizaciones en tiempo real
     const handleInitialData = (data: any) => {

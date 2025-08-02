@@ -64,45 +64,28 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  // Estados para manejar datos locales - using CSV data instead
+  // Estados para manejar datos locales - usando pending accounts reales
+  const [pendingAccounts, setPendingAccounts] = useState<PendingAccountsData | null>(null);
+  const [loadingPending, setLoadingPending] = useState(true);
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
-  // Usar el hook unificado SSE
-  const { accounts: csvAccounts, loading, error } = useCSVData();
-
-  // Convertir datos CSV a formato esperado
-  const pendingAccounts = React.useMemo(() => {
-    if (!csvAccounts?.unconnectedSlaves) return null;
-
-    const pendingData: PendingAccountsData = {
-      pendingAccounts: {},
-      totalPending: csvAccounts.unconnectedSlaves.length,
-      message: `Found ${csvAccounts.unconnectedSlaves.length} pending accounts`,
-    };
-
-    csvAccounts.unconnectedSlaves.forEach((slave: any) => {
-      pendingData.pendingAccounts[slave.id] = {
-        id: slave.id,
-        platform: slave.platform || null,
-        firstSeen: slave.firstSeen || new Date().toISOString(),
-        lastActivity: slave.lastActivity || new Date().toISOString(),
-        status: slave.status || 'pending',
-      };
-    });
-
-    return pendingData;
-  }, [csvAccounts]);
+  // Usar el hook CSV solo para master accounts
+  const { accounts: csvAccounts } = useCSVData();
 
   const masterAccounts = React.useMemo(() => {
     if (!csvAccounts?.masterAccounts) return [];
 
-    return Object.entries(csvAccounts.masterAccounts).map(([id, master]: [string, any]) => ({
-      id,
-      name: master.name || id,
-      broker: master.broker || 'Unknown',
-      platform: master.platform || 'Unknown',
-      registeredAt: master.registeredAt || new Date().toISOString(),
-      status: master.status || 'offline',
-    }));
+    return Object.entries(csvAccounts.masterAccounts).map(([id, master]) => {
+      const masterData = master as Record<string, unknown>;
+      return {
+        id,
+        name: masterData.name || id,
+        broker: masterData.broker || 'Unknown',
+        platform: masterData.platform || 'Unknown',
+        registeredAt: masterData.registeredAt || new Date().toISOString(),
+        status: masterData.status || 'offline',
+      };
+    });
   }, [csvAccounts]);
 
   // Obtener total de cuentas (masters + slaves) para el usuario
@@ -139,26 +122,43 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Load pending accounts
   const loadPendingAccounts = useCallback(async () => {
+    if (!secretKey) return;
+
     try {
-      console.log('API KEY ENVIADO (pending):', secretKey);
-      const response = await fetch(`${baseUrl}/accounts/pending`, {
+      setLoadingPending(true);
+      setPendingError(null);
+      console.log('🔄 Loading pending accounts...');
+      const response = await fetch(`${baseUrl}/api/accounts/pending`, {
         headers: {
-          'x-api-key': secretKey || '',
+          'x-api-key': secretKey,
         },
       });
+
       if (response.ok) {
-        await response.json();
-        // Data handled by CSV
+        const data = await response.json();
+        console.log('✅ Pending accounts loaded:', data);
+        setPendingAccounts(data);
       } else {
-        console.error('Failed to fetch pending accounts');
+        const errorMsg = 'Failed to load pending accounts';
+        console.error('❌ Failed to fetch pending accounts:', response.status);
+        setPendingError(errorMsg);
+        toast({
+          title: 'Error',
+          description: errorMsg,
+          variant: 'destructive',
+        });
       }
     } catch (error) {
-      console.error('Error loading pending accounts:', error);
+      const errorMsg = 'Error loading pending accounts';
+      console.error('❌ Error loading pending accounts:', error);
+      setPendingError(errorMsg);
       toast({
         title: 'Error',
-        description: 'Error loading pending accounts',
+        description: errorMsg,
         variant: 'destructive',
       });
+    } finally {
+      setLoadingPending(false);
     }
   }, [secretKey, baseUrl]);
 
@@ -188,16 +188,21 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Real-time events handled by SSE in useCSVData hook
 
-  // Los datos se cargan automáticamente via SSE
+  // Cargar pending accounts al montar el componente
   useEffect(() => {
-    if (error) {
+    loadPendingAccounts();
+  }, [loadPendingAccounts]);
+
+  // Mostrar errores de pending accounts
+  useEffect(() => {
+    if (pendingError) {
       toast({
         title: 'Error',
-        description: error,
+        description: pendingError,
         variant: 'destructive',
       });
     }
-  }, [error]);
+  }, [pendingError]);
 
   // Open conversion form inline or master confirmation
   const openConversionForm = async (account: PendingAccount, type: 'master' | 'slave') => {
@@ -276,7 +281,8 @@ export const PendingAccountsManager: React.FC = () => {
         setConfirmingMasterId(null);
         // Refresh master accounts immediately to ensure the new master appears in dropdowns
         await loadMasterAccounts();
-        // Los eventos en tiempo real se encargarán de actualizar automáticamente
+        // Recargar pending accounts para actualizar la lista
+        await loadPendingAccounts();
       } else {
         // Si falla, revertir la actualización optimista
         if (pendingAccounts) {
@@ -349,7 +355,8 @@ export const PendingAccountsManager: React.FC = () => {
           });
         }
         setExpandedAccountId(null);
-        // Los eventos en tiempo real se encargarán de actualizar automáticamente
+        // Recargar pending accounts para actualizar la lista
+        await loadPendingAccounts();
       } else {
         // Si falla, revertir la actualización optimista
         if (pendingAccounts) {
@@ -394,7 +401,8 @@ export const PendingAccountsManager: React.FC = () => {
       if (response.ok) {
         // Eliminación exitosa - solo cerrar el modal sin mostrar mensaje
         setConfirmingDeleteId(null);
-        // Los eventos en tiempo real se encargarán de actualizar automáticamente
+        // Recargar pending accounts para actualizar la lista
+        await loadPendingAccounts();
       } else {
         // Si falla, revertir la actualización optimista
         if (pendingAccounts) {
@@ -418,7 +426,8 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  if (loading) {
+  // Solo mostrar spinner si está cargando pending accounts
+  if (loadingPending) {
     return (
       <Card className="bg-white">
         <CardHeader>
@@ -429,7 +438,8 @@ export const PendingAccountsManager: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent"></div>
+            <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+            <span className="ml-2 text-gray-600">Loading pending accounts...</span>
           </div>
         </CardContent>
       </Card>
@@ -752,7 +762,8 @@ export const PendingAccountsManager: React.FC = () => {
                                           value={master.id}
                                           className=" hover:bg-gray-50 cursor-pointer"
                                         >
-                                          {master.name || master.id} ({master.platform})
+                                          {String(master.name || master.id)} (
+                                          {String(master.platform)})
                                         </SelectItem>
                                       ))
                                     ) : (

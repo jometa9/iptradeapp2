@@ -7,6 +7,7 @@ import {
   getCopierStatus,
   getSlaveConfig,
   installBot,
+  registerCSVAsPending,
   resetAllToOn,
   runInstallScript,
   scanCSVFiles,
@@ -402,5 +403,17 @@ router.post('/csv/run-install-script', requireValidSubscription, runInstallScrip
  *         description: Platform accounts scanned
  */
 router.post('/csv/scan-platform-accounts', requireValidSubscription, scanPlatformAccounts);
+
+/**
+ * @swagger
+ * /csv/register-as-pending:
+ *   post:
+ *     summary: Register CSV accounts as pending accounts
+ *     tags: [CSV]
+ *     responses:
+ *       200:
+ *         description: CSV accounts registered as pending
+ */
+router.post('/csv/register-as-pending', requireValidSubscription, registerCSVAsPending);
 
 export default router;

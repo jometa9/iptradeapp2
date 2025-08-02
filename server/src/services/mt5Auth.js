@@ -356,6 +356,24 @@ class Mt5AuthService {
       return false;
     }
   }
+
+  // Clear all user data (for logout)
+  clearUserData(userId) {
+    try {
+      if (this.accounts[userId]) {
+        delete this.accounts[userId];
+        this.saveAccounts();
+        console.log(
+          `🗑️ Cleared all MT5 data for user: ${userId ? userId.substring(0, 8) : 'unknown'}...`
+        );
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error clearing MT5 user data:', error);
+      return false;
+    }
+  }
 }
 
 // Create singleton instance

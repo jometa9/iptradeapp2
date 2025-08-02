@@ -26,7 +26,11 @@
     "release": "node scripts/release.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "format:fix": "prettier --write . && eslint . --fix"
+    "format:fix": "prettier --write . && eslint . --fix",
+    "test:accounts": "node scripts/manage-test-accounts.cjs",
+    "test:accounts:generate": "node scripts/manage-test-accounts.cjs generate",
+    "test:accounts:cleanup": "node scripts/manage-test-accounts.cjs cleanup",
+    "test:accounts:reset": "node scripts/manage-test-accounts.cjs reset"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",

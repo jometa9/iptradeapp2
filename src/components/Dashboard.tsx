@@ -52,8 +52,13 @@ export const Dashboard: React.FC = () => {
     }
   }, [userInfo, loginTimerStarted]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Even if logout fails, we still want to redirect the user
+    }
   };
 
   const handleHelp = () => {

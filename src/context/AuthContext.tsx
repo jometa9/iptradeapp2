@@ -7,7 +7,7 @@ interface AuthContextType {
   userInfo: UserInfo | null;
   error: string | null;
   login: (secretKey: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -123,15 +123,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Función de logout
-  const logout = () => {
+  const logout = async () => {
+    const currentSecretKey = secretKey;
+
+    // Clear all local state immediately
     setIsAuthenticated(false);
     setSecretKey(null);
     setUserInfo(null);
     setError(null);
-    // Clear all auth-related data from localStorage
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
-    localStorage.removeItem(`${STORAGE_KEY}_user_info`);
+
+    // Clear ALL data from localStorage
+    try {
+      // Clear auth-related data
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
+      localStorage.removeItem(`${STORAGE_KEY}_user_info`);
+
+      // Clear any other app data that might be stored
+      localStorage.removeItem('secretKey'); // Used by csvFrontendService
+
+      // Clear all localStorage keys that might contain user data
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith('iptrade_') || key.includes('user') || key.includes('account'))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      console.log('🧹 Cleared all frontend user data');
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
+
+    // Clear backend data if we have an API key
+    if (currentSecretKey) {
+      try {
+        const response = await fetch(
+          `/api/clear-user-data?apiKey=${encodeURIComponent(currentSecretKey)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('🧹 Backend data cleanup completed:', result);
+
+          if (result.hasErrors) {
+            console.warn('⚠️ Some backend data cleanup had errors:', result.cleared.errors);
+          }
+        } else {
+          console.error('❌ Failed to clear backend data:', response.status);
+        }
+      } catch (error) {
+        console.error('❌ Error calling backend cleanup:', error);
+        // Don't prevent logout if backend cleanup fails
+      }
+    }
+
+    console.log('✅ User logout completed');
   };
 
   // Limpiar error
@@ -177,7 +235,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       );
                     } else {
                       // License expired, logout user
-                      logout();
+                      logout().catch(error =>
+                        console.error('Error during automatic logout:', error)
+                      );
                     }
                   });
                 }, timeUntilNextValidation);
@@ -215,7 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     );
                   } else {
                     // License expired, logout user
-                    logout();
+                    logout().catch(error => console.error('Error during automatic logout:', error));
                   }
                 });
               },

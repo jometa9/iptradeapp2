@@ -23,3 +23,35 @@ dist-ssr
 *.sw?
 
 example
+
+# User accounts and configuration files (sensitive data)
+config/registered_accounts.json
+server/config/registered_accounts.json
+server/config/copier_status.json
+config/copier_status.json
+
+# CSV data files (user-generated content)
+csv_data/IPTRADECSV2.csv
+server/csv_data/IPTRADECSV2.csv
+accounts/IPTRADECSV2.csv
+accounts/account_*.csv
+server/csv_data/generated_accounts_summary.json
+csv_data/generated_accounts_summary.json
+
+# User-specific configuration
+config/trading_transformations.json
+server/config/trading_transformations.json
+
+# Environment files with sensitive data
+.env
+.env.local
+.env.production
+.env.development
+
+# Generated account files
+accounts/account_*.csv
+
+# Additional config files that might contain sensitive data
+config/mt5_accounts.json
+server/config/mt5_accounts.json
+accounts/generated_accounts_summary.json

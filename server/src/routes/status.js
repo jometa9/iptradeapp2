@@ -1,7 +1,10 @@
 import express from 'express';
 
+import { loadAccountsConfig, saveAccountsConfig } from '../controllers/configManager.js';
 import { getStatus } from '../controllers/statusController.js';
 import { subscriptionCache, validateSubscription } from '../middleware/subscriptionAuth.js';
+import CtraderAuthServiceInstance from '../services/ctraderAuth.js';
+import Mt5AuthServiceInstance from '../services/mt5Auth.js';
 
 const router = express.Router();
 
@@ -136,6 +139,113 @@ router.post('/clear-subscription-cache', (req, res) => {
       message: `Cleared entire subscription cache (${cacheSize} entries)`,
       cleared: true,
       entriesCleared: cacheSize,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /clear-user-data:
+ *   post:
+ *     summary: Clear all user data on logout
+ *     tags: [Status]
+ *     parameters:
+ *       - in: query
+ *         name: apiKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: API key of the user to clear data for
+ *     responses:
+ *       200:
+ *         description: All user data cleared successfully
+ *       400:
+ *         description: API Key is required
+ *       500:
+ *         description: Error clearing user data
+ */
+router.post('/clear-user-data', async (req, res) => {
+  const { apiKey } = req.query;
+
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API Key is required' });
+  }
+
+  try {
+    console.log(`🧹 Starting complete data cleanup for user: ${apiKey.substring(0, 8)}...`);
+
+    let clearedData = {
+      subscriptionCache: false,
+      userAccounts: false,
+      mt5Data: false,
+      ctraderData: false,
+      errors: [],
+    };
+
+    // 1. Clear subscription cache
+    try {
+      if (subscriptionCache.has(apiKey)) {
+        subscriptionCache.delete(apiKey);
+        clearedData.subscriptionCache = true;
+        console.log(`🗑️ Cleared subscription cache for user`);
+      }
+    } catch (error) {
+      console.error('Error clearing subscription cache:', error);
+      clearedData.errors.push('subscription_cache');
+    }
+
+    // 2. Clear user accounts and configurations
+    try {
+      const config = loadAccountsConfig();
+      if (config.userAccounts && config.userAccounts[apiKey]) {
+        delete config.userAccounts[apiKey];
+        saveAccountsConfig(config);
+        clearedData.userAccounts = true;
+        console.log(`🗑️ Cleared user accounts configuration`);
+      }
+    } catch (error) {
+      console.error('Error clearing user accounts:', error);
+      clearedData.errors.push('user_accounts');
+    }
+
+    // 3. Clear MT5 data (using userId - in many cases this is the same as apiKey)
+    try {
+      // Try to clear data using apiKey as userId (most common case)
+      const mt5Cleared = Mt5AuthServiceInstance.clearUserData(apiKey);
+      if (mt5Cleared) {
+        clearedData.mt5Data = true;
+        console.log(`🗑️ Cleared MT5 data for user`);
+      }
+    } catch (error) {
+      console.error('Error clearing MT5 data:', error);
+      clearedData.errors.push('mt5_data');
+    }
+
+    // 4. Clear cTrader data
+    try {
+      // Try to clear cTrader tokens using apiKey as userId
+      const ctraderCleared = CtraderAuthServiceInstance.revokeUserTokens(apiKey);
+      if (ctraderCleared) {
+        clearedData.ctraderData = true;
+        console.log(`🗑️ Cleared cTrader data for user`);
+      }
+    } catch (error) {
+      console.error('Error clearing cTrader data:', error);
+      clearedData.errors.push('ctrader_data');
+    }
+
+    console.log(`✅ Data cleanup completed for user: ${apiKey.substring(0, 8)}...`);
+
+    return res.status(200).json({
+      message: 'User data cleared successfully',
+      cleared: clearedData,
+      hasErrors: clearedData.errors.length > 0,
+    });
+  } catch (error) {
+    console.error('💥 Error during user data cleanup:', error);
+    return res.status(500).json({
+      error: 'Failed to clear user data',
+      details: error.message,
     });
   }
 });
