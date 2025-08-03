@@ -207,12 +207,7 @@ export const PendingAccountsManager: React.FC = () => {
   const convertToMaster = async (accountId: string, accountPlatform: string) => {
     setIsConverting(true);
 
-    // Actualización optimista: remover inmediatamente de pending
-    if (pendingAccounts && pendingAccounts.pendingAccounts) {
-      const updatedPendingAccounts = { ...pendingAccounts.pendingAccounts };
-      delete updatedPendingAccounts[accountId];
-      // State updated via CSV data
-    }
+
 
     try {
       const endpoint = `${baseUrl}/accounts/pending/${accountId}/to-master`;
@@ -236,21 +231,13 @@ export const PendingAccountsManager: React.FC = () => {
         setConfirmingMasterId(null);
         // Refresh master accounts immediately to ensure the new master appears in dropdowns
         await loadMasterAccounts();
-        // Recargar pending accounts para actualizar la lista
-        await 
       } else {
-        // Si falla, revertir la actualización optimista
-        if (pendingAccounts) {
-          
-        }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account to master');
       }
     } catch (error) {
       // Si falla, revertir la actualización optimista
-      if (pendingAccounts) {
-        
-      }
+
       console.error('Error converting account to master:', error);
       toast({
         title: 'Error',
@@ -268,10 +255,6 @@ export const PendingAccountsManager: React.FC = () => {
 
     setIsConverting(true);
 
-    // Actualización optimista: remover inmediatamente de pending
-    if (pendingAccounts && pendingAccounts.pendingAccounts) {
-      // State updated via CSV data
-    }
 
     try {
       const endpoint = `${baseUrl}/accounts/pending/${expandedAccountId}/to-slave`;
@@ -310,21 +293,13 @@ export const PendingAccountsManager: React.FC = () => {
           });
         }
         setExpandedAccountId(null);
-        // Recargar pending accounts para actualizar la lista
-        await 
       } else {
-        // Si falla, revertir la actualización optimista
-        if (pendingAccounts) {
-          
-        }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account');
       }
     } catch (error) {
       // Si falla, revertir la actualización optimista
-      if (pendingAccounts) {
-        
-      }
+
       console.error('Error converting account:', error);
       toast({
         title: 'Error',
