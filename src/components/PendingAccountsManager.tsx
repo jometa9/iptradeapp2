@@ -19,20 +19,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
 
+// Pending account interface (CSV system)
 interface PendingAccount {
-  id: string;
-  platform: string | null;
-  firstSeen: string;
-  lastActivity: string;
-  status: string;
-}
-
-// MasterAccount interface moved to useCSVData hook
-
-interface PendingAccountsData {
-  pendingAccounts: Record<string, PendingAccount>;
-  totalPending: number;
-  message: string;
+  account_id: string;
+  platform: string;
+  account_type: string;
+  status: 'online' | 'offline';
+  timestamp: string;
+  timeDiff?: number;
 }
 
 interface ConversionForm {
@@ -65,12 +59,13 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  // Usar el nuevo hook para pending accounts simplificadas
-  const { pendingData, loading: loadingPending, error: pendingError, deletePendingAccount: deletePendingFromCSV } = usePendingAccounts();
-  
-  // Estados para manejar datos legacy (JSON system)
-  const [legacyPendingAccounts, setLegacyPendingAccounts] = useState<PendingAccountsData | null>(null);
-  const [legacyLoadingPending, setLegacyLoadingPending] = useState(true);
+  // Usar el hook para pending accounts
+  const {
+    pendingData,
+    loading: loadingPending,
+    error: pendingError,
+    deletePendingAccount: deletePendingFromCSV,
+  } = usePendingAccounts();
 
   // Usar el hook CSV solo para master accounts
   const { accounts: csvAccounts } = useCSVData();
@@ -123,47 +118,7 @@ export const PendingAccountsManager: React.FC = () => {
     return platformMap[platform] || platform || 'Unknown Platform';
   };
 
-  // Load pending accounts
-  const loadPendingAccounts = useCallback(async () => {
-    if (!secretKey) return;
 
-    try {
-      setLoadingPending(true);
-      setPendingError(null);
-      console.log('🔄 Loading pending accounts...');
-      const response = await fetch(`${baseUrl}/api/accounts/pending`, {
-        headers: {
-          'x-api-key': secretKey,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Pending accounts loaded:', data);
-        setPendingAccounts(data);
-      } else {
-        const errorMsg = 'Failed to load pending accounts';
-        console.error('❌ Failed to fetch pending accounts:', response.status);
-        setPendingError(errorMsg);
-        toast({
-          title: 'Error',
-          description: errorMsg,
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      const errorMsg = 'Error loading pending accounts';
-      console.error('❌ Error loading pending accounts:', error);
-      setPendingError(errorMsg);
-      toast({
-        title: 'Error',
-        description: errorMsg,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingPending(false);
-    }
-  }, [secretKey, baseUrl]);
 
   // Load master accounts for slave connection
   const loadMasterAccounts = useCallback(async () => {
@@ -191,10 +146,7 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Real-time events handled by SSE in useCSVData hook
 
-  // Cargar pending accounts al montar el componente
-  useEffect(() => {
-    loadPendingAccounts();
-  }, [loadPendingAccounts]);
+
 
   // Mostrar errores de pending accounts
   useEffect(() => {
@@ -213,18 +165,18 @@ export const PendingAccountsManager: React.FC = () => {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
       setConfirmingDeleteId(null);
-      setConfirmingMasterId(account.id);
+      setConfirmingMasterId(account.account_id);
     } else {
       // For slave, show form directly and hide master confirmation if open
       setConfirmingMasterId(null);
       setConfirmingDeleteId(null);
-      setExpandedAccountId(account.id);
+      setExpandedAccountId(account.account_id);
 
       // Refresh master accounts list to ensure we have the latest data
       await loadMasterAccounts();
 
       setConversionForm({
-        name: `Account ${account.id}`,
+        name: `Account ${account.account_id}`,
         description: '',
         broker: 'MetaQuotes',
         platform: account.platform || 'Unknown',
@@ -285,11 +237,11 @@ export const PendingAccountsManager: React.FC = () => {
         // Refresh master accounts immediately to ensure the new master appears in dropdowns
         await loadMasterAccounts();
         // Recargar pending accounts para actualizar la lista
-        await loadPendingAccounts();
+        await 
       } else {
         // Si falla, revertir la actualización optimista
         if (pendingAccounts) {
-          loadPendingAccounts();
+          
         }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account to master');
@@ -297,7 +249,7 @@ export const PendingAccountsManager: React.FC = () => {
     } catch (error) {
       // Si falla, revertir la actualización optimista
       if (pendingAccounts) {
-        loadPendingAccounts();
+        
       }
       console.error('Error converting account to master:', error);
       toast({
@@ -359,11 +311,11 @@ export const PendingAccountsManager: React.FC = () => {
         }
         setExpandedAccountId(null);
         // Recargar pending accounts para actualizar la lista
-        await loadPendingAccounts();
+        await 
       } else {
         // Si falla, revertir la actualización optimista
         if (pendingAccounts) {
-          loadPendingAccounts();
+          
         }
         const error = await response.json();
         throw new Error(error.message || 'Failed to convert account');
@@ -371,7 +323,7 @@ export const PendingAccountsManager: React.FC = () => {
     } catch (error) {
       // Si falla, revertir la actualización optimista
       if (pendingAccounts) {
-        loadPendingAccounts();
+        
       }
       console.error('Error converting account:', error);
       toast({
@@ -470,16 +422,14 @@ export const PendingAccountsManager: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {accounts.map((account) => {
+              {accounts.map(account => {
                 const isOnline = account.status === 'online';
 
                 return (
                   <div
                     key={account.account_id}
                     className={`border rounded-lg p-2 shadow ${
-                      isOnline
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-orange-50 border-orange-200'
+                      isOnline ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'
                     }`}
                   >
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -578,7 +528,7 @@ export const PendingAccountsManager: React.FC = () => {
                               Cancel
                             </Button>
                           </>
-                        ) : expandedAccountId === id ? (
+                        ) : expandedAccountId === account.account_id ? (
                           // Show conversion form buttons when form is open
                           <>
                             <Button
@@ -675,7 +625,7 @@ export const PendingAccountsManager: React.FC = () => {
                     </div>
 
                     {/* Inline Conversion Form */}
-                    {expandedAccountId === id && (
+                    {expandedAccountId === account.account_id && (
                       <div className="p-2">
                         <h2 className="text-lg flex items-center font-medium ">
                           <Unplug className="h-4 w-4 mr-2" />
