@@ -10,12 +10,10 @@ import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
 import { VersionInfo } from './VersionInfo';
 import { Button } from './ui/button';
-import { useToast } from './ui/use-toast';
 
 export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
-  const { toast } = useToast();
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
   const [isConnectingPlatforms, setIsConnectingPlatforms] = useState<boolean>(false);
@@ -87,11 +85,7 @@ export const Dashboard: React.FC = () => {
 
   const handleConnectPlatforms = async () => {
     if (!secretKey) {
-      toast({
-        title: 'Error',
-        description: 'Authentication required',
-        variant: 'destructive',
-      });
+      console.error('❌ Authentication required');
       return;
     }
 
@@ -99,7 +93,7 @@ export const Dashboard: React.FC = () => {
 
     try {
       console.log('🔍 Starting platform connection...');
-      
+
       const response = await fetch(`${baseUrl}/api/csv/connect-platforms`, {
         method: 'POST',
         headers: {
@@ -111,42 +105,24 @@ export const Dashboard: React.FC = () => {
         const data = await response.json();
         console.log('✅ Platform connection result:', data);
 
-        // Mostrar resultado detallado
-        const platformsList = data.platforms.join(', ');
+        const platformsList = data.platforms.length > 0 ? data.platforms.join(', ') : 'None';
         const summary = data.summary;
+        const actions = data.actions;
 
-        toast({
-          title: '🚀 Platform Scan Complete',
-          description: `Found ${summary.totalAccounts} accounts across ${summary.totalFiles} files. Platforms: ${platformsList}`,
-        });
+        console.log(`🚀 Connect Platforms Complete: Connected ${actions.accountsRegistered} new accounts. Total pending: ${actions.totalPending}. Platforms: ${platformsList}`);
 
-        // Si se encontraron nuevos archivos, mostrar mensaje adicional
-        if (summary.newFiles > 0) {
-          setTimeout(() => {
-            toast({
-              title: '📁 New Files Detected',
-              description: `${summary.newFiles} new CSV files are now being monitored`,
-            });
-          }, 2000);
+        if (actions.accountsRegistered > 0) {
+          console.log(`✅ ${actions.accountsRegistered} trading accounts are now pending configuration`);
+        } else if (summary.newFiles > 0) {
+          console.log(`📁 ${summary.newFiles} new CSV files are now being monitored`);
         }
 
       } else {
         const error = await response.json();
         console.error('❌ Platform connection failed:', error);
-        
-        toast({
-          title: 'Connection Failed',
-          description: error.details || 'Failed to scan trading platforms',
-          variant: 'destructive',
-        });
       }
     } catch (error) {
       console.error('❌ Platform connection error:', error);
-      toast({
-        title: 'Connection Error',
-        description: 'Unable to connect to trading platforms',
-        variant: 'destructive',
-      });
     } finally {
       setIsConnectingPlatforms(false);
     }
@@ -191,7 +167,7 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title="Connect Trading Platforms"
+                  title="Connect Trading Accounts"
                   onClick={handleConnectPlatforms}
                   disabled={isConnectingPlatforms}
                 >

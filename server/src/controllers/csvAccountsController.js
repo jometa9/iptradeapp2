@@ -161,64 +161,144 @@ export const scanCSVFiles = (req, res) => {
   }
 };
 
-// Conectar plataformas - Escaneo completo del sistema
+// Conectar plataformas - Escaneo completo del sistema y registro automático
 export const connectPlatforms = async (req, res) => {
   try {
     console.log('🔍 Starting platform connection scan...');
-    
+
+    const apiKey = req.apiKey;
+    if (!apiKey) {
+      return res.status(401).json({ error: 'API key required' });
+    }
+
+    const userAccounts = getUserAccounts(apiKey);
     const previousCount = csvManager.csvFiles.size;
     console.log(`📊 Current CSV files: ${previousCount}`);
-    
+
     // Forzar escaneo completo
     const files = await csvManager.scanCSVFiles();
-    
+
     const newCount = csvManager.csvFiles.size;
     const foundFiles = newCount - previousCount;
-    
-    // Obtener estadísticas por plataforma
-    const platformStats = {};
+
+    // Registrar automáticamente cuentas unknown como pending
+    let registeredCount = 0;
+    csvManager.csvFiles.forEach((fileData, filePath) => {
+      fileData.data.forEach(row => {
+        if (row.account_id && row.account_type === 'unknown' && row.status === 'online') {
+          const accountId = row.account_id;
+          const platform = row.platform || 'Unknown';
+
+          // Verificar si ya existe en algún lado
+          const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
+          const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
+          const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
+
+          if (!isPending && !isMaster && !isSlave) {
+            const pendingAccount = {
+              id: accountId,
+              name: `Account ${accountId}`,
+              platform: platform,
+              status: 'online',
+              balance: parseFloat(row.balance) || 0,
+              equity: parseFloat(row.equity) || 0,
+              margin: parseFloat(row.margin) || 0,
+              freeMargin: parseFloat(row.free_margin) || 0,
+              server: row.server || 'Unknown',
+              currency: row.currency || 'USD',
+              leverage: row.leverage || '1:100',
+              company: row.company || platform,
+              createdAt: new Date().toISOString(),
+              source: 'auto_detected',
+            };
+
+            if (!userAccounts.pendingAccounts) {
+              userAccounts.pendingAccounts = {};
+            }
+            userAccounts.pendingAccounts[accountId] = pendingAccount;
+            registeredCount++;
+            console.log(`🔄 Auto-registered CSV account ${accountId} (${platform}) as pending`);
+          }
+        }
+      });
+    });
+
+    // Guardar cambios si se registraron cuentas
+    if (registeredCount > 0) {
+      saveUserAccounts(apiKey, userAccounts);
+      console.log(`💾 Saved ${registeredCount} new pending accounts`);
+    }
+
+    // Obtener estadísticas actualizadas
     const allAccounts = csvManager.getAllActiveAccounts();
-    
-    // Contar por plataforma
+    const platformStats = {};
+
+    // Contar cuentas detectadas en CSV por plataforma
     Object.values(allAccounts.masterAccounts).forEach(account => {
       const platform = account.platform || 'Unknown';
       platformStats[platform] = (platformStats[platform] || 0) + 1;
     });
-    
+
     allAccounts.unconnectedSlaves.forEach(account => {
       const platform = account.platform || 'Unknown';
       platformStats[platform] = (platformStats[platform] || 0) + 1;
     });
-    
+
+    // Contar cuentas pending por plataforma
+    const pendingStats = {};
+    if (userAccounts.pendingAccounts) {
+      Object.values(userAccounts.pendingAccounts).forEach(account => {
+        const platform = account.platform || 'Unknown';
+        pendingStats[platform] = (pendingStats[platform] || 0) + 1;
+      });
+    }
+
     // Reiniciar watchers para nuevos archivos
     if (foundFiles > 0) {
       csvManager.startFileWatching();
       console.log(`📁 Started watching ${foundFiles} new CSV file(s)`);
     }
 
+    const totalPendingAccounts = userAccounts.pendingAccounts
+      ? Object.keys(userAccounts.pendingAccounts).length
+      : 0;
+    const csvAccountsCount =
+      Object.keys(allAccounts.masterAccounts).length + allAccounts.unconnectedSlaves.length;
+
     const response = {
       success: true,
-      message: foundFiles > 0 
-        ? `Platform scan complete! Found ${foundFiles} new CSV file(s)` 
-        : 'Platform scan complete! No new files found',
+      message:
+        registeredCount > 0
+          ? `Connected ${registeredCount} new accounts! Found ${foundFiles} new CSV files`
+          : foundFiles > 0
+            ? `Scanned ${foundFiles} new CSV files. No new accounts to connect`
+            : 'Platform scan complete. No new files or accounts found',
       summary: {
         totalFiles: newCount,
         newFiles: foundFiles,
-        totalAccounts: Object.keys(allAccounts.masterAccounts).length + allAccounts.unconnectedSlaves.length,
-        platformStats
+        csvAccounts: csvAccountsCount,
+        newPendingAccounts: registeredCount,
+        totalPendingAccounts,
+        platformStats,
+        pendingStats,
       },
-      platforms: Object.keys(platformStats).length > 0 ? Object.keys(platformStats) : ['No platforms detected']
+      platforms: Object.keys({ ...platformStats, ...pendingStats }),
+      actions: {
+        filesScanned: newCount,
+        newFilesFound: foundFiles,
+        accountsRegistered: registeredCount,
+        totalPending: totalPendingAccounts,
+      },
     };
 
-    console.log('✅ Platform connection scan completed:', response.summary);
+    console.log('✅ Platform connection completed:', response.summary);
     res.json(response);
-
   } catch (error) {
     console.error('❌ Error connecting platforms:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to connect platforms',
-      details: error.message 
+      details: error.message,
     });
   }
 };
