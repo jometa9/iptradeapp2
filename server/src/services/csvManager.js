@@ -28,7 +28,7 @@ class CSVManager extends EventEmitter {
   async scanPendingCSVFiles() {
     try {
       console.log('🔍 Scanning for simplified pending CSV files...');
-      
+
       // Buscar todos los archivos IPTRADECSV2.csv en el sistema
       const patterns = [
         '**/IPTRADECSV2.csv',
@@ -38,12 +38,12 @@ class CSVManager extends EventEmitter {
 
       const allFiles = [];
       const currentTime = new Date();
-      
+
       for (const pattern of patterns) {
         try {
-          const files = await glob(pattern, { 
+          const files = await glob(pattern, {
             ignore: ['**/node_modules/**', '**/.git/**'],
-            absolute: true 
+            absolute: true,
           });
           allFiles.push(...files);
         } catch (error) {
@@ -53,21 +53,21 @@ class CSVManager extends EventEmitter {
 
       // Procesar archivos encontrados
       const validPendingAccounts = [];
-      
+
       for (const filePath of allFiles) {
         try {
           if (existsSync(filePath)) {
             const content = readFileSync(filePath, 'utf8');
             const lines = content.split('\n').filter(line => line.trim());
-            
+
             if (lines.length < 2) continue; // Sin datos válidos
-            
+
             const headers = lines[0].split(',').map(h => h.trim());
-            
+
             // Verificar que sea el formato simplificado para pending
             const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
             const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
-            
+
             if (!isSimplifiedFormat) {
               console.log(`📄 Skipping ${filePath} - not simplified pending format`);
               continue;
@@ -77,7 +77,7 @@ class CSVManager extends EventEmitter {
             for (let i = 1; i < lines.length; i++) {
               const values = lines[i].split(',').map(v => v.trim());
               const account = {};
-              
+
               headers.forEach((header, index) => {
                 account[header] = values[index];
               });
@@ -87,14 +87,19 @@ class CSVManager extends EventEmitter {
                 const timeDiff = (currentTime - accountTime) / 1000; // diferencia en segundos
 
                 // Solo incluir si no ha pasado más de 1 hora
-                if (timeDiff <= 3600) { // 3600 segundos = 1 hora
+                if (timeDiff <= 3600) {
+                  // 3600 segundos = 1 hora
                   account.status = timeDiff <= 5 ? 'online' : 'offline';
                   account.timeDiff = timeDiff;
                   account.filePath = filePath;
                   validPendingAccounts.push(account);
-                  console.log(`📱 Found pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`);
+                  console.log(
+                    `📱 Found pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`
+                  );
                 } else {
-                  console.log(`⏰ Ignoring account ${account.account_id} - too old (${(timeDiff/60).toFixed(1)} minutes)`);
+                  console.log(
+                    `⏰ Ignoring account ${account.account_id} - too old (${(timeDiff / 60).toFixed(1)} minutes)`
+                  );
                 }
               }
             }
@@ -104,9 +109,10 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      console.log(`✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`);
+      console.log(
+        `✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`
+      );
       return validPendingAccounts;
-
     } catch (error) {
       console.error('Error scanning pending CSV files:', error);
       return [];
@@ -241,7 +247,23 @@ class CSVManager extends EventEmitter {
         // Emitir evento de archivos actualizados
         this.emit('newFilesDetected', Array.from(this.csvFiles.keys()));
       }
+
+      // También escanear pending accounts periódicamente
+      await this.scanAndEmitPendingUpdates();
     }, scanInterval);
+  }
+
+  // Nuevo método para escanear pending y emitir updates via SSE
+  async scanAndEmitPendingUpdates() {
+    try {
+      const pendingAccounts = await this.scanPendingCSVFiles();
+      this.emit('pendingAccountsUpdate', {
+        accounts: pendingAccounts,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error scanning pending accounts for SSE:', error);
+    }
   }
 
   // Refrescar datos de un archivo específico
@@ -254,8 +276,40 @@ class CSVManager extends EventEmitter {
         lastModified,
         data: newData,
       });
+
+      console.log(`📄 Refreshed data for ${filePath}`);
+
+      // Emitir evento general
+      this.emit('csvFileChanged', { filePath, data: newData });
+
+      // Si es un archivo pending, emitir evento específico
+      this.checkAndEmitPendingUpdate(filePath);
     } catch (error) {
       console.error(`Error refreshing file ${filePath}:`, error);
+    }
+  }
+
+  // Verificar si el archivo es pending y emitir update
+  async checkAndEmitPendingUpdate(filePath) {
+    try {
+      // Verificar si el archivo contiene pending accounts
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        if (lines.length >= 2) {
+          const headers = lines[0].split(',').map(h => h.trim());
+          const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
+          const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
+          
+          if (isSimplifiedFormat) {
+            console.log(`🔄 Pending accounts file changed: ${filePath}`);
+            await this.scanAndEmitPendingUpdates();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking pending update:', error);
     }
   }
 
