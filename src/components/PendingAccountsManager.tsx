@@ -118,8 +118,6 @@ export const PendingAccountsManager: React.FC = () => {
     return platformMap[platform] || platform || 'Unknown Platform';
   };
 
-
-
   // Load master accounts for slave connection
   const loadMasterAccounts = useCallback(async () => {
     try {
@@ -145,8 +143,6 @@ export const PendingAccountsManager: React.FC = () => {
   // loadAccountStats not used - using CSV data instead
 
   // Real-time events handled by SSE in useCSVData hook
-
-
 
   // Mostrar errores de pending accounts
   useEffect(() => {
@@ -207,8 +203,6 @@ export const PendingAccountsManager: React.FC = () => {
   const convertToMaster = async (accountId: string, accountPlatform: string) => {
     setIsConverting(true);
 
-
-
     try {
       const endpoint = `${baseUrl}/accounts/pending/${accountId}/to-master`;
       const payload = {
@@ -254,7 +248,6 @@ export const PendingAccountsManager: React.FC = () => {
     if (!expandedAccountId) return;
 
     setIsConverting(true);
-
 
     try {
       const endpoint = `${baseUrl}/accounts/pending/${expandedAccountId}/to-slave`;

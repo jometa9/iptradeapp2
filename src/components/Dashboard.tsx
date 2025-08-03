@@ -21,7 +21,7 @@ export const Dashboard: React.FC = () => {
   // isRecentLogin not used
   // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
-  
+
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
 
   // Fetch user IP on component mount
@@ -108,7 +108,9 @@ export const Dashboard: React.FC = () => {
         const platformsList = data.platforms.length > 0 ? data.platforms.join(', ') : 'None';
         const summary = data.summary;
 
-        console.log(`🚀 Pending Accounts Scan Complete: Found ${summary.totalAccounts} accounts (${summary.onlineAccounts} online, ${summary.offlineAccounts} offline). Platforms: ${platformsList}`);
+        console.log(
+          `🚀 Pending Accounts Scan Complete: Found ${summary.totalAccounts} accounts (${summary.onlineAccounts} online, ${summary.offlineAccounts} offline). Platforms: ${platformsList}`
+        );
 
         if (summary.totalAccounts > 0) {
           console.log(`✅ ${summary.totalAccounts} pending accounts detected from CSV files`);
@@ -116,7 +118,6 @@ export const Dashboard: React.FC = () => {
         } else {
           console.log('📭 No pending accounts found in CSV files');
         }
-
       } else {
         const error = await response.json();
         console.error('❌ Platform connection failed:', error);

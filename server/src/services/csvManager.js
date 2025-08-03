@@ -259,7 +259,7 @@ class CSVManager extends EventEmitter {
       const pendingAccounts = await this.scanPendingCSVFiles();
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error scanning pending accounts for SSE:', error);
@@ -296,12 +296,12 @@ class CSVManager extends EventEmitter {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf8');
         const lines = content.split('\n').filter(line => line.trim());
-        
+
         if (lines.length >= 2) {
           const headers = lines[0].split(',').map(h => h.trim());
           const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
           const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
-          
+
           if (isSimplifiedFormat) {
             console.log(`🔄 Pending accounts file changed: ${filePath}`);
             await this.scanAndEmitPendingUpdates();

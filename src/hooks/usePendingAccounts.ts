@@ -116,36 +116,39 @@ export const usePendingAccounts = () => {
     return () => clearInterval(interval);
   }, [loadPendingAccounts]);
 
-  const deletePendingAccount = useCallback(async (accountId: string) => {
-    if (!secretKey) {
-      throw new Error('Authentication required');
-    }
-
-    try {
-      console.log(`🗑️ Deleting pending account: ${accountId}`);
-
-      const response = await fetch(`${baseUrl}/api/csv/pending/${accountId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-api-key': secretKey,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Pending account deleted:', data);
-        // Refresh the data immediately
-        await loadPendingAccounts();
-        return data;
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete pending account');
+  const deletePendingAccount = useCallback(
+    async (accountId: string) => {
+      if (!secretKey) {
+        throw new Error('Authentication required');
       }
-    } catch (error) {
-      console.error('❌ Error deleting pending account:', error);
-      throw error;
-    }
-  }, [secretKey, baseUrl, loadPendingAccounts]);
+
+      try {
+        console.log(`🗑️ Deleting pending account: ${accountId}`);
+
+        const response = await fetch(`${baseUrl}/api/csv/pending/${accountId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-api-key': secretKey,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Pending account deleted:', data);
+          // Refresh the data immediately
+          await loadPendingAccounts();
+          return data;
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to delete pending account');
+        }
+      } catch (error) {
+        console.error('❌ Error deleting pending account:', error);
+        throw error;
+      }
+    },
+    [secretKey, baseUrl, loadPendingAccounts]
+  );
 
   return {
     pendingData,

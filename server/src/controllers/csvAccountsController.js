@@ -1,7 +1,8 @@
-import csvManager from '../services/csvManager.js';
-import { getUserAccounts, saveUserAccounts } from './configManager.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
+
+import csvManager from '../services/csvManager.js';
+import { getUserAccounts, saveUserAccounts } from './configManager.js';
 
 // Obtener todas las cuentas desde CSV
 export const getAllAccounts = (req, res) => {
@@ -167,13 +168,13 @@ export const scanCSVFiles = (req, res) => {
 export const deletePendingAccount = async (req, res) => {
   try {
     console.log('🗑️ Deleting pending account...');
-    
+
     const { accountId } = req.params;
-    
+
     if (!accountId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Account ID is required' 
+        error: 'Account ID is required',
       });
     }
 
@@ -186,13 +187,13 @@ export const deletePendingAccount = async (req, res) => {
 
     let deletedFromFiles = 0;
     const allFiles = [];
-    
+
     // Encontrar archivos
     for (const pattern of patterns) {
       try {
-        const files = await glob(pattern, { 
+        const files = await glob(pattern, {
           ignore: ['**/node_modules/**', '**/.git/**'],
-          absolute: true 
+          absolute: true,
         });
         allFiles.push(...files);
       } catch (error) {
@@ -206,23 +207,23 @@ export const deletePendingAccount = async (req, res) => {
         if (existsSync(filePath)) {
           const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n').filter(line => line.trim());
-          
+
           if (lines.length < 2) continue;
-          
+
           const headers = lines[0].split(',').map(h => h.trim());
           const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
           const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
-          
+
           if (!isSimplifiedFormat) continue;
 
           // Buscar y eliminar líneas que contengan esta cuenta
           let modified = false;
           const filteredLines = [headers.join(',')]; // Mantener header
-          
+
           for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',').map(v => v.trim());
             const accountIdIndex = headers.indexOf('account_id');
-            
+
             if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
               console.log(`🗑️ Removing account ${accountId} from ${filePath}`);
               modified = true;
@@ -231,7 +232,7 @@ export const deletePendingAccount = async (req, res) => {
               filteredLines.push(lines[i]);
             }
           }
-          
+
           if (modified) {
             // Escribir el archivo actualizado
             writeFileSync(filePath, filteredLines.join('\n'));
@@ -249,22 +250,22 @@ export const deletePendingAccount = async (req, res) => {
 
     const response = {
       success: true,
-      message: deletedFromFiles > 0 
-        ? `Account ${accountId} deleted from ${deletedFromFiles} file(s)` 
-        : `Account ${accountId} not found in any files`,
+      message:
+        deletedFromFiles > 0
+          ? `Account ${accountId} deleted from ${deletedFromFiles} file(s)`
+          : `Account ${accountId} not found in any files`,
       deletedFromFiles,
-      accountId
+      accountId,
     };
 
     console.log('✅ Pending account deletion completed:', response);
     res.json(response);
-
   } catch (error) {
     console.error('❌ Error deleting pending account:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to delete pending account',
-      details: error.message 
+      details: error.message,
     });
   }
 };
