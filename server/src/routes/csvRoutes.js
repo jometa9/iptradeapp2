@@ -2,6 +2,7 @@ import express from 'express';
 
 import {
   connectPlatforms,
+  deletePendingAccount,
   emergencyShutdown,
   getAllAccounts,
   getConnectivityStats,
@@ -417,6 +418,24 @@ router.post('/csv/scan-platform-accounts', requireValidSubscription, scanPlatfor
  *         description: Pending accounts scan completed
  */
 router.get('/csv/scan-pending', requireValidSubscription, scanPendingAccounts);
+
+/**
+ * @swagger
+ * /csv/pending/{accountId}:
+ *   delete:
+ *     summary: Delete a pending account from CSV files
+ *     tags: [CSV]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Pending account deleted successfully
+ */
+router.delete('/csv/pending/:accountId', requireValidSubscription, deletePendingAccount);
 
 /**
  * @swagger

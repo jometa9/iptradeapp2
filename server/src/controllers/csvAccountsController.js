@@ -1,5 +1,7 @@
 import csvManager from '../services/csvManager.js';
 import { getUserAccounts, saveUserAccounts } from './configManager.js';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { glob } from 'glob';
 
 // Obtener todas las cuentas desde CSV
 export const getAllAccounts = (req, res) => {
@@ -161,13 +163,119 @@ export const scanCSVFiles = (req, res) => {
   }
 };
 
+// Eliminar cuenta pending del sistema CSV simplificado
+export const deletePendingAccount = async (req, res) => {
+  try {
+    console.log('🗑️ Deleting pending account...');
+    
+    const { accountId } = req.params;
+    
+    if (!accountId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Account ID is required' 
+      });
+    }
+
+    // Buscar todos los archivos IPTRADECSV2.csv que contienen esta cuenta
+    const patterns = [
+      '**/IPTRADECSV2.csv',
+      '**/csv_data/**/IPTRADECSV2.csv',
+      '**/accounts/**/IPTRADECSV2.csv',
+    ];
+
+    let deletedFromFiles = 0;
+    const allFiles = [];
+    
+    // Encontrar archivos
+    for (const pattern of patterns) {
+      try {
+        const files = await glob(pattern, { 
+          ignore: ['**/node_modules/**', '**/.git/**'],
+          absolute: true 
+        });
+        allFiles.push(...files);
+      } catch (error) {
+        console.error(`Error searching pattern ${pattern}:`, error);
+      }
+    }
+
+    // Procesar cada archivo para eliminar la cuenta
+    for (const filePath of allFiles) {
+      try {
+        if (existsSync(filePath)) {
+          const content = readFileSync(filePath, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+          
+          if (lines.length < 2) continue;
+          
+          const headers = lines[0].split(',').map(h => h.trim());
+          const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
+          const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
+          
+          if (!isSimplifiedFormat) continue;
+
+          // Buscar y eliminar líneas que contengan esta cuenta
+          let modified = false;
+          const filteredLines = [headers.join(',')]; // Mantener header
+          
+          for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim());
+            const accountIdIndex = headers.indexOf('account_id');
+            
+            if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
+              console.log(`🗑️ Removing account ${accountId} from ${filePath}`);
+              modified = true;
+              // No agregar esta línea (eliminar)
+            } else {
+              filteredLines.push(lines[i]);
+            }
+          }
+          
+          if (modified) {
+            // Escribir el archivo actualizado
+            writeFileSync(filePath, filteredLines.join('\n'));
+            deletedFromFiles++;
+            console.log(`✅ Updated file: ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing file ${filePath}:`, error);
+      }
+    }
+
+    // Trigger a scan update
+    await csvManager.scanAndEmitPendingUpdates();
+
+    const response = {
+      success: true,
+      message: deletedFromFiles > 0 
+        ? `Account ${accountId} deleted from ${deletedFromFiles} file(s)` 
+        : `Account ${accountId} not found in any files`,
+      deletedFromFiles,
+      accountId
+    };
+
+    console.log('✅ Pending account deletion completed:', response);
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error deleting pending account:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to delete pending account',
+      details: error.message 
+    });
+  }
+};
+
 // Nuevo endpoint simplificado para pending accounts
 export const scanPendingAccounts = async (req, res) => {
   try {
     console.log('🔍 Starting simplified pending accounts scan...');
-    
+
     const pendingAccounts = await csvManager.scanPendingCSVFiles();
-    
+
     // Agrupar por plataforma
     const platformStats = {};
     pendingAccounts.forEach(account => {
@@ -187,20 +295,19 @@ export const scanPendingAccounts = async (req, res) => {
         totalAccounts: pendingAccounts.length,
         onlineAccounts: pendingAccounts.filter(a => a.status === 'online').length,
         offlineAccounts: pendingAccounts.filter(a => a.status === 'offline').length,
-        platformStats
+        platformStats,
       },
-      platforms: Object.keys(platformStats)
+      platforms: Object.keys(platformStats),
     };
 
     console.log('✅ Pending accounts scan completed:', response.summary);
     res.json(response);
-
   } catch (error) {
     console.error('❌ Error scanning pending accounts:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Failed to scan pending accounts',
-      details: error.message 
+      details: error.message,
     });
   }
 };

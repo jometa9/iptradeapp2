@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import { useAuth } from '../context/AuthContext';
 
 interface PendingAccount {
@@ -76,10 +77,10 @@ export const usePendingAccounts = () => {
       console.log('🌐 SSE connected for pending accounts');
     };
 
-    eventSource.onmessage = (event) => {
+    eventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // Listen for pending accounts updates
         if (data.type === 'pendingAccountsUpdate' || data.type === 'csvFileChanged') {
           console.log('🔄 Pending accounts update received via SSE');
@@ -90,7 +91,7 @@ export const usePendingAccounts = () => {
       }
     };
 
-    eventSource.onerror = (error) => {
+    eventSource.onerror = error => {
       console.error('❌ SSE connection error:', error);
     };
 
@@ -115,10 +116,42 @@ export const usePendingAccounts = () => {
     return () => clearInterval(interval);
   }, [loadPendingAccounts]);
 
+  const deletePendingAccount = useCallback(async (accountId: string) => {
+    if (!secretKey) {
+      throw new Error('Authentication required');
+    }
+
+    try {
+      console.log(`🗑️ Deleting pending account: ${accountId}`);
+
+      const response = await fetch(`${baseUrl}/api/csv/pending/${accountId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-api-key': secretKey,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Pending account deleted:', data);
+        // Refresh the data immediately
+        await loadPendingAccounts();
+        return data;
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete pending account');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting pending account:', error);
+      throw error;
+    }
+  }, [secretKey, baseUrl, loadPendingAccounts]);
+
   return {
     pendingData,
     loading,
     error,
     refresh: loadPendingAccounts,
+    deletePendingAccount,
   };
 };

@@ -4,6 +4,7 @@ import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
+import { usePendingAccounts } from '../hooks/usePendingAccounts';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
@@ -64,10 +65,12 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  // Estados para manejar datos locales - usando pending accounts reales
-  const [pendingAccounts, setPendingAccounts] = useState<PendingAccountsData | null>(null);
-  const [loadingPending, setLoadingPending] = useState(true);
-  const [pendingError, setPendingError] = useState<string | null>(null);
+  // Usar el nuevo hook para pending accounts simplificadas
+  const { pendingData, loading: loadingPending, error: pendingError, deletePendingAccount: deletePendingFromCSV } = usePendingAccounts();
+  
+  // Estados para manejar datos legacy (JSON system)
+  const [legacyPendingAccounts, setLegacyPendingAccounts] = useState<PendingAccountsData | null>(null);
+  const [legacyLoadingPending, setLegacyLoadingPending] = useState(true);
 
   // Usar el hook CSV solo para master accounts
   const { accounts: csvAccounts } = useCSVData();
@@ -381,40 +384,15 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  // Delete pending account
+  // Delete pending account from CSV files
   const deletePendingAccount = async (accountId: string) => {
     setIsConverting(true);
-
-    // Actualización optimista: remover inmediatamente de pending
-    if (pendingAccounts && pendingAccounts.pendingAccounts) {
-      // State updated via CSV data
-    }
+    setConfirmingDeleteId(null); // Cierre inmediato del modal
 
     try {
-      const response = await fetch(`${baseUrl}/accounts/pending/${accountId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-
-      if (response.ok) {
-        // Eliminación exitosa - solo cerrar el modal sin mostrar mensaje
-        setConfirmingDeleteId(null);
-        // Recargar pending accounts para actualizar la lista
-        await loadPendingAccounts();
-      } else {
-        // Si falla, revertir la actualización optimista
-        if (pendingAccounts) {
-          loadPendingAccounts();
-        }
-        throw new Error('Failed to delete pending account');
-      }
+      await deletePendingFromCSV(accountId);
+      console.log(`✅ Successfully deleted pending account: ${accountId}`);
     } catch (error) {
-      // Si falla, revertir la actualización optimista
-      if (pendingAccounts) {
-        loadPendingAccounts();
-      }
       console.error('Error deleting pending account:', error);
       toast({
         title: 'Error',
@@ -446,8 +424,9 @@ export const PendingAccountsManager: React.FC = () => {
     );
   }
 
-  const pendingCount = pendingAccounts?.totalPending || 0;
-  const accounts = pendingAccounts?.pendingAccounts || {};
+  // Usar datos del nuevo sistema CSV simplificado
+  const pendingCount = pendingData?.summary?.totalAccounts || 0;
+  const accounts = pendingData?.accounts || [];
 
   return (
     <>
@@ -491,15 +470,14 @@ export const PendingAccountsManager: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {Object.entries(accounts).map(([id, account]) => {
-                const isSuccessfullyConverted = false; // No longer tracking successful conversions
-                const isMasterConversion = false; // No longer tracking conversion type
+              {accounts.map((account) => {
+                const isOnline = account.status === 'online';
 
                 return (
                   <div
-                    key={id}
+                    key={account.account_id}
                     className={`border rounded-lg p-2 shadow ${
-                      isSuccessfullyConverted
+                      isOnline
                         ? 'bg-green-50 border-green-200'
                         : 'bg-orange-50 border-orange-200'
                     }`}
@@ -508,42 +486,37 @@ export const PendingAccountsManager: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <h3
                           className={`font-semibold ml-2 ${
-                            isSuccessfullyConverted ? 'text-green-900' : 'text-orange-900'
+                            isOnline ? 'text-green-900' : 'text-orange-900'
                           }`}
                         >
-                          {id}
+                          {account.account_id}
                         </h3>
                         <Badge
                           variant="outline"
                           className={
-                            isSuccessfullyConverted
+                            isOnline
                               ? 'bg-green-100 text-green-800 border-green-300'
-                              : account.status === 'offline'
-                                ? 'bg-red-50 text-red-800 border-red-300'
-                                : 'bg-orange-100 text-orange-800 border-orange-300'
+                              : 'bg-red-50 text-red-800 border-red-300'
                           }
                         >
-                          {isSuccessfullyConverted
-                            ? isMasterConversion
-                              ? 'Master Account'
-                              : 'Slave Account'
-                            : account.status === 'offline'
-                              ? 'Pending Offline'
-                              : 'Pending'}
+                          {isOnline ? 'Pending Online' : 'Pending Offline'}
                         </Badge>
                         <Badge
                           variant="outline"
                           className="bg-gray-50 text-gray-800 border border-gray-300"
                         >
-                          {getPlatformDisplayName(account.platform)}
+                          {account.platform}
                         </Badge>
+                        <span className="text-xs text-gray-500">
+                          {account.timeDiff ? `${account.timeDiff.toFixed(1)}s ago` : ''}
+                        </span>
                       </div>
 
                       {/* aca agregar otro badgegt para la plataforma */}
 
                       <div className="flex items-center gap-2 flex-wrap justify-left lg:p-0 lg:m-0">
                         {/* debo agregar botones de confirmacion para slave y master */}
-                        {confirmingMasterId === id ? (
+                        {confirmingMasterId === account.account_id ? (
                           <>
                             <Button
                               size="sm"
@@ -574,13 +547,13 @@ export const PendingAccountsManager: React.FC = () => {
                               Cancel
                             </Button>
                           </>
-                        ) : confirmingDeleteId === id ? (
+                        ) : confirmingDeleteId === account.account_id ? (
                           <>
                             <Button
                               size="sm"
                               variant="outline"
                               className="bg-red-50 h-9 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
-                              onClick={() => deletePendingAccount(id)}
+                              onClick={() => deletePendingAccount(account.account_id)}
                               disabled={isConverting}
                             >
                               {isConverting ? (
@@ -647,7 +620,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                  onClick={() => openDeleteConfirmation(id)}
+                                  onClick={() => openDeleteConfirmation(account.account_id)}
                                   disabled={isConverting}
                                   title="Delete Pending Offline Account"
                                 >
@@ -689,7 +662,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   className="bg-red-50 h-9 w-9 p-0 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
-                                  onClick={() => openDeleteConfirmation(id)}
+                                  onClick={() => openDeleteConfirmation(account.account_id)}
                                   disabled={isConverting}
                                 >
                                   <XCircle className="h-4 w-4" />
