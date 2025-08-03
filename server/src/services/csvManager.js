@@ -24,7 +24,96 @@ class CSVManager extends EventEmitter {
     this.startPeriodicScan();
   }
 
-  // Escanear todos los archivos IPTRADECSV2.csv en el sistema
+  // Nuevo método para escanear archivos pending simplificados
+  async scanPendingCSVFiles() {
+    try {
+      console.log('🔍 Scanning for simplified pending CSV files...');
+      
+      // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+      const patterns = [
+        '**/IPTRADECSV2.csv',
+        '**/csv_data/**/IPTRADECSV2.csv',
+        '**/accounts/**/IPTRADECSV2.csv',
+      ];
+
+      const allFiles = [];
+      const currentTime = new Date();
+      
+      for (const pattern of patterns) {
+        try {
+          const files = await glob(pattern, { 
+            ignore: ['**/node_modules/**', '**/.git/**'],
+            absolute: true 
+          });
+          allFiles.push(...files);
+        } catch (error) {
+          console.error(`Error searching pattern ${pattern}:`, error);
+        }
+      }
+
+      // Procesar archivos encontrados
+      const validPendingAccounts = [];
+      
+      for (const filePath of allFiles) {
+        try {
+          if (existsSync(filePath)) {
+            const content = readFileSync(filePath, 'utf8');
+            const lines = content.split('\n').filter(line => line.trim());
+            
+            if (lines.length < 2) continue; // Sin datos válidos
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            // Verificar que sea el formato simplificado para pending
+            const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
+            const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
+            
+            if (!isSimplifiedFormat) {
+              console.log(`📄 Skipping ${filePath} - not simplified pending format`);
+              continue;
+            }
+
+            // Procesar solo la línea de datos (asumiendo un solo account por archivo)
+            for (let i = 1; i < lines.length; i++) {
+              const values = lines[i].split(',').map(v => v.trim());
+              const account = {};
+              
+              headers.forEach((header, index) => {
+                account[header] = values[index];
+              });
+
+              if (account.account_type === 'pending' && account.timestamp && account.account_id) {
+                const accountTime = new Date(account.timestamp);
+                const timeDiff = (currentTime - accountTime) / 1000; // diferencia en segundos
+
+                // Solo incluir si no ha pasado más de 1 hora
+                if (timeDiff <= 3600) { // 3600 segundos = 1 hora
+                  account.status = timeDiff <= 5 ? 'online' : 'offline';
+                  account.timeDiff = timeDiff;
+                  account.filePath = filePath;
+                  validPendingAccounts.push(account);
+                  console.log(`📱 Found pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`);
+                } else {
+                  console.log(`⏰ Ignoring account ${account.account_id} - too old (${(timeDiff/60).toFixed(1)} minutes)`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing file ${filePath}:`, error);
+        }
+      }
+
+      console.log(`✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`);
+      return validPendingAccounts;
+
+    } catch (error) {
+      console.error('Error scanning pending CSV files:', error);
+      return [];
+    }
+  }
+
+  // Escanear todos los archivos IPTRADECSV2.csv en el sistema (método original)
   async scanCSVFiles() {
     try {
       // Cargar configuración de ubicaciones

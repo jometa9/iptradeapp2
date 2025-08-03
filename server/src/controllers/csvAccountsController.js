@@ -161,7 +161,51 @@ export const scanCSVFiles = (req, res) => {
   }
 };
 
-// Conectar plataformas - Escaneo completo del sistema y registro automático
+// Nuevo endpoint simplificado para pending accounts
+export const scanPendingAccounts = async (req, res) => {
+  try {
+    console.log('🔍 Starting simplified pending accounts scan...');
+    
+    const pendingAccounts = await csvManager.scanPendingCSVFiles();
+    
+    // Agrupar por plataforma
+    const platformStats = {};
+    pendingAccounts.forEach(account => {
+      const platform = account.platform || 'Unknown';
+      if (!platformStats[platform]) {
+        platformStats[platform] = { online: 0, offline: 0, total: 0 };
+      }
+      platformStats[platform][account.status]++;
+      platformStats[platform].total++;
+    });
+
+    const response = {
+      success: true,
+      message: `Found ${pendingAccounts.length} pending accounts`,
+      accounts: pendingAccounts,
+      summary: {
+        totalAccounts: pendingAccounts.length,
+        onlineAccounts: pendingAccounts.filter(a => a.status === 'online').length,
+        offlineAccounts: pendingAccounts.filter(a => a.status === 'offline').length,
+        platformStats
+      },
+      platforms: Object.keys(platformStats)
+    };
+
+    console.log('✅ Pending accounts scan completed:', response.summary);
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Error scanning pending accounts:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to scan pending accounts',
+      details: error.message 
+    });
+  }
+};
+
+// Conectar plataformas - Escaneo completo del sistema y registro automático (método original)
 export const connectPlatforms = async (req, res) => {
   try {
     console.log('🔍 Starting platform connection scan...');

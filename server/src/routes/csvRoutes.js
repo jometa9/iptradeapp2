@@ -12,6 +12,7 @@ import {
   resetAllToOn,
   runInstallScript,
   scanCSVFiles,
+  scanPendingAccounts,
   scanPlatformAccounts,
   setGlobalStatus,
   setMasterStatus,
@@ -404,6 +405,18 @@ router.post('/csv/run-install-script', requireValidSubscription, runInstallScrip
  *         description: Platform accounts scanned
  */
 router.post('/csv/scan-platform-accounts', requireValidSubscription, scanPlatformAccounts);
+
+/**
+ * @swagger
+ * /csv/scan-pending:
+ *   get:
+ *     summary: Scan simplified pending accounts from CSV files
+ *     tags: [CSV]
+ *     responses:
+ *       200:
+ *         description: Pending accounts scan completed
+ */
+router.get('/csv/scan-pending', requireValidSubscription, scanPendingAccounts);
 
 /**
  * @swagger

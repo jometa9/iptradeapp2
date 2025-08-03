@@ -94,8 +94,8 @@ export const Dashboard: React.FC = () => {
     try {
       console.log('🔍 Starting platform connection...');
 
-      const response = await fetch(`${baseUrl}/api/csv/connect-platforms`, {
-        method: 'POST',
+      const response = await fetch(`${baseUrl}/api/csv/scan-pending`, {
+        method: 'GET',
         headers: {
           'x-api-key': secretKey,
         },
@@ -107,14 +107,14 @@ export const Dashboard: React.FC = () => {
 
         const platformsList = data.platforms.length > 0 ? data.platforms.join(', ') : 'None';
         const summary = data.summary;
-        const actions = data.actions;
 
-        console.log(`🚀 Connect Platforms Complete: Connected ${actions.accountsRegistered} new accounts. Total pending: ${actions.totalPending}. Platforms: ${platformsList}`);
+        console.log(`🚀 Pending Accounts Scan Complete: Found ${summary.totalAccounts} accounts (${summary.onlineAccounts} online, ${summary.offlineAccounts} offline). Platforms: ${platformsList}`);
 
-        if (actions.accountsRegistered > 0) {
-          console.log(`✅ ${actions.accountsRegistered} trading accounts are now pending configuration`);
-        } else if (summary.newFiles > 0) {
-          console.log(`📁 ${summary.newFiles} new CSV files are now being monitored`);
+        if (summary.totalAccounts > 0) {
+          console.log(`✅ ${summary.totalAccounts} pending accounts detected from CSV files`);
+          console.log('📊 Platform breakdown:', summary.platformStats);
+        } else {
+          console.log('📭 No pending accounts found in CSV files');
         }
 
       } else {
