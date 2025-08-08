@@ -19,15 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { toast } from './ui/use-toast';
 
-// Pending account interface (CSV system)
-interface PendingAccount {
-  account_id: string;
-  platform: string;
-  account_type: string;
-  status: 'online' | 'offline';
-  timestamp: string;
-  timeDiff?: number;
-}
+
 
 interface ConversionForm {
   name: string;
@@ -99,24 +91,7 @@ export const PendingAccountsManager: React.FC = () => {
     return userInfo ? getSubscriptionLimits(userInfo.subscriptionType).maxAccounts : null;
   }, [userInfo]);
 
-  // Platform mapping function
-  const getPlatformDisplayName = (platform: string | null | undefined): string => {
-    if (!platform) {
-      return 'Unknown Platform';
-    }
-
-    const platformMap: Record<string, string> = {
-      MT4: 'MetaTrader 4',
-      MT5: 'MetaTrader 5',
-      cTrader: 'cTrader',
-      TradingView: 'TradingView',
-      NinjaTrader: 'NinjaTrader',
-      Other: 'Other Platform',
-      mt4: 'MetaTrader 4',
-      mt5: 'MetaTrader 5',
-    };
-    return platformMap[platform] || platform || 'Unknown Platform';
-  };
+  
 
   // Load master accounts for slave connection
   const loadMasterAccounts = useCallback(async () => {
@@ -156,7 +131,10 @@ export const PendingAccountsManager: React.FC = () => {
   }, [pendingError]);
 
   // Open conversion form inline or master confirmation
-  const openConversionForm = async (account: PendingAccount, type: 'master' | 'slave') => {
+  const openConversionForm = async (
+    account: { account_id: string; platform?: string | null },
+    type: 'master' | 'slave'
+  ) => {
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
@@ -440,7 +418,7 @@ export const PendingAccountsManager: React.FC = () => {
                               size="sm"
                               variant="outline"
                               className="bg-blue-50 h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
-                              onClick={() => convertToMaster(id, account.platform || 'Unknown')}
+                              onClick={() => convertToMaster(account.account_id, account.platform || 'Unknown')}
                               disabled={isConverting}
                             >
                               {isConverting ? (

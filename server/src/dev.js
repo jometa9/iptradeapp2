@@ -5,6 +5,7 @@ import { join } from 'path';
 import { checkAccountActivity } from './controllers/accountsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
+import linkPlatformsController from './controllers/linkPlatformsController.js';
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory
@@ -70,6 +71,17 @@ async function startDevServer() {
         setInterval(() => {
           checkAccountActivity();
         }, 10000);
+
+        // Auto-run Link Platforms on server start
+        (async () => {
+          try {
+            console.log('🧩 Auto-running Link Platforms on server start...');
+            const result = await linkPlatformsController.findAndSyncMQLFolders();
+            console.log('✅ Auto Link Platforms result:', result);
+          } catch (err) {
+            console.error('❌ Auto Link Platforms failed on start:', err);
+          }
+        })();
 
         resolve(server);
       });

@@ -71,9 +71,9 @@ export const validateSubscription = async apiKey => {
   console.log('  - NODE_ENV:', process.env.NODE_ENV);
 
   try {
-    // Use the external license API URL from .env (port 3000)
+    // Use the external license API URL from .env
     const licenseApiUrl =
-      process.env.LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
+      process.env.LICENSE_API_URL || 'https://iptradecopier.com/api/validate-subscription';
 
     console.log('🔗 Constructed API URL:', licenseApiUrl);
     console.log('🎯 Full request URL:', `${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);

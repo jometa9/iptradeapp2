@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, LogOut, MessageCircle, RefreshCw, Zap } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Link, LogOut, MessageCircle, RefreshCw, Zap } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
+import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
+import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
@@ -14,6 +16,14 @@ import { Button } from './ui/button';
 export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
+  const { linkPlatforms, isLinking } = useLinkPlatforms();
+  
+  // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
+  useAutoLinkPlatforms();
+  
+  console.log('🎯 Dashboard rendered - Link Platforms button should be visible');
+  console.log('🔗 isLinking state:', isLinking);
+  
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
   const [isConnectingPlatforms, setIsConnectingPlatforms] = useState<boolean>(false);
@@ -38,6 +48,9 @@ export const Dashboard: React.FC = () => {
   // Efecto para realizar acciones al montar el componente
   useEffect(() => {
     fetchUserIP();
+
+    // Link Platforms se ejecuta automáticamente con useAutoLinkPlatforms
+    // No es necesario ejecutarlo manualmente aquí
 
     // Log de información de plan para depuración
     // Recent login state removed
@@ -81,6 +94,20 @@ export const Dashboard: React.FC = () => {
   const handleCommunity = () => {
     const urlCommunity = 'https://t.me/iptradecopier';
     openExternalLink(urlCommunity);
+  };
+
+  const handleLinkPlatforms = async () => {
+    console.log('🔗 Link Platforms button clicked!');
+    console.log('📊 Current isLinking state:', isLinking);
+    try {
+      console.log('🔄 Starting Link Platforms process...');
+      const result = await linkPlatforms();
+      console.log('✅ Link Platforms completed successfully:', result);
+      console.log('📊 Final isLinking state:', isLinking);
+    } catch (error) {
+      console.error('❌ Link Platforms failed:', error);
+      console.log('📊 Error isLinking state:', isLinking);
+    }
   };
 
   const handleConnectPlatforms = async () => {
@@ -164,6 +191,20 @@ export const Dashboard: React.FC = () => {
                     {userInfo?.name || 'User'}
                   </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  title="Link Platforms (Sync MQL4/MQL5 bots)"
+                  onClick={handleLinkPlatforms}
+                  disabled={isLinking}
+                >
+                  {isLinking ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Link className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

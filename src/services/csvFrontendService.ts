@@ -53,7 +53,7 @@ class CSVFrontendService extends SimpleEventEmitter {
   constructor() {
     super();
     // Configurar puerto del servidor
-    this.serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+    this.serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
     this.init();
   }
 

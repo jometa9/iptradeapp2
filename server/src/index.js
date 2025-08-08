@@ -17,7 +17,9 @@ import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
+import linkPlatformsRoutes from './routes/linkPlatforms.js';
 import swaggerDocs from './swaggerConfig.js';
+import linkPlatformsController from './controllers/linkPlatformsController.js';
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory
@@ -64,6 +66,7 @@ app.use('/api', csvRoutes);
 app.use('/api', eventRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/slave-config', slaveConfigRoutes);
+app.use('/api/link-platforms', linkPlatformsRoutes);
 // app.use('/api/ctrader', ctraderRoutes);
 // app.use('/api/mt5', mt5Routes);
 
@@ -92,6 +95,16 @@ async function startServer() {
         console.log('🎉 === IPTRADE SERVER STARTED ===');
         console.log(`📡 Server running on http://127.0.0.1:${PORT}`);
         console.log(`🔗 Health check: http://127.0.0.1:${PORT}/api/status`);
+        // Auto-run Link Platforms on server start
+        (async () => {
+          try {
+            console.log('🧩 Auto-running Link Platforms on server start...');
+            const result = await linkPlatformsController.findAndSyncMQLFolders();
+            console.log('✅ Auto Link Platforms result:', result);
+          } catch (err) {
+            console.error('❌ Auto Link Platforms failed on start:', err);
+          }
+        })();
         resolve(server);
       });
 

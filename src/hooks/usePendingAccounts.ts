@@ -28,7 +28,7 @@ export const usePendingAccounts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
+  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
 
   const loadPendingAccounts = useCallback(async () => {
     if (!secretKey) {

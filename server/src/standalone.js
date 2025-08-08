@@ -16,6 +16,7 @@ import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
 import swaggerDocs from './swaggerConfig.js';
+import linkPlatformsRoutes from './routes/linkPlatforms.js';
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory
@@ -53,6 +54,7 @@ export function createServer() {
   app.use('/api', eventRoutes);
   app.use('/api/accounts', accountsRoutes);
   app.use('/api/slave-config', slaveConfigRoutes);
+  app.use('/api/link-platforms', linkPlatformsRoutes);
   // app.use('/api/ctrader', ctraderRoutes);
 
   // Error handling middleware
