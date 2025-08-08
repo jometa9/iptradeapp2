@@ -415,10 +415,10 @@ function createWindow() {
       autoHideMenuBar: false, // Mostrar barra de menú
     });
   } else {
-    // En Windows/Linux: ventana sin frame personalizada
+    // En Windows/Linux: mostrar barra de título nativa
     Object.assign(windowConfig, {
-      titleBarStyle: 'hidden',
-      frame: false,
+      titleBarStyle: 'default',
+      frame: true,
       autoHideMenuBar: true,
     });
   }
