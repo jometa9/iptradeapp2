@@ -151,6 +151,9 @@ async function startServer() {
         cwd: path.join(__dirname, '..'),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, PORT: port },
+        // En Windows, desconectar el proceso del padre para evitar que quede colgado
+        detached: process.platform !== 'win32',
+        windowsHide: true,
       });
 
       serverProcess.stdout.on('data', data => {
@@ -262,16 +265,13 @@ async function createTray() {
     const updateTrayMenu = async () => {
       try {
         // Obtener el estado del copier desde el servidor
-        const serverPort = process.env.VITE_SERVER_PORT || '30';
+        const serverPort = process.env.VITE_SERVER_PORT || '3000';
         
         // Agregar timeout para evitar que la petición se cuelgue
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
         
-        const response = await fetch(`http://localhost:${serverPort}/api/copier/status`, {
-          headers: {
-            'x-api-key': process.env.API_KEY || 'iptrade_89536f5b9e643c0433f3',
-          },
+        const response = await fetch(`http://localhost:${serverPort}/copier-status`, {
           signal: controller.signal,
         });
         
@@ -439,17 +439,37 @@ function createWindow() {
   });
 
   // Manejar el evento de cierre de ventana
-  mainWindow.on('close', event => {
-    if (!app.isQuiting) {
+  mainWindow.on('close', async event => {
+    // En Windows, cerrar la aplicación completamente cuando se cierra la ventana
+    if (process.platform === 'win32') {
       event.preventDefault();
-      mainWindow.hide();
+      
+      console.log('[ELECTRON] Window closing - shutting down application...');
+      
+      // Marcar que estamos cerrando
+      app.isQuiting = true;
+      
+      // Limpiar todos los procesos
+      await cleanupProcesses();
+      
+      // Cerrar la ventana principal
+      mainWindow = null;
+      
+      // Forzar el cierre de la aplicación
+      app.exit(0);
+    } else {
+      // En otras plataformas, mantener el comportamiento de minimizar al tray
+      if (!app.isQuiting) {
+        event.preventDefault();
+        mainWindow.hide();
 
-      // En macOS, ocultar el icono del dock cuando la ventana está oculta
-      if (process.platform === 'darwin') {
-        app.dock.hide();
+        // En macOS, ocultar el icono del dock cuando la ventana está oculta
+        if (process.platform === 'darwin') {
+          app.dock.hide();
+        }
+
+        return false;
       }
-
-      return false;
     }
   });
 
@@ -510,26 +530,94 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('window-all-closed', function () {
-  if (serverInstance) {
-    console.log('[ELECTRON] Closing server');
-    serverInstance.close();
+app.on('window-all-closed', async function () {
+  console.log('[ELECTRON] All windows closed');
+  
+  // En Windows, cerrar la aplicación completamente
+  if (process.platform === 'win32') {
+    app.isQuiting = true;
+    await cleanupProcesses();
+    app.exit(0);
   }
+  // En macOS, mantener la app abierta (comportamiento estándar de macOS)
+  // En Linux, también cerrar la app
+  else if (process.platform !== 'darwin') {
+    app.isQuiting = true;
+    await cleanupProcesses();
+    app.quit();
+  }
+});
 
+// Función para limpiar todos los procesos
+async function cleanupProcesses() {
+  console.log('[ELECTRON] Starting cleanup...');
+  
+  // Cerrar el servidor
+  if (serverInstance) {
+    console.log('[ELECTRON] Closing server instance...');
+    return new Promise((resolve) => {
+      serverInstance.close(() => {
+        console.log('[ELECTRON] Server closed');
+        serverInstance = null;
+        resolve();
+      });
+    });
+  }
+  
   // Terminar el proceso del servidor en desarrollo
   if (serverProcess) {
-    console.log('[ELECTRON] Closing development server');
-    serverProcess.kill();
+    console.log('[ELECTRON] Killing development server process...');
+    serverProcess.kill('SIGTERM');
+    serverProcess = null;
   }
-
-  // No cerrar la app, solo ocultar la ventana
-  // if (process.platform !== 'darwin') app.quit();
-});
-
-// Manejar el evento before-quit para limpiar el tray
-app.on('before-quit', () => {
-  app.isQuiting = true;
+  
+  // Destruir el tray
   if (tray) {
+    console.log('[ELECTRON] Destroying tray...');
     tray.destroy();
+    tray = null;
+  }
+}
+
+// Manejar el evento before-quit para limpiar recursos
+app.on('before-quit', async (event) => {
+  if (!app.isQuiting) {
+    event.preventDefault();
+    app.isQuiting = true;
+    
+    await cleanupProcesses();
+    
+    // Ahora sí, cerrar la app
+    app.quit();
   }
 });
+
+// Manejar el evento will-quit para asegurar limpieza final
+app.on('will-quit', () => {
+  // Forzar el cierre de cualquier proceso restante
+  if (serverProcess) {
+    serverProcess.kill('SIGKILL');
+  }
+});
+
+// Manejar señales de proceso para limpiar cuando se cierra desde la terminal
+process.on('SIGINT', async () => {
+  console.log('[ELECTRON] SIGINT received, cleaning up...');
+  await cleanupProcesses();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('[ELECTRON] SIGTERM received, cleaning up...');
+  await cleanupProcesses();
+  process.exit(0);
+});
+
+// En Windows, también manejar CTRL+C
+if (process.platform === 'win32') {
+  process.on('SIGBREAK', async () => {
+    console.log('[ELECTRON] SIGBREAK received, cleaning up...');
+    await cleanupProcesses();
+    process.exit(0);
+  });
+}
