@@ -81,7 +81,7 @@ async function startDevServer() {
               linkPlatformsController.isLinking
             );
 
-            const result = await linkPlatformsController.findAndSyncMQLFoldersOptimized();
+            const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
             console.log('✅ Auto Link Platforms result:', result);
             console.log(
               '📊 Link Platforms state after auto-start:',

@@ -273,6 +273,7 @@ export const PendingAccountsManager: React.FC = () => {
 
           case 'completed':
             console.log('✅ Link Platforms completed - showing success');
+            console.log('📋 Result data:', data.result);
             setLinkingStatus({
               step: 'completed',
               message: 'Success! Platforms linked successfully',
@@ -281,6 +282,7 @@ export const PendingAccountsManager: React.FC = () => {
 
             // Hide the status after 3 seconds
             setTimeout(() => {
+              console.log('⏰ Hiding linking status after 3 seconds');
               setLinkingStatus({
                 step: 'idle',
                 message: '',

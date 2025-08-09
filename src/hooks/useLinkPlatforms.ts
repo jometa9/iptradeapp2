@@ -13,6 +13,12 @@ export const useLinkPlatforms = () => {
   const listenerIdRef = useRef<string | null>(null);
   const hasCheckedInitialStatus = useRef<boolean>(false);
 
+  // Track isLinking state changes
+  const setIsLinkingWithLog = (newValue: boolean, reason: string) => {
+    console.log(`🔄 Changing isLinking: ${isLinking} → ${newValue} (${reason})`);
+    setIsLinking(newValue);
+  };
+
   // Check if Link Platforms is currently running on server
   const checkLinkingStatus = async () => {
     if (!secretKey) return;
@@ -31,7 +37,7 @@ export const useLinkPlatforms = () => {
 
         if (status.isLinking) {
           console.log('🔄 Link Platforms is already running - activating spinner');
-          setIsLinking(true);
+          setIsLinkingWithLog(true, 'server status check');
         }
       }
     } catch (error) {
@@ -45,7 +51,7 @@ export const useLinkPlatforms = () => {
       return;
     }
 
-    setIsLinking(true);
+    setIsLinkingWithLog(true, 'manual button click');
     setError(null);
 
     try {
@@ -68,7 +74,7 @@ export const useLinkPlatforms = () => {
       console.error('❌ Link Platforms error:', err);
       throw err;
     } finally {
-      setIsLinking(false);
+      setIsLinkingWithLog(false, 'manual request finished');
     }
   };
 
@@ -95,41 +101,47 @@ export const useLinkPlatforms = () => {
       // Escuchar eventos de Link Platforms
       if (data.type === 'linkPlatformsEvent') {
         console.log('🔗 Link Platforms event received:', data.eventType, data.message);
+        console.log('🔍 Full event payload:', data);
 
         switch (data.eventType) {
           case 'started':
-            setIsLinking(true);
+            console.log('🟢 STARTED event - activating spinner');
+            setIsLinkingWithLog(true, 'SSE started event');
             setError(null);
             console.log('🔄 Link Platforms started - spinner activated');
             break;
 
           case 'completed':
+            console.log('🟢 COMPLETED event received');
             setLastResult({
               success: true,
               message: data.message,
               result: data.result,
             });
             console.log('✅ Link Platforms completed by server');
+            console.log('✅ Message:', data.message);
             console.log('✅ backgroundScan value:', data.result?.backgroundScan);
             console.log('✅ Full result data:', data.result);
+            console.log('✅ Current isLinking state before decision:', isLinking);
 
             if (data.result?.backgroundScan) {
               console.log('🔄 Spinner continues - waiting for background scan completion...');
             } else {
               // Si no hay background scan, terminar spinner inmediatamente
-              setIsLinking(false);
-              console.log('✅ No background scan - spinner stopped immediately');
+              console.log('🛑 COMPLETED: Stopping spinner - no background scan needed');
+              setIsLinkingWithLog(false, 'SSE completed event');
+              console.log('✅ COMPLETED: Spinner stopped immediately');
             }
             break;
 
           case 'idle':
             // El servidor está indicando que Link Platforms no está corriendo
-            setIsLinking(false);
+            setIsLinkingWithLog(false, 'SSE idle event');
             console.log('💤 Link Platforms is idle - ensuring spinner is stopped');
             break;
 
           case 'error':
-            setIsLinking(false);
+            setIsLinkingWithLog(false, 'SSE error event');
             setError(data.error || 'Link Platforms failed');
             setLastResult({
               success: false,
@@ -149,7 +161,7 @@ export const useLinkPlatforms = () => {
         switch (data.eventType) {
           case 'completed':
             // Si había background scan, terminar el spinner ahora
-            setIsLinking(false);
+            setIsLinkingWithLog(false, 'SSE background scan completed');
             console.log('✅ Spinner stopped - background scan completed');
 
             if (
@@ -169,7 +181,7 @@ export const useLinkPlatforms = () => {
 
           case 'error':
             // Si el background scan falló, terminar el spinner
-            setIsLinking(false);
+            setIsLinkingWithLog(false, 'SSE background scan error');
             console.error('❌ Background scan failed:', data.error);
             break;
         }

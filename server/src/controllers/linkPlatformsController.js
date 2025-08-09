@@ -584,6 +584,13 @@ class LinkPlatformsController {
         ...data,
       };
       console.log(`📡 Emitting Link Platforms event: ${eventType}`);
+      if (eventType === 'completed') {
+        console.log('📋 Completed event data:', {
+          backgroundScan: eventData.result?.backgroundScan,
+          synced: eventData.result?.synced,
+          errors: eventData.result?.errors?.length || 0,
+        });
+      }
       csvManager.emit('linkPlatformsEvent', eventData);
     } catch (error) {
       console.error('Error emitting Link Platforms event:', error);

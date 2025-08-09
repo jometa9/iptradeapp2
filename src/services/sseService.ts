@@ -6,30 +6,34 @@ let listenerCounter = 0;
 export const SSEService = {
   connect(secretKey: string) {
     if (typeof window === 'undefined') return;
-    
+
     // Si ya existe una conexión, no crear otra
     if (globalEventSource) {
       console.log('♻️ SSE: Reusing existing global connection');
       return;
     }
 
-    const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+    const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+    const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
+    const sseUrl = `${baseUrl}/api/csv/events?apiKey=${secretKey}`;
+
     console.log('🔗 SSE: Creating SINGLE global connection...');
-    
-    globalEventSource = new EventSource(`${baseUrl}/api/csv/events?apiKey=${secretKey}`);
+    console.log('🔗 SSE: Connecting to:', sseUrl);
+
+    globalEventSource = new EventSource(sseUrl);
 
     globalEventSource.onopen = () => {
       console.log('✅ SSE: Global connection opened successfully');
     };
 
-    globalEventSource.onmessage = (event) => {
+    globalEventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
         // Filtrar mensajes de heartbeat y initial_data de los logs
         if (data.type !== 'heartbeat' && data.type !== 'initial_data') {
           console.log('📡 SSE: Message received:', data.type);
         }
-        
+
         // Notificar a todos los listeners
         globalListeners.forEach(callback => callback(data));
       } catch (error) {
@@ -37,7 +41,7 @@ export const SSEService = {
       }
     };
 
-    globalEventSource.onerror = (error) => {
+    globalEventSource.onerror = error => {
       console.error('❌ SSE: Connection error:', error);
     };
   },
@@ -53,7 +57,7 @@ export const SSEService = {
   removeListener(id: string) {
     globalListeners.delete(id);
     console.log(`📡 SSE: Listener '${id}' removed (Remaining: ${globalListeners.size})`);
-    
+
     // Si no hay más listeners, cerrar la conexión (solo en producción)
     if (globalListeners.size === 0 && globalEventSource) {
       if (import.meta.env.MODE === 'development') {
@@ -68,5 +72,5 @@ export const SSEService = {
 
   isConnected(): boolean {
     return !!globalEventSource && globalEventSource.readyState === EventSource.OPEN;
-  }
+  },
 };
