@@ -170,7 +170,7 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title={`Install and cofigure IPTRADE on all your trading platform`}
+                  title={`Link Platforms`}
                   onClick={handleLinkPlatforms}
                   disabled={isLinking}
                 >

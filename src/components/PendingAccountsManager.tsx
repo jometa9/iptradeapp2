@@ -117,12 +117,12 @@ export const PendingAccountsManager: React.FC = () => {
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
     const statusMap = {
       idle: { message: '', isLoading: false },
-      starting: { message: 'Starting link platforms process...', isLoading: true },
+      starting: { message: 'Scanning for link platforms process...', isLoading: true },
       finding: {
         message: 'Scanning for MetaTrader installations...',
         isLoading: true,
       },
-      syncing: { message: 'Syncing Expert Advisors to platforms...', isLoading: true },
+      syncing: { message: 'Syncing trading platforms...', isLoading: true },
       completed: {
         message: 'Success! Platforms linked successfully',
         isLoading: false,
@@ -315,23 +315,6 @@ export const PendingAccountsManager: React.FC = () => {
         message: 'Starting link platforms process...',
         isActive: true,
       });
-
-      // Since we don't get intermediate events, simulate progress
-      setTimeout(() => {
-        setLinkingStatus({
-          step: 'finding',
-          message: 'Scanning for MetaTrader installations...',
-          isActive: true,
-        });
-      }, 1000);
-
-      setTimeout(() => {
-        setLinkingStatus({
-          step: 'syncing',
-          message: 'Syncing Expert Advisors to platforms...',
-          isActive: true,
-        });
-      }, 5000);
     }
 
     if (
@@ -595,7 +578,15 @@ export const PendingAccountsManager: React.FC = () => {
             {pendingCount === 0 ? (
               <div className="text-center py-4">
                 {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
-                  <p className="text-muted-foreground text-blue-800">
+                  <p
+                    className={`text-muted-foreground ${
+                      linkingStatus.step === 'completed'
+                        ? 'link-platforms-success-text'
+                        : getLinkingStatusDisplay(linkingStatus).isLoading
+                          ? 'link-platforms-gradient-text'
+                          : 'text-red-700 font-semibold'
+                    }`}
+                  >
                     {getLinkingStatusDisplay(linkingStatus).message}
                   </p>
                 ) : (

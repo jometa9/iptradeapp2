@@ -402,13 +402,25 @@ class LinkPlatformsController {
 
   // Realizar búsqueda completa (sin cache)
   async performFullScan(result) {
+    // Emitir evento de scanning
+    this.emitLinkPlatformsEvent('scanning', {
+      message: 'Scanning for MetaTrader installations...',
+    });
+
     // Búsqueda simple en todo el sistema
     try {
       console.log(`🔍 Scanning system for MQL folders...`);
+
+      // Emitir evento de syncing antes de empezar el proceso completo
+      this.emitLinkPlatformsEvent('syncing', {
+        message: 'Syncing Expert Advisors to platforms...',
+      });
+
       const driveResult = await this.scanDrive('', false);
 
       result.mql4Folders.push(...driveResult.mql4Folders);
       result.mql5Folders.push(...driveResult.mql5Folders);
+
       result.created += driveResult.created;
       result.synced += driveResult.synced;
       result.errors.push(...driveResult.errors);
@@ -835,13 +847,6 @@ class LinkPlatformsController {
     };
 
     try {
-      // Emitir evento de inicio de búsqueda (ambas plataformas en paralelo)
-      csvManager.emit('linkPlatformsEvent', {
-        type: 'scanning',
-        message: 'Scanning for MetaTrader installations...',
-        timestamp: new Date().toISOString(),
-      });
-
       // Buscar MQL4 y MQL5 en UNA SOLA PASADA para máxima eficiencia
       console.log('🚀 Starting unified search for MQL4 and MQL5 folders...');
       const { mql4Folders, mql5Folders } = await this.findBothMQLFolders();

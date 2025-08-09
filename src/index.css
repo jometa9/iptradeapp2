@@ -55,3 +55,42 @@
 body {
   background-color: #fbf9fa;
 }
+
+.link-platforms-gradient-text {
+  background: linear-gradient(90deg, #00000020, #00000040, #00000060, #00000080, #000000);
+  background-size: 400% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 2.5s ease-in-out infinite;
+}
+
+.link-platforms-success-text {
+  background: linear-gradient(90deg, #374151 0%, #111827 50%, #374151 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: success-shimmer 1.5s ease-in-out 2;
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes success-shimmer {
+  0% {
+    background-position: -200% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
