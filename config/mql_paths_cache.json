@@ -1,13 +1,14 @@
 {
   "paths": {
     "mql4Folders": [
-      "/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/Program Files (x86)/MetaTrader 4/MQL4"
+      "/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/Program Files (x86)/MetaTrader 4/MQL4",
+      "/Users/joaquinmetayer/Documents/GitHub/MetaTrader/Position Size Calculator/MQL4"
     ],
     "mql5Folders": [
       "/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/Program Files/MetaTrader 5/MQL5",
       "/Users/joaquinmetayer/Documents/GitHub/MetaTrader/Position Size Calculator/MQL5"
     ]
   },
-  "timestamp": "2025-08-09T17:27:29.918Z",
+  "timestamp": "2025-08-09T17:31:24.887Z",
   "version": "1.0"
 }
