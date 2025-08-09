@@ -944,22 +944,144 @@ class LinkPlatformsController {
           const homeDir = os.homedir();
 
           const unixCommand = `find "${homeDir}" -name "${folderName}" -type d 2>/dev/null`;
-          console.log(unixCommand);
-          const { stdout: unixStdout } = await execAsync(unixCommand, {
-            maxBuffer: 10 * 1024 * 1024,
-          });
-          folders.push(
-            ...unixStdout
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0)
-          );
+          console.log(`🔍 Executing command: ${unixCommand}`);
+
+          try {
+            const { stdout: unixStdout, stderr: unixStderr } = await execAsync(unixCommand, {
+              maxBuffer: 10 * 1024 * 1024,
+              shell: '/bin/bash', // Explicitly use bash instead of default shell
+              env: { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, // Ensure PATH is set
+            });
+
+            console.log(`✅ Command executed successfully`);
+            console.log(`📝 stdout length: ${unixStdout.length}`);
+            console.log(`📝 stderr: ${unixStderr || 'none'}`);
+
+            if (unixStdout.trim()) {
+              console.log(`📁 Found folders for ${folderName}:`);
+              unixStdout.split('\n').forEach(line => {
+                if (line.trim()) {
+                  console.log(`  - ${line.trim()}`);
+                }
+              });
+            } else {
+              console.log(`ℹ️ No folders found for ${folderName}`);
+            }
+
+            folders.push(
+              ...unixStdout
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+            );
+          } catch (execError) {
+            // Even if find command "fails" (exit code 1), it might still have found results
+            // This happens when find encounters permission denied on some directories
+            const hasStdout = execError.stdout && execError.stdout.trim().length > 0;
+
+            if (hasStdout) {
+              console.log(
+                `⚠️ Command returned error code ${execError.code} but found results for ${folderName}`
+              );
+              console.log(`📁 Found folders despite error:`);
+              execError.stdout.split('\n').forEach(line => {
+                if (line.trim()) {
+                  console.log(`  - ${line.trim()}`);
+                }
+              });
+
+              folders.push(
+                ...execError.stdout
+                  .split('\n')
+                  .map(line => line.trim())
+                  .filter(line => line.length > 0)
+              );
+            } else {
+              console.error(`❌ Command execution failed for ${folderName}:`, execError.message);
+              console.error(`❌ Error code: ${execError.code}`);
+              console.error(`❌ Error signal: ${execError.signal}`);
+              console.error(`❌ stderr: ${execError.stderr}`);
+              console.error(`❌ stdout: ${execError.stdout}`);
+
+              // Try alternative approach using fs.readdir recursively
+              console.log(`🔄 Trying alternative file system search for ${folderName}...`);
+              try {
+                const altFolders = await this.findFoldersRecursivelyFS(homeDir, folderName);
+                console.log(`✅ Alternative search found ${altFolders.length} folders`);
+                folders.push(...altFolders);
+              } catch (altError) {
+                console.error(`❌ Alternative search also failed:`, altError.message);
+              }
+            }
+          }
           break;
         }
       }
     } catch (error) {
       // Do not fail the whole flow if the command errors; return what we have
       console.warn(`⚠️ Folder search issue for ${folderName}: ${error?.message || error}`);
+    }
+
+    return folders;
+  }
+
+  // Alternative method to find folders using Node.js fs instead of shell commands
+  async findFoldersRecursivelyFS(startPath, targetFolderName, maxDepth = 10, currentDepth = 0) {
+    const folders = [];
+
+    // Prevent infinite recursion
+    if (currentDepth > maxDepth) {
+      return folders;
+    }
+
+    try {
+      const items = await fs.promises.readdir(startPath, { withFileTypes: true });
+
+      for (const item of items) {
+        if (item.isDirectory()) {
+          const fullPath = path.join(startPath, item.name);
+
+          // If this directory matches our target, add it
+          if (item.name === targetFolderName) {
+            folders.push(fullPath);
+            console.log(`📁 Found ${targetFolderName} at: ${fullPath}`);
+          }
+
+          // Skip certain directories to avoid permission issues and improve performance
+          const skipDirs = [
+            'node_modules',
+            '.git',
+            '.npm',
+            '.cache',
+            '.Trash',
+            'System',
+            'Library/Caches',
+            'Library/Logs',
+          ];
+
+          const shouldSkip = skipDirs.some(
+            skipDir => fullPath.includes(skipDir) || item.name.startsWith('.')
+          );
+
+          if (!shouldSkip) {
+            try {
+              // Recursively search subdirectories
+              const subFolders = await this.findFoldersRecursivelyFS(
+                fullPath,
+                targetFolderName,
+                maxDepth,
+                currentDepth + 1
+              );
+              folders.push(...subFolders);
+            } catch (subError) {
+              // Skip directories we can't access (permission denied, etc.)
+              // This is normal and expected
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories we can't read
     }
 
     return folders;
