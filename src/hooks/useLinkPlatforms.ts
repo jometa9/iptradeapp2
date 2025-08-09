@@ -67,22 +67,23 @@ export const useLinkPlatforms = () => {
           case 'started':
             setIsLinking(true);
             setError(null);
-            console.log('🔄 Link Platforms started automatically by server');
+            console.log('🔄 Link Platforms started - spinner activated');
             break;
 
           case 'completed':
-            // Solo terminar spinner si NO hay background scan activo
-            if (!data.result?.backgroundScan) {
-              setIsLinking(false);
-            }
             setLastResult({
               success: true,
               message: data.message,
               result: data.result,
             });
-            console.log('✅ Link Platforms completed automatically by server');
+            console.log('✅ Link Platforms completed by server');
+
             if (data.result?.backgroundScan) {
-              console.log('🔄 Keeping spinner active for background scan...');
+              console.log('🔄 Spinner continues - waiting for background scan completion...');
+            } else {
+              // Si no hay background scan, terminar spinner inmediatamente
+              setIsLinking(false);
+              console.log('✅ No background scan - spinner stopped immediately');
             }
             break;
 

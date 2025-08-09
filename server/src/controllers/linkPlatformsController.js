@@ -43,8 +43,9 @@ class LinkPlatformsController {
   async linkPlatforms(req, res) {
     try {
       console.log('🔗 Starting Link Platforms process...');
+      console.log('👤 Manual user request - will perform full scan (ignore cache)');
 
-      const result = await this.findAndSyncMQLFoldersOptimized();
+      const result = await this.findAndSyncMQLFoldersManual();
 
       res.json({
         success: true,
@@ -193,7 +194,52 @@ class LinkPlatformsController {
     return cacheAge < this.cacheValidityHours;
   }
 
-  // Buscar y sincronizar MQL folders con cache optimizado
+  // Manual user request - ALWAYS full scan (ignore cache)
+  async findAndSyncMQLFoldersManual() {
+    console.log('🔗 Starting manual Link Platforms process...');
+    console.log('🔍 Manual request - performing full scan (ignoring cache)');
+
+    // Track linking state
+    this.isLinking = true;
+    console.log('📊 Link Platforms state set to TRUE:', this.isLinking);
+
+    const result = {
+      mql4Folders: [],
+      mql5Folders: [],
+      created: 0,
+      synced: 0,
+      errors: [],
+      filesCreated: 0,
+      csvFiles: [],
+      usedCache: false,
+      backgroundScan: false,
+    };
+
+    // Emitir evento de inicio para el frontend
+    this.emitLinkPlatformsEvent('started', { message: 'Manual Link Platforms process started' });
+
+    try {
+      // SIEMPRE hacer búsqueda completa para requests manuales
+      await this.performFullScan(result);
+    } catch (error) {
+      result.errors.push(`General error: ${error.message}`);
+
+      // Emitir evento de error
+      this.emitLinkPlatformsEvent('error', {
+        message: 'Link Platforms process failed',
+        error: error.message,
+        result,
+      });
+    } finally {
+      // Always reset linking state
+      this.isLinking = false;
+      console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
+    }
+
+    return result;
+  }
+
+  // Buscar y sincronizar MQL folders con cache optimizado (SOLO para auto-start)
   async findAndSyncMQLFoldersOptimized() {
     console.log('🔗 Starting optimized Link Platforms process...');
 
@@ -222,7 +268,9 @@ class LinkPlatformsController {
 
       if (this.isCacheValid()) {
         console.log('⚡ Using cached paths for immediate processing...');
+        console.log('🚀 Auto-start with valid cache - NO background scan');
         result.usedCache = true;
+        result.backgroundScan = false; // NO background scan en auto-start
 
         // Procesar rutas cacheadas inmediatamente
         await this.processCachedPaths(this.cachedPaths, result);
@@ -232,20 +280,13 @@ class LinkPlatformsController {
           await this.configureCSVWatching(result.csvFiles);
         }
 
-        // Emitir evento de finalización rápida
+        // Emitir evento de finalización completa (sin background scan)
         this.emitLinkPlatformsEvent('completed', {
-          message: 'Link Platforms completed using cached paths',
+          message: 'Link Platforms completed using cached paths (auto-start)',
           result,
         });
 
-        // Iniciar búsqueda en background para nuevas rutas (NO bloquea la respuesta)
-        console.log('🔄 Starting background scan for new MQL installations...');
-        result.backgroundScan = true;
-
-        // Ejecutar en background sin esperar (Promise no bloqueante)
-        this.performBackgroundScan().catch(error => {
-          console.error('❌ Background scan error (non-blocking):', error);
-        });
+        console.log('✅ Auto-start completed - no background scan needed');
       } else {
         console.log('🔍 No valid cache found, performing full scan...');
         await this.performFullScan(result);
@@ -401,19 +442,33 @@ class LinkPlatformsController {
       const newPaths = { mql4Folders: [], mql5Folders: [] };
 
       try {
+        console.log('🔍 Background scan: Starting drive scan...');
         const driveResult = await this.scanDrive('', true); // Solo buscar, no procesar
+        console.log('🔍 Background scan: Drive scan completed, processing results...');
         newPaths.mql4Folders.push(...driveResult.mql4Folders);
         newPaths.mql5Folders.push(...driveResult.mql5Folders);
+        console.log(
+          `🔍 Background scan: Found ${newPaths.mql4Folders.length} MQL4 + ${newPaths.mql5Folders.length} MQL5 folders`
+        );
       } catch (error) {
         console.error(`❌ Background scan error:`, error);
       }
 
       // Comparar con cache actual
+      console.log('🔍 Background scan: Comparing with cached paths...');
       const currentMQL4 = this.cachedPaths?.mql4Folders || [];
       const currentMQL5 = this.cachedPaths?.mql5Folders || [];
 
+      console.log(
+        `🔍 Background scan: Current cache has ${currentMQL4.length} MQL4 + ${currentMQL5.length} MQL5 folders`
+      );
+
       const newMQL4 = newPaths.mql4Folders.filter(path => !currentMQL4.includes(path));
       const newMQL5 = newPaths.mql5Folders.filter(path => !currentMQL5.includes(path));
+
+      console.log(
+        `🔍 Background scan: Found ${newMQL4.length} new MQL4 + ${newMQL5.length} new MQL5 folders`
+      );
 
       if (newMQL4.length > 0 || newMQL5.length > 0) {
         console.log(
@@ -468,10 +523,12 @@ class LinkPlatformsController {
         });
       } else {
         console.log('ℹ️ Background scan: No new MQL installations found');
+        console.log('📡 Background scan: Emitting completion event...');
         this.emitBackgroundScanEvent('completed', {
           message: 'Background scan completed - no new installations found',
           newInstallations: { mql4: 0, mql5: 0, synced: 0 },
         });
+        console.log('✅ Background scan: Event emitted successfully');
       }
     } catch (error) {
       console.error('❌ Background scan failed:', error);
