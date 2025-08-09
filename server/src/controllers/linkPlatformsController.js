@@ -1056,57 +1056,154 @@ class LinkPlatformsController {
     }
   }
 
-  // Búsqueda específica para macOS
+  // Búsqueda específica para macOS - busca en TODOS los discos y ubicaciones
   async findBothMQLFoldersMacOS() {
-    const homeDir = os.homedir();
+    try {
+      // Obtener todas las ubicaciones posibles donde puede estar MetaTrader
+      const searchPaths = await this.getMacOSSearchPaths();
+      console.log(`🔍 Searching for MQL folders in macOS paths: ${searchPaths.length} locations`);
+      
+      const allMQL4Folders = [];
+      const allMQL5Folders = [];
+      
+      // Buscar en cada ubicación de forma paralela para mayor velocidad
+      const searchPromises = searchPaths.map(async (searchPath) => {
+        try {
+          console.log(`🔍 Searching in path: ${searchPath}`);
+          
+          // Comando optimizado para buscar ambas carpetas MQL4 y MQL5
+          const command = `find "${searchPath}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
+          
+          const { stdout } = await execAsync(command, {
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 20000, // Timeout más corto por ruta individual
+            shell: '/bin/zsh',
+            env: {
+              ...process.env,
+              PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
+            },
+          });
 
-    // Comando optimizado para macOS
-    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
-    console.log(`🔍 Executing macOS search: ${command}`);
-    console.log(`🏠 Home directory: ${homeDir}`);
-
-    return new Promise(resolve => {
-      exec(
-        command,
-        {
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 30000,
-          shell: '/bin/zsh',
-          env: {
-            ...process.env,
-            PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
-            HOME: homeDir,
-          },
-        },
-        (error, stdout, stderr) => {
           if (stdout && stdout.trim()) {
-            console.log(`📝 macOS search completed successfully`);
-
-            const allFolders = stdout
+            const folders = stdout
               .split('\n')
               .map(line => line.trim())
               .filter(line => line.length > 0);
-
-            console.log(`📋 Found ${allFolders.length} MQL folders:`);
-            allFolders.forEach(folder => console.log(`  📂 ${folder}`));
-
-            const result = {
-              mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
-              mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-            };
-
-            console.log(
-              `📁 Categorized: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
-            );
-            resolve(result);
-            return;
+              
+            const mql4 = folders.filter(folder => folder.endsWith('/MQL4'));
+            const mql5 = folders.filter(folder => folder.endsWith('/MQL5'));
+            
+            console.log(`📂 Path ${searchPath}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 folders`);
+            
+            return { mql4, mql5 };
           }
-
-          console.log(`🔄 No MQL folders found in macOS, returning empty result`);
-          resolve({ mql4Folders: [], mql5Folders: [] });
+          
+          return { mql4: [], mql5: [] };
+        } catch (error) {
+          console.warn(`⚠️ Error searching path ${searchPath}: ${error.message}`);
+          return { mql4: [], mql5: [] };
         }
-      );
+      });
+      
+      // Esperar que todas las búsquedas terminen
+      const results = await Promise.all(searchPromises);
+      
+      // Combinar todos los resultados
+      results.forEach(result => {
+        allMQL4Folders.push(...result.mql4);
+        allMQL5Folders.push(...result.mql5);
+      });
+      
+      // Remover duplicados
+      const uniqueMQL4 = [...new Set(allMQL4Folders)];
+      const uniqueMQL5 = [...new Set(allMQL5Folders)];
+      
+      console.log(`✅ macOS search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 folders`);
+      uniqueMQL4.forEach(folder => console.log(`  📂 MQL4: ${folder}`));
+      uniqueMQL5.forEach(folder => console.log(`  📂 MQL5: ${folder}`));
+      
+      return {
+        mql4Folders: uniqueMQL4,
+        mql5Folders: uniqueMQL5,
+      };
+      
+    } catch (error) {
+      console.error(`❌ Error in macOS MQL search: ${error.message}`);
+      return { mql4Folders: [], mql5Folders: [] };
+    }
+  }
+
+  // Obtener todas las rutas de búsqueda para macOS incluyendo discos externos
+  async getMacOSSearchPaths() {
+    const homeDir = os.homedir();
+    const searchPaths = new Set();
+    
+    // Rutas principales del sistema
+    const systemPaths = [
+      homeDir,
+      '/Applications',
+      '/usr/local/share',
+      '/opt',
+      '/System/Volumes/Data/Applications', // macOS Catalina+
+    ];
+    
+    // Rutas específicas del usuario
+    const userPaths = [
+      path.join(homeDir, 'Library', 'Application Support'),
+      path.join(homeDir, 'Documents'),
+      path.join(homeDir, 'Desktop'),
+      path.join(homeDir, 'Downloads'),
+      path.join(homeDir, 'Applications'), // Apps del usuario
+    ];
+    
+    // Agregar todas las rutas base
+    systemPaths.forEach(p => searchPaths.add(p));
+    userPaths.forEach(p => searchPaths.add(p));
+    
+    // Buscar volúmenes montados (discos externos, USB, etc.)
+    try {
+      console.log('🔍 Detecting mounted volumes...');
+      const { stdout } = await execAsync('ls /Volumes 2>/dev/null', { timeout: 5000 });
+      
+      if (stdout && stdout.trim()) {
+        const volumes = stdout
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line && line.length > 0)
+          .map(volume => `/Volumes/${volume}`);
+        
+        volumes.forEach(volume => {
+          // Verificar que el volumen sea accesible
+          try {
+            if (fs.existsSync(volume) && fs.statSync(volume).isDirectory()) {
+              searchPaths.add(volume);
+              // También agregar subcarpetas comunes en discos externos
+              searchPaths.add(path.join(volume, 'Applications'));
+              searchPaths.add(path.join(volume, 'Users'));
+            }
+          } catch (error) {
+            // Ignorar volúmenes inaccesibles
+          }
+        });
+        
+        console.log(`📀 Found mounted volumes: ${volumes.join(', ')}`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not list mounted volumes:', error.message);
+    }
+    
+    // Filtrar solo rutas que existen y son accesibles
+    const existingPaths = Array.from(searchPaths).filter(pathStr => {
+      try {
+        return fs.existsSync(pathStr) && fs.statSync(pathStr).isDirectory();
+      } catch (error) {
+        return false;
+      }
     });
+    
+    console.log(`🔍 macOS search paths (${existingPaths.length}): ${existingPaths.join(', ')}`);
+    
+    return existingPaths;
   }
 
   // Búsqueda específica para Linux
