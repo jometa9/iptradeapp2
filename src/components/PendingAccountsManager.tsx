@@ -32,14 +32,7 @@ interface ConversionForm {
   reverseTrade: boolean;
 }
 
-type LinkingStep =
-  | 'idle'
-  | 'starting'
-  | 'finding_mt4'
-  | 'finding_mt5'
-  | 'syncing'
-  | 'completed'
-  | 'error';
+type LinkingStep = 'idle' | 'starting' | 'finding' | 'syncing' | 'completed' | 'error';
 
 interface LinkingStatus {
   step: LinkingStep;
@@ -125,12 +118,8 @@ export const PendingAccountsManager: React.FC = () => {
     const statusMap = {
       idle: { message: '', isLoading: false },
       starting: { message: 'Starting link platforms process...', isLoading: true },
-      finding_mt4: {
-        message: 'Scanning for MetaTrader 4 installations...',
-        isLoading: true,
-      },
-      finding_mt5: {
-        message: 'Scanning for MetaTrader 5 installations...',
+      finding: {
+        message: 'Scanning for MetaTrader installations...',
         isLoading: true,
       },
       syncing: { message: 'Syncing Expert Advisors to platforms...', isLoading: true },
@@ -207,20 +196,11 @@ export const PendingAccountsManager: React.FC = () => {
             });
             break;
 
-          case 'scanning_mql4':
-            console.log('📊 MQL4 scanning started');
+          case 'scanning':
+            console.log('🔍 Platform scanning started');
             setLinkingStatus({
-              step: 'finding_mt4',
-              message: 'Scanning for MetaTrader 4 installations...',
-              isActive: true,
-            });
-            break;
-
-          case 'scanning_mql5':
-            console.log('📈 MQL5 scanning started');
-            setLinkingStatus({
-              step: 'finding_mt5',
-              message: 'Scanning for MetaTrader 5 installations...',
+              step: 'finding',
+              message: 'Scanning for MetaTrader installations...',
               isActive: true,
             });
             break;
@@ -287,20 +267,15 @@ export const PendingAccountsManager: React.FC = () => {
       if (data.type === 'commandExecution') {
         const command = data.command as string;
 
-        if (command && command.includes('find') && command.includes('MQL4')) {
-          console.log('📊 MQL4 scan command detected');
+        if (
+          command &&
+          command.includes('find') &&
+          (command.includes('MQL4') || command.includes('MQL5'))
+        ) {
+          console.log('🔍 MetaTrader scan command detected');
           setLinkingStatus({
-            step: 'finding_mt4',
-            message: 'Scanning for MetaTrader 4 installations...',
-            isActive: true,
-          });
-        }
-
-        if (command && command.includes('find') && command.includes('MQL5')) {
-          console.log('📈 MQL5 scan command detected');
-          setLinkingStatus({
-            step: 'finding_mt5',
-            message: 'Scanning for MetaTrader 5 installations...',
+            step: 'finding',
+            message: 'Scanning for MetaTrader installations...',
             isActive: true,
           });
         }
@@ -344,19 +319,11 @@ export const PendingAccountsManager: React.FC = () => {
       // Since we don't get intermediate events, simulate progress
       setTimeout(() => {
         setLinkingStatus({
-          step: 'finding_mt4',
-          message: 'Scanning for MetaTrader 4 installations...',
+          step: 'finding',
+          message: 'Scanning for MetaTrader installations...',
           isActive: true,
         });
       }, 1000);
-
-      setTimeout(() => {
-        setLinkingStatus({
-          step: 'finding_mt5',
-          message: 'Scanning for MetaTrader 5 installations...',
-          isActive: true,
-        });
-      }, 3000);
 
       setTimeout(() => {
         setLinkingStatus({

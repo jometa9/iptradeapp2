@@ -837,7 +837,7 @@ class LinkPlatformsController {
     try {
       // Emitir evento de inicio de búsqueda (ambas plataformas en paralelo)
       csvManager.emit('linkPlatformsEvent', {
-        type: 'scanning_mql4',
+        type: 'scanning',
         message: 'Scanning for MetaTrader installations...',
         timestamp: new Date().toISOString(),
       });
