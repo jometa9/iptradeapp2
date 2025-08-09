@@ -110,6 +110,8 @@ export const useLinkPlatforms = () => {
               result: data.result,
             });
             console.log('✅ Link Platforms completed by server');
+            console.log('✅ backgroundScan value:', data.result?.backgroundScan);
+            console.log('✅ Full result data:', data.result);
 
             if (data.result?.backgroundScan) {
               console.log('🔄 Spinner continues - waiting for background scan completion...');
@@ -118,6 +120,12 @@ export const useLinkPlatforms = () => {
               setIsLinking(false);
               console.log('✅ No background scan - spinner stopped immediately');
             }
+            break;
+
+          case 'idle':
+            // El servidor está indicando que Link Platforms no está corriendo
+            setIsLinking(false);
+            console.log('💤 Link Platforms is idle - ensuring spinner is stopped');
             break;
 
           case 'error':

@@ -40,20 +40,22 @@ const requireValidSubscription = (req, res, next) => {
 // Server-Sent Events para file watching real
 router.get('/csv/events', requireValidSubscription, (req, res) => {
   const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-  
+
   // PROTECCIÓN: Solo una conexión por IP
   if (activeConnectionsByIP.has(clientIP)) {
     console.log(`🚫 SSE: BLOCKING duplicate connection from IP: ${clientIP}`);
     res.status(429).json({ error: 'Only one SSE connection per IP allowed' });
     return;
   }
-  
+
   activeSSEConnections++;
   const connectionId = activeSSEConnections;
   activeConnectionsByIP.set(clientIP, connectionId);
-  
+
   console.log(`🔌 SSE connection #${connectionId} established (Total: ${activeSSEConnections})`);
-  console.log(`📋 Connection details: User-Agent=${req.headers['user-agent']?.substring(0, 50)}...`);
+  console.log(
+    `📋 Connection details: User-Agent=${req.headers['user-agent']?.substring(0, 50)}...`
+  );
   console.log(`🔑 API Key: ${req.query.apiKey?.substring(0, 12)}...`);
   console.log(`📍 Client IP: ${clientIP}`);
   res.writeHead(200, {
@@ -142,14 +144,17 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de Link Platforms
       const handleLinkPlatformsEvent = payload => {
         try {
-          console.log(`📨 Forwarding Link Platforms event: ${payload.type}`);
+          console.log(
+            `📨 Forwarding Link Platforms event to SSE #${connectionId}: ${payload.type}`
+          );
+          console.log(`🔍 Total active SSE connections: ${activeSSEConnections}`);
           sendUpdate({
             type: 'linkPlatformsEvent',
             timestamp: payload.timestamp || new Date().toISOString(),
             eventType: payload.type, // 'started', 'completed', 'error'
             message: payload.message,
             result: payload.result,
-            error: payload.error
+            error: payload.error,
           });
         } catch (e) {
           console.error('Error handling Link Platforms event:', e);
@@ -166,7 +171,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
             eventType: payload.type, // 'completed', 'error'
             message: payload.message,
             newInstallations: payload.newInstallations,
-            error: payload.error
+            error: payload.error,
           });
         } catch (e) {
           console.error('Error handling background scan event:', e);
@@ -191,17 +196,28 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
       sendUpdate(initialData);
 
-      // Enviar estado actual de Link Platforms si está en progreso
+      // Enviar estado actual de Link Platforms al cliente que se conecta
       import('../controllers/linkPlatformsController.js')
         .then(linkPlatformsModule => {
           const linkStatus = linkPlatformsModule.default.getLinkingStatus();
+          console.log('📤 SSE: Checking Link Platforms status for new client:', linkStatus);
+
           if (linkStatus.isLinking) {
             console.log('📤 SSE: Sending Link Platforms started event to new client');
             sendUpdate({
               type: 'linkPlatformsEvent',
               timestamp: linkStatus.timestamp,
               eventType: 'started',
-              message: 'Link Platforms process is in progress'
+              message: 'Link Platforms process is in progress',
+            });
+          } else {
+            // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
+            console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
+            sendUpdate({
+              type: 'linkPlatformsEvent',
+              timestamp: new Date().toISOString(),
+              eventType: 'idle',
+              message: 'Link Platforms is idle',
             });
           }
         })
@@ -213,7 +229,9 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       req.on('close', () => {
         activeSSEConnections--;
         activeConnectionsByIP.delete(clientIP);
-        console.log(`🔌 SSE connection #${connectionId} closed (Remaining: ${activeSSEConnections})`);
+        console.log(
+          `🔌 SSE connection #${connectionId} closed (Remaining: ${activeSSEConnections})`
+        );
         console.log(`📍 Released IP: ${clientIP}`);
         clearInterval(heartbeat);
         csvManager.off('fileUpdated', handleCSVUpdate);

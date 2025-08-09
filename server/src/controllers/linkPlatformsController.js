@@ -189,9 +189,24 @@ class LinkPlatformsController {
   isCacheValid() {
     if (!this.cachedPaths || !this.lastScanTime) return false;
 
+    // Verificar que el cache tenga paths válidos (no esté vacío)
+    const hasMQL4Paths = this.cachedPaths.mql4Folders && this.cachedPaths.mql4Folders.length > 0;
+    const hasMQL5Paths = this.cachedPaths.mql5Folders && this.cachedPaths.mql5Folders.length > 0;
+
+    if (!hasMQL4Paths && !hasMQL5Paths) {
+      console.log('📋 Cache exists but is empty (no MQL paths found) - need to search');
+      return false;
+    }
+
     const now = new Date();
     const cacheAge = (now - this.lastScanTime) / (1000 * 60 * 60); // horas
-    return cacheAge < this.cacheValidityHours;
+    const isTimeValid = cacheAge < this.cacheValidityHours;
+
+    console.log(
+      `📋 Cache validation: ${hasMQL4Paths ? 'MQL4✅' : 'MQL4❌'} ${hasMQL5Paths ? 'MQL5✅' : 'MQL5❌'} Time:${isTimeValid ? '✅' : '❌'}(${cacheAge.toFixed(1)}h)`
+    );
+
+    return isTimeValid;
   }
 
   // Manual user request - ALWAYS full scan (ignore cache)
@@ -813,12 +828,32 @@ class LinkPlatformsController {
     };
 
     try {
-      // Buscar carpetas MQL4 y MQL5 con comando simple
-      const mql4Folders = await this.findFoldersRecursively('', 'MQL4');
-      const mql5Folders = await this.findFoldersRecursively('', 'MQL5');
+      // Emitir evento de inicio de búsqueda (ambas plataformas en paralelo)
+      csvManager.emit('linkPlatformsEvent', {
+        type: 'scanning_mql4',
+        message: 'Scanning for MetaTrader installations...',
+        timestamp: new Date().toISOString(),
+      });
+
+      // Buscar MQL4 y MQL5 en UNA SOLA PASADA para máxima eficiencia
+      console.log('🚀 Starting unified search for MQL4 and MQL5 folders...');
+      const { mql4Folders, mql5Folders } = await this.findBothMQLFolders();
+      console.log(
+        `✅ Unified search completed: ${mql4Folders.length} MQL4 + ${mql5Folders.length} MQL5 folders`
+      );
 
       // Solo agregar carpetas al resultado
       result.mql4Folders = mql4Folders;
+      result.mql5Folders = mql5Folders;
+
+      // Emitir evento de inicio de sincronización
+      if (!searchOnly && (mql4Folders.length > 0 || mql5Folders.length > 0)) {
+        csvManager.emit('linkPlatformsEvent', {
+          type: 'syncing',
+          message: 'Syncing Expert Advisors to platforms...',
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // Procesar carpetas MQL4 solo si no es búsqueda únicamente
       if (!searchOnly) {
@@ -919,172 +954,84 @@ class LinkPlatformsController {
     return result;
   }
 
-  async findFoldersRecursively(rootPath, folderName) {
-    const folders = [];
+  // Búsqueda simple y rápida de MQL4 y MQL5
+  async findBothMQLFolders() {
+    const homeDir = os.homedir();
 
-    try {
-      switch (this.operatingSystem) {
-        case 'windows': {
-          const startRoot = rootPath && rootPath.trim().length > 0 ? rootPath : 'C:\\';
-          const winCommand = `dir /s /b /ad "${startRoot}" | findstr /i "\\\\${folderName}$"`;
-          const { stdout: winStdout } = await execAsync(winCommand, {
-            maxBuffer: 10 * 1024 * 1024,
-          });
-          folders.push(
-            ...winStdout
+    // Comando optimizado - usar exec directo para evitar excepciones por exit codes
+    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
+    console.log(`🔍 Executing optimized search: ${command}`);
+    console.log(`🏠 Home directory: ${homeDir}`);
+
+    return new Promise(resolve => {
+      exec(
+        command,
+        {
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 30000,
+          shell: '/bin/zsh',
+          env: {
+            ...process.env,
+            PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
+            HOME: homeDir,
+          },
+        },
+        (error, stdout, stderr) => {
+          // Procesar stdout independientemente del exit code
+          if (stdout && stdout.trim()) {
+            console.log(`📝 Command completed successfully`);
+
+            const allFolders = stdout
               .split('\n')
               .map(line => line.trim())
-              .filter(line => line.length > 0)
-          );
-          break;
-        }
-        case 'macos':
-        case 'linux': {
-          // Buscar SOLO desde el HOME del usuario (evitar usar ~ que no siempre se expande en /bin/sh)
-          const homeDir = os.homedir();
+              .filter(line => line.length > 0);
 
-          const unixCommand = `find "${homeDir}" -name "${folderName}" -type d 2>/dev/null`;
-          console.log(`🔍 Executing command: ${unixCommand}`);
+            console.log(`📋 Found ${allFolders.length} MQL folders:`);
+            allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
-          try {
-            const { stdout: unixStdout, stderr: unixStderr } = await execAsync(unixCommand, {
-              maxBuffer: 10 * 1024 * 1024,
-              shell: '/bin/bash', // Explicitly use bash instead of default shell
-              env: { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, // Ensure PATH is set
-            });
+            const result = {
+              mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
+              mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+            };
 
-            console.log(`✅ Command executed successfully`);
-            console.log(`📝 stdout length: ${unixStdout.length}`);
-            console.log(`📝 stderr: ${unixStderr || 'none'}`);
-
-            if (unixStdout.trim()) {
-              console.log(`📁 Found folders for ${folderName}:`);
-              unixStdout.split('\n').forEach(line => {
-                if (line.trim()) {
-                  console.log(`  - ${line.trim()}`);
-                }
-              });
-            } else {
-              console.log(`ℹ️ No folders found for ${folderName}`);
-            }
-
-            folders.push(
-              ...unixStdout
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
+            console.log(
+              `📁 Categorized: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
             );
-          } catch (execError) {
-            // Even if find command "fails" (exit code 1), it might still have found results
-            // This happens when find encounters permission denied on some directories
-            const hasStdout = execError.stdout && execError.stdout.trim().length > 0;
-
-            if (hasStdout) {
-              console.log(
-                `⚠️ Command returned error code ${execError.code} but found results for ${folderName}`
-              );
-              console.log(`📁 Found folders despite error:`);
-              execError.stdout.split('\n').forEach(line => {
-                if (line.trim()) {
-                  console.log(`  - ${line.trim()}`);
-                }
-              });
-
-              folders.push(
-                ...execError.stdout
-                  .split('\n')
-                  .map(line => line.trim())
-                  .filter(line => line.length > 0)
-              );
-            } else {
-              console.error(`❌ Command execution failed for ${folderName}:`, execError.message);
-              console.error(`❌ Error code: ${execError.code}`);
-              console.error(`❌ Error signal: ${execError.signal}`);
-              console.error(`❌ stderr: ${execError.stderr}`);
-              console.error(`❌ stdout: ${execError.stdout}`);
-
-              // Try alternative approach using fs.readdir recursively
-              console.log(`🔄 Trying alternative file system search for ${folderName}...`);
-              try {
-                const altFolders = await this.findFoldersRecursivelyFS(homeDir, folderName);
-                console.log(`✅ Alternative search found ${altFolders.length} folders`);
-                folders.push(...altFolders);
-              } catch (altError) {
-                console.error(`❌ Alternative search also failed:`, altError.message);
-              }
-            }
+            resolve(result);
+            return;
           }
-          break;
-        }
-      }
-    } catch (error) {
-      // Do not fail the whole flow if the command errors; return what we have
-      console.warn(`⚠️ Folder search issue for ${folderName}: ${error?.message || error}`);
-    }
 
-    return folders;
+          // Solo si realmente no hay resultados útiles
+          console.log(`🔄 No MQL folders found, returning empty result`);
+          resolve({ mql4Folders: [], mql5Folders: [] });
+        }
+      );
+    });
   }
 
-  // Alternative method to find folders using Node.js fs instead of shell commands
-  async findFoldersRecursivelyFS(startPath, targetFolderName, maxDepth = 10, currentDepth = 0) {
-    const folders = [];
-
-    // Prevent infinite recursion
-    if (currentDepth > maxDepth) {
-      return folders;
-    }
+  // Método simple de búsqueda individual (usado solo como fallback)
+  async findFoldersRecursively(rootPath, folderName) {
+    const homeDir = os.homedir();
 
     try {
-      const items = await fs.promises.readdir(startPath, { withFileTypes: true });
+      const command = `find "${homeDir}" -name "${folderName}" -type d 2>/dev/null`;
+      const { stdout } = await execAsync(command, {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 15000,
+        shell: '/bin/bash',
+      });
 
-      for (const item of items) {
-        if (item.isDirectory()) {
-          const fullPath = path.join(startPath, item.name);
+      const folders = stdout
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
 
-          // If this directory matches our target, add it
-          if (item.name === targetFolderName) {
-            folders.push(fullPath);
-            console.log(`📁 Found ${targetFolderName} at: ${fullPath}`);
-          }
-
-          // Skip certain directories to avoid permission issues and improve performance
-          const skipDirs = [
-            'node_modules',
-            '.git',
-            '.npm',
-            '.cache',
-            '.Trash',
-            'System',
-            'Library/Caches',
-            'Library/Logs',
-          ];
-
-          const shouldSkip = skipDirs.some(
-            skipDir => fullPath.includes(skipDir) || item.name.startsWith('.')
-          );
-
-          if (!shouldSkip) {
-            try {
-              // Recursively search subdirectories
-              const subFolders = await this.findFoldersRecursivelyFS(
-                fullPath,
-                targetFolderName,
-                maxDepth,
-                currentDepth + 1
-              );
-              folders.push(...subFolders);
-            } catch (subError) {
-              // Skip directories we can't access (permission denied, etc.)
-              // This is normal and expected
-            }
-          }
-        }
-      }
+      console.log(`📁 Found ${folders.length} ${folderName} folders`);
+      return folders;
     } catch (error) {
-      // Skip directories we can't read
+      console.error(`❌ Error finding ${folderName}: ${error.message}`);
+      return [];
     }
-
-    return folders;
   }
 }
 
