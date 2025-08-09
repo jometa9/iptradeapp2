@@ -966,13 +966,103 @@ class LinkPlatformsController {
     return result;
   }
 
-  // Búsqueda simple y rápida de MQL4 y MQL5
+  // Búsqueda simple y rápida de MQL4 y MQL5 con detección de OS
   async findBothMQLFolders() {
+    console.log(`🔍 Starting MQL folder search for ${this.operatingSystem}...`);
+    
+    switch (this.operatingSystem) {
+      case 'windows':
+        return await this.findBothMQLFoldersWindows();
+      case 'macos':
+        return await this.findBothMQLFoldersMacOS();
+      case 'linux':
+        return await this.findBothMQLFoldersLinux();
+      default:
+        console.warn('⚠️ Unknown OS, using Linux fallback');
+        return await this.findBothMQLFoldersLinux();
+    }
+  }
+
+  // Búsqueda específica para Windows - busca en TODOS los discos
+  async findBothMQLFoldersWindows() {
+    try {
+      // Obtener todos los drives disponibles
+      const drives = await this.getWindowsDrives();
+      console.log(`🔍 Searching for MQL folders in Windows drives: ${drives.join(', ')}`);
+      
+      const allMQL4Folders = [];
+      const allMQL5Folders = [];
+      
+      // Buscar en cada drive de forma paralela para mayor velocidad
+      const searchPromises = drives.map(async (drive) => {
+        try {
+          console.log(`🔍 Searching in drive: ${drive}`);
+          
+          // Comando para buscar ambas carpetas MQL4 y MQL5 en un solo comando
+          const command = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\MQL[45]$"`;
+          
+          const { stdout } = await execAsync(command, {
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 30000,
+            shell: 'cmd.exe',
+          });
+
+          if (stdout && stdout.trim()) {
+            const folders = stdout
+              .split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0);
+              
+            const mql4 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL4'));
+            const mql5 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL5'));
+            
+            console.log(`📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 folders`);
+            
+            return { mql4, mql5 };
+          }
+          
+          return { mql4: [], mql5: [] };
+        } catch (error) {
+          console.warn(`⚠️ Error searching drive ${drive}: ${error.message}`);
+          return { mql4: [], mql5: [] };
+        }
+      });
+      
+      // Esperar que todas las búsquedas terminen
+      const results = await Promise.all(searchPromises);
+      
+      // Combinar todos los resultados
+      results.forEach(result => {
+        allMQL4Folders.push(...result.mql4);
+        allMQL5Folders.push(...result.mql5);
+      });
+      
+      // Remover duplicados
+      const uniqueMQL4 = [...new Set(allMQL4Folders)];
+      const uniqueMQL5 = [...new Set(allMQL5Folders)];
+      
+      console.log(`✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 folders`);
+      uniqueMQL4.forEach(folder => console.log(`  📂 MQL4: ${folder}`));
+      uniqueMQL5.forEach(folder => console.log(`  📂 MQL5: ${folder}`));
+      
+      return {
+        mql4Folders: uniqueMQL4,
+        mql5Folders: uniqueMQL5,
+      };
+      
+    } catch (error) {
+      console.error(`❌ Error in Windows MQL search: ${error.message}`);
+      return { mql4Folders: [], mql5Folders: [] };
+    }
+  }
+
+  // Búsqueda específica para macOS
+  async findBothMQLFoldersMacOS() {
     const homeDir = os.homedir();
 
-    // Comando optimizado - usar exec directo para evitar excepciones por exit codes
+    // Comando optimizado para macOS
     const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
-    console.log(`🔍 Executing optimized search: ${command}`);
+    console.log(`🔍 Executing macOS search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
     return new Promise(resolve => {
@@ -989,9 +1079,8 @@ class LinkPlatformsController {
           },
         },
         (error, stdout, stderr) => {
-          // Procesar stdout independientemente del exit code
           if (stdout && stdout.trim()) {
-            console.log(`📝 Command completed successfully`);
+            console.log(`📝 macOS search completed successfully`);
 
             const allFolders = stdout
               .split('\n')
@@ -1013,8 +1102,60 @@ class LinkPlatformsController {
             return;
           }
 
-          // Solo si realmente no hay resultados útiles
-          console.log(`🔄 No MQL folders found, returning empty result`);
+          console.log(`🔄 No MQL folders found in macOS, returning empty result`);
+          resolve({ mql4Folders: [], mql5Folders: [] });
+        }
+      );
+    });
+  }
+
+  // Búsqueda específica para Linux
+  async findBothMQLFoldersLinux() {
+    const homeDir = os.homedir();
+
+    // Comando optimizado para Linux
+    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
+    console.log(`🔍 Executing Linux search: ${command}`);
+    console.log(`🏠 Home directory: ${homeDir}`);
+
+    return new Promise(resolve => {
+      exec(
+        command,
+        {
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 30000,
+          shell: '/bin/bash',
+          env: {
+            ...process.env,
+            PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
+            HOME: homeDir,
+          },
+        },
+        (error, stdout, stderr) => {
+          if (stdout && stdout.trim()) {
+            console.log(`📝 Linux search completed successfully`);
+
+            const allFolders = stdout
+              .split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0);
+
+            console.log(`📋 Found ${allFolders.length} MQL folders:`);
+            allFolders.forEach(folder => console.log(`  📂 ${folder}`));
+
+            const result = {
+              mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
+              mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+            };
+
+            console.log(
+              `📁 Categorized: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
+            );
+            resolve(result);
+            return;
+          }
+
+          console.log(`🔄 No MQL folders found in Linux, returning empty result`);
           resolve({ mql4Folders: [], mql5Folders: [] });
         }
       );
