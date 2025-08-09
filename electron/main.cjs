@@ -4,15 +4,29 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Helper para leer el puerto del .env raíz
+// Helper para leer el puerto del .env raíz o variables de entorno
 function getPortFromEnv() {
+  // Primero intentar leer de variables de entorno del proceso
+  if (process.env.PORT) {
+    return process.env.PORT;
+  }
+
+  if (process.env.VITE_SERVER_PORT) {
+    return process.env.VITE_SERVER_PORT;
+  }
+
+  // Luego intentar leer del archivo .env en la raíz
   const envPath = path.join(__dirname, '../.env');
   if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
-    const match = envContent.match(/^PORT=(\d+)/m);
-    if (match) return match[1];
+    const portMatch = envContent.match(/^PORT=(\d+)/m);
+    if (portMatch) return portMatch[1];
+
+    const vitePortMatch = envContent.match(/^VITE_SERVER_PORT=(\d+)/m);
+    if (vitePortMatch) return vitePortMatch[1];
   }
-  return '3000'; // fallback
+
+  return '3000'; // fallback por defecto
 }
 
 // Mejorar la detección de modo desarrollo
@@ -265,16 +279,17 @@ async function createTray() {
     const updateTrayMenu = async () => {
       try {
         // Obtener el estado del copier desde el servidor
-        const serverPort = process.env.VITE_SERVER_PORT || '3000';
-        
+        const serverPort = getPortFromEnv();
+        console.log(`[TRAY] Using server port: ${serverPort}`);
+
         // Agregar timeout para evitar que la petición se cuelgue
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
-        
+
         const response = await fetch(`http://localhost:${serverPort}/copier-status`, {
           signal: controller.signal,
         });
-        
+
         clearTimeout(timeoutId);
 
         let copierStatus = 'OFF';
@@ -320,14 +335,14 @@ async function createTray() {
         console.log(`[TRAY] Menu updated - Copier status: ${copierStatus}`);
       } catch (error) {
         console.error('[TRAY] Error updating menu:', error.message || error);
-        
+
         // Log específico para errores de conexión
         if (error.code === 'ECONNREFUSED') {
           console.log('[TRAY] Server not ready yet, will retry on next interval');
         } else if (error.name === 'AbortError') {
           console.log('[TRAY] Request timeout, server may be starting up');
         }
-        
+
         // En caso de error, usar estado por defecto
         const contextMenu = Menu.buildFromTemplate([
           {
@@ -443,18 +458,18 @@ function createWindow() {
     // En Windows, cerrar la aplicación completamente cuando se cierra la ventana
     if (process.platform === 'win32') {
       event.preventDefault();
-      
+
       console.log('[ELECTRON] Window closing - shutting down application...');
-      
+
       // Marcar que estamos cerrando
       app.isQuiting = true;
-      
+
       // Limpiar todos los procesos
       await cleanupProcesses();
-      
+
       // Cerrar la ventana principal
       mainWindow = null;
-      
+
       // Forzar el cierre de la aplicación
       app.exit(0);
     } else {
@@ -532,7 +547,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async function () {
   console.log('[ELECTRON] All windows closed');
-  
+
   // En Windows, cerrar la aplicación completamente
   if (process.platform === 'win32') {
     app.isQuiting = true;
@@ -551,11 +566,11 @@ app.on('window-all-closed', async function () {
 // Función para limpiar todos los procesos
 async function cleanupProcesses() {
   console.log('[ELECTRON] Starting cleanup...');
-  
+
   // Cerrar el servidor
   if (serverInstance) {
     console.log('[ELECTRON] Closing server instance...');
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       serverInstance.close(() => {
         console.log('[ELECTRON] Server closed');
         serverInstance = null;
@@ -563,14 +578,14 @@ async function cleanupProcesses() {
       });
     });
   }
-  
+
   // Terminar el proceso del servidor en desarrollo
   if (serverProcess) {
     console.log('[ELECTRON] Killing development server process...');
     serverProcess.kill('SIGTERM');
     serverProcess = null;
   }
-  
+
   // Destruir el tray
   if (tray) {
     console.log('[ELECTRON] Destroying tray...');
@@ -580,13 +595,13 @@ async function cleanupProcesses() {
 }
 
 // Manejar el evento before-quit para limpiar recursos
-app.on('before-quit', async (event) => {
+app.on('before-quit', async event => {
   if (!app.isQuiting) {
     event.preventDefault();
     app.isQuiting = true;
-    
+
     await cleanupProcesses();
-    
+
     // Ahora sí, cerrar la app
     app.quit();
   }

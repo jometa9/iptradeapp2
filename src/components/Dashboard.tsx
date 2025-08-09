@@ -114,8 +114,15 @@ export const Dashboard: React.FC = () => {
     try {
       console.log(`🔄 Starting Link Platforms process for ${osInfo.text}...`);
       const result = await linkPlatforms();
-      console.log('✅ Link Platforms completed successfully:', result);
-      console.log('📊 Final isLinking state:', isLinking);
+      console.log('✅ Link Platforms HTTP request completed:', result);
+      console.log('📊 isLinking state after HTTP request:', isLinking);
+
+      // Si hay background scan, el spinner debería mantenerse
+      if (result?.result?.backgroundScan) {
+        console.log(
+          '🔄 Background scan active - spinner should continue until backgroundScanEvent'
+        );
+      }
     } catch (error) {
       console.error('❌ Link Platforms failed:', error);
       console.log('📊 Error isLinking state:', isLinking);

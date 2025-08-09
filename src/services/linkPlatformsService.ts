@@ -1,4 +1,4 @@
-const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
 
 export interface LinkPlatformsResult {
   success: boolean;
@@ -17,6 +17,9 @@ export interface LinkPlatformsResult {
 export const linkPlatformsService = {
   async linkPlatforms(secretKey: string): Promise<LinkPlatformsResult> {
     try {
+      console.log('🌐 Making Link Platforms request to:', `${baseUrl}/api/link-platforms`);
+      console.log('🔑 Using API key:', secretKey ? 'Present' : 'Missing');
+
       const response = await fetch(`${baseUrl}/api/link-platforms`, {
         method: 'POST',
         headers: {
@@ -26,14 +29,19 @@ export const linkPlatformsService = {
       });
 
       if (!response.ok) {
+        console.error('❌ Link Platforms request failed:', response.status, response.statusText);
         const errorData = await response.json();
+        console.error('❌ Error details:', errorData);
         throw new Error(errorData.message || 'Link Platforms failed');
       }
 
-      return await response.json();
+      console.log('✅ Link Platforms request successful, status:', response.status);
+      const result = await response.json();
+      console.log('📊 Link Platforms result:', result);
+      return result;
     } catch (error) {
       console.error('Link Platforms service error:', error);
       throw error;
     }
-  }
+  },
 };

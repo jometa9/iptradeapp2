@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
 import { useAuth } from '../context/AuthContext';
-import { linkPlatformsService } from '../services/linkPlatformsService';
 import type { LinkPlatformsResult } from '../services/linkPlatformsService';
+import { linkPlatformsService } from '../services/linkPlatformsService';
 import { SSEService } from '../services/sseService';
 
 export const useLinkPlatforms = () => {
@@ -22,17 +23,17 @@ export const useLinkPlatforms = () => {
 
     try {
       console.log('🔗 Starting Link Platforms process...');
-      
+
       const result = await linkPlatformsService.linkPlatforms(secretKey);
-      
+
       setLastResult(result);
-      
+
       console.log('✅ Link Platforms completed:', result);
-      
+
       if (result.result.errors.length > 0) {
         console.warn('⚠️ Link Platforms completed with errors:', result.result.errors);
       }
-      
+
       return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Link Platforms failed';
@@ -55,58 +56,78 @@ export const useLinkPlatforms = () => {
 
     const handleSSEMessage = (data: any) => {
       if (data.type !== 'heartbeat' && data.type !== 'initial_data') {
-        console.log('📨 Link Platforms SSE message:', data.type);
+        console.log('📨 Link Platforms SSE message:', data.type, data);
       }
 
       // Escuchar eventos de Link Platforms
       if (data.type === 'linkPlatformsEvent') {
         console.log('🔗 Link Platforms event received:', data.eventType, data.message);
-        
+
         switch (data.eventType) {
           case 'started':
             setIsLinking(true);
             setError(null);
             console.log('🔄 Link Platforms started automatically by server');
             break;
-            
+
           case 'completed':
-            setIsLinking(false);
+            // Solo terminar spinner si NO hay background scan activo
+            if (!data.result?.backgroundScan) {
+              setIsLinking(false);
+            }
             setLastResult({
               success: true,
               message: data.message,
-              result: data.result
+              result: data.result,
             });
             console.log('✅ Link Platforms completed automatically by server');
+            if (data.result?.backgroundScan) {
+              console.log('🔄 Keeping spinner active for background scan...');
+            }
             break;
-            
+
           case 'error':
             setIsLinking(false);
             setError(data.error || 'Link Platforms failed');
             setLastResult({
               success: false,
               message: data.message,
-              result: data.result
+              result: data.result,
             });
             console.error('❌ Link Platforms failed automatically by server:', data.error);
             break;
         }
       }
 
-      // Escuchar eventos de background scan (SOLO para logs, NO afecta spinner)
+      // Escuchar eventos de background scan (AFECTA spinner cuando cache se usa)
       if (data.type === 'backgroundScanEvent') {
-        console.log('🔇 Background scan event received (silent):', data.eventType, data.message);
-        
+        console.log('🔇 Background scan event received:', data.eventType, data.message);
+        console.log('🔄 Stopping spinner due to background scan completion');
+
         switch (data.eventType) {
           case 'completed':
-            if (data.newInstallations && (data.newInstallations.mql4 > 0 || data.newInstallations.mql5 > 0)) {
-              console.log(`🆕 Background scan found new installations: ${data.newInstallations.mql4} MQL4 + ${data.newInstallations.mql5} MQL5`);
-              console.log(`✅ Background scan synced ${data.newInstallations.synced} new bots silently`);
+            // Si había background scan, terminar el spinner ahora
+            setIsLinking(false);
+            console.log('✅ Spinner stopped - background scan completed');
+
+            if (
+              data.newInstallations &&
+              (data.newInstallations.mql4 > 0 || data.newInstallations.mql5 > 0)
+            ) {
+              console.log(
+                `🆕 Background scan found new installations: ${data.newInstallations.mql4} MQL4 + ${data.newInstallations.mql5} MQL5`
+              );
+              console.log(
+                `✅ Background scan synced ${data.newInstallations.synced} new bots silently`
+              );
             } else {
               console.log('ℹ️ Background scan completed - no new installations found');
             }
             break;
-            
+
           case 'error':
+            // Si el background scan falló, terminar el spinner
+            setIsLinking(false);
             console.error('❌ Background scan failed:', data.error);
             break;
         }
@@ -131,6 +152,6 @@ export const useLinkPlatforms = () => {
     lastResult,
     error,
     clearError: () => setError(null),
-    clearResult: () => setLastResult(null)
+    clearResult: () => setLastResult(null),
   };
 };

@@ -346,25 +346,21 @@ class LinkPlatformsController {
 
   // Realizar búsqueda completa (sin cache)
   async performFullScan(result) {
-    // Buscar todas las unidades de disco en Windows
-    const drives = await this.getAvailableDrives();
+    // Búsqueda simple en todo el sistema
+    try {
+      console.log(`🔍 Scanning system for MQL folders...`);
+      const driveResult = await this.scanDrive('', false);
 
-    for (const drive of drives) {
-      try {
-        console.log(`🔍 Scanning drive ${drive} for MQL folders...`);
-        const driveResult = await this.scanDrive(drive);
-
-        result.mql4Folders.push(...driveResult.mql4Folders);
-        result.mql5Folders.push(...driveResult.mql5Folders);
-        result.created += driveResult.created;
-        result.synced += driveResult.synced;
-        result.errors.push(...driveResult.errors);
-        result.filesCreated += driveResult.filesCreated;
-        result.csvFiles.push(...driveResult.csvFiles);
-      } catch (error) {
-        result.errors.push(`Error scanning drive ${drive}: ${error.message}`);
-        console.error(`❌ Error scanning drive ${drive}:`, error);
-      }
+      result.mql4Folders.push(...driveResult.mql4Folders);
+      result.mql5Folders.push(...driveResult.mql5Folders);
+      result.created += driveResult.created;
+      result.synced += driveResult.synced;
+      result.errors.push(...driveResult.errors);
+      result.filesCreated += driveResult.filesCreated;
+      result.csvFiles.push(...driveResult.csvFiles);
+    } catch (error) {
+      result.errors.push(`Error scanning system: ${error.message}`);
+      console.error(`❌ Error scanning system:`, error);
     }
 
     console.log(
@@ -402,17 +398,14 @@ class LinkPlatformsController {
       console.log('🔄 Background scan: Looking for new MQL installations...');
       console.log('ℹ️ Background scan running silently - no frontend spinner will be shown');
 
-      const drives = await this.getAvailableDrives();
       const newPaths = { mql4Folders: [], mql5Folders: [] };
 
-      for (const drive of drives) {
-        try {
-          const driveResult = await this.scanDrive(drive, true); // Solo buscar, no procesar
-          newPaths.mql4Folders.push(...driveResult.mql4Folders);
-          newPaths.mql5Folders.push(...driveResult.mql5Folders);
-        } catch (error) {
-          console.error(`❌ Background scan error on drive ${drive}:`, error);
-        }
+      try {
+        const driveResult = await this.scanDrive('', true); // Solo buscar, no procesar
+        newPaths.mql4Folders.push(...driveResult.mql4Folders);
+        newPaths.mql5Folders.push(...driveResult.mql5Folders);
+      } catch (error) {
+        console.error(`❌ Background scan error:`, error);
       }
 
       // Comparar con cache actual
@@ -763,9 +756,9 @@ class LinkPlatformsController {
     };
 
     try {
-      // Buscar carpetas MQL4 y MQL5 recursivamente
-      const mql4Folders = await this.findFoldersRecursively(drivePath, 'MQL4');
-      const mql5Folders = await this.findFoldersRecursively(drivePath, 'MQL5');
+      // Buscar carpetas MQL4 y MQL5 con comando simple
+      const mql4Folders = await this.findFoldersRecursively('', 'MQL4');
+      const mql5Folders = await this.findFoldersRecursively('', 'MQL5');
 
       // Solo agregar carpetas al resultado
       result.mql4Folders = mql4Folders;
@@ -873,162 +866,36 @@ class LinkPlatformsController {
     const folders = [];
 
     try {
-      console.log(
-        `🔍 Searching for ${folderName} folders in ${rootPath} (${this.operatingSystem})`
-      );
-
       switch (this.operatingSystem) {
         case 'windows':
-          await this.findFoldersWindows(rootPath, folderName, folders);
+          const winCommand = `dir /s /b /ad "${rootPath}" | findstr /i "\\\\${folderName}$"`;
+          const { stdout: winStdout } = await execAsync(winCommand, { timeout: 30000 });
+          folders.push(
+            ...winStdout
+              .split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0)
+          );
           break;
+
         case 'macos':
         case 'linux':
-          await this.findFoldersUnix(rootPath, folderName, folders);
+          // Buscar en todo el sistema desde la raíz del usuario
+          const unixCommand = `find ~ -name "${folderName}" -type d 2>/dev/null`;
+          const { stdout: unixStdout } = await execAsync(unixCommand, { timeout: 30000 });
+          folders.push(
+            ...unixStdout
+              .split('\n')
+              .map(line => line.trim())
+              .filter(line => line.length > 0)
+          );
           break;
-        default:
-          console.warn('⚠️ Unknown OS, using fallback method');
-          await this.findFoldersRecursivelySimple(rootPath, folderName, folders);
       }
     } catch (error) {
-      // Si el comando específico del OS no encuentra resultados, intentar con búsqueda recursiva
-      console.log(`🔄 Using fallback search method for ${folderName} in ${rootPath}`);
-      try {
-        await this.findFoldersRecursivelySimple(rootPath, folderName, folders);
-      } catch (simpleError) {
-        console.error(`❌ Error in simple folder search for ${folderName}:`, simpleError);
-      }
+      // Silencioso - si no encuentra nada, simplemente devuelve array vacío
     }
 
-    console.log(`📁 Found ${folders.length} ${folderName} folders in ${rootPath}`);
     return folders;
-  }
-
-  async findFoldersWindows(rootPath, folderName, folders) {
-    const findCommand = `dir /s /b /ad "${rootPath}" | findstr /i "\\\\${folderName}$"`;
-    const { stdout } = await execAsync(findCommand, { timeout: 30000 }); // 30 second timeout
-
-    const foundFolders = stdout
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line && line.length > 0);
-
-    folders.push(...foundFolders);
-  }
-
-  async findFoldersUnix(rootPath, folderName, folders) {
-    // Usar find para macOS y Linux
-    // -type d = solo directorios
-    // -name = nombre exacto (case sensitive)
-    // -iname = nombre exacto (case insensitive)
-    // -maxdepth = limitar profundidad para evitar búsquedas muy lentas
-    const findCommand = `find "${rootPath}" -maxdepth 10 -type d -iname "${folderName}" 2>/dev/null`;
-
-    try {
-      const { stdout } = await execAsync(findCommand, { timeout: 30000 }); // 30 second timeout
-
-      const foundFolders = stdout
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line && line.length > 0);
-
-      folders.push(...foundFolders);
-    } catch (error) {
-      if (error.code === 'ETIMEDOUT') {
-        console.warn(`⏰ Search timeout for ${folderName} in ${rootPath}`);
-      } else {
-        // Si el comando find no encuentra resultados, no es un error real
-        console.log(`🔍 No ${folderName} folders found in ${rootPath} using find command`);
-      }
-    }
-  }
-
-  async findFoldersRecursivelySimple(rootPath, folderName, folders, maxDepth = 5) {
-    const searchRecursively = async (currentPath, depth = 0) => {
-      if (depth > maxDepth) return;
-
-      try {
-        const items = fs.readdirSync(currentPath);
-
-        for (const item of items) {
-          const fullPath = path.join(currentPath, item);
-
-          try {
-            const stat = fs.statSync(fullPath);
-
-            if (stat.isDirectory()) {
-              if (item.toUpperCase() === folderName.toUpperCase()) {
-                folders.push(fullPath);
-              } else if (depth < maxDepth) {
-                // Evitar carpetas del sistema y temporales específicas de cada OS
-                const skipFolders = this.getSystemFoldersToSkip();
-                if (!skipFolders.some(skip => item.toUpperCase().includes(skip.toUpperCase()))) {
-                  await searchRecursively(fullPath, depth + 1);
-                }
-              }
-            }
-          } catch (error) {
-            // Ignorar errores de acceso (permisos, enlaces rotos, etc.)
-          }
-        }
-      } catch (error) {
-        // Ignorar errores de acceso al directorio principal
-      }
-    };
-
-    await searchRecursively(rootPath);
-  }
-
-  getSystemFoldersToSkip() {
-    const commonSkipFolders = ['node_modules', '.git', '.svn', 'Temp', 'tmp', 'cache', '.cache'];
-
-    switch (this.operatingSystem) {
-      case 'windows':
-        return [
-          ...commonSkipFolders,
-          '$RECYCLE.BIN',
-          'System Volume Information',
-          'Windows',
-          'Program Files',
-          'Program Files (x86)',
-          'ProgramData',
-          'Recovery',
-          'System32',
-          'SysWOW64',
-        ];
-      case 'macos':
-        return [
-          ...commonSkipFolders,
-          'System',
-          'Library/Caches',
-          'Library/Logs',
-          '.Trash',
-          '.Spotlight-V100',
-          '.fseventsd',
-          'private/var',
-          'usr/bin',
-          'usr/sbin',
-          'bin',
-          'sbin',
-        ];
-      case 'linux':
-        return [
-          ...commonSkipFolders,
-          'proc',
-          'sys',
-          'dev',
-          'run',
-          'var/log',
-          'var/cache',
-          'usr/bin',
-          'usr/sbin',
-          'bin',
-          'sbin',
-          'boot',
-          'lost+found',
-        ];
-      default:
-        return commonSkipFolders;
-    }
   }
 }
 
