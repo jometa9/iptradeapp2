@@ -76,8 +76,16 @@ async function startDevServer() {
         (async () => {
           try {
             console.log('🧩 Auto-running Link Platforms on server start...');
+            console.log(
+              '📊 Link Platforms state before auto-start:',
+              linkPlatformsController.isLinking
+            );
             const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
             console.log('✅ Auto Link Platforms result:', result);
+            console.log(
+              '📊 Link Platforms state after auto-start:',
+              linkPlatformsController.isLinking
+            );
           } catch (err) {
             console.error('❌ Auto Link Platforms failed on start:', err);
           }

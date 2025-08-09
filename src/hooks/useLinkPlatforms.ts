@@ -11,6 +11,33 @@ export const useLinkPlatforms = () => {
   const [lastResult, setLastResult] = useState<LinkPlatformsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
+  const hasCheckedInitialStatus = useRef<boolean>(false);
+
+  // Check if Link Platforms is currently running on server
+  const checkLinkingStatus = async () => {
+    if (!secretKey) return;
+
+    try {
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const response = await fetch(`http://localhost:${serverPort}/api/link-platforms/status`, {
+        headers: {
+          'x-api-key': secretKey,
+        },
+      });
+
+      if (response.ok) {
+        const status = await response.json();
+        console.log('🔍 Link Platforms status check:', status);
+
+        if (status.isLinking) {
+          console.log('🔄 Link Platforms is already running - activating spinner');
+          setIsLinking(true);
+        }
+      }
+    } catch (error) {
+      console.log('ℹ️ Could not check Link Platforms status (probably not running)');
+    }
+  };
 
   const linkPlatforms = async () => {
     if (!secretKey) {
@@ -50,6 +77,12 @@ export const useLinkPlatforms = () => {
     if (!secretKey) return;
 
     console.log('🔗 Link Platforms: Setting up SSE listener...');
+
+    // Verificar estado inicial solo una vez
+    if (!hasCheckedInitialStatus.current) {
+      hasCheckedInitialStatus.current = true;
+      checkLinkingStatus();
+    }
 
     // Conectar al SSE (solo creará conexión si no existe)
     SSEService.connect(secretKey);
