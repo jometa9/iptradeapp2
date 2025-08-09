@@ -11,7 +11,22 @@ export const useOperatingSystem = () => {
         try {
           // Use Electron API to get OS
           const platform = await window.electronAPI.getPlatform();
-          setOs(platform as OperatingSystem);
+          console.log('🖥️ Electron platform detected:', platform);
+
+          // Map Electron platform to our OS type
+          switch (platform) {
+            case 'win32':
+              setOs('windows');
+              break;
+            case 'darwin':
+              setOs('macos');
+              break;
+            case 'linux':
+              setOs('linux');
+              break;
+            default:
+              setOs('unknown');
+          }
         } catch (error) {
           // Fallback to user agent detection
           const userAgent = navigator.userAgent.toLowerCase();

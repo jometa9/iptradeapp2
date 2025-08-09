@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, Link, LogOut, MessageCircle, RefreshCw, Zap } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Link, LogOut, MessageCircle, RefreshCw } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
 import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
+import { useOperatingSystem } from '../hooks/useOperatingSystem';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
@@ -17,13 +18,14 @@ export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
   const { linkPlatforms, isLinking } = useLinkPlatforms();
-  
+  const operatingSystem = useOperatingSystem();
+
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
-  
+
   console.log('🎯 Dashboard rendered - Link Platforms button should be visible');
   console.log('🔗 isLinking state:', isLinking);
-  
+
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
   // Removed separate "connect platforms" flow; unified under Link Platforms
@@ -32,7 +34,19 @@ export const Dashboard: React.FC = () => {
   // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
 
-  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
+  const getOSInfo = () => {
+    console.log('🖥️ Current operating system detected:', operatingSystem);
+    switch (operatingSystem) {
+      case 'windows':
+        return { text: 'Windows' };
+      case 'macos':
+        return { text: 'macOS' };
+      case 'linux':
+        return { text: 'Linux' };
+      default:
+        return { text: 'Unknown' };
+    }
+  };
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -94,10 +108,11 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleLinkPlatforms = async () => {
-    console.log('🔗 Link Platforms button clicked!');
+    const osInfo = getOSInfo();
+    console.log(`🔗 Link Platforms button clicked! (OS: ${osInfo.text} ${osInfo.icon})`);
     console.log('📊 Current isLinking state:', isLinking);
     try {
-      console.log('🔄 Starting Link Platforms process...');
+      console.log(`🔄 Starting Link Platforms process for ${osInfo.text}...`);
       const result = await linkPlatforms();
       console.log('✅ Link Platforms completed successfully:', result);
       console.log('📊 Final isLinking state:', isLinking);
@@ -148,14 +163,18 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title="Link Platforms (Sync MQL4/MQL5 bots)"
+                  title={`Install and cofigure IPTRADE on all your trading platform`}
                   onClick={handleLinkPlatforms}
                   disabled={isLinking}
                 >
                   {isLinking ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <div className="flex items-center space-x-1">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    </div>
                   ) : (
-                    <Link className="w-4 h-4" />
+                    <div className="flex items-center space-x-1">
+                      <Link className="w-4 h-4" />
+                    </div>
                   )}
                 </Button>
                 {/* Removed Connect Trading Accounts button; unified under Link Platforms */}
