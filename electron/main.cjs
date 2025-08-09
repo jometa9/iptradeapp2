@@ -206,9 +206,6 @@ async function startServer() {
 }
 
 async function createAdaptiveIcon() {
-  console.log('[TRAY] Creating template icon for macOS');
-
-  // Crear canvas de ultra alta resolución (64x64) y escalar a 16x16
   const size = 64;
   const canvas = require('canvas').createCanvas(size, size);
   const ctx = canvas.getContext('2d');
@@ -237,50 +234,37 @@ async function createAdaptiveIcon() {
   // En macOS, marcar como template para adaptación automática
   if (process.platform === 'darwin') {
     resizedIcon.setTemplateImage(true);
-    console.log('[TRAY] Icon marked as template - will auto-adapt to theme');
   }
 
-  console.log('[TRAY] Template icon created successfully');
   return resizedIcon;
 }
 
 async function createTray() {
   try {
-    console.log('[TRAY] Starting tray creation...');
-
     // Crear un icono adaptativo
     let icon;
 
     if (process.platform === 'darwin') {
       // En macOS, crear icono adaptativo
       icon = await createAdaptiveIcon();
-      console.log('[TRAY] Created adaptive icon for macOS');
     } else {
       // En otros sistemas, usar el archivo de icono
       const iconPath = path.join(__dirname, '../public/iconShadow025.png');
       if (require('fs').existsSync(iconPath)) {
         icon = nativeImage.createFromPath(iconPath);
       } else {
-        console.error('[TRAY] Icon file does not exist:', iconPath);
         return;
       }
     }
 
-    console.log('[TRAY] Creating tray with icon...');
-    console.log('[TRAY] Icon size:', icon.getSize());
-    console.log('[TRAY] Icon is template:', icon.isTemplateImage());
-
     tray = new Tray(icon);
     tray.setToolTip('IPTRADE');
 
-    console.log('[TRAY] Tray created successfully');
-
-    // Función para actualizar el menú del tray con el estado real
     const updateTrayMenu = async () => {
       try {
         // Obtener el estado del copier desde el servidor
         const serverPort = getPortFromEnv();
-        console.log(`[TRAY] Using server port: ${serverPort}`);
+        console.log(` Using server port: ${serverPort}`);
 
         // Agregar timeout para evitar que la petición se cuelgue
         const controller = new AbortController();
@@ -309,7 +293,6 @@ async function createTray() {
           {
             label: 'Go to the dashboard',
             click: () => {
-              console.log('[TRAY] Go to dashboard clicked');
               if (mainWindow) {
                 mainWindow.show();
                 mainWindow.focus();
@@ -325,25 +308,13 @@ async function createTray() {
           {
             label: 'Quit',
             click: () => {
-              console.log('[TRAY] Quit clicked');
               app.quit();
             },
           },
         ]);
 
         tray.setContextMenu(contextMenu);
-        console.log(`[TRAY] Menu updated - Copier status: ${copierStatus}`);
       } catch (error) {
-        console.error('[TRAY] Error updating menu:', error.message || error);
-
-        // Log específico para errores de conexión
-        if (error.code === 'ECONNREFUSED') {
-          console.log('[TRAY] Server not ready yet, will retry on next interval');
-        } else if (error.name === 'AbortError') {
-          console.log('[TRAY] Request timeout, server may be starting up');
-        }
-
-        // En caso de error, usar estado por defecto
         const contextMenu = Menu.buildFromTemplate([
           {
             label: 'IPTRADE COPIER OFF',
@@ -354,7 +325,6 @@ async function createTray() {
           {
             label: 'Go to the dashboard',
             click: () => {
-              console.log('[TRAY] Go to dashboard clicked');
               if (mainWindow) {
                 mainWindow.show();
                 mainWindow.focus();
@@ -369,7 +339,6 @@ async function createTray() {
           {
             label: 'Quit',
             click: () => {
-              console.log('[TRAY] Quit clicked');
               app.quit();
             },
           },
@@ -388,19 +357,11 @@ async function createTray() {
 
     // NO hacer nada al hacer clic en el icono del tray
     // Solo mostrar el menú contextual
-    tray.on('click', () => {
-      console.log('[TRAY] Tray icon clicked - showing context menu');
-      // El menú se muestra automáticamente al hacer clic en macOS
-      // En Windows/Linux, el menú se muestra automáticamente
-    });
+    tray.on('click', () => {});
 
     // En macOS, el icono se adapta automáticamente gracias a setTemplateImage(true)
     // No necesitamos verificar cambios de tema manualmente
-
-    console.log('[TRAY] Tray setup completed');
-  } catch (error) {
-    console.error('[TRAY] Error creating tray:', error);
-  }
+  } catch (error) {}
 }
 
 function createWindow() {

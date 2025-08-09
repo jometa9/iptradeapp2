@@ -924,9 +924,12 @@ class LinkPlatformsController {
 
     try {
       switch (this.operatingSystem) {
-        case 'windows':
-          const winCommand = `dir /s /b /ad "${rootPath}" | findstr /i "\\\\${folderName}$"`;
-          const { stdout: winStdout } = await execAsync(winCommand, { timeout: 30000 });
+        case 'windows': {
+          const startRoot = rootPath && rootPath.trim().length > 0 ? rootPath : 'C:\\';
+          const winCommand = `dir /s /b /ad "${startRoot}" | findstr /i "\\\\${folderName}$"`;
+          const { stdout: winStdout } = await execAsync(winCommand, {
+            maxBuffer: 10 * 1024 * 1024,
+          });
           folders.push(
             ...winStdout
               .split('\n')
@@ -934,12 +937,17 @@ class LinkPlatformsController {
               .filter(line => line.length > 0)
           );
           break;
-
+        }
         case 'macos':
-        case 'linux':
-          // Buscar en todo el sistema desde la raíz del usuario
-          const unixCommand = `find ~ -name "${folderName}" -type d 2>/dev/null`;
-          const { stdout: unixStdout } = await execAsync(unixCommand, { timeout: 30000 });
+        case 'linux': {
+          // Buscar SOLO desde el HOME del usuario (evitar usar ~ que no siempre se expande en /bin/sh)
+          const homeDir = os.homedir();
+
+          const unixCommand = `find "${homeDir}" -name "${folderName}" -type d 2>/dev/null`;
+          console.log(unixCommand);
+          const { stdout: unixStdout } = await execAsync(unixCommand, {
+            maxBuffer: 10 * 1024 * 1024,
+          });
           folders.push(
             ...unixStdout
               .split('\n')
@@ -947,9 +955,11 @@ class LinkPlatformsController {
               .filter(line => line.length > 0)
           );
           break;
+        }
       }
     } catch (error) {
-      // Silencioso - si no encuentra nada, simplemente devuelve array vacío
+      // Do not fail the whole flow if the command errors; return what we have
+      console.warn(`⚠️ Folder search issue for ${folderName}: ${error?.message || error}`);
     }
 
     return folders;

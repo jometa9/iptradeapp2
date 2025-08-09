@@ -17,13 +17,13 @@ import {
   notifyAccountCreated,
   notifyTradingConfigCreated,
 } from './eventNotifier.js';
+import linkPlatformsController from './linkPlatformsController.js';
 import {
   createDisabledSlaveConfig,
   loadSlaveConfigs,
   saveSlaveConfigs,
 } from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
-import linkPlatformsController from './linkPlatformsController.js';
 
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -395,7 +395,9 @@ export const registerMasterAccount = (req, res) => {
       copyingEnabled: false,
     });
     // Trigger background linking after registering master
-    try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+    try {
+      linkPlatformsController.findAndSyncMQLFoldersManual();
+    } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register master account' });
   }
@@ -484,7 +486,9 @@ export const registerSlaveAccount = (req, res) => {
 
     res.json(responseData);
     // Trigger background linking after registering slave
-    try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+    try {
+      linkPlatformsController.findAndSyncMQLFoldersManual();
+    } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
   }
@@ -747,7 +751,9 @@ export const updateMasterAccount = (req, res) => {
       status: 'success',
     });
     // Trigger background linking after master update
-    try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+    try {
+      linkPlatformsController.findAndSyncMQLFoldersManual();
+    } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update master account' });
   }
@@ -818,7 +824,9 @@ export const updateSlaveAccount = (req, res) => {
       status: 'success',
     });
     // Trigger background linking after slave update
-    try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+    try {
+      linkPlatformsController.findAndSyncMQLFoldersManual();
+    } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update slave account' });
   }
@@ -1057,7 +1065,9 @@ export const convertPendingToMaster = (req, res) => {
         copyingEnabled: false,
       });
       // Trigger background linking after conversion to master
-      try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+      try {
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }
@@ -1150,7 +1160,9 @@ export const convertPendingToSlave = (req, res) => {
 
       res.json(responseData);
       // Trigger background linking after conversion to slave
-      try { linkPlatformsController.findAndSyncMQLFoldersOptimized(); } catch {}
+      try {
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }

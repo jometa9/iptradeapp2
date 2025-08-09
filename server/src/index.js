@@ -5,6 +5,8 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import swaggerUi from 'swagger-ui-express';
 
+// import mt5Routes from './routes/mt5.js';
+import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
@@ -12,14 +14,12 @@ import copierStatusRoutes from './routes/copierStatus.js';
 import csvRoutes from './routes/csvRoutes.js';
 // import ctraderRoutes from './routes/ctrader.js';
 import eventRoutes from './routes/events.js';
-// import mt5Routes from './routes/mt5.js';
+import linkPlatformsRoutes from './routes/linkPlatforms.js';
 import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
-import linkPlatformsRoutes from './routes/linkPlatforms.js';
 import swaggerDocs from './swaggerConfig.js';
-import linkPlatformsController from './controllers/linkPlatformsController.js';
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory
@@ -99,7 +99,7 @@ async function startServer() {
         (async () => {
           try {
             console.log('🧩 Auto-running Link Platforms on server start...');
-            const result = await linkPlatformsController.findAndSyncMQLFolders();
+            const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
             console.log('✅ Auto Link Platforms result:', result);
           } catch (err) {
             console.error('❌ Auto Link Platforms failed on start:', err);
