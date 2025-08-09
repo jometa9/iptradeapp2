@@ -9,6 +9,8 @@ export interface LinkPlatformsResult {
     created: number;
     synced: number;
     errors: string[];
+    filesCreated?: number;
+    csvFiles?: string[];
   };
 }
 

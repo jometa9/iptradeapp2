@@ -63,6 +63,9 @@ class CSVFrontendService extends SimpleEventEmitter {
   }
 
   private startEventSource() {
+    console.log('🚫 CSVFrontendService: EventSource DISABLED - using unified SSE instead');
+    return; // DISABLED - ahora usamos SSEService unificado
+    
     const eventSource = new EventSource(
       `http://localhost:${this.serverPort}/api/csv/events/frontend`
     );

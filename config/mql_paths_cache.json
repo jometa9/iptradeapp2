@@ -1,0 +1,16 @@
+{
+  "paths": {
+    "mql4Folders": [
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\BA68EFFD01E9A836615486E9463581A8\\MQL4",
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4"
+    ],
+    "mql5Folders": [
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\1BBB1897A3CF55D3AD4369AA2C68E843\\MQL5",
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\27EDF286B81479D084229CE95C029334\\MQL5",
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\D0E8209F77C8CF37AD8BF550E51FF075\\MQL5",
+      "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\D857D11E897132888124F9DABE50C008\\MQL5"
+    ]
+  },
+  "timestamp": "2025-08-09T00:44:39.725Z",
+  "version": "1.0"
+}

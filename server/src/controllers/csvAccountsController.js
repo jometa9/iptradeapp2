@@ -245,8 +245,10 @@ export const deletePendingAccount = async (req, res) => {
       }
     }
 
-    // Trigger a scan update
-    await csvManager.scanAndEmitPendingUpdates();
+    // Trigger a scan update only if there are CSV files to scan
+    if (csvManager.csvFiles.size > 0) {
+      await csvManager.scanAndEmitPendingUpdates();
+    }
 
     const response = {
       success: true,
@@ -273,7 +275,10 @@ export const deletePendingAccount = async (req, res) => {
 // Nuevo endpoint simplificado para pending accounts
 export const scanPendingAccounts = async (req, res) => {
   try {
-    console.log('🔍 Starting simplified pending accounts scan...');
+    // Solo loguear si hay archivos CSV para escanear
+    if (csvManager.csvFiles.size > 0) {
+      console.log('🔍 Starting simplified pending accounts scan...');
+    }
 
     const pendingAccounts = await csvManager.scanPendingCSVFiles();
 
@@ -301,7 +306,10 @@ export const scanPendingAccounts = async (req, res) => {
       platforms: Object.keys(platformStats),
     };
 
-    console.log('✅ Pending accounts scan completed:', response.summary);
+    // Solo loguear cuando hay resultados significativos
+    if (response.summary.totalAccounts > 0) {
+      console.log('✅ Pending accounts scan completed:', response.summary);
+    }
     res.json(response);
   } catch (error) {
     console.error('❌ Error scanning pending accounts:', error);

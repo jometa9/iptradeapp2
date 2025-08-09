@@ -22,9 +22,14 @@ import {
 
 const router = express.Router();
 
+// Contador de conexiones SSE activas y limitador por IP
+let activeSSEConnections = 0;
+const activeConnectionsByIP = new Map();
+
 // Middleware para validar API key (mantener compatibilidad)
 const requireValidSubscription = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
+  // Buscar API key en headers o query params (para SSE)
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
   if (!apiKey) {
     return res.status(401).json({ error: 'API Key required' });
   }
@@ -34,6 +39,23 @@ const requireValidSubscription = (req, res, next) => {
 
 // Server-Sent Events para file watching real
 router.get('/csv/events', requireValidSubscription, (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+  
+  // PROTECCIÓN: Solo una conexión por IP
+  if (activeConnectionsByIP.has(clientIP)) {
+    console.log(`🚫 SSE: BLOCKING duplicate connection from IP: ${clientIP}`);
+    res.status(429).json({ error: 'Only one SSE connection per IP allowed' });
+    return;
+  }
+  
+  activeSSEConnections++;
+  const connectionId = activeSSEConnections;
+  activeConnectionsByIP.set(clientIP, connectionId);
+  
+  console.log(`🔌 SSE connection #${connectionId} established (Total: ${activeSSEConnections})`);
+  console.log(`📋 Connection details: User-Agent=${req.headers['user-agent']?.substring(0, 50)}...`);
+  console.log(`🔑 API Key: ${req.query.apiKey?.substring(0, 12)}...`);
+  console.log(`📍 Client IP: ${clientIP}`);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -88,8 +110,74 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         sendUpdate(updatedData);
       };
 
+      // Reemitir eventos de pending accounts (sin forzar escaneo adicional)
+      const handlePendingUpdate = payload => {
+        try {
+          const accounts = payload.accounts || [];
+          const summary = {
+            totalAccounts: accounts.length,
+            onlineAccounts: accounts.filter(a => a.status === 'online').length,
+            offlineAccounts: accounts.filter(a => a.status === 'offline').length,
+            platformStats: accounts.reduce((acc, a) => {
+              const plat = a.platform || 'Unknown';
+              if (!acc[plat]) acc[plat] = { online: 0, offline: 0, total: 0 };
+              acc[plat][a.status === 'online' ? 'online' : 'offline'] += 1;
+              acc[plat].total += 1;
+              return acc;
+            }, {}),
+          };
+
+          sendUpdate({
+            type: 'pendingAccountsUpdate',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            accounts,
+            summary,
+            platforms: Object.keys(summary.platformStats),
+          });
+        } catch (e) {
+          console.error('Error handling pending accounts update:', e);
+        }
+      };
+
+      // Reemitir eventos de Link Platforms
+      const handleLinkPlatformsEvent = payload => {
+        try {
+          console.log(`📨 Forwarding Link Platforms event: ${payload.type}`);
+          sendUpdate({
+            type: 'linkPlatformsEvent',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            eventType: payload.type, // 'started', 'completed', 'error'
+            message: payload.message,
+            result: payload.result,
+            error: payload.error
+          });
+        } catch (e) {
+          console.error('Error handling Link Platforms event:', e);
+        }
+      };
+
+      // Reemitir eventos de background scan (SOLO para logs, NO afecta spinner)
+      const handleBackgroundScanEvent = payload => {
+        try {
+          console.log(`🔇 Forwarding background scan event: ${payload.type}`);
+          sendUpdate({
+            type: 'backgroundScanEvent',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            eventType: payload.type, // 'completed', 'error'
+            message: payload.message,
+            newInstallations: payload.newInstallations,
+            error: payload.error
+          });
+        } catch (e) {
+          console.error('Error handling background scan event:', e);
+        }
+      };
+
       // Agregar listener al CSV Manager
       csvManager.on('fileUpdated', handleCSVUpdate);
+      csvManager.on('pendingAccountsUpdate', handlePendingUpdate);
+      csvManager.on('linkPlatformsEvent', handleLinkPlatformsEvent);
+      csvManager.on('backgroundScanEvent', handleBackgroundScanEvent);
 
       // Enviar datos iniciales en formato correcto para el frontend
       const initialData = {
@@ -103,10 +191,35 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
       sendUpdate(initialData);
 
+      // Enviar estado actual de Link Platforms si está en progreso
+      import('../controllers/linkPlatformsController.js')
+        .then(linkPlatformsModule => {
+          const linkStatus = linkPlatformsModule.default.getLinkingStatus();
+          if (linkStatus.isLinking) {
+            console.log('📤 SSE: Sending Link Platforms started event to new client');
+            sendUpdate({
+              type: 'linkPlatformsEvent',
+              timestamp: linkStatus.timestamp,
+              eventType: 'started',
+              message: 'Link Platforms process is in progress'
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error checking Link Platforms status:', error);
+        });
+
       // Cleanup cuando el cliente se desconecta
       req.on('close', () => {
+        activeSSEConnections--;
+        activeConnectionsByIP.delete(clientIP);
+        console.log(`🔌 SSE connection #${connectionId} closed (Remaining: ${activeSSEConnections})`);
+        console.log(`📍 Released IP: ${clientIP}`);
         clearInterval(heartbeat);
         csvManager.off('fileUpdated', handleCSVUpdate);
+        csvManager.off('pendingAccountsUpdate', handlePendingUpdate);
+        csvManager.off('linkPlatformsEvent', handleLinkPlatformsEvent);
+        csvManager.off('backgroundScanEvent', handleBackgroundScanEvent);
       });
     })
     .catch(error => {

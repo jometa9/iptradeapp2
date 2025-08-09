@@ -26,7 +26,7 @@ export const Dashboard: React.FC = () => {
   
   const [userIP, setUserIP] = useState<string>('Loading...');
   const [showIP, setShowIP] = useState<boolean>(true);
-  const [isConnectingPlatforms, setIsConnectingPlatforms] = useState<boolean>(false);
+  // Removed separate "connect platforms" flow; unified under Link Platforms
   // Estado para controlar si se acaba de iniciar sesión
   // isRecentLogin not used
   // Estado para saber si ya se disparó el temporizador
@@ -48,9 +48,6 @@ export const Dashboard: React.FC = () => {
   // Efecto para realizar acciones al montar el componente
   useEffect(() => {
     fetchUserIP();
-
-    // Link Platforms se ejecuta automáticamente con useAutoLinkPlatforms
-    // No es necesario ejecutarlo manualmente aquí
 
     // Log de información de plan para depuración
     // Recent login state removed
@@ -110,51 +107,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleConnectPlatforms = async () => {
-    if (!secretKey) {
-      console.error('❌ Authentication required');
-      return;
-    }
-
-    setIsConnectingPlatforms(true);
-
-    try {
-      console.log('🔍 Starting platform connection...');
-
-      const response = await fetch(`${baseUrl}/api/csv/scan-pending`, {
-        method: 'GET',
-        headers: {
-          'x-api-key': secretKey,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Platform connection result:', data);
-
-        const platformsList = data.platforms.length > 0 ? data.platforms.join(', ') : 'None';
-        const summary = data.summary;
-
-        console.log(
-          `🚀 Pending Accounts Scan Complete: Found ${summary.totalAccounts} accounts (${summary.onlineAccounts} online, ${summary.offlineAccounts} offline). Platforms: ${platformsList}`
-        );
-
-        if (summary.totalAccounts > 0) {
-          console.log(`✅ ${summary.totalAccounts} pending accounts detected from CSV files`);
-          console.log('📊 Platform breakdown:', summary.platformStats);
-        } else {
-          console.log('📭 No pending accounts found in CSV files');
-        }
-      } else {
-        const error = await response.json();
-        console.error('❌ Platform connection failed:', error);
-      }
-    } catch (error) {
-      console.error('❌ Platform connection error:', error);
-    } finally {
-      setIsConnectingPlatforms(false);
-    }
-  };
+  // Removed: separate connect platforms handler (unified under linkPlatforms)
 
   return (
     <UpdateTestProvider>
@@ -205,20 +158,7 @@ export const Dashboard: React.FC = () => {
                     <Link className="w-4 h-4" />
                   )}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-600 hover:text-gray-900"
-                  title="Connect Trading Accounts"
-                  onClick={handleConnectPlatforms}
-                  disabled={isConnectingPlatforms}
-                >
-                  {isConnectingPlatforms ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Zap className="w-4 h-4" />
-                  )}
-                </Button>
+                {/* Removed Connect Trading Accounts button; unified under Link Platforms */}
                 <Button
                   variant="ghost"
                   size="sm"

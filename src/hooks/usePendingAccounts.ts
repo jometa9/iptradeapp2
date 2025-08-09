@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 
 import { useAuth } from '../context/AuthContext';
+import { SSEService } from '../services/sseService';
 
 interface PendingAccount {
   account_id: string;
@@ -27,6 +28,7 @@ export const usePendingAccounts = () => {
   const [pendingData, setPendingData] = useState<PendingAccountsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const listenerIdRef = useRef<string | null>(null);
 
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
 
@@ -66,55 +68,40 @@ export const usePendingAccounts = () => {
     }
   }, [secretKey, baseUrl]);
 
-  // SSE connection for real-time updates
+  // SSE listener para actualizaciones de pending accounts
   useEffect(() => {
     if (!secretKey) return;
 
-    console.log('🔄 Setting up SSE for pending accounts...');
-    const eventSource = new EventSource(`${baseUrl}/api/events?apiKey=${secretKey}`);
+    console.log('📋 Pending Accounts: Setting up SSE listener...');
 
-    eventSource.onopen = () => {
-      console.log('🌐 SSE connected for pending accounts');
-    };
+    // Conectar al SSE (solo creará conexión si no existe)
+    SSEService.connect(secretKey);
 
-    eventSource.onmessage = event => {
-      try {
-        const data = JSON.parse(event.data);
-
-        // Listen for pending accounts updates
-        if (data.type === 'pendingAccountsUpdate' || data.type === 'csvFileChanged') {
-          console.log('🔄 Pending accounts update received via SSE');
-          loadPendingAccounts();
-        }
-      } catch (error) {
-        console.error('❌ Error parsing SSE message:', error);
+    const handleSSEMessage = (data: any) => {
+      if (data.type === 'pendingAccountsUpdate' || data.type === 'csvFileChanged') {
+        console.log('📨 Received pending accounts update via SSE');
+        loadPendingAccounts();
       }
     };
 
-    eventSource.onerror = error => {
-      console.error('❌ SSE connection error:', error);
-    };
+    // Agregar listener
+    const listenerId = SSEService.addListener(handleSSEMessage);
+    listenerIdRef.current = listenerId;
 
     return () => {
-      console.log('🔌 Closing SSE connection for pending accounts');
-      eventSource.close();
+      if (listenerIdRef.current) {
+        console.log('🔌 Pending Accounts: Removing SSE listener');
+        SSEService.removeListener(listenerIdRef.current);
+      }
     };
-  }, [secretKey, baseUrl, loadPendingAccounts]);
+  }, [secretKey, loadPendingAccounts]);
 
   // Initial load
   useEffect(() => {
     loadPendingAccounts();
   }, [loadPendingAccounts]);
 
-  // Periodic refresh every 10 seconds to check for status changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('⏰ Periodic refresh of pending accounts status');
-      loadPendingAccounts();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval);
-  }, [loadPendingAccounts]);
+  // Removed periodic refresh - using SSE only
 
   const deletePendingAccount = useCallback(
     async (accountId: string) => {

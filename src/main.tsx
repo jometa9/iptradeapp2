@@ -6,7 +6,7 @@ import App from './App.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  // <StrictMode> // TEMPORALMENTE DESACTIVADO para debug SSE
     <App />
-  </StrictMode>
+  // </StrictMode>
 );

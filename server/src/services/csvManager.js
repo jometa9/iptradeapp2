@@ -8,7 +8,7 @@ class CSVManager extends EventEmitter {
     super();
     this.csvFiles = new Map(); // Cache de archivos CSV encontrados
     this.watchers = new Map(); // File watchers
-    this.scanTimer = null; // Timer para escaneo periódico
+    this.scanTimer = null; // Timer para escaneo periódico (deshabilitado por defecto)
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.init();
   }
@@ -19,15 +19,17 @@ class CSVManager extends EventEmitter {
       require('fs').mkdirSync(this.csvDirectory, { recursive: true });
     }
 
-    this.scanCSVFiles();
-    this.startFileWatching();
-    this.startPeriodicScan();
+    // No hacer escaneo inicial automático; esperará a que Link Platforms configure las rutas específicas
+    console.log('📋 CSV Manager initialized - waiting for platform linking to configure specific paths');
   }
 
   // Nuevo método para escanear archivos pending simplificados
   async scanPendingCSVFiles() {
     try {
-      console.log('🔍 Scanning for simplified pending CSV files...');
+      // Solo loguear si hay archivos para escanear
+      if (this.csvFiles.size > 0) {
+        console.log('🔍 Scanning for simplified pending CSV files...');
+      }
 
       // Buscar todos los archivos IPTRADECSV2.csv en el sistema
       const patterns = [
@@ -109,9 +111,12 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      console.log(
-        `✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`
-      );
+      // Solo loguear cuando hay archivos o cuentas pendientes
+      if (allFiles.length > 0 || validPendingAccounts.length > 0) {
+        console.log(
+          `✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`
+        );
+      }
       return validPendingAccounts;
     } catch (error) {
       console.error('Error scanning pending CSV files:', error);
@@ -208,54 +213,25 @@ class CSVManager extends EventEmitter {
     });
   }
 
-  // Iniciar escaneo periódico para detectar nuevos archivos CSV
+  // Iniciar escaneo periódico para detectar nuevos archivos CSV (deshabilitado)
   startPeriodicScan() {
-    // Cargar configuración para obtener el intervalo
-    const configPath = join(process.cwd(), 'server', 'config', 'csv_locations.json');
-    let scanInterval = 30000; // 30 segundos por defecto
-
-    try {
-      if (existsSync(configPath)) {
-        const config = JSON.parse(readFileSync(configPath, 'utf8'));
-        if (config.autoScan && config.scanInterval) {
-          scanInterval = config.scanInterval;
-        } else if (!config.autoScan) {
-          console.log('🔍 Auto-scan is disabled in configuration');
-          return;
-        }
-      }
-    } catch (error) {
-      console.error('Error loading CSV scan configuration:', error);
-    }
-
-    console.log(`🔄 Starting periodic CSV scan every ${scanInterval / 1000} seconds`);
-
-    this.scanTimer = setInterval(async () => {
-      console.log('🔍 Scanning for new CSV files...');
-      const previousCount = this.csvFiles.size;
-
-      await this.scanCSVFiles();
-
-      const newCount = this.csvFiles.size;
-      if (newCount > previousCount) {
-        const foundFiles = newCount - previousCount;
-        console.log(`📁 Found ${foundFiles} new CSV file(s)`);
-
-        // Iniciar watchers para los nuevos archivos
-        this.startFileWatching();
-
-        // Emitir evento de archivos actualizados
-        this.emit('newFilesDetected', Array.from(this.csvFiles.keys()));
-      }
-
-      // También escanear pending accounts periódicamente
-      await this.scanAndEmitPendingUpdates();
-    }, scanInterval);
+    // Intentionally disabled; scanning will be triggered explicitly by app events
+    console.log('⏸️ Periodic CSV scan is disabled; using event-driven scans only');
   }
 
-  // Nuevo método para escanear pending y emitir updates via SSE
+  // Método para escanear pending y emitir updates via SSE (solo si hay archivos para escanear)
   async scanAndEmitPendingUpdates() {
     try {
+      // Solo escanear si hay archivos CSV disponibles
+      if (this.csvFiles.size === 0) {
+        // Sin archivos CSV, emitir estado vacío sin escanear
+        this.emit('pendingAccountsUpdate', {
+          accounts: [],
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+      
       const pendingAccounts = await this.scanPendingCSVFiles();
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,

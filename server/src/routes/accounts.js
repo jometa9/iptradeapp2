@@ -1,4 +1,5 @@
 import express from 'express';
+import linkPlatformsController from '../controllers/linkPlatformsController.js';
 
 import {
   connectSlaveToMaster,
@@ -407,6 +408,8 @@ router.post('/register-pending', (req, res) => {
       accountId,
       status: 'pending',
     });
+    // Trigger background linking after registering a pending account
+    try { linkPlatformsController.findAndSyncMQLFolders(); } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);
     res.status(500).json({
