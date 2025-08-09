@@ -24,3 +24,8 @@ que muestr acuanod quiero agregar una slave y tengo el free version
 - trading account configurarion
 - probar que copier ande bien y se comporte de una forma correcta
 - ui mejorar y cerrar
+
+LINK ACCOUNTS END
+* PROBAR LINK ACCOUNTS EN WINDOWS QUE TODO ANDE BIEN
+PENDINGS UI
+DEFINIR FORMATO DEL CSV Y QUE EL SERVER SE MANEJE EN BASE A ESE FORMATO

@@ -62,40 +62,6 @@ export const PendingAccountsManager: React.FC = () => {
     message: '',
     isActive: false,
   });
-
-  // Debug function to test linking status display
-  const testLinkingStatus = () => {
-    console.log('🧪 Testing linking status display...');
-    setLinkingStatus({
-      step: 'starting',
-      message: 'Starting link account process...',
-      isActive: true,
-    });
-
-    setTimeout(() => {
-      setLinkingStatus({
-        step: 'finding_mt4',
-        message: 'Finding your MetaTrader 4 platforms...',
-        isActive: true,
-      });
-    }, 2000);
-
-    setTimeout(() => {
-      setLinkingStatus({
-        step: 'completed',
-        message: 'Success! Accounts linked successfully',
-        isActive: true,
-      });
-    }, 4000);
-
-    setTimeout(() => {
-      setLinkingStatus({
-        step: 'idle',
-        message: '',
-        isActive: false,
-      });
-    }, 7000);
-  };
   const [conversionForm, setConversionForm] = useState<ConversionForm>({
     name: '',
     description: '',
@@ -157,25 +123,22 @@ export const PendingAccountsManager: React.FC = () => {
   // Helper function to get linking status message and icon
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
     const statusMap = {
-      idle: { message: '', icon: null, isLoading: false },
-      starting: { message: 'Starting link platforms process...', icon: '🔗', isLoading: true },
+      idle: { message: '', isLoading: false },
+      starting: { message: 'Starting link platforms process...', isLoading: true },
       finding_mt4: {
         message: 'Scanning for MetaTrader 4 installations...',
-        icon: '📊',
         isLoading: true,
       },
       finding_mt5: {
         message: 'Scanning for MetaTrader 5 installations...',
-        icon: '📈',
         isLoading: true,
       },
-      syncing: { message: 'Syncing Expert Advisors to platforms...', icon: '⚙️', isLoading: true },
+      syncing: { message: 'Syncing Expert Advisors to platforms...', isLoading: true },
       completed: {
         message: 'Success! Platforms linked successfully',
-        icon: '✅',
         isLoading: false,
       },
-      error: { message: 'Error linking accounts. Please try again.', icon: '❌', isLoading: false },
+      error: { message: 'Error linking accounts. Please try again.', isLoading: false },
     };
 
     return statusMap[status.step];
@@ -664,36 +627,13 @@ export const PendingAccountsManager: React.FC = () => {
           <CardContent>
             {pendingCount === 0 ? (
               <div className="text-center py-4">
-                <p className="text-muted-foreground text-gray-600">No pending accounts</p>
-
-                {/* Debug button - remove in production */}
-                <button
-                  onClick={testLinkingStatus}
-                  className="mt-2 px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
-                >
-                  🧪 Test Linking Status
-                </button>
-
-                {/* Linking Status Display */}
-                {linkingStatus.isActive && linkingStatus.step !== 'idle' && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center justify-center gap-2">
-                      {getLinkingStatusDisplay(linkingStatus).isLoading && (
-                        <div className="h-4 w-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div>
-                      )}
-                      <span className="text-lg">{getLinkingStatusDisplay(linkingStatus).icon}</span>
-                      <p className="text-sm font-medium text-blue-800">
-                        {getLinkingStatusDisplay(linkingStatus).message}
-                      </p>
-                    </div>
-                  </div>
+                {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
+                  <p className="text-muted-foreground text-blue-800">
+                    {getLinkingStatusDisplay(linkingStatus).message}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground text-gray-600">No pending accounts</p>
                 )}
-
-                {/* Debug info */}
-                <div className="mt-2 p-2 bg-gray-100 text-xs text-gray-600 rounded">
-                  Debug: step={linkingStatus.step}, isActive={linkingStatus.isActive.toString()},
-                  isLinking={isLinking.toString()}
-                </div>
 
                 <p className="text-sm text-muted-foreground mt-2 text-gray-400">
                   New accounts connected to the server will appear here automatically
