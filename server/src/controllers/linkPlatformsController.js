@@ -94,7 +94,7 @@ class LinkPlatformsController {
           result.created += driveResult.created;
           result.synced += driveResult.synced;
           result.errors.push(...driveResult.errors);
-          // Aggregate CSV creation results
+          // Aggregate CSV detection results
           if (typeof driveResult.filesCreated === 'number') {
             result.filesCreated += driveResult.filesCreated;
           }
@@ -112,7 +112,7 @@ class LinkPlatformsController {
       console.log(
         `📁 Created: ${result.created}, Synced: ${result.synced}, Errors: ${result.errors.length}`
       );
-      console.log(`📄 CSV files created: ${result.filesCreated}`);
+      console.log(`📄 CSV files found: ${result.csvFiles.length}`);
 
       // Configurar CSV manager con las rutas específicas encontradas
       try {
@@ -377,22 +377,20 @@ class LinkPlatformsController {
         }
       }
 
-      // Ensure Files folder and CSV exist
+      // Ensure Files folder exists (but don't create CSV automatically)
       if (!fs.existsSync(filesPath)) {
         fs.mkdirSync(filesPath, { recursive: true });
         result.created++;
         console.log(`📁 Created ${type}/Files folder: ${filesPath}`);
       }
 
+      // Only detect existing CSV files, don't create them
       const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-      if (!fs.existsSync(csvPath)) {
-        const header = 'timestamp,account_id,account_type,status,action,data,master_id,platform\n';
-        fs.writeFileSync(csvPath, header, { encoding: 'utf8' });
-        result.filesCreated++;
+      if (fs.existsSync(csvPath)) {
         result.csvFiles.push(csvPath);
-        console.log(`🆕 Created CSV file: ${csvPath}`);
+        console.log(`📄 Found existing CSV file: ${csvPath}`);
       } else {
-        result.csvFiles.push(csvPath);
+        console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
       }
     } catch (error) {
       result.errors.push(`Error processing ${type} folder ${folder}: ${error.message}`);
@@ -897,14 +895,13 @@ class LinkPlatformsController {
               console.log(`📁 Created MQL4/Files folder: ${filesPath}`);
             }
 
+            // Only detect existing CSV files, don't create them
             const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-            if (!fs.existsSync(csvPath)) {
-              const header =
-                'timestamp,account_id,account_type,status,action,data,master_id,platform\n';
-              fs.writeFileSync(csvPath, header, { encoding: 'utf8' });
-              result.filesCreated++;
+            if (fs.existsSync(csvPath)) {
               result.csvFiles.push(csvPath);
-              console.log(`🆕 Created CSV file: ${csvPath}`);
+              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            } else {
+              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL4 folder ${folder}: ${error.message}`);
@@ -945,14 +942,13 @@ class LinkPlatformsController {
               console.log(`📁 Created MQL5/Files folder: ${filesPath}`);
             }
 
+            // Only detect existing CSV files, don't create them
             const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-            if (!fs.existsSync(csvPath)) {
-              const header =
-                'timestamp,account_id,account_type,status,action,data,master_id,platform\n';
-              fs.writeFileSync(csvPath, header, { encoding: 'utf8' });
-              result.filesCreated++;
+            if (fs.existsSync(csvPath)) {
               result.csvFiles.push(csvPath);
-              console.log(`🆕 Created CSV file: ${csvPath}`);
+              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            } else {
+              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL5 folder ${folder}: ${error.message}`);
@@ -969,7 +965,7 @@ class LinkPlatformsController {
   // Búsqueda simple y rápida de MQL4 y MQL5 con detección de OS
   async findBothMQLFolders() {
     console.log(`🔍 Starting MQL folder search for ${this.operatingSystem}...`);
-    
+
     switch (this.operatingSystem) {
       case 'windows':
         return await this.findBothMQLFoldersWindows();
@@ -989,18 +985,18 @@ class LinkPlatformsController {
       // Obtener todos los drives disponibles
       const drives = await this.getWindowsDrives();
       console.log(`🔍 Searching for MQL folders in Windows drives: ${drives.join(', ')}`);
-      
+
       const allMQL4Folders = [];
       const allMQL5Folders = [];
-      
+
       // Buscar en cada drive de forma paralela para mayor velocidad
-      const searchPromises = drives.map(async (drive) => {
+      const searchPromises = drives.map(async drive => {
         try {
           console.log(`🔍 Searching in drive: ${drive}`);
-          
+
           // Comando para buscar ambas carpetas MQL4 y MQL5 en un solo comando
           const command = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\MQL[45]$"`;
-          
+
           const { stdout } = await execAsync(command, {
             maxBuffer: 10 * 1024 * 1024,
             timeout: 30000,
@@ -1012,44 +1008,47 @@ class LinkPlatformsController {
               .split('\n')
               .map(line => line.trim())
               .filter(line => line.length > 0);
-              
+
             const mql4 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL4'));
             const mql5 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL5'));
-            
-            console.log(`📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 folders`);
-            
+
+            console.log(
+              `📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 folders`
+            );
+
             return { mql4, mql5 };
           }
-          
+
           return { mql4: [], mql5: [] };
         } catch (error) {
           console.warn(`⚠️ Error searching drive ${drive}: ${error.message}`);
           return { mql4: [], mql5: [] };
         }
       });
-      
+
       // Esperar que todas las búsquedas terminen
       const results = await Promise.all(searchPromises);
-      
+
       // Combinar todos los resultados
       results.forEach(result => {
         allMQL4Folders.push(...result.mql4);
         allMQL5Folders.push(...result.mql5);
       });
-      
+
       // Remover duplicados
       const uniqueMQL4 = [...new Set(allMQL4Folders)];
       const uniqueMQL5 = [...new Set(allMQL5Folders)];
-      
-      console.log(`✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 folders`);
+
+      console.log(
+        `✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 folders`
+      );
       uniqueMQL4.forEach(folder => console.log(`  📂 MQL4: ${folder}`));
       uniqueMQL5.forEach(folder => console.log(`  📂 MQL5: ${folder}`));
-      
+
       return {
         mql4Folders: uniqueMQL4,
         mql5Folders: uniqueMQL5,
       };
-      
     } catch (error) {
       console.error(`❌ Error in Windows MQL search: ${error.message}`);
       return { mql4Folders: [], mql5Folders: [] };
