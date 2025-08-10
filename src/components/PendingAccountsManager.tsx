@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, Clock, HousePlug, Trash, Unplug, XCircle } from 'lucide-react';
+import { Cable, Clock, HousePlug, Smile, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -49,7 +49,13 @@ export const PendingAccountsManager: React.FC = () => {
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Inicializar isCollapsed desde localStorage
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('pendingAccountsCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+
   const [linkingStatus, setLinkingStatus] = useState<LinkingStatus>({
     step: 'idle',
     message: '',
@@ -65,6 +71,11 @@ export const PendingAccountsManager: React.FC = () => {
     forceLot: 0,
     reverseTrade: false,
   });
+
+  // Guardar isCollapsed en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('pendingAccountsCollapsed', JSON.stringify(isCollapsed));
+  }, [isCollapsed]);
 
   // Debug initial state
   console.log('🔍 PendingAccountsManager mounted - Initial state:', {
@@ -577,6 +588,7 @@ export const PendingAccountsManager: React.FC = () => {
           <CardContent>
             {pendingCount === 0 ? (
               <div className="text-center py-4">
+                <Smile className="h-5 w-5 mx-auto mb-2" />
                 {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
                   <p
                     className={`text-muted-foreground ${
