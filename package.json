@@ -52,6 +52,7 @@
     "cors": "^2.8.5",
     "cva": "^0.0.0",
     "electron-updater": "^6.3.11",
+    "eventsource": "^4.0.0",
     "express": "^5.1.0",
     "lucide-react": "^0.511.0",
     "node-fetch": "^3.3.2",

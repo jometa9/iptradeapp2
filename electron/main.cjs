@@ -3,6 +3,7 @@ const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { EventSource } = require('eventsource');
 
 // Helper para leer el puerto del .env raíz o variables de entorno
 function getPortFromEnv() {
@@ -260,100 +261,94 @@ async function createTray() {
     tray = new Tray(icon);
     tray.setToolTip('IPTRADE');
 
-    const updateTrayMenu = async () => {
-      try {
-        // Obtener el estado del copier desde el servidor
-        const serverPort = getPortFromEnv();
-        console.log(` Using server port: ${serverPort}`);
+    // Función para crear el menú del tray
+    const createTrayMenu = (copierStatus = 'OFF') => {
+      return Menu.buildFromTemplate([
+        {
+          label: `IPTRADE COPIER ${copierStatus}`,
+          enabled: false, // Solo para mostrar el estado, no clickeable
+          type: 'normal',
+        },
+        { type: 'separator' },
+        {
+          label: 'Go to the dashboard',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.show();
+              mainWindow.focus();
 
-        // Agregar timeout para evitar que la petición se cuelgue
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
-
-        const response = await fetch(`http://localhost:${serverPort}/copier-status`, {
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        let copierStatus = 'OFF';
-        if (response.ok) {
-          const data = await response.json();
-          copierStatus = data.globalStatus ? 'ON' : 'OFF';
-        }
-
-        // Crear el menú del tray con el estado actual
-        const contextMenu = Menu.buildFromTemplate([
-          {
-            label: `IPTRADE COPIER ${copierStatus}`,
-            enabled: false, // Solo para mostrar el estado, no clickeable
-            type: 'normal',
-          },
-          { type: 'separator' },
-          {
-            label: 'Go to the dashboard',
-            click: () => {
-              if (mainWindow) {
-                mainWindow.show();
-                mainWindow.focus();
-
-                // En macOS, mostrar el icono del dock cuando la ventana está visible
-                if (process.platform === 'darwin') {
-                  app.dock.show();
-                }
+              // En macOS, mostrar el icono del dock cuando la ventana está visible
+              if (process.platform === 'darwin') {
+                app.dock.show();
               }
-            },
+            }
           },
-          { type: 'separator' },
-          {
-            label: 'Quit',
-            click: () => {
-              app.quit();
-            },
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit',
+          click: () => {
+            app.quit();
           },
-        ]);
-
-        tray.setContextMenu(contextMenu);
-      } catch (error) {
-        const contextMenu = Menu.buildFromTemplate([
-          {
-            label: 'IPTRADE COPIER OFF',
-            enabled: false,
-            type: 'normal',
-          },
-          { type: 'separator' },
-          {
-            label: 'Go to the dashboard',
-            click: () => {
-              if (mainWindow) {
-                mainWindow.show();
-                mainWindow.focus();
-
-                if (process.platform === 'darwin') {
-                  app.dock.show();
-                }
-              }
-            },
-          },
-          { type: 'separator' },
-          {
-            label: 'Quit',
-            click: () => {
-              app.quit();
-            },
-          },
-        ]);
-        tray.setContextMenu(contextMenu);
-      }
+        },
+      ]);
     };
 
-    // Actualizar el menú inicialmente con retraso para asegurar que el servidor esté listo
-    setTimeout(async () => {
-      await updateTrayMenu();
-    }, 5000); // Esperar 5 segundos para que el servidor esté completamente listo
+    // Función para actualizar el menú del tray con SSE
+    const setupSSEForTray = () => {
+      const serverPort = getPortFromEnv();
+      const sseUrl = `http://localhost:${serverPort}/api/csv/events/frontend`;
 
-    // Actualizar el menú cada 30 segundos para mantener el estado actualizado
-    setInterval(updateTrayMenu, 30000);
+      console.log('🔗 Tray: Setting up SSE connection for real-time updates');
+      console.log('🔗 Tray: Connecting to:', sseUrl);
+
+      const eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = () => {
+        console.log('✅ Tray: SSE connection opened successfully');
+        // Actualización inicial del menú - se actualizará cuando lleguen los datos
+        tray.setContextMenu(createTrayMenu('OFF'));
+      };
+
+      eventSource.onmessage = event => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // Procesar eventos relevantes para el copier status
+          if (data.type === 'csv_updated' || data.type === 'initial_data') {
+            const copierStatus = data.copierStatus?.globalStatus ? 'ON' : 'OFF';
+            tray.setContextMenu(createTrayMenu(copierStatus));
+            console.log(`📡 Tray: Copier status updated to ${copierStatus}`);
+          }
+        } catch (error) {
+          console.error('❌ Tray: Error parsing SSE message:', error);
+        }
+      };
+
+      eventSource.onerror = error => {
+        console.error('❌ Tray: SSE connection error:', error);
+        // En caso de error, mostrar estado OFF
+        tray.setContextMenu(createTrayMenu('OFF'));
+
+        // Reintentar conexión después de 5 segundos
+        setTimeout(() => {
+          if (eventSource.readyState === EventSource.CLOSED) {
+            console.log('🔄 Tray: Retrying SSE connection...');
+            setupSSEForTray();
+          }
+        }, 5000);
+      };
+
+      return eventSource;
+    };
+
+    // Configurar SSE para el tray
+    let trayEventSource = null;
+
+    // Esperar 5 segundos para que el servidor esté listo, luego configurar SSE
+    setTimeout(() => {
+      trayEventSource = setupSSEForTray();
+    }, 5000);
 
     // NO hacer nada al hacer clic en el icono del tray
     // Solo mostrar el menú contextual

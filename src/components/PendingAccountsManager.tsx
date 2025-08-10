@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, Clock, HousePlug, Smile, Trash, Unplug, XCircle } from 'lucide-react';
+import { Cable, Clock, HousePlug, Smile, TrafficCone, Trash, Unplug, XCircle } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -588,7 +588,11 @@ export const PendingAccountsManager: React.FC = () => {
           <CardContent>
             {pendingCount === 0 ? (
               <div className="text-center py-4">
-                <Smile className="h-5 w-5 mx-auto mb-2" />
+                {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
+                  <TrafficCone className="h-5 w-5 mx-auto mb-2 text-gray-500" />
+                ) : (
+                  <Smile className="h-5 w-5 mx-auto mb-2 text-gray-500" />
+                )}
                 {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
                   <p
                     className={`text-muted-foreground ${
