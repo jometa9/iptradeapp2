@@ -14,6 +14,7 @@ class CSVManager extends EventEmitter {
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.heartbeatInterval = null; // Para el heartbeat de los watchers
     this.pollingInterval = null; // Para el polling de archivos
+    this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
     this.init();
   }
 
@@ -181,7 +182,17 @@ class CSVManager extends EventEmitter {
       for (const filePath of allFiles) {
         try {
           if (existsSync(filePath)) {
-            const content = readFileSync(filePath, 'utf8');
+            // Leer como buffer para detectar encoding
+            const buffer = readFileSync(filePath);
+            let content;
+
+            // Detectar UTF-16 LE BOM (FF FE)
+            if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+              content = buffer.toString('utf16le');
+            } else {
+              content = buffer.toString('utf8');
+            }
+
             const lines = content.split('\n').filter(line => line.trim());
 
             // Log detallado del contenido del archivo
@@ -293,14 +304,24 @@ class CSVManager extends EventEmitter {
 
                     // Solo incluir si no ha pasado más de 1 hora
                     if (timeDiff <= 3600) {
-                      // Determinar status basado en el tiempo transcurrido
-                      account.current_status = timeDiff <= 5 ? 'online' : 'offline';
+                      // Determinar status basado en el tiempo transcurrido (usar valor absoluto)
+                      const absTimeDiff = Math.abs(timeDiff);
+                      account.current_status = absTimeDiff <= 5 ? 'online' : 'offline';
                       account.timeDiff = timeDiff;
                       account.filePath = filePath;
                       validPendingAccounts.push(account);
                       console.log(
                         `📱 Found pending account ${account.account_id} (${account.platform}) - ${account.current_status} (${timeDiff.toFixed(1)}s ago) - Timestamp: ${account.timestamp}`
                       );
+                      if (account.current_status === 'offline') {
+                        console.log(
+                          `🔴 Account ${account.account_id} is OFFLINE - absolute time difference: ${absTimeDiff.toFixed(1)}s > 5s threshold`
+                        );
+                      } else {
+                        console.log(
+                          `🟢 Account ${account.account_id} is ONLINE - absolute time difference: ${absTimeDiff.toFixed(1)}s <= 5s threshold`
+                        );
+                      }
                     } else {
                       console.log(
                         `⏰ Ignoring account ${account.account_id} - too old (${(timeDiff / 60).toFixed(1)} minutes) - Timestamp: ${account.timestamp}`
@@ -453,6 +474,10 @@ class CSVManager extends EventEmitter {
       clearInterval(this.pollingInterval);
     }
 
+    if (this.pendingEvaluationInterval) {
+      clearInterval(this.pendingEvaluationInterval);
+    }
+
     // Almacenar últimas modificaciones para detectar cambios
     const lastModifiedTimes = new Map();
     this.csvFiles.forEach((fileData, filePath) => {
@@ -504,6 +529,16 @@ class CSVManager extends EventEmitter {
         console.log(`   👁️ Polling: ${filePath.split('/').pop()}`);
       });
     }, 30000); // Cada 30 segundos
+
+    // Timer para re-evaluar cuentas pendientes cada 5 segundos
+    if (this.pendingEvaluationInterval) {
+      clearInterval(this.pendingEvaluationInterval);
+    }
+
+    this.pendingEvaluationInterval = setInterval(() => {
+      console.log(`🔄 Re-evaluating pending accounts status...`);
+      this.scanAndEmitPendingUpdates();
+    }, 5000); // Cada 5 segundos
   }
 
   // Iniciar escaneo periódico para detectar nuevos archivos CSV (deshabilitado)
@@ -526,6 +561,10 @@ class CSVManager extends EventEmitter {
       }
 
       const pendingAccounts = await this.scanSimplifiedPendingCSVFiles();
+      console.log(`📤 Emitting pending accounts update with ${pendingAccounts.length} accounts`);
+      pendingAccounts.forEach(acc => {
+        console.log(`   - ${acc.account_id}: ${acc.current_status}`);
+      });
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,
         timestamp: new Date().toISOString(),

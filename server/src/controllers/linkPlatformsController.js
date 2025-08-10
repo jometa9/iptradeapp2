@@ -607,24 +607,37 @@ class LinkPlatformsController {
         for (const csvPath of allCsvFiles) {
           if (fs.existsSync(csvPath)) {
             try {
-              const content = fs.readFileSync(csvPath, 'utf8');
+              // Leer el archivo como buffer primero para detectar encoding
+              const buffer = fs.readFileSync(csvPath);
+              let content;
+              
+              // Detectar UTF-16 LE BOM (FF FE)
+              if (buffer[0] === 0xFF && buffer[1] === 0xFE) {
+                content = buffer.toString('utf16le');
+              } else {
+                content = buffer.toString('utf8');
+              }
+              
               const lines = content.split('\n').filter(line => line.trim());
 
               if (lines.length > 0) {
                 const firstLine = lines[0];
 
-                // Sanear posibles BOM (\uFEFF), caracteres no ASCII y CR (\r) provenientes de Wine
-                const sanitizedFirstLine = firstLine
-                  .replace(/\uFEFF/g, '')
-                  .replace(/\r/g, '')
-                  .replace(/^[^\[\d]+/, ''); // Eliminar cualquier carácter no válido al inicio
+                // Log para debugging
+                console.log(`🔍 Checking file: ${csvPath}`);
+                console.log(`   Raw first line bytes: ${Buffer.from(firstLine).toString('hex')}`);
+                console.log(`   Raw first line: "${firstLine}"`);
 
-                // Verificar si tiene formato válido (con corchetes o comas)
-                const hasValidFormat =
-                  (sanitizedFirstLine.includes('[') &&
-                    sanitizedFirstLine.includes(']') &&
-                    /\[[0-9]+\]/.test(sanitizedFirstLine)) ||
-                  (sanitizedFirstLine.includes(',') && /^[0-9],/.test(sanitizedFirstLine));
+                // Buscar patrones válidos en cualquier parte de la línea
+                // Esto manejará archivos con BOM u otros caracteres al inicio
+                const hasBracketFormat = /\[[0-9]+\].*\[[0-9]+\].*\[.*\].*\[.*\]/.test(firstLine);
+                const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
+
+                const hasValidFormat = hasBracketFormat || hasCommaFormat;
+
+                console.log(`   Has bracket format: ${hasBracketFormat}`);
+                console.log(`   Has comma format: ${hasCommaFormat}`);
+                console.log(`   Valid format: ${hasValidFormat}`);
 
                 if (hasValidFormat) {
                   validCsvFiles.push(csvPath);
