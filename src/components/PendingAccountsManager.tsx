@@ -72,10 +72,45 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
+  // Scanning messages for rotation
+  const scanningMessages = [
+    'Searching your MetaTrader platforms...',
+    'Checking Expert Advisor installation...',
+    'Linking your platforms...',
+    'Verifying platform connections...',
+    'Scanning for trading terminals...',
+    'Establishing secure connections...',
+    'Configuring platform integration...',
+    'Finalizing platform setup...',
+  ];
+
+  // State for rotating message
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+  const [isRotating, setIsRotating] = useState(false);
+
   // Guardar isCollapsed en localStorage cuando cambie
   useEffect(() => {
     localStorage.setItem('pendingAccountsCollapsed', JSON.stringify(isCollapsed));
   }, [isCollapsed]);
+
+  // Effect for rotating messages when in starting step
+  useEffect(() => {
+    if (linkingStatus.step === 'starting' && linkingStatus.isActive) {
+      setIsRotating(true);
+      setCurrentMessageIndex(0);
+
+      const interval = setInterval(() => {
+        setCurrentMessageIndex(prevIndex => (prevIndex + 1) % scanningMessages.length);
+      }, 5000);
+
+      return () => {
+        clearInterval(interval);
+        setIsRotating(false);
+      };
+    } else {
+      setIsRotating(false);
+    }
+  }, [linkingStatus.step, linkingStatus.isActive, scanningMessages.length]);
 
   // Debug initial state
   console.log('🔍 PendingAccountsManager mounted - Initial state:', {
@@ -128,7 +163,12 @@ export const PendingAccountsManager: React.FC = () => {
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
     const statusMap = {
       idle: { message: '', isLoading: false },
-      starting: { message: 'Scanning for link platforms process...', isLoading: true },
+      starting: {
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : 'Scanning for link platforms process...',
+        isLoading: true,
+      },
       finding: {
         message: 'Scanning for MetaTrader installations...',
         isLoading: true,
@@ -595,6 +635,9 @@ export const PendingAccountsManager: React.FC = () => {
                 )}
                 {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
                   <p
+                    key={
+                      linkingStatus.step === 'starting' ? 'rotating-message' : linkingStatus.step
+                    }
                     className={`text-muted-foreground ${
                       linkingStatus.step === 'completed'
                         ? 'link-platforms-success-text'
