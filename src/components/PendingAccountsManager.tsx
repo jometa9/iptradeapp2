@@ -732,9 +732,7 @@ export const PendingAccountsManager: React.FC = () => {
                           >
                             {account.platform}
                           </Badge>
-                          <span className="text-xs text-gray-500">
-                            {account.timeDiff ? `${account.timeDiff.toFixed(1)}s ago` : ''}
-                          </span>
+                          {/* Removed timeDiff display for pending accounts */}
                         </div>
 
                         {/* aca agregar otro badgegt para la plataforma */}
