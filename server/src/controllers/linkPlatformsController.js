@@ -574,28 +574,23 @@ class LinkPlatformsController {
 
       try {
         // Buscar todos los archivos IPTRADECSV2.csv en el sistema
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
-
         // Comando para buscar archivos CSV en todo el sistema
         const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
         console.log(`🔍 Executing: ${findCommand}`);
 
-        // Usar execSync con ignoreReturnCode para evitar problemas con códigos de salida
-        const { execSync } = await import('child_process');
+        // Usar exec asíncrono para evitar crash por exit code 1
         let stdout = '';
         try {
-          stdout = execSync(findCommand, { encoding: 'utf8' });
+          const result = await execAsync(findCommand, { encoding: 'utf8' });
+          stdout = result.stdout;
         } catch (error) {
-          // Si hay error pero tenemos stdout, usarlo de todas formas
+          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
+          // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
             console.log(
               `⚠️ Find command returned error code but found files, using results anyway`
             );
-          } else {
-            throw error;
           }
         }
         const allCsvFiles = stdout
@@ -618,15 +613,18 @@ class LinkPlatformsController {
               if (lines.length > 0) {
                 const firstLine = lines[0];
 
-                // Sanear posibles BOM (\uFEFF) y CR (\r) provenientes de Wine
-                const sanitizedFirstLine = firstLine.replace(/\uFEFF/g, '').replace(/\r/g, '');
+                // Sanear posibles BOM (\uFEFF), caracteres no ASCII y CR (\r) provenientes de Wine
+                const sanitizedFirstLine = firstLine
+                  .replace(/\uFEFF/g, '')
+                  .replace(/\r/g, '')
+                  .replace(/^[^\[\d]+/, ''); // Eliminar cualquier carácter no válido al inicio
 
                 // Verificar si tiene formato válido (con corchetes o comas)
                 const hasValidFormat =
                   (sanitizedFirstLine.includes('[') &&
                     sanitizedFirstLine.includes(']') &&
                     /\[[0-9]+\]/.test(sanitizedFirstLine)) ||
-                  (sanitizedFirstLine.includes(',') && sanitizedFirstLine.startsWith('0,'));
+                  (sanitizedFirstLine.includes(',') && /^[0-9],/.test(sanitizedFirstLine));
 
                 if (hasValidFormat) {
                   validCsvFiles.push(csvPath);

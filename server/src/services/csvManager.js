@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync, readFileSync, watch, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import { join } from 'path';
 
@@ -12,6 +12,8 @@ class CSVManager extends EventEmitter {
     this.debounceTimers = new Map(); // Debounce por archivo para eventos de watch
     this.debounceTimeoutMs = 400; // Ventana de debounce para agrupar cambios de archivo
     this.csvDirectory = join(process.cwd(), 'csv_data');
+    this.heartbeatInterval = null; // Para el heartbeat de los watchers
+    this.pollingInterval = null; // Para el polling de archivos
     this.init();
   }
 
@@ -439,36 +441,69 @@ class CSVManager extends EventEmitter {
 
   // Iniciar watching de archivos CSV
   startFileWatching() {
-    this.csvFiles.forEach((fileData, filePath) => {
-      if (this.watchers.has(filePath)) {
-        this.watchers.get(filePath).close();
-      }
+    console.log(`👀 Starting file watching for ${this.csvFiles.size} CSV files...`);
 
-      const watcher = watch(filePath, (eventType, filename) => {
-        if (eventType !== 'change') return;
-
-        // Debounce para evitar ráfagas de eventos duplicados
-        const existingTimer = this.debounceTimers.get(filePath);
-        if (existingTimer) clearTimeout(existingTimer);
-
-        const timerId = setTimeout(() => {
-          console.log(`📝 CSV file updated: ${filePath}`);
-          this.refreshFileData(filePath);
-
-          // Emitir evento para el frontend
-          this.emit('fileUpdated', filePath, this.csvFiles.get(filePath)?.data);
-
-          // Forzar reevaluación de cuentas pendientes con el nuevo método
-          this.scanAndEmitPendingUpdates();
-
-          this.debounceTimers.delete(filePath);
-        }, this.debounceTimeoutMs);
-
-        this.debounceTimers.set(filePath, timerId);
-      });
-
-      this.watchers.set(filePath, watcher);
+    // Limpiar watchers y polling anteriores
+    this.watchers.forEach(watcher => {
+      if (watcher.close) watcher.close();
     });
+    this.watchers.clear();
+
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    // Almacenar últimas modificaciones para detectar cambios
+    const lastModifiedTimes = new Map();
+    this.csvFiles.forEach((fileData, filePath) => {
+      lastModifiedTimes.set(filePath, this.getFileLastModified(filePath));
+    });
+
+    console.log(`🔄 Using polling method for file watching (macOS + Wine compatibility)`);
+
+    // Polling cada 2 segundos para detectar cambios
+    this.pollingInterval = setInterval(() => {
+      this.csvFiles.forEach((fileData, filePath) => {
+        try {
+          const currentModified = this.getFileLastModified(filePath);
+          const lastModified = lastModifiedTimes.get(filePath);
+
+          if (currentModified > lastModified) {
+            console.log(`🔔 File change detected via polling: ${filePath}`);
+            console.log(`   📅 Last: ${new Date(lastModified).toISOString()}`);
+            console.log(`   📅 Current: ${new Date(currentModified).toISOString()}`);
+
+            lastModifiedTimes.set(filePath, currentModified);
+
+            // Procesar el cambio
+            console.log(`📝 Processing CSV file update: ${filePath}`);
+            this.refreshFileData(filePath);
+
+            // Emitir evento para el frontend
+            this.emit('fileUpdated', filePath, this.csvFiles.get(filePath)?.data);
+
+            // Forzar reevaluación de cuentas pendientes
+            this.scanAndEmitPendingUpdates();
+          }
+        } catch (error) {
+          console.error(`❌ Error checking file ${filePath}:`, error.message);
+        }
+      });
+    }, 2000); // Cada 2 segundos
+
+    console.log(`🎯 Polling configured for ${this.csvFiles.size} files`);
+
+    // Heartbeat para confirmar que el polling está activo
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    this.heartbeatInterval = setInterval(() => {
+      console.log(`💓 CSV Polling heartbeat - ${this.csvFiles.size} files being monitored:`);
+      this.csvFiles.forEach((fileData, filePath) => {
+        console.log(`   👁️ Polling: ${filePath.split('/').pop()}`);
+      });
+    }, 30000); // Cada 30 segundos
   }
 
   // Iniciar escaneo periódico para detectar nuevos archivos CSV (deshabilitado)
