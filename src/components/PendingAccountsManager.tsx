@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, Clock, HousePlug, Smile, TrafficCone, Trash, Unplug, XCircle } from 'lucide-react';
+import {
+  Cable,
+  Clock,
+  HousePlug,
+  PartyPopper,
+  Smile,
+  TrafficCone,
+  Trash,
+  Unplug,
+  XCircle,
+} from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -628,10 +638,17 @@ export const PendingAccountsManager: React.FC = () => {
           <CardContent>
             {pendingCount === 0 ? (
               <div className="text-center py-4">
-                {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
-                  <TrafficCone className="h-5 w-5 mx-auto mb-2 text-gray-500" />
-                ) : (
-                  <Smile className="h-5 w-5 mx-auto mb-2 text-gray-500" />
+                {linkingStatus.isActive &&
+                  linkingStatus.step !== 'idle' &&
+                  linkingStatus.step !== 'completed' && (
+                    <TrafficCone className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                  )}
+                {!linkingStatus.isActive && linkingStatus.step === 'idle' && (
+                  <Smile className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                )}
+
+                {linkingStatus.step === 'completed' && (
+                  <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
                 )}
                 {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
                   <p
@@ -643,7 +660,7 @@ export const PendingAccountsManager: React.FC = () => {
                         ? 'link-platforms-success-text'
                         : getLinkingStatusDisplay(linkingStatus).isLoading
                           ? 'link-platforms-gradient-text'
-                          : 'text-red-700 font-semibold'
+                          : 'text-gray-500 font-semibold'
                     }`}
                   >
                     {getLinkingStatusDisplay(linkingStatus).message}
