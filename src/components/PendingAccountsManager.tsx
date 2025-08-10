@@ -593,18 +593,23 @@ export const PendingAccountsManager: React.FC = () => {
                   <p className="text-muted-foreground text-gray-600">No pending accounts</p>
                 )}
 
-                <p className="text-sm text-muted-foreground mt-2 text-gray-400">
-                  New accounts connected to the server will appear here automatically
+                <p className="text-[10px] text-muted-foreground mt-3 text-gray-400">
+                  If you are not seeing your accounts, please check the following:
                 </p>
-                <p className="text-sm text-muted-foreground mt-2 text-gray-400">
-                  See how to connect your accounts to the app{' '}
+                <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-2 text-gray-400">
+                  <li>Click on the "Link Platforms" button on the top right</li>
+                  <li>Open or refresh all your MetaTrader platforms</li>
+                  <li>In MetaTrader, add IPTRADE Expert Advisor to the chart</li>
+                  <li>Wait for the EA to connect to the app and it will appear here</li>
+                </ul>
+                <p className="text-[10px] text-muted-foreground mt-2 text-gray-400">
                   <a
                     href="https://iptradecopier.com/docs"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-600 "
                   >
-                    here
+                    For more info or details, click here
                   </a>
                 </p>
               </div>

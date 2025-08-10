@@ -94,3 +94,9 @@ body {
     background-position: 200% 50%;
   }
 }
+
+ul,
+li {
+  list-style: none;
+  list-style-position: none;
+}
