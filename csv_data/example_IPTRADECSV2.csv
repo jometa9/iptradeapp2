@@ -1,9 +1,0 @@
-timestamp,account_id,account_type,status,action,data,master_id,platform
-2024-01-15T10:30:00Z,12345,master,online,ping,{},,MT4
-2024-01-15T10:30:01Z,12345,master,online,config,{"enabled":true,"type":"master"},,MT4
-2024-01-15T10:30:02Z,12345,master,online,order,{"symbol":"EURUSD","type":"BUY","lot":0.1,"price":1.0850},,MT4
-2024-01-15T10:30:03Z,67890,slave,online,ping,{},12345,MT5
-2024-01-15T10:30:04Z,67890,slave,online,config,{"enabled":true,"description":"Slave 67890"},12345,MT5
-2024-01-15T10:30:05Z,67890,slave,online,order,{"symbol":"EURUSD","type":"BUY","lot":0.1,"price":1.0850},12345,MT5
-2024-01-15T10:30:06Z,11111,slave,online,ping,{},,MT4
-2024-01-15T10:30:07Z,11111,slave,online,config,{"enabled":false,"description":"Unconnected slave"},,MT4

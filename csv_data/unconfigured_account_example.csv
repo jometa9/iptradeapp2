@@ -1,7 +1,0 @@
-timestamp,account_id,account_type,status,action,data,master_id,platform
-2024-01-15T10:30:00Z,UNCONFIG001,unknown,online,ping,{},,TradingView
-2024-01-15T10:30:01Z,UNCONFIG001,unknown,online,ping,{},,TradingView
-2024-01-15T10:30:02Z,UNCONFIG001,unknown,online,ping,{},,TradingView
-2024-01-15T10:30:03Z,UNCONFIG001,unknown,online,ping,{},,TradingView
-2024-01-15T10:30:04Z,UNCONFIG001,unknown,online,ping,{},,TradingView
-2024-01-15T10:30:05Z,UNCONFIG001,unknown,online,ping,{},,TradingView

@@ -82,16 +82,22 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
-  // Scanning messages for rotation
   const scanningMessages = [
     'Searching your MetaTrader platforms...',
     'Checking Expert Advisor installation...',
     'Linking your platforms...',
     'Verifying platform connections...',
     'Scanning for trading terminals...',
+    'The good traders have strong patience...',
     'Establishing secure connections...',
+    'Please be patient...',
     'Configuring platform integration...',
+    'To be continued...',
     'Finalizing platform setup...',
+    'Almost there...',
+    'A lot of work to do...',
+    'Too much files in the way...',
+    'Yes, I know it takes time...',
   ];
 
   // State for rotating message
@@ -692,7 +698,7 @@ export const PendingAccountsManager: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {accounts.map(account => {
-                  const isOnline = account.status === 'online';
+                  const isOnline = (account.current_status || account.status) === 'online';
 
                   return (
                     <div

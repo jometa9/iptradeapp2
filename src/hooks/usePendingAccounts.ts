@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import { SSEService } from '../services/sseService';
@@ -8,8 +8,10 @@ interface PendingAccount {
   platform: string;
   timestamp: string;
   status: 'online' | 'offline';
+  current_status?: 'online' | 'offline'; // Nuevo campo para el formato simplificado
   timeDiff: number;
   filePath: string;
+  pending_indicator?: string; // Para el nuevo formato [0]
 }
 
 interface PendingAccountsData {
@@ -30,7 +32,8 @@ export const usePendingAccounts = () => {
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
 
-  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+  const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
 
   const loadPendingAccounts = useCallback(async () => {
     if (!secretKey) {
@@ -78,7 +81,11 @@ export const usePendingAccounts = () => {
     SSEService.connect(secretKey);
 
     const handleSSEMessage = (data: any) => {
-      if (data.type === 'pendingAccountsUpdate' || data.type === 'csvFileChanged') {
+      if (
+        data.type === 'pendingAccountsUpdate' ||
+        data.type === 'csvFileChanged' ||
+        data.type === 'csv_updated'
+      ) {
         console.log('📨 Received pending accounts update via SSE');
         loadPendingAccounts();
       }

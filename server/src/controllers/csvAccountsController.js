@@ -210,26 +210,55 @@ export const deletePendingAccount = async (req, res) => {
 
           if (lines.length < 2) continue;
 
-          const headers = lines[0].split(',').map(h => h.trim());
-          const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
-          const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
+          // Verificar si es el nuevo formato simplificado [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
+          const firstDataLine = lines[1]; // Primera línea de datos
+          const firstValues = firstDataLine.split(',').map(v => v.trim());
 
-          if (!isSimplifiedFormat) continue;
-
-          // Buscar y eliminar líneas que contengan esta cuenta
           let modified = false;
-          const filteredLines = [headers.join(',')]; // Mantener header
+          let filteredLines = [];
 
-          for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',').map(v => v.trim());
-            const accountIdIndex = headers.indexOf('account_id');
+          if (firstValues[0] === '0' && firstValues.length >= 5) {
+            // Nuevo formato simplificado - no hay header
+            console.log(`📄 Processing new simplified format for deletion: ${filePath}`);
 
-            if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
-              console.log(`🗑️ Removing account ${accountId} from ${filePath}`);
-              modified = true;
-              // No agregar esta línea (eliminar)
-            } else {
-              filteredLines.push(lines[i]);
+            for (let i = 0; i < lines.length; i++) {
+              const lineValues = lines[i].split(',').map(v => v.trim());
+
+              // Verificar formato: [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
+              if (lineValues[0] === '0' && lineValues.length >= 5) {
+                if (lineValues[1] === accountId) {
+                  console.log(`🗑️ Removing account ${accountId} from new format file ${filePath}`);
+                  modified = true;
+                  // No agregar esta línea (eliminar)
+                } else {
+                  filteredLines.push(lines[i]);
+                }
+              } else {
+                // Mantener líneas que no siguen el formato esperado
+                filteredLines.push(lines[i]);
+              }
+            }
+          } else {
+            // Formato anterior con headers
+            const headers = lines[0].split(',').map(h => h.trim());
+            const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
+            const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
+
+            if (!isSimplifiedFormat) continue;
+
+            filteredLines = [headers.join(',')]; // Mantener header
+
+            for (let i = 1; i < lines.length; i++) {
+              const values = lines[i].split(',').map(v => v.trim());
+              const accountIdIndex = headers.indexOf('account_id');
+
+              if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
+                console.log(`🗑️ Removing account ${accountId} from legacy format file ${filePath}`);
+                modified = true;
+                // No agregar esta línea (eliminar)
+              } else {
+                filteredLines.push(lines[i]);
+              }
             }
           }
 
@@ -275,21 +304,21 @@ export const deletePendingAccount = async (req, res) => {
 // Nuevo endpoint simplificado para pending accounts
 export const scanPendingAccounts = async (req, res) => {
   try {
-    // Solo loguear si hay archivos CSV para escanear
-    if (csvManager.csvFiles.size > 0) {
-      console.log('🔍 Starting simplified pending accounts scan...');
-    }
+    console.log('🔍 Starting simplified pending accounts scan...');
 
-    const pendingAccounts = await csvManager.scanPendingCSVFiles();
+    // Usar el nuevo método que soporta ambos formatos
+    const pendingAccounts = await csvManager.scanSimplifiedPendingCSVFiles();
 
     // Agrupar por plataforma
     const platformStats = {};
     pendingAccounts.forEach(account => {
       const platform = account.platform || 'Unknown';
+      const status = account.current_status || account.status || 'offline';
+
       if (!platformStats[platform]) {
         platformStats[platform] = { online: 0, offline: 0, total: 0 };
       }
-      platformStats[platform][account.status]++;
+      platformStats[platform][status]++;
       platformStats[platform].total++;
     });
 
@@ -299,8 +328,10 @@ export const scanPendingAccounts = async (req, res) => {
       accounts: pendingAccounts,
       summary: {
         totalAccounts: pendingAccounts.length,
-        onlineAccounts: pendingAccounts.filter(a => a.status === 'online').length,
-        offlineAccounts: pendingAccounts.filter(a => a.status === 'offline').length,
+        onlineAccounts: pendingAccounts.filter(a => (a.current_status || a.status) === 'online')
+          .length,
+        offlineAccounts: pendingAccounts.filter(a => (a.current_status || a.status) === 'offline')
+          .length,
         platformStats,
       },
       platforms: Object.keys(platformStats),

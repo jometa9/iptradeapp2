@@ -568,18 +568,130 @@ class LinkPlatformsController {
   async configureCSVWatching(csvPaths) {
     console.log(`🔧 Configuring CSV watching for ${csvPaths.length} specific paths...`);
 
-    // Actualizar CSV manager con las rutas específicas encontradas
-    csvPaths.forEach(csvPath => {
-      if (fs.existsSync(csvPath)) {
-        csvManager.csvFiles.set(csvPath, {
-          lastModified: csvManager.getFileLastModified(csvPath),
-          data: csvManager.parseCSVFile(csvPath),
-        });
-        console.log(`📍 Added CSV to watch list: ${csvPath}`);
-      }
-    });
+    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
+    if (this.operatingSystem === 'macos') {
+      console.log(`🍎 macOS detected - performing system-wide CSV search...`);
 
-    // Configurar file watching específicamente para estas rutas
+      try {
+        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+
+        // Comando para buscar archivos CSV en todo el sistema
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        console.log(`🔍 Executing: ${findCommand}`);
+
+        // Usar execSync con ignoreReturnCode para evitar problemas con códigos de salida
+        const { execSync } = await import('child_process');
+        let stdout = '';
+        try {
+          stdout = execSync(findCommand, { encoding: 'utf8' });
+        } catch (error) {
+          // Si hay error pero tenemos stdout, usarlo de todas formas
+          if (error.stdout) {
+            stdout = error.stdout;
+            console.log(
+              `⚠️ Find command returned error code but found files, using results anyway`
+            );
+          } else {
+            throw error;
+          }
+        }
+        const allCsvFiles = stdout
+          .trim()
+          .split('\n')
+          .filter(line => line.trim());
+
+        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
+        allCsvFiles.forEach(file => console.log(`   - ${file}`));
+
+        // Filtrar solo archivos CSV con formato válido
+        const validCsvFiles = [];
+
+        for (const csvPath of allCsvFiles) {
+          if (fs.existsSync(csvPath)) {
+            try {
+              const content = fs.readFileSync(csvPath, 'utf8');
+              const lines = content.split('\n').filter(line => line.trim());
+
+              if (lines.length > 0) {
+                const firstLine = lines[0];
+
+                // Sanear posibles BOM (\uFEFF) y CR (\r) provenientes de Wine
+                const sanitizedFirstLine = firstLine.replace(/\uFEFF/g, '').replace(/\r/g, '');
+
+                // Verificar si tiene formato válido (con corchetes o comas)
+                const hasValidFormat =
+                  (sanitizedFirstLine.includes('[') &&
+                    sanitizedFirstLine.includes(']') &&
+                    /\[[0-9]+\]/.test(sanitizedFirstLine)) ||
+                  (sanitizedFirstLine.includes(',') && sanitizedFirstLine.startsWith('0,'));
+
+                if (hasValidFormat) {
+                  validCsvFiles.push(csvPath);
+
+                  // Log detallado del contenido del archivo CSV válido
+                  console.log(`\n📄 === VALID CSV FILE FOUND ===`);
+                  console.log(`📁 File: ${csvPath}`);
+                  console.log(`📊 Total lines: ${lines.length}`);
+                  console.log(`📋 Raw content:`);
+                  console.log(content);
+                  console.log(`📋 Processed lines:`);
+                  lines.forEach((line, index) => {
+                    console.log(`   Line ${index + 1}: "${line}"`);
+                  });
+                  console.log(`📄 === END CSV CONTENT ===\n`);
+                } else {
+                  console.log(`❌ Skipping invalid format: ${csvPath}`);
+                }
+              }
+            } catch (error) {
+              console.log(`❌ Error reading CSV file ${csvPath}: ${error.message}`);
+            }
+          }
+        }
+
+        console.log(
+          `✅ Found ${validCsvFiles.length} valid CSV files out of ${allCsvFiles.length} total files`
+        );
+
+        // Configurar watching para archivos válidos
+        validCsvFiles.forEach(csvPath => {
+          csvManager.csvFiles.set(csvPath, {
+            lastModified: csvManager.getFileLastModified(csvPath),
+            data: csvManager.parseCSVFile(csvPath),
+          });
+          console.log(`📍 Added valid CSV to watch list: ${csvPath}`);
+        });
+      } catch (error) {
+        console.error(`❌ Error during system-wide CSV search:`, error);
+
+        // Fallback: usar las rutas originales
+        csvPaths.forEach(csvPath => {
+          if (fs.existsSync(csvPath)) {
+            csvManager.csvFiles.set(csvPath, {
+              lastModified: csvManager.getFileLastModified(csvPath),
+              data: csvManager.parseCSVFile(csvPath),
+            });
+            console.log(`📍 Added fallback CSV to watch list: ${csvPath}`);
+          }
+        });
+      }
+    } else {
+      // Para otros sistemas operativos, usar la lógica original
+      csvPaths.forEach(csvPath => {
+        if (fs.existsSync(csvPath)) {
+          csvManager.csvFiles.set(csvPath, {
+            lastModified: csvManager.getFileLastModified(csvPath),
+            data: csvManager.parseCSVFile(csvPath),
+          });
+          console.log(`📍 Added CSV to watch list: ${csvPath}`);
+        }
+      });
+    }
+
+    // Configurar file watching
     csvManager.startFileWatching();
 
     console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
