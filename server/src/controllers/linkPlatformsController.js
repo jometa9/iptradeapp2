@@ -610,14 +610,14 @@ class LinkPlatformsController {
               // Leer el archivo como buffer primero para detectar encoding
               const buffer = fs.readFileSync(csvPath);
               let content;
-              
+
               // Detectar UTF-16 LE BOM (FF FE)
-              if (buffer[0] === 0xFF && buffer[1] === 0xFE) {
+              if (buffer[0] === 0xff && buffer[1] === 0xfe) {
                 content = buffer.toString('utf16le');
               } else {
                 content = buffer.toString('utf8');
               }
-              
+
               const lines = content.split('\n').filter(line => line.trim());
 
               if (lines.length > 0) {
