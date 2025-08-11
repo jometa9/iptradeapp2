@@ -28,7 +28,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const { app } = createServer();
-const DEV_PORT = process.env.PORT || 3000;
+const DEV_PORT = process.env.PORT || 30;
 
 // Debug: Let's see what environment variables are loaded
 console.log('🔧 DEV MODE Environment variables:');
