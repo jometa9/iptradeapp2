@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import {
   Cable,
-  Clock,
   HousePlug,
   PartyPopper,
   Smile,
@@ -84,6 +83,7 @@ export const PendingAccountsManager: React.FC = () => {
 
   const scanningMessages = [
     'Searching your MetaTrader platforms...',
+    'Your pending accounts are being processed...',
     'Checking Expert Advisor installation...',
     'Linking your platforms...',
     'Verifying platform connections...',
@@ -580,27 +580,6 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  // Solo mostrar spinner si está cargando pending accounts
-  if (loadingPending) {
-    return (
-      <Card className="bg-white">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Pending Accounts
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-            <span className="ml-2 text-gray-600">Loading pending accounts...</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Usar datos del nuevo sistema CSV simplificado
   const pendingCount = pendingData?.summary?.totalAccounts || 0;
   const accounts = pendingData?.accounts || [];
 

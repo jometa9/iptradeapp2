@@ -434,9 +434,10 @@ function createWindow() {
         event.preventDefault();
         mainWindow.hide();
 
-        // En macOS, ocultar el icono del dock cuando la ventana está oculta
-        if (process.platform === 'darwin') {
-          app.dock.hide();
+        // En macOS, NO ocultar el icono del dock para mantener comportamiento nativo
+        // Solo ocultar en otras plataformas
+        if (process.platform !== 'darwin') {
+          // Para otras plataformas, ocultar completamente
         }
 
         return false;
@@ -446,13 +447,14 @@ function createWindow() {
 
   // Manejar el evento de minimizar
   mainWindow.on('minimize', event => {
+    // En macOS, permitir minimización normal
+    if (process.platform === 'darwin') {
+      return; // No prevenir el comportamiento por defecto
+    }
+
+    // En otras plataformas, ocultar al tray
     event.preventDefault();
     mainWindow.hide();
-
-    // En macOS, ocultar el icono del dock cuando la ventana está oculta
-    if (process.platform === 'darwin') {
-      app.dock.hide();
-    }
   });
 
   // Manejar eventos de fullscreen
