@@ -241,6 +241,12 @@ class LinkPlatformsController {
       // Para requests manuales, también configurar CSV watching para archivos existentes
       console.log('🔧 Manual request: Configuring CSV watching for existing files...');
       await this.configureCSVWatchingForExistingFiles();
+
+      // Emitir evento de finalización completa DESPUÉS de configurar CSV watching
+      this.emitLinkPlatformsEvent('completed', {
+        message: 'Link Platforms process completed successfully (including CSV configuration)',
+        result,
+      });
     } catch (error) {
       result.errors.push(`General error: ${error.message}`);
 
@@ -456,11 +462,11 @@ class LinkPlatformsController {
       await this.configureCSVWatching(result.csvFiles);
     }
 
-    // Emitir evento de finalización exitosa
-    this.emitLinkPlatformsEvent('completed', {
-      message: 'Link Platforms process completed successfully',
-      result,
-    });
+    // Emitir evento de finalización exitosa (comentado - ahora se emite desde findAndSyncMQLFoldersManual)
+    // this.emitLinkPlatformsEvent('completed', {
+    //   message: 'Link Platforms process completed successfully',
+    //   result,
+    // });
   }
 
   // Realizar búsqueda en background para nuevas instalaciones (SIN afectar frontend)
