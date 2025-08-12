@@ -27,7 +27,11 @@ export const Dashboard: React.FC = () => {
   console.log('🔗 isLinking state:', isLinking);
 
   const [userIP, setUserIP] = useState<string>('Loading...');
-  const [showIP, setShowIP] = useState<boolean>(true);
+  // Inicializar showIP desde localStorage
+  const [showIP, setShowIP] = useState<boolean>(() => {
+    const saved = localStorage.getItem('showIP');
+    return saved ? JSON.parse(saved) : true;
+  });
   // Removed separate "connect platforms" flow; unified under Link Platforms
   // Estado para controlar si se acaba de iniciar sesión
   // isRecentLogin not used
@@ -68,6 +72,11 @@ export const Dashboard: React.FC = () => {
 
     // Timer cleanup removed
   }, [userInfo]);
+
+  // Guardar showIP en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('showIP', JSON.stringify(showIP));
+  }, [showIP]);
 
   // Efecto para controlar la visibilidad de la tarjeta solo una vez por sesión
   useEffect(() => {

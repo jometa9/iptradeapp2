@@ -81,6 +81,19 @@ export const PendingAccountsManager: React.FC = () => {
     reverseTrade: false,
   });
 
+  // Función para mapear códigos de plataforma a nombres amigables
+  const getPlatformDisplayName = (platformCode: string): string => {
+    const platformMap: Record<string, string> = {
+      MT4: 'MetaTrader 4',
+      MT5: 'MetaTrader 5',
+      CT: 'cTrader',
+      CTRADER: 'cTrader',
+      TRADINGVIEW: 'TradingView',
+    };
+
+    return platformMap[platformCode?.toUpperCase()] || platformCode || 'Unknown';
+  };
+
   const scanningMessages = [
     'Searching your MetaTrader platforms...',
     'Your pending accounts are being processed...',
@@ -709,7 +722,7 @@ export const PendingAccountsManager: React.FC = () => {
                             variant="outline"
                             className="bg-gray-50 text-gray-800 border border-gray-300"
                           >
-                            {account.platform}
+                            {getPlatformDisplayName(account.platform)}
                           </Badge>
                           {/* Removed timeDiff display for pending accounts */}
                         </div>
@@ -815,9 +828,9 @@ export const PendingAccountsManager: React.FC = () => {
                               </Button>
                             </>
                           ) : (
-                            // Normal buttons - only show if account is online (status !== 'offline')
+                            // Normal buttons - only show if account is online
                             <>
-                              {account.status === 'offline' ? (
+                              {!isOnline ? (
                                 // Show offline status and delete only
                                 <>
                                   <Button

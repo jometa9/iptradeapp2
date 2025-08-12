@@ -34,6 +34,8 @@ Esta carpeta contiene toda la documentación del proyecto IP Trade App 2. Los do
 ### 🖥️ **Configuración y Límites**
 - [MANAGED_VPS_LIMITS_CONFIGURATION.md](./MANAGED_VPS_LIMITS_CONFIGURATION.md) - Configuración de límites de VPS gestionado
 - [PLAN_MAPPING_FIX.md](./PLAN_MAPPING_FIX.md) - Fix de mapeo de planes
+- [LOCALSTORAGE_CONFIGURATION.md](./LOCALSTORAGE_CONFIGURATION.md) - Configuraciones de localStorage para preferencias del usuario
+- [LOCALSTORAGE_IMPLEMENTATION_SUMMARY.md](./LOCALSTORAGE_IMPLEMENTATION_SUMMARY.md) - Resumen de implementación de localStorage
 
 ### 🔗 **Integraciones Externas**
 - [EXTERNAL_LINKS_INTEGRATION.md](./EXTERNAL_LINKS_INTEGRATION.md) - Integración de enlaces externos
@@ -56,6 +58,8 @@ docs/
 ├── SUBSCRIPTION_*.md                  # Documentación de suscripciones
 ├── MANAGED_VPS_LIMITS_CONFIGURATION.md # Configuración de VPS
 ├── PLAN_MAPPING_FIX.md                # Fix de mapeo de planes
+├── LOCALSTORAGE_CONFIGURATION.md      # Configuraciones de localStorage
+├── LOCALSTORAGE_IMPLEMENTATION_SUMMARY.md # Resumen de implementación localStorage
 └── EXTERNAL_LINKS_INTEGRATION.md      # Integración de enlaces externos
 ```
 
@@ -67,6 +71,7 @@ docs/
 - **Cuentas Pendientes**: Todos los archivos `PENDING_ACCOUNTS_*.md`
 - **Suscripciones**: Todos los archivos `SUBSCRIPTION_*.md`
 - **Límites**: [MANAGED_VPS_LIMITS_CONFIGURATION.md](./MANAGED_VPS_LIMITS_CONFIGURATION.md)
+- **Preferencias**: [LOCALSTORAGE_CONFIGURATION.md](./LOCALSTORAGE_CONFIGURATION.md)
 - **Desarrollo**: [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md), [VERSIONING_AND_DEPLOYMENT.md](./VERSIONING_AND_DEPLOYMENT.md)
 
 ### Por Estado:
@@ -77,12 +82,12 @@ docs/
 
 ## 📊 Estadísticas
 
-- **Total de documentos**: 22 archivos
+- **Total de documentos**: 24 archivos
 - **Documentación de APIs**: 3 archivos
 - **Documentación de cuentas pendientes**: 3 archivos
 - **Documentación de suscripciones**: 5 archivos
 - **Documentación de implementación**: 3 archivos
-- **Documentación de configuración**: 2 archivos
+- **Documentación de configuración**: 3 archivos
 - **Documentación de integración**: 2 archivos
 - **Documentación general**: 4 archivos
 
