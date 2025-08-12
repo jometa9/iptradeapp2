@@ -3,7 +3,6 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 
 import { checkAccountActivity } from './controllers/accountsController.js';
-import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
@@ -65,25 +64,8 @@ async function startDevServer() {
           checkAccountActivity();
         }, 1000);
 
-        // Auto-run Link Platforms on server start
-        (async () => {
-          try {
-            console.log('🧩 Auto-running Link Platforms on server start...');
-            console.log(
-              '📊 Link Platforms state before auto-start:',
-              linkPlatformsController.isLinking
-            );
-
-            const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
-            console.log('✅ Auto Link Platforms result:', result);
-            console.log(
-              '📊 Link Platforms state after auto-start:',
-              linkPlatformsController.isLinking
-            );
-          } catch (err) {
-            console.error('❌ Auto Link Platforms failed on start:', err);
-          }
-        })();
+        // Auto-run Link Platforms will be triggered when frontend connects to SSE
+        console.log('⏳ Auto Link Platforms will be triggered when frontend connects to SSE...');
 
         resolve(server);
       });
