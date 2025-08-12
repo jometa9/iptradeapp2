@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 
 import { checkAccountActivity } from './controllers/accountsController.js';
+import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
@@ -64,8 +65,30 @@ async function startDevServer() {
           checkAccountActivity();
         }, 1000);
 
-        // Auto-run Link Platforms will be triggered when frontend connects to SSE
-        console.log('⏳ Auto Link Platforms will be triggered when frontend connects to SSE...');
+        // Auto-run Link Platforms on server start
+        (async () => {
+          try {
+            console.log('🧩 Auto-running Link Platforms on server start...');
+            console.log(
+              '📊 Link Platforms state before auto-start:',
+              linkPlatformsController.isLinking
+            );
+
+            const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
+            console.log('✅ Auto Link Platforms result:', result);
+            console.log(
+              '📊 Link Platforms state after auto-start:',
+              linkPlatformsController.isLinking
+            );
+
+            // Ensure CSV watching is configured for existing files after auto-start
+            console.log('🔧 Auto-start: Configuring CSV watching for existing files...');
+            await linkPlatformsController.configureCSVWatchingForExistingFiles();
+            console.log('✅ Auto-start: CSV watching configured successfully');
+          } catch (err) {
+            console.error('❌ Auto Link Platforms failed on start:', err);
+          }
+        })();
 
         resolve(server);
       });

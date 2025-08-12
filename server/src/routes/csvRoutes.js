@@ -58,30 +58,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
   );
   console.log(`🔑 API Key: ${req.query.apiKey?.substring(0, 12)}...`);
   console.log(`📍 Client IP: ${clientIP}`);
-
-  // Trigger auto Link Platforms on first frontend connection
-  if (activeSSEConnections === 1) {
-    console.log('🎯 First frontend connection detected - triggering auto Link Platforms...');
-
-    // Import and execute Link Platforms asynchronously
-    import('../controllers/linkPlatformsController.js').then(
-      ({ default: linkPlatformsController }) => {
-        linkPlatformsController
-          .findAndSyncMQLFoldersManual()
-          .then(result => {
-            console.log('✅ Auto Link Platforms completed after frontend connection:', {
-              mql4Folders: result.mql4Folders.length,
-              mql5Folders: result.mql5Folders.length,
-              csvFiles: result.csvFiles.length,
-              errors: result.errors.length,
-            });
-          })
-          .catch(error => {
-            console.error('❌ Auto Link Platforms failed after frontend connection:', error);
-          });
-      }
-    );
-  }
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',

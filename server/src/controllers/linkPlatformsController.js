@@ -300,10 +300,6 @@ class LinkPlatformsController {
           await this.configureCSVWatching(result.csvFiles);
         }
 
-        // Para auto-start, también configurar CSV watching para archivos existentes
-        console.log('🔧 Auto-start: Configuring CSV watching for existing files...');
-        await this.configureCSVWatchingForExistingFiles();
-
         // Emitir evento de finalización completa (sin background scan)
         this.emitLinkPlatformsEvent('completed', {
           message: 'Link Platforms completed using cached paths (auto-start)',
@@ -314,10 +310,6 @@ class LinkPlatformsController {
       } else {
         console.log('🔍 No valid cache found, performing full scan...');
         await this.performFullScan(result);
-
-        // Para auto-start sin cache, también configurar CSV watching para archivos existentes
-        console.log('🔧 Auto-start (no cache): Configuring CSV watching for existing files...');
-        await this.configureCSVWatchingForExistingFiles();
       }
     } catch (error) {
       result.errors.push(`General error: ${error.message}`);
