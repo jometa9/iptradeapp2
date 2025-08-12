@@ -1,23 +1,26 @@
 import { useEffect, useRef } from 'react';
-import { useLinkPlatforms } from './useLinkPlatforms';
+
 import { useCSVData } from './useCSVData';
+import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
+import { useLinkPlatforms } from './useLinkPlatforms';
 
 export const useAutoLinkPlatforms = () => {
   const { linkPlatforms } = useLinkPlatforms();
   const { accounts } = useCSVData();
+  const { clearHiddenAccounts } = useHiddenPendingAccounts();
   const previousAccountsRef = useRef<any>(null);
   const isInitialMount = useRef(true);
   const hasExecutedOnce = useRef(false);
 
   const hasAccountChanged = (current: any, previous: any): boolean => {
     const fieldsToCompare = ['accountNumber', 'platform', 'server', 'accountType', 'status'];
-    
+
     for (const field of fieldsToCompare) {
       if (current[field] !== previous[field]) {
         return true;
       }
     }
-    
+
     return false;
   };
 
@@ -56,7 +59,7 @@ export const useAutoLinkPlatforms = () => {
     for (const accountId of Object.keys(currentAccounts.masterAccounts || {})) {
       const currentAccount = currentAccounts.masterAccounts[accountId];
       const previousAccount = previousAccounts.masterAccounts?.[accountId];
-      
+
       if (previousAccount && hasAccountChanged(currentAccount, previousAccount)) {
         console.log(`✏️ Account modified: ${accountId}`);
         return true;
@@ -77,23 +80,30 @@ export const useAutoLinkPlatforms = () => {
     // Solo ejecutar si hay cambios en las cuentas
     if (accounts && previousAccountsRef.current !== accounts) {
       const previousAccounts = previousAccountsRef.current;
-      
+
       // Detectar si se agregaron, editaron o eliminaron cuentas
       const hasChanges = detectAccountChanges(accounts, previousAccounts);
-      
+
       if (hasChanges) {
         // Solo ejecutar si ya se ejecutó al menos una vez (evitar ejecutar al inicio)
         if (hasExecutedOnce.current) {
           console.log('🔄 Account changes detected, executing Link Platforms...');
+
+          // Limpiar cuentas ocultas cuando se ejecuta Link Platforms automáticamente
+          console.log('🧹 Clearing hidden accounts due to auto Link Platforms execution');
+          clearHiddenAccounts();
+
           linkPlatforms().catch(error => {
             console.error('Auto Link Platforms failed:', error);
           });
         } else {
-          console.log('🔄 Account changes detected, but skipping first execution (server handles it)');
+          console.log(
+            '🔄 Account changes detected, but skipping first execution (server handles it)'
+          );
           hasExecutedOnce.current = true;
         }
       }
-      
+
       previousAccountsRef.current = accounts;
     }
   }, [accounts, linkPlatforms]);

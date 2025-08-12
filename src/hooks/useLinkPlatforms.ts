@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import type { LinkPlatformsResult } from '../services/linkPlatformsService';
 import { linkPlatformsService } from '../services/linkPlatformsService';
 import { SSEService } from '../services/sseService';
+import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
 
 export const useLinkPlatforms = () => {
   const { secretKey } = useAuth();
@@ -12,6 +13,7 @@ export const useLinkPlatforms = () => {
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
   const hasCheckedInitialStatus = useRef<boolean>(false);
+  const { clearHiddenAccounts } = useHiddenPendingAccounts();
 
   // Track isLinking state changes
   const setIsLinkingWithLog = (newValue: boolean, reason: string) => {
@@ -56,6 +58,10 @@ export const useLinkPlatforms = () => {
 
     try {
       console.log('🔗 Starting Link Platforms process...');
+
+      // Limpiar cuentas ocultas cuando se inicia Link Platforms manual
+      console.log('🧹 Clearing hidden accounts due to manual Link Platforms initiation');
+      clearHiddenAccounts();
 
       const result = await linkPlatformsService.linkPlatforms(secretKey);
 
@@ -124,6 +130,10 @@ export const useLinkPlatforms = () => {
             console.log('✅ Full result data:', data.result);
             console.log('✅ Current isLinking state before decision:', isLinking);
 
+            // Limpiar cuentas ocultas cuando se complete el proceso de link platforms
+            console.log('🧹 Clearing hidden pending accounts after Link Platforms completion');
+            clearHiddenAccounts();
+
             if (data.result?.backgroundScan) {
               console.log('🔄 Spinner continues - waiting for background scan completion...');
             } else {
@@ -163,6 +173,10 @@ export const useLinkPlatforms = () => {
             // Si había background scan, terminar el spinner ahora
             setIsLinkingWithLog(false, 'SSE background scan completed');
             console.log('✅ Spinner stopped - background scan completed');
+
+            // Limpiar cuentas ocultas cuando se complete el background scan
+            console.log('🧹 Clearing hidden pending accounts after background scan completion');
+            clearHiddenAccounts();
 
             if (
               data.newInstallations &&

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import { SSEService } from '../services/sseService';
+import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
 
 interface PendingAccount {
   account_id: string;
@@ -31,6 +32,7 @@ export const usePendingAccounts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
+  const { hideAccount, filterVisibleAccounts } = useHiddenPendingAccounts();
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
@@ -56,7 +58,36 @@ export const usePendingAccounts = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Pending accounts loaded:', data.summary);
-        setPendingData(data);
+
+        // Filtrar cuentas ocultas antes de establecer el estado
+        const visibleAccounts = filterVisibleAccounts(data.accounts);
+        const filteredData = {
+          ...data,
+          accounts: visibleAccounts,
+          summary: {
+            ...data.summary,
+            totalAccounts: visibleAccounts.length,
+            platformStats: visibleAccounts.reduce(
+              (stats, account) => {
+                const platform = account.platform || 'Unknown';
+                if (!stats[platform]) {
+                  stats[platform] = { total: 0, online: 0, offline: 0 };
+                }
+                stats[platform].total++;
+                if (account.current_status === 'online') {
+                  stats[platform].online++;
+                } else {
+                  stats[platform].offline++;
+                }
+                return stats;
+              },
+              {} as Record<string, { total: number; online: number; offline: number }>
+            ),
+          },
+        };
+
+        setPendingData(filteredData);
+        console.log(`👁️ Filtered ${data.accounts.length - visibleAccounts.length} hidden accounts`);
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to load pending accounts');
@@ -87,7 +118,54 @@ export const usePendingAccounts = () => {
         data.type === 'csv_updated'
       ) {
         console.log('📨 Received pending accounts update via SSE');
-        loadPendingAccounts();
+
+        // En lugar de recargar todo, actualizar solo los datos que han cambiado
+        // pero respetando las cuentas ocultas
+        if (data.accounts && Array.isArray(data.accounts)) {
+          console.log('🔄 Updating pending accounts from SSE while respecting hidden accounts');
+
+          // Filtrar cuentas ocultas de los nuevos datos
+          const visibleNewAccounts = filterVisibleAccounts(data.accounts);
+
+          // Actualizar el estado manteniendo las cuentas ocultas
+          if (pendingData) {
+            const updatedPendingData = {
+              ...pendingData,
+              accounts: visibleNewAccounts,
+              summary: {
+                totalAccounts: visibleNewAccounts.length,
+                onlineAccounts: visibleNewAccounts.filter(acc => acc.current_status === 'online')
+                  .length,
+                offlineAccounts: visibleNewAccounts.filter(acc => acc.current_status === 'offline')
+                  .length,
+                platformStats: visibleNewAccounts.reduce(
+                  (stats, account) => {
+                    const platform = account.platform || 'Unknown';
+                    if (!stats[platform]) {
+                      stats[platform] = { total: 0, online: 0, offline: 0 };
+                    }
+                    stats[platform].total++;
+                    if (account.current_status === 'online') {
+                      stats[platform].online++;
+                    } else {
+                      stats[platform].offline++;
+                    }
+                    return stats;
+                  },
+                  {} as Record<string, { total: number; online: number; offline: number }>
+                ),
+              },
+            };
+
+            setPendingData(updatedPendingData);
+            console.log(
+              `👁️ SSE update: ${data.accounts.length - visibleNewAccounts.length} hidden accounts filtered`
+            );
+          }
+        } else {
+          // Si no hay datos específicos, hacer reload completo
+          loadPendingAccounts();
+        }
       }
     };
 
@@ -101,7 +179,7 @@ export const usePendingAccounts = () => {
         SSEService.removeListener(listenerIdRef.current);
       }
     };
-  }, [secretKey, loadPendingAccounts]);
+  }, [secretKey, loadPendingAccounts, filterVisibleAccounts, pendingData]);
 
   // Initial load
   useEffect(() => {
@@ -117,31 +195,72 @@ export const usePendingAccounts = () => {
       }
 
       try {
-        console.log(`🗑️ Deleting pending account: ${accountId}`);
+        console.log(`🗑️ Hiding pending account: ${accountId}`);
 
-        const response = await fetch(`${baseUrl}/api/csv/pending/${accountId}`, {
-          method: 'DELETE',
-          headers: {
-            'x-api-key': secretKey,
-          },
-        });
+        // Encontrar la cuenta para obtener su plataforma
+        const accountToHide = pendingData?.accounts.find(
+          account => account.account_id === accountId
+        );
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Pending account deleted:', data);
-          // Refresh the data immediately
-          await loadPendingAccounts();
-          return data;
+        if (!accountToHide) {
+          throw new Error('Account not found');
+        }
+
+        // Ocultar la cuenta usando el sistema de persistencia
+        hideAccount(accountId, accountToHide.platform);
+
+        // Actualizar el estado local inmediatamente
+        if (pendingData && pendingData.accounts) {
+          const updatedAccounts = pendingData.accounts.filter(
+            account => account.account_id !== accountId
+          );
+
+          const updatedPendingData = {
+            ...pendingData,
+            accounts: updatedAccounts,
+            summary: {
+              ...pendingData.summary,
+              totalAccounts: updatedAccounts.length,
+              onlineAccounts: updatedAccounts.filter(acc => acc.current_status === 'online').length,
+              offlineAccounts: updatedAccounts.filter(acc => acc.current_status === 'offline')
+                .length,
+              platformStats: updatedAccounts.reduce(
+                (stats, account) => {
+                  const platform = account.platform || 'Unknown';
+                  if (!stats[platform]) {
+                    stats[platform] = { total: 0, online: 0, offline: 0 };
+                  }
+                  stats[platform].total++;
+                  if (account.current_status === 'online') {
+                    stats[platform].online++;
+                  } else {
+                    stats[platform].offline++;
+                  }
+                  return stats;
+                },
+                {} as Record<string, { total: number; online: number; offline: number }>
+              ),
+            },
+          };
+
+          setPendingData(updatedPendingData);
+          console.log('✅ Pending account hidden and removed from view');
+
+          return {
+            success: true,
+            message: 'Pending account hidden from view',
+            accountId,
+            status: 'hidden',
+          };
         } else {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to delete pending account');
+          throw new Error('No pending data available');
         }
       } catch (error) {
-        console.error('❌ Error deleting pending account:', error);
+        console.error('❌ Error hiding pending account:', error);
         throw error;
       }
     },
-    [secretKey, baseUrl, loadPendingAccounts]
+    [secretKey, pendingData, hideAccount]
   );
 
   return {

@@ -573,19 +573,25 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  // Delete pending account from CSV files
+  // Hide pending account (persistent)
   const deletePendingAccount = async (accountId: string) => {
     setIsConverting(true);
     setConfirmingDeleteId(null); // Cierre inmediato del modal
 
     try {
       await deletePendingFromCSV(accountId);
-      console.log(`✅ Successfully deleted pending account: ${accountId}`);
+      console.log(`✅ Successfully hidden pending account: ${accountId}`);
+      toast({
+        title: 'Account Hidden',
+        description:
+          'Account hidden from view. It will reappear when you restart the app or run link platforms.',
+        variant: 'default',
+      });
     } catch (error) {
-      console.error('Error deleting pending account:', error);
+      console.error('Error hiding pending account:', error);
       toast({
         title: 'Error',
-        description: 'Error deleting pending account',
+        description: 'Error hiding pending account from view',
         variant: 'destructive',
       });
     } finally {
@@ -776,12 +782,12 @@ export const PendingAccountsManager: React.FC = () => {
                                 {isConverting ? (
                                   <>
                                     <div className="h-4 w-4 rounded-full border-2 border-red-600 border-t-transparent mr-1" />
-                                    Deleting...
+                                    Hiding...
                                   </>
                                 ) : (
                                   <>
                                     <XCircle className="h-4 w-4 p-0 mr-2" />
-                                    Delete
+                                    Confirm Hide
                                   </>
                                 )}
                               </Button>
@@ -839,7 +845,7 @@ export const PendingAccountsManager: React.FC = () => {
                                     className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                     onClick={() => openDeleteConfirmation(account.account_id)}
                                     disabled={isConverting}
-                                    title="Delete Pending Offline Account"
+                                    title="Hide Pending Offline Account from View"
                                   >
                                     <Trash className="h-4 w-4 text-red-600" />
                                   </Button>
