@@ -374,6 +374,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
+      devTools: isDev, // Solo habilitar DevTools en desarrollo
     },
   };
 
@@ -402,6 +403,75 @@ function createWindow() {
   console.log(`[WINDOW] Frame: ${windowConfig.frame ? 'Native' : 'Custom'}`);
   console.log(`[WINDOW] Title bar: ${windowConfig.titleBarStyle}`);
   console.log(`[WINDOW] Menu bar: ${windowConfig.autoHideMenuBar ? 'Hidden' : 'Visible'}`);
+
+  // Deshabilitar teclas de acceso rápido del navegador
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const isMac = process.platform === 'darwin';
+    const isCtrl = input.control || (isMac && input.meta);
+    const isShift = input.shift;
+    const key = input.key.toLowerCase();
+
+    // Lista de combinaciones de teclas a deshabilitar
+    const disabledShortcuts = [
+      // Refresh
+      { condition: isCtrl && key === 'r', name: 'Ctrl+R (Refresh)' },
+      { condition: key === 'f5', name: 'F5 (Refresh)' },
+      { condition: isCtrl && isShift && key === 'r', name: 'Ctrl+Shift+R (Hard Refresh)' },
+
+      // DevTools
+      { condition: key === 'f12', name: 'F12 (DevTools)' },
+      { condition: isCtrl && isShift && key === 'i', name: 'Ctrl+Shift+I (DevTools)' },
+      { condition: isCtrl && isShift && key === 'c', name: 'Ctrl+Shift+C (Inspector)' },
+      { condition: isCtrl && isShift && key === 'j', name: 'Ctrl+Shift+J (Console)' },
+      { condition: isCtrl && isShift && key === 'm', name: 'Ctrl+Shift+M (Responsive)' },
+
+      // Ver código fuente
+      { condition: isCtrl && key === 'u', name: 'Ctrl+U (View Source)' },
+
+      // Navegación del navegador
+      { condition: isCtrl && key === 'l', name: 'Ctrl+L (Address Bar)' },
+      { condition: isCtrl && key === 't', name: 'Ctrl+T (New Tab)' },
+      { condition: isCtrl && key === 'w', name: 'Ctrl+W (Close Tab)' },
+      { condition: isCtrl && key === 'n', name: 'Ctrl+N (New Window)' },
+
+      // Zoom
+      { condition: isCtrl && key === '=', name: 'Ctrl+= (Zoom In)' },
+      { condition: isCtrl && key === '-', name: 'Ctrl+- (Zoom Out)' },
+      { condition: isCtrl && key === '0', name: 'Ctrl+0 (Reset Zoom)' },
+
+      // En macOS, también deshabilitar Cmd+Option+I (DevTools)
+      {
+        condition: isMac && input.meta && input.alt && key === 'i',
+        name: 'Cmd+Option+I (DevTools)',
+      },
+    ];
+
+    // Verificar si la combinación de teclas está en la lista de deshabilitadas
+    for (const shortcut of disabledShortcuts) {
+      if (shortcut.condition) {
+        console.log(`[SECURITY] Blocked shortcut: ${shortcut.name}`);
+        event.preventDefault();
+        return;
+      }
+    }
+  });
+
+  // Deshabilitar menú contextual del navegador
+  mainWindow.webContents.on('context-menu', event => {
+    event.preventDefault();
+  });
+
+  // Prevenir que se abran las DevTools
+  mainWindow.webContents.on('devtools-opened', () => {
+    console.log('[SECURITY] DevTools attempted to open - closing immediately');
+    mainWindow.webContents.closeDevTools();
+  });
+
+  // Prevenir que se abran nuevas ventanas
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.log(`[SECURITY] Blocked window open attempt: ${url}`);
+    return { action: 'deny' };
+  });
 
   // Manejar enlaces externos
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -486,6 +556,34 @@ app.whenReady().then(async () => {
   await startServer();
   // Cambiar el nombre de la app
   app.setName('IPTRADE');
+
+  // Configurar menú de aplicación para deshabilitar teclas de acceso rápido
+  if (process.platform !== 'darwin') {
+    const { Menu } = require('electron');
+    const template = [
+      {
+        label: 'IPTRADE',
+        submenu: [
+          {
+            label: 'About IPTRADE',
+            role: 'about',
+          },
+          { type: 'separator' },
+          {
+            label: 'Quit',
+            accelerator: 'CmdOrCtrl+Q',
+            click: () => {
+              app.quit();
+            },
+          },
+        ],
+      },
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  }
+
   createWindow();
 
   console.log('[APP] Creating tray...');

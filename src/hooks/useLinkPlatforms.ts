@@ -59,9 +59,9 @@ export const useLinkPlatforms = () => {
     try {
       console.log('🔗 Starting Link Platforms process...');
 
-      // Limpiar cuentas ocultas cuando se inicia Link Platforms manual
-      console.log('🧹 Clearing hidden accounts due to manual Link Platforms initiation');
-      clearHiddenAccounts();
+      // REMOVIDO: Ya no limpiamos las cuentas ocultas al inicio
+      // console.log('🧹 Clearing hidden accounts due to manual Link Platforms initiation');
+      // clearHiddenAccounts();
 
       const result = await linkPlatformsService.linkPlatforms(secretKey);
 

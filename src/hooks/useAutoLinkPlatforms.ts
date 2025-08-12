@@ -89,9 +89,9 @@ export const useAutoLinkPlatforms = () => {
         if (hasExecutedOnce.current) {
           console.log('🔄 Account changes detected, executing Link Platforms...');
 
-          // Limpiar cuentas ocultas cuando se ejecuta Link Platforms automáticamente
-          console.log('🧹 Clearing hidden accounts due to auto Link Platforms execution');
-          clearHiddenAccounts();
+          // REMOVIDO: Ya no limpiamos las cuentas ocultas automáticamente
+          // console.log('🧹 Clearing hidden accounts due to auto Link Platforms execution');
+          // clearHiddenAccounts();
 
           linkPlatforms().catch(error => {
             console.error('Auto Link Platforms failed:', error);
