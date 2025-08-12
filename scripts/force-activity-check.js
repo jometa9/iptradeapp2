@@ -26,7 +26,7 @@ const forceActivityCheck = () => {
     const now = new Date();
     const lastActivity = new Date(slaveAccount.lastActivity);
     const timeSinceActivity = now - lastActivity;
-    const ACTIVITY_TIMEOUT = 500000; // 500 seconds
+    const ACTIVITY_TIMEOUT = 5000; // 5 seconds
 
     console.log(`  - Time since activity: ${Math.round(timeSinceActivity / 1000)}s`);
     console.log(`  - ACTIVITY_TIMEOUT: ${ACTIVITY_TIMEOUT / 1000}s`);

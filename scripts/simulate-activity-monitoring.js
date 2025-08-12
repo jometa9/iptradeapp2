@@ -14,7 +14,7 @@ const simulateActivityMonitoring = () => {
 
     let hasChanges = false;
     const now = new Date();
-    const ACTIVITY_TIMEOUT = 500000; // 500 seconds
+    const ACTIVITY_TIMEOUT = 5000; // 5 seconds
 
     console.log('🔍 Simulating activity monitoring...');
 

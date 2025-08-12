@@ -36,14 +36,7 @@ console.log('- process.env.PORT:', process.env.PORT);
 console.log('- Final DEV_PORT:', DEV_PORT);
 console.log('- NODE_ENV:', process.env.NODE_ENV);
 console.log('- LICENSE_API_URL:', process.env.LICENSE_API_URL);
-console.log(
-  '- CTRADER_CLIENT_ID:',
-  process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
-);
-console.log(
-  '- CTRADER_CLIENT_SECRET:',
-  process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
-);
+
 console.log('- .env file:', join(process.cwd(), '..', '.env'));
 console.log('- Current working directory:', process.cwd());
 
@@ -66,11 +59,11 @@ async function startDevServer() {
 
         // Start periodic account activity monitoring
         console.log(
-          '🔍 Starting account activity monitoring (60-second timeout, checking every 10 seconds)...'
+          '🔍 Starting account activity monitoring (5-second timeout, checking every 1 second)...'
         );
         setInterval(() => {
           checkAccountActivity();
-        }, 10000);
+        }, 1000);
 
         // Auto-run Link Platforms on server start
         (async () => {

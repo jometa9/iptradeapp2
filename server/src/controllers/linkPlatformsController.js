@@ -211,6 +211,7 @@ class LinkPlatformsController {
 
   // Manual user request - ALWAYS full scan (ignore cache)
   async findAndSyncMQLFoldersManual() {
+    console.log('❤️❤️❤️❤️❤️ Manual user request - will perform full scan (ignore cache)');
     console.log('🔗 Starting manual Link Platforms process...');
     console.log('🔍 Manual request - performing full scan (ignoring cache)');
 
@@ -236,6 +237,10 @@ class LinkPlatformsController {
     try {
       // SIEMPRE hacer búsqueda completa para requests manuales
       await this.performFullScan(result);
+
+      // Para requests manuales, también configurar CSV watching para archivos existentes
+      console.log('🔧 Manual request: Configuring CSV watching for existing files...');
+      await this.configureCSVWatchingForExistingFiles();
     } catch (error) {
       result.errors.push(`General error: ${error.message}`);
 
@@ -561,6 +566,66 @@ class LinkPlatformsController {
         message: 'Background scan failed',
         error: error.message,
       });
+    }
+  }
+
+  // Nueva función para configurar el CSV watching para archivos existentes en el sistema
+  async configureCSVWatchingForExistingFiles() {
+    console.log('🔧 Configuring CSV watching for existing files in the system...');
+
+    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
+    if (this.operatingSystem === 'macos') {
+      console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
+
+      try {
+        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        console.log(`🔍 Executing: ${findCommand}`);
+
+        // Usar exec asíncrono para evitar crash por exit code 1
+        let stdout = '';
+        try {
+          const result = await execAsync(findCommand, { encoding: 'utf8' });
+          stdout = result.stdout;
+        } catch (error) {
+          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
+          // Usamos el stdout aunque haya error
+          if (error.stdout) {
+            stdout = error.stdout;
+            console.log(
+              `⚠️ Find command returned error code but found files, using results anyway`
+            );
+          }
+        }
+        const allCsvFiles = stdout
+          .trim()
+          .split('\n')
+          .filter(line => line.trim());
+
+        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
+        allCsvFiles.forEach(file => console.log(`   - ${file}`));
+
+        // Configurar watching para todos los archivos encontrados
+        allCsvFiles.forEach(csvPath => {
+          if (fs.existsSync(csvPath)) {
+            csvManager.csvFiles.set(csvPath, {
+              lastModified: csvManager.getFileLastModified(csvPath),
+              data: csvManager.parseCSVFile(csvPath),
+            });
+            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
+          }
+        });
+
+        // Configurar file watching
+        csvManager.startFileWatching();
+
+        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
+      } catch (error) {
+        console.error(`❌ Error during system-wide CSV search for existing files:`, error);
+      }
+    } else {
+      // Para otros sistemas operativos, usar la lógica original
+      console.log('🔧 Using original CSV watching logic for non-macOS systems');
     }
   }
 

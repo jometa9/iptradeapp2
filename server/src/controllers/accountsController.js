@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import csvManager from '../services/csvManager.js';
 import {
   getUserAccounts,
   loadAccountsConfig,
@@ -80,7 +81,8 @@ export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
 
 // Activity monitoring configuration
-const ACTIVITY_TIMEOUT = 500000; // 5 seconds in milliseconds
+const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
+const PENDING_DELETION_TIMEOUT = 3600000; // 1 hour in milliseconds
 
 // Check and update account status based on activity
 const checkAccountActivity = () => {
@@ -264,12 +266,20 @@ const checkAccountActivity = () => {
       }
 
       // Check pending accounts for this user
+      const accountsToDelete = [];
+
       for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
         if (account.lastActivity) {
           const lastActivity = new Date(account.lastActivity);
           const timeSinceActivity = now - lastActivity;
 
-          if (timeSinceActivity > ACTIVITY_TIMEOUT) {
+          // Check if account should be deleted (1 hour offline)
+          if (timeSinceActivity > PENDING_DELETION_TIMEOUT) {
+            accountsToDelete.push(accountId);
+            console.log(
+              `🗑️ Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked for deletion (${Math.round(timeSinceActivity / 1000 / 60)} minutes inactive)`
+            );
+          } else if (timeSinceActivity > ACTIVITY_TIMEOUT) {
             if (account.status !== 'offline') {
               account.status = 'offline';
               userHasChanges = true;
@@ -297,6 +307,13 @@ const checkAccountActivity = () => {
         }
       }
 
+      // Delete accounts that have been offline for more than 1 hour
+      for (const accountId of accountsToDelete) {
+        delete userAccounts.pendingAccounts[accountId];
+        userHasChanges = true;
+        console.log(`🗑️ Deleted pending account ${accountId} after 1 hour of inactivity`);
+      }
+
       if (userHasChanges) {
         hasChanges = true;
       }
@@ -305,6 +322,32 @@ const checkAccountActivity = () => {
     // Save changes if any were made
     if (hasChanges) {
       saveAccountsConfig(config);
+
+      // Emit event to notify frontend of pending account changes
+      console.log('📢 Emitting pending accounts update due to activity changes');
+
+      // Collect all pending accounts from all users for the update
+      const allPendingAccounts = [];
+      for (const [apiKey, userAccounts] of Object.entries(config.users || {})) {
+        if (userAccounts.pendingAccounts) {
+          for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
+            allPendingAccounts.push({
+              account_id: accountId,
+              platform: account.platform || 'Unknown',
+              timestamp: account.lastActivity || account.createdAt || new Date().toISOString(),
+              status: account.status || 'offline',
+              current_status: account.status || 'offline',
+              filePath: 'registered_accounts.json',
+            });
+          }
+        }
+      }
+
+      // Emit the update event
+      csvManager.emit('pendingAccountsUpdate', {
+        accounts: allPendingAccounts,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     return hasChanges;

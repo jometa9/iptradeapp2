@@ -17,8 +17,8 @@ const simulateSlaveOffline = () => {
       return;
     }
 
-    // Set lastActivity to a time that's older than ACTIVITY_TIMEOUT (500 seconds)
-    const oldTime = new Date(Date.now() - 600000); // 10 minutes ago
+    // Set lastActivity to a time that's older than ACTIVITY_TIMEOUT (5 seconds)
+    const oldTime = new Date(Date.now() - 10000); // 10 seconds ago
     userAccounts.slaveAccounts['TEST_TV_010'].lastActivity = oldTime.toISOString();
     userAccounts.slaveAccounts['TEST_TV_010'].status = 'offline';
 
