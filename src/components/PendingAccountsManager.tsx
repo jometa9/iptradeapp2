@@ -787,7 +787,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 ) : (
                                   <>
                                     <XCircle className="h-4 w-4 p-0 mr-2" />
-                                    Confirm Hide
+                                    Delete
                                   </>
                                 )}
                               </Button>
@@ -856,7 +856,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="bg-blue-50 h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
+                                    className="bg-white h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
                                     onClick={async () =>
                                       await openConversionForm(account, 'master')
                                     }
@@ -873,7 +873,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="bg-green-50 h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-green-100"
+                                    className="bg-white h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-gray-50"
                                     onClick={async () => await openConversionForm(account, 'slave')}
                                     title="Make Slave"
                                     disabled={
@@ -888,7 +888,7 @@ export const PendingAccountsManager: React.FC = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="bg-red-50 h-9 w-9 p-0 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
+                                    className="bg-white h-9 w-9 p-0 rounded-lg border-red-200 text-red-700 hover:bg-gray-50"
                                     onClick={() => openDeleteConfirmation(account.account_id)}
                                     disabled={isConverting}
                                   >
