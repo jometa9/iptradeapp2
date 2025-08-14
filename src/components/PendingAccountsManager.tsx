@@ -618,16 +618,23 @@ export const PendingAccountsManager: React.FC = () => {
                 {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' && (
-                    <TrafficCone className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                    <>
+                      <TrafficCone className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                      <p className="text-muted-foreground text-gray-600 link-platforms-gradient-text">
+                        {getLinkingStatusDisplay(linkingStatus).message}
+                      </p>
+                    </>
                   )}
                 {!linkingStatus.isActive && linkingStatus.step === 'idle' && (
-                  <Smile className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                  <>
+                    <Smile className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                    <p className="text-muted-foreground text-gray-600">No pending accounts</p>
+                  </>
                 )}
 
                 {linkingStatus.step === 'completed' && (
                   <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
                 )}
-                <p className="text-muted-foreground text-gray-600">No pending accounts</p>
 
                 <p className="text-[10px] text-muted-foreground mt-3 text-gray-400">
                   If you are not seeing your accounts, please check the following:
@@ -763,7 +770,7 @@ export const PendingAccountsManager: React.FC = () => {
                             <>
                               {!isOnline ? (
                                 // Show offline status only
-                                <div className="text-xs text-gray-500">Account offline</div>
+                                <div className="h-9 w-9"></div>
                               ) : (
                                 // Show normal buttons for online accounts
                                 <>
