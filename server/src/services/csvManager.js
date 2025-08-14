@@ -625,7 +625,7 @@ class CSVManager extends EventEmitter {
     }
   }
 
-  // Parsear archivo CSV
+  // Parsear archivo CSV con el nuevo formato de corchetes
   parseCSVFile(filePath) {
     try {
       if (!existsSync(filePath)) {
@@ -633,29 +633,136 @@ class CSVManager extends EventEmitter {
       }
 
       const content = readFileSync(filePath, 'utf8');
-      const lines = content.trim().split('\n');
+      const lines = content
+        .trim()
+        .split('\n')
+        .filter(line => line.trim());
 
-      if (lines.length <= 1) return []; // Solo header o vacío
+      if (lines.length === 0) return [];
 
-      const headers = lines[0].split(',');
-      const data = [];
+      // Detectar formato
+      const firstLine = lines[0];
+      const hasBrackets = firstLine.includes('[') && firstLine.includes(']');
 
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        const row = {};
-
-        headers.forEach((header, index) => {
-          row[header.trim()] = values[index] ? values[index].trim() : '';
-        });
-
-        data.push(row);
+      // Si es el formato antiguo con headers, usar el parser antiguo
+      if (!hasBrackets && firstLine.includes(',')) {
+        return this.parseOldCSVFormat(lines);
       }
 
-      return data;
+      // Nuevo formato con corchetes - múltiples cuentas en un archivo
+      const accounts = new Map();
+      let currentAccountId = null;
+      let currentAccountData = null;
+
+      for (const line of lines) {
+        // Extraer valores entre corchetes
+        const matches = line.match(/\[([^\]]*)\]/g);
+        if (!matches || matches.length < 2) continue;
+
+        const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+        const lineType = values[0];
+
+        switch (lineType) {
+          case 'TYPE':
+            // Nueva cuenta
+            currentAccountId = values[3]; // [TYPE][MASTER][MT4][12345]
+            currentAccountData = {
+              account_id: currentAccountId,
+              account_type: values[1].toLowerCase(), // master, slave, pending
+              platform: values[2],
+              status: 'offline', // Se actualizará con STATUS line
+              timestamp: null,
+              config: {},
+              tickets: [],
+            };
+            accounts.set(currentAccountId, currentAccountData);
+            break;
+
+          case 'STATUS':
+            // Actualizar status
+            if (currentAccountData) {
+              currentAccountData.status = values[1].toLowerCase(); // online/offline
+              currentAccountData.timestamp = values[2];
+
+              // Calcular si realmente está online basado en timestamp
+              const now = Date.now() / 1000;
+              const pingTime = parseInt(values[2]) || 0;
+              const timeDiff = Math.abs(now - pingTime);
+              if (timeDiff > 5) {
+                currentAccountData.status = 'offline';
+              }
+            }
+            break;
+
+          case 'CONFIG':
+            // Parsear configuración según tipo de cuenta
+            if (currentAccountData) {
+              if (currentAccountData.account_type === 'master') {
+                currentAccountData.config = {
+                  enabled: values[2] === 'ENABLED',
+                  name: values[3] || 'Master Account',
+                };
+              } else if (currentAccountData.account_type === 'slave') {
+                currentAccountData.config = {
+                  enabled: values[2] === 'ENABLED',
+                  lotMultiplier: parseFloat(values[3]) || 1.0,
+                  forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
+                  reverseTrading: values[5] === 'TRUE',
+                  maxLotSize: values[6] !== 'NULL' ? parseFloat(values[6]) : null,
+                  minLotSize: values[7] !== 'NULL' ? parseFloat(values[7]) : null,
+                  masterId: values[8] !== 'NULL' ? values[8] : null,
+                };
+                // Para compatibilidad con getAllActiveAccounts
+                currentAccountData.master_id = currentAccountData.config.masterId;
+              }
+            }
+            break;
+
+          case 'TICKET':
+            // Solo para masters - agregar trades
+            if (currentAccountData && currentAccountData.account_type === 'master') {
+              currentAccountData.tickets.push({
+                ticket: values[1],
+                symbol: values[2],
+                type: values[3],
+                lots: parseFloat(values[4]),
+                price: parseFloat(values[5]),
+                sl: parseFloat(values[6]),
+                tp: parseFloat(values[7]),
+                openTime: values[8],
+              });
+            }
+            break;
+        }
+      }
+
+      // Convertir Map a Array para compatibilidad
+      return Array.from(accounts.values());
     } catch (error) {
       console.error(`Error parsing CSV file ${filePath}:`, error);
       return [];
     }
+  }
+
+  // Parser para formato antiguo (retrocompatibilidad)
+  parseOldCSVFormat(lines) {
+    if (lines.length <= 1) return [];
+
+    const headers = lines[0].split(',');
+    const data = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',');
+      const row = {};
+
+      headers.forEach((header, index) => {
+        row[header.trim()] = values[index] ? values[index].trim() : '';
+      });
+
+      data.push(row);
+    }
+
+    return data;
   }
 
   // Obtener todas las cuentas activas
@@ -861,18 +968,72 @@ class CSVManager extends EventEmitter {
 
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
-    const timestamp = new Date().toISOString();
-    const csvLine = `${timestamp},${accountId},config,online,config,${JSON.stringify(config)}\n`;
+    try {
+      // Buscar el archivo CSV correcto para esta cuenta
+      let targetFile = null;
 
-    // Escribir en el primer archivo CSV encontrado
-    const firstFile = Array.from(this.csvFiles.keys())[0];
-    if (firstFile) {
-      try {
-        writeFileSync(firstFile, csvLine, { flag: 'a' });
-        console.log(`📝 Config written to CSV for account ${accountId}`);
-      } catch (error) {
-        console.error(`Error writing to CSV:`, error);
+      // Buscar en todos los archivos CSV monitoreados
+      this.csvFiles.forEach((fileData, filePath) => {
+        fileData.data.forEach(row => {
+          if (row.account_id === accountId) {
+            targetFile = filePath;
+          }
+        });
+      });
+
+      if (!targetFile) {
+        console.error(`❌ No CSV file found for account ${accountId}`);
+        return false;
       }
+
+      // Leer el archivo completo
+      const content = readFileSync(targetFile, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim());
+
+      // Buscar y actualizar la línea CONFIG
+      let configUpdated = false;
+      const updatedLines = lines.map(line => {
+        // Detectar si es línea CONFIG con corchetes
+        if (line.includes('[CONFIG]') && line.includes(`[${accountId}]`)) {
+          // Construir nueva línea CONFIG según el tipo de cuenta
+          if (config.type === 'master') {
+            configUpdated = true;
+            return `[CONFIG][MASTER][${config.enabled ? 'ENABLED' : 'DISABLED'}][${config.name || 'Master Account'}]`;
+          } else if (config.type === 'slave') {
+            configUpdated = true;
+            const slaveConfig = config.slaveConfig || {};
+            return `[CONFIG][SLAVE][${config.enabled ? 'ENABLED' : 'DISABLED'}][${slaveConfig.lotMultiplier || '1.0'}][${slaveConfig.forceLot || 'NULL'}][${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}][${slaveConfig.maxLotSize || 'NULL'}][${slaveConfig.minLotSize || 'NULL'}][${slaveConfig.masterId || 'NULL'}]`;
+          }
+        }
+        return line;
+      });
+
+      // Si no encontramos línea CONFIG, agregar una al final
+      if (!configUpdated) {
+        console.log(`⚠️ No CONFIG line found for account ${accountId}, adding one`);
+        if (config.type === 'master') {
+          updatedLines.push(
+            `[CONFIG][MASTER][${config.enabled ? 'ENABLED' : 'DISABLED'}][${config.name || 'Master Account'}]`
+          );
+        } else if (config.type === 'slave') {
+          const slaveConfig = config.slaveConfig || {};
+          updatedLines.push(
+            `[CONFIG][SLAVE][${config.enabled ? 'ENABLED' : 'DISABLED'}][${slaveConfig.lotMultiplier || '1.0'}][${slaveConfig.forceLot || 'NULL'}][${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}][${slaveConfig.maxLotSize || 'NULL'}][${slaveConfig.minLotSize || 'NULL'}][${slaveConfig.masterId || 'NULL'}]`
+          );
+        }
+      }
+
+      // Escribir archivo actualizado
+      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      console.log(`✅ Config updated in CSV for account ${accountId} at ${targetFile}`);
+
+      // Refrescar datos en memoria
+      this.refreshFileData(targetFile);
+
+      return true;
+    } catch (error) {
+      console.error(`Error writing config to CSV:`, error);
+      return false;
     }
   }
 
@@ -903,14 +1064,14 @@ class CSVManager extends EventEmitter {
   }
 
   // Actualizar configuración de slave
-  updateSlaveConfig(slaveId, enabled) {
+  updateSlaveConfig(slaveId, slaveConfig) {
     const config = {
-      enabled,
-      description: `Slave ${slaveId} configuration`,
-      lastUpdated: new Date().toISOString(),
+      type: 'slave',
+      enabled: slaveConfig.enabled,
+      slaveConfig: slaveConfig,
     };
 
-    this.writeConfig(slaveId, config);
+    return this.writeConfig(slaveId, config);
   }
 
   // Actualizar estado global del copier
@@ -924,14 +1085,14 @@ class CSVManager extends EventEmitter {
   }
 
   // Actualizar estado de master
-  updateMasterStatus(masterId, enabled) {
+  updateMasterStatus(masterId, enabled, name = null) {
     const config = {
-      enabled,
       type: 'master',
-      timestamp: new Date().toISOString(),
+      enabled,
+      name: name || `Master ${masterId}`,
     };
 
-    this.writeConfig(masterId, config);
+    return this.writeConfig(masterId, config);
   }
 
   // Emergency shutdown

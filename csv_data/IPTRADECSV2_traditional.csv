@@ -1,0 +1,4 @@
+timestamp,account_id,account_type,status,action,data,master_id,platform
+2025-08-14T00:54:14.929Z,99999,master,online,ping,{},NULL,MT4
+2025-08-14T00:54:14.929Z,77777,slave,online,ping,{},99999,MT5
+2025-08-14T00:54:14.929Z,360360,pending,online,ping,{},NULL,CTRADER
