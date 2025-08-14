@@ -1,24 +1,21 @@
 import express from 'express';
 
+import { getAllAccounts, getConnectivityStats } from '../controllers/accountsController.js';
 import {
-  connectPlatforms,
-  deletePendingAccount,
   emergencyShutdown,
-  getAllAccounts,
-  getConnectivityStats,
-  getCopierStatus,
-  getSlaveConfig,
-  installBot,
-  registerCSVAsPending,
   resetAllToOn,
-  runInstallScript,
-  scanCSVFiles,
-  scanPendingAccounts,
-  scanPlatformAccounts,
   setGlobalStatus,
   setMasterStatus,
-  updateSlaveConfig,
+} from '../controllers/copierStatusController.js';
+import {
+  connectPlatforms,
+  deletePendingFromCSV,
+  registerCSVAsPending,
+  scanPendingAccounts,
+  scanPlatformAccounts,
+  updateCSVAccountType,
 } from '../controllers/csvAccountsController.js';
+import { getSlaveConfig } from '../controllers/slaveConfigController.js';
 
 const router = express.Router();
 
@@ -104,7 +101,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
           filePath,
           timestamp: new Date().toISOString(),
           ...processDataForFrontend({
-            copierStatus: csvManager.getCopierStatus(),
+            // copierStatus: csvManager.getCopierStatus(),
             accounts: csvManager.getAllActiveAccounts(),
           }),
         };
@@ -184,12 +181,52 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       csvManager.on('linkPlatformsEvent', handleLinkPlatformsEvent);
       csvManager.on('backgroundScanEvent', handleBackgroundScanEvent);
 
+      // Reemitir eventos de eliminación de cuentas
+      const handleAccountDeleted = payload => {
+        try {
+          console.log(
+            `📢 Forwarding accountDeleted event: ${payload.accountType} ${payload.accountId}`
+          );
+          sendUpdate({
+            type: 'accountDeleted',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            accountId: payload.accountId,
+            accountType: payload.accountType, // 'master' or 'slave'
+            apiKey: payload.apiKey,
+          });
+        } catch (e) {
+          console.error('Error handling accountDeleted event:', e);
+        }
+      };
+
+      // Reemitir eventos de conversión de cuentas
+      const handleAccountConverted = payload => {
+        try {
+          console.log(
+            `📢 Forwarding accountConverted event: ${payload.newType} ${payload.accountId}`
+          );
+          sendUpdate({
+            type: 'accountConverted',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            accountId: payload.accountId,
+            newType: payload.newType, // 'master' or 'slave'
+            platform: payload.platform,
+            apiKey: payload.apiKey,
+          });
+        } catch (e) {
+          console.error('Error handling accountConverted event:', e);
+        }
+      };
+
+      csvManager.on('accountDeleted', handleAccountDeleted);
+      csvManager.on('accountConverted', handleAccountConverted);
+
       // Enviar datos iniciales en formato correcto para el frontend
       const initialData = {
         type: 'initial_data',
         timestamp: new Date().toISOString(),
         ...processDataForFrontend({
-          copierStatus: csvManager.getCopierStatus(),
+          // copierStatus: csvManager.getCopierStatus(),
           accounts: csvManager.getAllActiveAccounts(),
         }),
       };
@@ -211,14 +248,53 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
               message: 'Link Platforms process is in progress',
             });
           } else {
-            // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
-            console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
-            sendUpdate({
-              type: 'linkPlatformsEvent',
-              timestamp: new Date().toISOString(),
-              eventType: 'idle',
-              message: 'Link Platforms is idle',
-            });
+            // Check if there's a recent completed result to show
+            if (linkStatus.lastResult && linkStatus.lastTimestamp) {
+              const lastResultTime = new Date(linkStatus.lastTimestamp);
+              const now = new Date();
+              const timeDiff = (now - lastResultTime) / 1000; // seconds
+
+              // If the last result was within the last 30 seconds, show it
+              if (timeDiff < 30) {
+                console.log('📤 SSE: Sending recent completed Link Platforms result to new client');
+                // Send the start event first
+                sendUpdate({
+                  type: 'linkPlatformsEvent',
+                  timestamp: linkStatus.lastTimestamp,
+                  eventType: 'started',
+                  message: 'Link Platforms process started',
+                });
+
+                // Then send the completed event after a brief moment
+                setTimeout(() => {
+                  sendUpdate({
+                    type: 'linkPlatformsEvent',
+                    timestamp: linkStatus.lastTimestamp,
+                    eventType: 'completed',
+                    message: linkStatus.lastResult.message || 'Link Platforms process completed',
+                    result: linkStatus.lastResult.result,
+                  });
+                }, 100);
+              } else {
+                // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
+                console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
+                sendUpdate({
+                  type: 'linkPlatformsEvent',
+                  timestamp: new Date().toISOString(),
+                  eventType: 'idle',
+                  message: 'Link Platforms is idle',
+                });
+              }
+            } else {
+              // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
+              console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
+              sendUpdate({
+                type: 'linkPlatformsEvent',
+                timestamp: new Date().toISOString(),
+                eventType: 'idle',
+                message: 'Link Platforms is idle',
+              });
+            }
           }
         })
         .catch(error => {
@@ -238,6 +314,8 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         csvManager.off('pendingAccountsUpdate', handlePendingUpdate);
         csvManager.off('linkPlatformsEvent', handleLinkPlatformsEvent);
         csvManager.off('backgroundScanEvent', handleBackgroundScanEvent);
+        csvManager.off('accountDeleted', handleAccountDeleted);
+        csvManager.off('accountConverted', handleAccountConverted);
       });
     })
     .catch(error => {
@@ -293,7 +371,7 @@ router.get('/csv/events/frontend', (req, res) => {
           filePath,
           timestamp: new Date().toISOString(),
           ...processDataForFrontend({
-            copierStatus: csvManager.getCopierStatus(),
+            // copierStatus: csvManager.getCopierStatus(),
             accounts: csvManager.getAllActiveAccounts(),
           }),
         };
@@ -309,7 +387,7 @@ router.get('/csv/events/frontend', (req, res) => {
         type: 'initial_data',
         timestamp: new Date().toISOString(),
         ...processDataForFrontend({
-          copierStatus: csvManager.getCopierStatus(),
+          // copierStatus: csvManager.getCopierStatus(),
           accounts: csvManager.getAllActiveAccounts(),
         }),
       };
@@ -349,7 +427,7 @@ router.get('/csv/accounts/all', requireValidSubscription, getAllAccounts);
  *       200:
  *         description: Copier status from CSV
  */
-router.get('/csv/copier/status', requireValidSubscription, getCopierStatus);
+// router.get('/csv/copier/status', requireValidSubscription, getCopierStatus);
 
 /**
  * @swagger
@@ -434,7 +512,7 @@ router.get('/csv/slave-config/:slaveAccountId', requireValidSubscription, getSla
  *       200:
  *         description: Slave configuration updated
  */
-router.post('/csv/slave-config', requireValidSubscription, updateSlaveConfig);
+// router.post('/csv/slave-config', requireValidSubscription, updateSlaveConfig);
 
 /**
  * @swagger
@@ -482,7 +560,7 @@ router.get('/csv/connectivity/stats', requireValidSubscription, getConnectivityS
  *       200:
  *         description: CSV files scanned
  */
-router.post('/csv/scan', requireValidSubscription, scanCSVFiles);
+// router.post('/csv/scan', requireValidSubscription, scanCSVFiles);
 
 /**
  * @swagger
@@ -503,7 +581,7 @@ router.post('/csv/scan', requireValidSubscription, scanCSVFiles);
  *       200:
  *         description: Bot installed
  */
-router.post('/csv/install-bot', requireValidSubscription, installBot);
+// router.post('/csv/install-bot', requireValidSubscription, installBot);
 
 /**
  * @swagger
@@ -524,7 +602,7 @@ router.post('/csv/install-bot', requireValidSubscription, installBot);
  *       200:
  *         description: Install script executed
  */
-router.post('/csv/run-install-script', requireValidSubscription, runInstallScript);
+// router.post('/csv/run-install-script', requireValidSubscription, runInstallScript);
 
 /**
  * @swagger
@@ -566,7 +644,40 @@ router.get('/csv/scan-pending', requireValidSubscription, scanPendingAccounts);
  *       200:
  *         description: Pending account deleted successfully
  */
-router.delete('/csv/pending/:accountId', requireValidSubscription, deletePendingAccount);
+router.delete('/csv/pending/:accountId', requireValidSubscription, deletePendingFromCSV);
+
+/**
+ * @swagger
+ * /csv/pending/{accountId}/update-type:
+ *   put:
+ *     summary: Update CSV account type from pending to master/slave
+ *     tags: [CSV]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               newType:
+ *                 type: string
+ *                 enum: [master, slave]
+ *                 description: The new account type
+ *     responses:
+ *       200:
+ *         description: Account type updated successfully
+ *       400:
+ *         description: Invalid parameters
+ *       404:
+ *         description: Account not found
+ */
+router.put('/csv/pending/:accountId/update-type', requireValidSubscription, updateCSVAccountType);
 
 /**
  * @swagger

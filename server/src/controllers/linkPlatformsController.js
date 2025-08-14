@@ -20,6 +20,8 @@ class LinkPlatformsController {
     this.cacheValidityHours = 24; // Cache válido por 24 horas
     this.cacheFilePath = path.join(__dirname, '../../../config/mql_paths_cache.json');
     this.operatingSystem = this.detectOperatingSystem();
+    this.lastLinkPlatformsResult = null; // Store last result for new clients
+    this.lastLinkPlatformsTimestamp = null; // Store timestamp of last operation
   }
 
   // Detectar el sistema operativo
@@ -787,14 +789,19 @@ class LinkPlatformsController {
         timestamp: new Date().toISOString(),
         ...data,
       };
-      console.log(`📡 Emitting Link Platforms event: ${eventType}`);
+
+      // Store the last result and timestamp for new clients
       if (eventType === 'completed') {
-        console.log('📋 Completed event data:', {
+        this.lastLinkPlatformsResult = eventData;
+        this.lastLinkPlatformsTimestamp = eventData.timestamp;
+        console.log('📋 Stored completed event for new clients:', {
           backgroundScan: eventData.result?.backgroundScan,
           synced: eventData.result?.synced,
           errors: eventData.result?.errors?.length || 0,
         });
       }
+
+      console.log(`📡 Emitting Link Platforms event: ${eventType}`);
       csvManager.emit('linkPlatformsEvent', eventData);
     } catch (error) {
       console.error('Error emitting Link Platforms event:', error);
@@ -821,6 +828,8 @@ class LinkPlatformsController {
     return {
       isLinking: this.isLinking,
       timestamp: new Date().toISOString(),
+      lastResult: this.lastLinkPlatformsResult,
+      lastTimestamp: this.lastLinkPlatformsTimestamp,
     };
   }
 

@@ -147,10 +147,36 @@ export const useCSVData = (): UseCSVDataReturn => {
       // La conexión está viva
     };
 
+    const handleAccountDeleted = (data: any) => {
+      console.log('Account deleted event received:', data);
+      // Forzar actualización de datos cuando se elimina una cuenta
+      if (data.type === 'accountDeleted') {
+        console.log(
+          `🔄 Account ${data.accountId} (${data.accountType}) was deleted, refreshing data...`
+        );
+        // Forzar recarga inmediata de datos
+        loadData();
+      }
+    };
+
+    const handleAccountConverted = (data: any) => {
+      console.log('Account converted event received:', data);
+      // Forzar actualización de datos cuando se convierte una cuenta
+      if (data.type === 'accountConverted') {
+        console.log(
+          `🔄 Account ${data.accountId} was converted to ${data.newType}, refreshing data...`
+        );
+        // Forzar recarga inmediata de datos
+        loadData();
+      }
+    };
+
     // Escuchar eventos específicos
     csvFrontendService.on('initialData', handleInitialData);
     csvFrontendService.on('csvUpdated', handleCSVUpdate);
     csvFrontendService.on('heartbeat', handleHeartbeat);
+    csvFrontendService.on('accountDeleted', handleAccountDeleted);
+    csvFrontendService.on('accountConverted', handleAccountConverted);
 
     // Cleanup
     return () => {

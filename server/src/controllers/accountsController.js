@@ -875,8 +875,33 @@ export const updateSlaveAccount = (req, res) => {
   }
 };
 
+// Function to write account back to CSV as PENDING
+const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
+  try {
+    // Use the specific file path directly
+    const csvFilePath =
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+
+    if (!existsSync(csvFilePath)) {
+      console.log('⚠️ CSV file not found, skipping CSV write');
+      return false;
+    }
+
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const pendingLine = `[0][${accountId}][${platform}][PENDING][${currentTimestamp}]`;
+
+    // Write the pending account to CSV
+    writeFileSync(csvFilePath, pendingLine + '\n', 'utf8');
+    console.log(`📝 Wrote account ${accountId} back to CSV as PENDING: ${pendingLine}`);
+    return true;
+  } catch (error) {
+    console.error('Error writing account to CSV as pending:', error);
+    return false;
+  }
+};
+
 // Delete master account
-export const deleteMasterAccount = (req, res) => {
+export const deleteMasterAccount = async (req, res) => {
   const { masterAccountId } = req.params;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
@@ -899,6 +924,9 @@ export const deleteMasterAccount = (req, res) => {
     });
   }
 
+  // Get platform info before deleting
+  const platform = userAccounts.masterAccounts[masterAccountId].platform || 'MT4';
+
   // Find and disconnect all connected slaves within user's accounts
   const connectedSlaves = Object.entries(userAccounts.connections)
     .filter(([, masterId]) => masterId === masterAccountId)
@@ -914,10 +942,35 @@ export const deleteMasterAccount = (req, res) => {
     console.log(
       `Master account deleted: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...), disconnected slaves: ${connectedSlaves.join(', ')}`
     );
+
+    // Write account back to CSV as PENDING
+    console.log(`🔧 Attempting to write account ${masterAccountId} back to CSV as PENDING...`);
+    const csvWritten = await writeAccountToCSVAsPending(masterAccountId, platform);
+    if (csvWritten) {
+      console.log(`📝 Account ${masterAccountId} written back to CSV as PENDING`);
+    } else {
+      console.log(`❌ Failed to write account ${masterAccountId} back to CSV as PENDING`);
+    }
+
+    // Emit SSE event to notify frontend of account deletion
+    try {
+      const csvManager = await import('../services/csvManager.js'); // Await import
+      csvManager.default.emit('accountDeleted', {
+        accountId: masterAccountId,
+        accountType: 'master',
+        apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`📢 SSE: Emitted accountDeleted event for master ${masterAccountId}`);
+    } catch (error) {
+      console.error('Error emitting accountDeleted event:', error);
+    }
+
     res.json({
-      message: 'Master account deleted successfully',
+      message: 'Master account deleted successfully and written back to CSV as PENDING',
       masterAccountId,
       disconnectedSlaves: connectedSlaves,
+      csvWritten,
       status: 'deleted',
     });
   } else {

@@ -82,7 +82,6 @@ export const getUserAccounts = apiKey => {
       slaveAccounts: {},
       pendingAccounts: {},
       connections: {},
-      createdAt: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
     };
   }
@@ -95,7 +94,6 @@ export const getUserAccounts = apiKey => {
       slaveAccounts: {},
       pendingAccounts: {},
       connections: {}, // slaveId -> masterAccountId mapping
-      createdAt: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
     };
     saveAccountsConfig(config);
@@ -112,9 +110,15 @@ export const saveUserAccounts = (apiKey, userAccounts) => {
   }
 
   const config = loadAccountsConfig();
+
+  // Ensure we only save the core account structure, not additional metadata
   config.userAccounts[apiKey] = {
-    ...userAccounts,
+    masterAccounts: userAccounts.masterAccounts || {},
+    slaveAccounts: userAccounts.slaveAccounts || {},
+    pendingAccounts: userAccounts.pendingAccounts || {},
+    connections: userAccounts.connections || {},
     lastActivity: new Date().toISOString(),
   };
+
   return saveAccountsConfig(config);
 };

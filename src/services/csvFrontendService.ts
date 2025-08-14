@@ -53,7 +53,7 @@ class CSVFrontendService extends SimpleEventEmitter {
   constructor() {
     super();
     // Configurar puerto del servidor
-    this.serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+    this.serverPort = import.meta.env.VITE_SERVER_PORT || '30';
     this.init();
   }
 
@@ -65,7 +65,7 @@ class CSVFrontendService extends SimpleEventEmitter {
   private startEventSource() {
     console.log('🚫 CSVFrontendService: EventSource DISABLED - using unified SSE instead');
     return; // DISABLED - ahora usamos SSEService unificado
-    
+
     const eventSource = new EventSource(
       `http://localhost:${this.serverPort}/api/csv/events/frontend`
     );
@@ -107,6 +107,16 @@ class CSVFrontendService extends SimpleEventEmitter {
       case 'heartbeat':
         // Heartbeat para mantener conexión
         this.emit('heartbeat', data);
+        break;
+
+      case 'accountDeleted':
+        // Cuenta eliminada
+        this.emit('accountDeleted', data);
+        break;
+
+      case 'accountConverted':
+        // Cuenta convertida
+        this.emit('accountConverted', data);
         break;
 
       default:

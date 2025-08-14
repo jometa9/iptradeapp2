@@ -1,5 +1,4 @@
 import express from 'express';
-import linkPlatformsController from '../controllers/linkPlatformsController.js';
 
 import {
   connectSlaveToMaster,
@@ -25,6 +24,7 @@ import {
   updateSlaveAccount,
 } from '../controllers/accountsController.js';
 import { getUserAccounts, saveUserAccounts } from '../controllers/configManager.js';
+import linkPlatformsController from '../controllers/linkPlatformsController.js';
 import { authenticateAccount } from '../middleware/roleAuth.js';
 import {
   allowPendingConversions,
@@ -409,7 +409,99 @@ router.post('/register-pending', (req, res) => {
       status: 'pending',
     });
     // Trigger background linking after registering a pending account
-    try { linkPlatformsController.findAndSyncMQLFolders(); } catch {}
+    try {
+      linkPlatformsController.findAndSyncMQLFolders();
+    } catch {}
+  } catch (error) {
+    console.error('Error registering pending account:', error);
+    res.status(500).json({
+      error: 'Failed to register pending account',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /accounts/register-pending-user:
+ *   post:
+ *   summary: Register a new pending account for authenticated user
+ *   tags: [Accounts]
+ *   requestBody:
+ *     required: true
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             accountId:
+ *               type: string
+ *               description: Account ID to register
+ *             platform:
+ *               type: string
+ *               description: Platform of the account
+ *             broker:
+ *               type: string
+ *               description: Broker of the account
+ *   responses:
+ *     200:
+ *       description: Account registered as pending
+ */
+router.post('/register-pending-user', requireValidSubscription, (req, res) => {
+  const { accountId, platform, broker } = req.body;
+  const apiKey = req.apiKey; // Set by requireValidSubscription middleware
+
+  if (!accountId) {
+    return res.status(400).json({
+      error: 'Account ID is required',
+      message: 'Please provide accountId in request body',
+    });
+  }
+
+  try {
+    const userAccounts = getUserAccounts(apiKey);
+
+    // Check if account already exists
+    const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
+    const isSlave = userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId];
+    const isPending = userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId];
+
+    if (isMaster || isSlave || isPending) {
+      return res.status(409).json({
+        error: 'Account already exists',
+        message: `Account ${accountId} is already registered`,
+      });
+    }
+
+    // Register as pending
+    const newPendingAccount = {
+      id: accountId,
+      name: `Account ${accountId}`,
+      description: 'Automatically detected account - awaiting configuration',
+      firstSeen: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      status: 'pending',
+      platform: platform || 'Unknown',
+      broker: broker || 'Unknown',
+    };
+
+    if (!userAccounts.pendingAccounts) {
+      userAccounts.pendingAccounts = {};
+    }
+    userAccounts.pendingAccounts[accountId] = newPendingAccount;
+    saveUserAccounts(apiKey, userAccounts);
+
+    console.log(`🔄 New account registered as pending for user: ${accountId}`);
+
+    res.json({
+      message: 'Account successfully registered as pending',
+      accountId,
+      status: 'pending',
+    });
+    // Trigger background linking after registering a pending account
+    try {
+      linkPlatformsController.findAndSyncMQLFolders();
+    } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);
     res.status(500).json({

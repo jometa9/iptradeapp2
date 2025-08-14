@@ -295,10 +295,12 @@ class CSVManager extends EventEmitter {
                     platform: lineValues[2],
                     status: lineValues[3],
                     timestamp: lineValues[4] || '', // Puede no tener timestamp
-                    account_type: 'pending', // Siempre pending para este formato
+                    account_type:
+                      lineValues[3] === 'PENDING' ? 'pending' : lineValues[3].toLowerCase(), // Solo pending si realmente dice PENDING
                   };
 
-                  if (account.account_id && account.timestamp) {
+                  // Solo procesar cuentas que realmente están en estado PENDING
+                  if (account.status === 'PENDING' && account.account_id && account.timestamp) {
                     const accountTime = this.parseTimestamp(account.timestamp);
                     const timeDiff = (currentTime - accountTime) / 1000; // diferencia en segundos
 
@@ -327,6 +329,11 @@ class CSVManager extends EventEmitter {
                         `⏰ Ignoring account ${account.account_id} - too old (${(timeDiff / 60).toFixed(1)} minutes) - Timestamp: ${account.timestamp}`
                       );
                     }
+                  } else if (account.account_id) {
+                    // Log cuando se encuentra una cuenta que no está en estado PENDING
+                    console.log(
+                      `ℹ️ Found non-pending account ${account.account_id} (${account.platform}) - Status: ${account.status} - Skipping (not pending)`
+                    );
                   }
                 }
               }

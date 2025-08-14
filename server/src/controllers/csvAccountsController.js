@@ -3,180 +3,253 @@ import { glob } from 'glob';
 
 import csvManager from '../services/csvManager.js';
 import { getUserAccounts, saveUserAccounts } from './configManager.js';
+import { createDisabledMasterConfig } from './copierStatusController.js';
+import { notifyAccountCreated, notifyTradingConfigCreated } from './eventNotifier.js';
+import { createDisabledSlaveConfig } from './slaveConfigController.js';
+import { createDefaultTradingConfig } from './tradingConfigController.js';
 
-// Obtener todas las cuentas desde CSV
-export const getAllAccounts = (req, res) => {
+// Get all CSV pending accounts
+export const getPendingCSVAccounts = (req, res) => {
   try {
-    const accounts = csvManager.getAllActiveAccounts();
-    res.json(accounts);
-  } catch (error) {
-    console.error('Error getting accounts from CSV:', error);
-    res.status(500).json({ error: 'Failed to get accounts from CSV' });
-  }
-};
+    const pendingAccounts = csvManager.csvFiles;
+    const accountsArray = [];
 
-// Obtener estado del copier desde CSV
-export const getCopierStatus = (req, res) => {
-  try {
-    const status = csvManager.getCopierStatus();
-    res.json(status);
-  } catch (error) {
-    console.error('Error getting copier status from CSV:', error);
-    res.status(500).json({ error: 'Failed to get copier status from CSV' });
-  }
-};
-
-// Actualizar estado global del copier
-export const setGlobalStatus = (req, res) => {
-  try {
-    const { enabled } = req.body;
-    csvManager.updateGlobalStatus(enabled);
+    pendingAccounts.forEach((data, filePath) => {
+      data.data.forEach(row => {
+        if (row.account_type === 'pending') {
+          accountsArray.push({
+            ...row,
+            filePath,
+          });
+        }
+      });
+    });
 
     res.json({
       success: true,
-      message: `Global copier ${enabled ? 'enabled' : 'disabled'}`,
-      enabled,
+      accounts: accountsArray,
+      totalPending: accountsArray.length,
     });
   } catch (error) {
-    console.error('Error updating global status:', error);
-    res.status(500).json({ error: 'Failed to update global status' });
+    console.error('Error getting pending CSV accounts:', error);
+    res.status(500).json({ error: 'Failed to get pending CSV accounts' });
   }
 };
 
-// Actualizar estado de master
-export const setMasterStatus = (req, res) => {
+// Update CSV account type from pending to master/slave
+export const updateCSVAccountType = async (req, res) => {
+  console.log('🚀 updateCSVAccountType called with:', {
+    accountId: req.params.accountId,
+    newType: req.body.newType,
+  });
   try {
-    const { masterAccountId, enabled } = req.body;
-    csvManager.updateMasterStatus(masterAccountId, enabled);
-
-    res.json({
-      success: true,
-      message: `Master ${masterAccountId} ${enabled ? 'enabled' : 'disabled'}`,
-      masterAccountId,
-      enabled,
-    });
-  } catch (error) {
-    console.error('Error updating master status:', error);
-    res.status(500).json({ error: 'Failed to update master status' });
-  }
-};
-
-// Obtener configuración de slave
-export const getSlaveConfig = (req, res) => {
-  try {
-    const { slaveAccountId } = req.params;
-    const config = csvManager.getSlaveConfig(slaveAccountId);
-
-    res.json({
-      slaveAccountId,
-      config,
-    });
-  } catch (error) {
-    console.error('Error getting slave config:', error);
-    res.status(500).json({ error: 'Failed to get slave config' });
-  }
-};
-
-// Actualizar configuración de slave
-export const updateSlaveConfig = (req, res) => {
-  try {
-    const { slaveAccountId, enabled } = req.body;
-    csvManager.updateSlaveConfig(slaveAccountId, enabled);
-
-    res.json({
-      success: true,
-      message: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
-      slaveAccountId,
-      enabled,
-    });
-  } catch (error) {
-    console.error('Error updating slave config:', error);
-    res.status(500).json({ error: 'Failed to update slave config' });
-  }
-};
-
-// Emergency shutdown
-export const emergencyShutdown = (req, res) => {
-  try {
-    csvManager.emergencyShutdown();
-
-    res.json({
-      success: true,
-      message: 'Emergency shutdown executed - all copiers disabled',
-    });
-  } catch (error) {
-    console.error('Error executing emergency shutdown:', error);
-    res.status(500).json({ error: 'Failed to execute emergency shutdown' });
-  }
-};
-
-// Reset all to ON
-export const resetAllToOn = (req, res) => {
-  try {
-    csvManager.resetAllToOn();
-
-    res.json({
-      success: true,
-      message: 'All copier statuses reset to ON',
-    });
-  } catch (error) {
-    console.error('Error resetting all statuses:', error);
-    res.status(500).json({ error: 'Failed to reset all statuses' });
-  }
-};
-
-// Obtener estadísticas de conectividad
-export const getConnectivityStats = (req, res) => {
-  try {
-    const accounts = csvManager.getAllActiveAccounts();
-    const totalAccounts =
-      Object.keys(accounts.masterAccounts).length + accounts.unconnectedSlaves.length;
-
-    const onlineAccounts =
-      Object.values(accounts.masterAccounts).filter(account => account.status === 'online').length +
-      accounts.unconnectedSlaves.filter(slave => slave.status === 'online').length;
-
-    res.json({
-      totalAccounts,
-      onlineAccounts,
-      offlineAccounts: totalAccounts - onlineAccounts,
-      connectivityPercentage: totalAccounts > 0 ? (onlineAccounts / totalAccounts) * 100 : 0,
-    });
-  } catch (error) {
-    console.error('Error getting connectivity stats:', error);
-    res.status(500).json({ error: 'Failed to get connectivity stats' });
-  }
-};
-
-// Escanear archivos CSV
-export const scanCSVFiles = (req, res) => {
-  try {
-    const files = csvManager.scanCSVFiles();
-
-    res.json({
-      success: true,
-      message: `Found ${files.length} CSV files`,
-      files,
-    });
-  } catch (error) {
-    console.error('Error scanning CSV files:', error);
-    res.status(500).json({ error: 'Failed to scan CSV files' });
-  }
-};
-
-// Eliminar cuenta pending del sistema CSV simplificado
-export const deletePendingAccount = async (req, res) => {
-  try {
-    console.log('🗑️ Deleting pending account...');
-
     const { accountId } = req.params;
+    const { newType } = req.body; // 'master' or 'slave'
+    const apiKey = req.apiKey;
 
-    if (!accountId) {
+    if (!accountId || !newType) {
       return res.status(400).json({
-        success: false,
-        error: 'Account ID is required',
+        error: 'Missing required parameters',
+        message: 'accountId and newType are required',
       });
     }
+
+    if (!['master', 'slave'].includes(newType)) {
+      return res.status(400).json({
+        error: 'Invalid account type',
+        message: 'newType must be either "master" or "slave"',
+      });
+    }
+
+    console.log(`🔄 Updating CSV account ${accountId} from pending to ${newType}...`);
+
+    // Use the specific file path directly
+    const csvFilePath =
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+
+    let filesUpdated = 0;
+    const allFiles = [csvFilePath];
+    let platform = 'MT4'; // Default platform
+    let timestamp = Date.now(); // Default timestamp
+
+    console.log(`📁 Found ${allFiles.length} CSV files to check`);
+    console.log('📁 Files found:', allFiles);
+
+    // Process each file
+    for (const filePath of allFiles) {
+      try {
+        console.log(`🔍 Checking file: ${filePath}`);
+        if (existsSync(filePath)) {
+          const content = readFileSync(filePath, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+          console.log(`📄 File has ${lines.length} lines`);
+
+          if (lines.length < 1) {
+            console.log('⚠️ File is empty, skipping');
+            continue;
+          }
+
+          // Process the single line directly
+          const line = lines[0];
+          console.log(`📄 Processing line: ${line}`);
+
+          // Check if it's the bracket format: [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
+          if (line.includes('[') && line.includes(']')) {
+            // Extract values from bracket format
+            const matches = line.match(/\[([^\]]+)\]/g);
+            if (matches && matches.length >= 5) {
+              const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+              console.log(`📋 Extracted values: [${values.join('][')}]`);
+
+              if (values[0] === '0' && values[1] === accountId) {
+                // Found the account - change from pending (0) to master (1) or slave (2)
+                const newIndicator = newType === 'master' ? '1' : '2';
+                const newStatus = newType.toUpperCase();
+                const newLine = `[${newIndicator}][${values[1]}][${values[2]}][${newStatus}][${values[4]}]`;
+
+                // Extract platform and timestamp from the original line
+                platform = values[2] || 'MT4';
+                timestamp = values[4] || Date.now();
+
+                // Write the updated line back to file
+                writeFileSync(filePath, newLine + '\n', 'utf8');
+                filesUpdated++;
+                console.log(`✏️ Updated account ${accountId} to ${newType} in ${filePath}`);
+                console.log(`📄 New content: ${newLine}`);
+              } else {
+                console.log(`❌ Account ${accountId} not found in this line`);
+              }
+            }
+          } else {
+            console.log(`❌ File format not recognized: ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing file ${filePath}:`, error);
+      }
+    }
+
+    if (filesUpdated > 0) {
+      // Register the account in the configured accounts system
+      const userAccounts = getUserAccounts(apiKey);
+
+      if (newType === 'master') {
+        // Check if account already exists as master or slave
+        if (userAccounts.masterAccounts[accountId] || userAccounts.slaveAccounts[accountId]) {
+          console.log(
+            `⚠️ Account ${accountId} already exists as configured account, skipping registration`
+          );
+        } else {
+          // Register as master account
+          userAccounts.masterAccounts[accountId] = {
+            id: accountId,
+            name: accountId,
+            description: `Converted from pending CSV account`,
+            broker: 'Unknown',
+            platform: platform,
+            registeredAt: new Date().toISOString(),
+            lastActivity: new Date(parseInt(timestamp) * 1000).toISOString(),
+            status: 'active',
+            apiKey: apiKey,
+            convertedFrom: 'pending_csv',
+          };
+
+          if (saveUserAccounts(apiKey, userAccounts)) {
+            // Create disabled master configuration for copy control
+            createDisabledMasterConfig(accountId, apiKey);
+            // Create default trading configuration
+            createDefaultTradingConfig(accountId);
+
+            // Notify about account creation
+            notifyAccountCreated(accountId, 'master', apiKey);
+            notifyTradingConfigCreated(accountId, {
+              lotMultiplier: 1.0,
+              forceLot: null,
+              reverseTrading: false,
+            });
+
+            console.log(
+              `✅ Successfully registered account ${accountId} as master in configured accounts system`
+            );
+          }
+        }
+      } else if (newType === 'slave') {
+        // Check if account already exists as master or slave
+        if (userAccounts.masterAccounts[accountId] || userAccounts.slaveAccounts[accountId]) {
+          console.log(
+            `⚠️ Account ${accountId} already exists as configured account, skipping registration`
+          );
+        } else {
+          // Register as slave account
+          userAccounts.slaveAccounts[accountId] = {
+            id: accountId,
+            name: accountId,
+            description: `Converted from pending CSV account`,
+            broker: 'Unknown',
+            platform: platform,
+            registeredAt: new Date().toISOString(),
+            lastActivity: new Date(parseInt(timestamp) * 1000).toISOString(),
+            status: 'active',
+            apiKey: apiKey,
+            convertedFrom: 'pending_csv',
+          };
+
+          if (saveUserAccounts(apiKey, userAccounts)) {
+            // Create disabled slave configuration
+            createDisabledSlaveConfig(accountId);
+
+            console.log(
+              `✅ Successfully registered account ${accountId} as slave in configured accounts system`
+            );
+          }
+        }
+      }
+
+      // Trigger CSV scan to update the in-memory data
+      await csvManager.scanCSVFiles();
+
+      // Emit SSE event to notify frontend of account conversion
+      csvManager.emit('accountConverted', {
+        accountId: accountId,
+        newType: newType,
+        platform: platform,
+        apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`📢 SSE: Emitted accountConverted event for ${accountId} to ${newType}`);
+
+      res.json({
+        success: true,
+        message: `Successfully updated account ${accountId} to ${newType} and registered in configured accounts system`,
+        filesUpdated,
+        accountRegistered: true,
+      });
+    } else {
+      res.status(404).json({
+        error: 'Account not found',
+        message: `No pending account with ID ${accountId} found in CSV files`,
+      });
+    }
+  } catch (error) {
+    console.error('Error updating CSV account type:', error);
+    res.status(500).json({
+      error: 'Failed to update CSV account type',
+      details: error.message,
+    });
+  }
+};
+
+// Delete pending account from CSV files
+export const deletePendingFromCSV = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const apiKey = req.apiKey;
+
+    if (!accountId) {
+      return res.status(400).json({ error: 'Account ID is required' });
+    }
+
+    console.log(`🗑️ Request to delete pending account ${accountId} from CSV files`);
 
     // Buscar todos los archivos IPTRADECSV2.csv que contienen esta cuenta
     const patterns = [
@@ -279,25 +352,23 @@ export const deletePendingAccount = async (req, res) => {
       await csvManager.scanAndEmitPendingUpdates();
     }
 
-    const response = {
-      success: true,
-      message:
-        deletedFromFiles > 0
-          ? `Account ${accountId} deleted from ${deletedFromFiles} file(s)`
-          : `Account ${accountId} not found in any files`,
-      deletedFromFiles,
-      accountId,
-    };
-
-    console.log('✅ Pending account deletion completed:', response);
-    res.json(response);
+    if (deletedFromFiles > 0) {
+      console.log(`✅ Deleted account ${accountId} from ${deletedFromFiles} CSV file(s)`);
+      res.json({
+        success: true,
+        message: `Account ${accountId} deleted from ${deletedFromFiles} CSV file(s)`,
+        filesModified: deletedFromFiles,
+      });
+    } else {
+      console.log(`⚠️ Account ${accountId} not found in any CSV files`);
+      res.status(404).json({
+        error: 'Account not found',
+        message: `Account ${accountId} not found in any CSV files`,
+      });
+    }
   } catch (error) {
-    console.error('❌ Error deleting pending account:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete pending account',
-      details: error.message,
-    });
+    console.error('Error deleting pending account from CSV:', error);
+    res.status(500).json({ error: 'Failed to delete pending account from CSV' });
   }
 };
 
@@ -425,132 +496,82 @@ export const connectPlatforms = async (req, res) => {
     const platformStats = {};
 
     // Contar cuentas detectadas en CSV por plataforma
-    Object.values(allAccounts.masterAccounts).forEach(account => {
+    allAccounts.forEach(account => {
       const platform = account.platform || 'Unknown';
-      platformStats[platform] = (platformStats[platform] || 0) + 1;
+      if (!platformStats[platform]) {
+        platformStats[platform] = {
+          total: 0,
+          online: 0,
+          offline: 0,
+          platforms: {},
+        };
+      }
+      platformStats[platform].total++;
+      if (account.status === 'online') {
+        platformStats[platform].online++;
+      } else {
+        platformStats[platform].offline++;
+      }
     });
 
-    allAccounts.unconnectedSlaves.forEach(account => {
-      const platform = account.platform || 'Unknown';
-      platformStats[platform] = (platformStats[platform] || 0) + 1;
-    });
-
-    // Contar cuentas pending por plataforma
-    const pendingStats = {};
-    if (userAccounts.pendingAccounts) {
-      Object.values(userAccounts.pendingAccounts).forEach(account => {
-        const platform = account.platform || 'Unknown';
-        pendingStats[platform] = (pendingStats[platform] || 0) + 1;
-      });
-    }
-
-    // Reiniciar watchers para nuevos archivos
-    if (foundFiles > 0) {
-      csvManager.startFileWatching();
-      console.log(`📁 Started watching ${foundFiles} new CSV file(s)`);
-    }
-
-    const totalPendingAccounts = userAccounts.pendingAccounts
-      ? Object.keys(userAccounts.pendingAccounts).length
-      : 0;
-    const csvAccountsCount =
-      Object.keys(allAccounts.masterAccounts).length + allAccounts.unconnectedSlaves.length;
-
+    // Respuesta con estadísticas mejoradas
     const response = {
       success: true,
-      message:
-        registeredCount > 0
-          ? `Connected ${registeredCount} new accounts! Found ${foundFiles} new CSV files`
-          : foundFiles > 0
-            ? `Scanned ${foundFiles} new CSV files. No new accounts to connect`
-            : 'Platform scan complete. No new files or accounts found',
-      summary: {
-        totalFiles: newCount,
-        newFiles: foundFiles,
-        csvAccounts: csvAccountsCount,
-        newPendingAccounts: registeredCount,
-        totalPendingAccounts,
-        platformStats,
-        pendingStats,
+      message: `Platform scan completed. Found ${newCount} CSV files (${foundFiles} new)`,
+      statistics: {
+        csvFiles: {
+          total: newCount,
+          new: foundFiles,
+          previousCount: previousCount,
+        },
+        accounts: {
+          totalDetected: allAccounts.length,
+          newlyRegistered: registeredCount,
+        },
+        platforms: platformStats,
       },
-      platforms: Object.keys({ ...platformStats, ...pendingStats }),
-      actions: {
-        filesScanned: newCount,
-        newFilesFound: foundFiles,
-        accountsRegistered: registeredCount,
-        totalPending: totalPendingAccounts,
-      },
+      timestamp: new Date().toISOString(),
     };
 
-    console.log('✅ Platform connection completed:', response.summary);
+    console.log('✅ Platform connection scan completed');
+    console.log(`📊 Statistics: ${JSON.stringify(response.statistics, null, 2)}`);
+
     res.json(response);
   } catch (error) {
-    console.error('❌ Error connecting platforms:', error);
+    console.error('❌ Error in connectPlatforms:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to connect platforms',
-      details: error.message,
+      message: error.message,
     });
   }
 };
 
-// Instalar bot en plataforma
-export const installBot = (req, res) => {
+// Escanear cuentas de plataforma - Método más simple que solo escanea
+export const scanPlatformAccounts = async (req, res) => {
   try {
-    const { platform } = req.body;
+    console.log('🔍 Starting platform accounts scan...');
 
-    // Simular instalación de bot
-    console.log(`Installing bot for platform: ${platform}`);
+    const previousCount = csvManager.csvFiles.size;
+
+    // Forzar escaneo completo
+    await csvManager.scanCSVFiles();
+
+    const newCount = csvManager.csvFiles.size;
+    const allAccounts = csvManager.getAllActiveAccounts();
 
     res.json({
       success: true,
-      message: `Bot installed successfully for ${platform}`,
-      platform,
+      message: 'Platform scan completed',
+      filesFound: newCount,
+      newFiles: newCount - previousCount,
+      totalAccounts: allAccounts.length,
+      accounts: allAccounts,
     });
+
+    console.log(`✅ Platform scan completed: ${newCount} files, ${allAccounts.length} accounts`);
   } catch (error) {
-    console.error('Error installing bot:', error);
-    res.status(500).json({ error: 'Failed to install bot' });
-  }
-};
-
-// Ejecutar script de instalación
-export const runInstallScript = (req, res) => {
-  try {
-    const { platform } = req.body;
-
-    // Simular ejecución de script
-    console.log(`Running install script for platform: ${platform}`);
-
-    res.json({
-      success: true,
-      message: `Install script executed for ${platform}`,
-      platform,
-    });
-  } catch (error) {
-    console.error('Error running install script:', error);
-    res.status(500).json({ error: 'Failed to run install script' });
-  }
-};
-
-// Escanear cuentas en plataformas
-export const scanPlatformAccounts = (req, res) => {
-  try {
-    // Simular escaneo de cuentas
-    const accounts = {
-      mt4: 2,
-      mt5: 3,
-      ctrader: 1,
-      tradingview: 0,
-      ninjatrader: 0,
-    };
-
-    res.json({
-      success: true,
-      message: 'Platform accounts scanned successfully',
-      accounts,
-    });
-  } catch (error) {
-    console.error('Error scanning platform accounts:', error);
+    console.error('❌ Error scanning platform accounts:', error);
     res.status(500).json({ error: 'Failed to scan platform accounts' });
   }
 };
@@ -615,10 +636,9 @@ export const registerCSVAsPending = (req, res) => {
       success: true,
       message: `Registered ${registeredCount} CSV accounts as pending`,
       registeredCount,
-      totalPending: Object.keys(userAccounts.pendingAccounts || {}).length,
     });
   } catch (error) {
     console.error('Error registering CSV accounts as pending:', error);
-    res.status(500).json({ error: 'Failed to register CSV accounts as pending' });
+    res.status(500).json({ error: 'Failed to register CSV accounts' });
   }
 };

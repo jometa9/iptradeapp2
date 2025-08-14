@@ -11,12 +11,12 @@ import copierStatusRoutes from './routes/copierStatus.js';
 import csvRoutes from './routes/csvRoutes.js';
 // import ctraderRoutes from './routes/ctrader.js';
 import eventRoutes from './routes/events.js';
+import linkPlatformsRoutes from './routes/linkPlatforms.js';
 import orderRoutes from './routes/orders.js';
 import slaveConfigRoutes from './routes/slaveConfig.js';
 import statusRoutes from './routes/status.js';
 import tradingConfigRoutes from './routes/tradingConfig.js';
 import swaggerDocs from './swaggerConfig.js';
-import linkPlatformsRoutes from './routes/linkPlatforms.js';
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory

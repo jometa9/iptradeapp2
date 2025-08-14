@@ -217,7 +217,7 @@ export const PendingAccountsManager: React.FC = () => {
   const loadMasterAccounts = useCallback(async () => {
     try {
       setIsRefreshingMasters(true);
-      const response = await fetch(`${baseUrl}/accounts/all`, {
+      const response = await fetch(`${baseUrl}/api/accounts/all`, {
         headers: {
           'x-api-key': secretKey || '',
         },
@@ -426,6 +426,8 @@ export const PendingAccountsManager: React.FC = () => {
     account: { account_id: string; platform?: string | null },
     type: 'master' | 'slave'
   ) => {
+    console.log('🔍 openConversionForm called:', { account, type });
+
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
@@ -433,6 +435,7 @@ export const PendingAccountsManager: React.FC = () => {
       setConfirmingMasterId(account.account_id);
     } else {
       // For slave, show form directly and hide master confirmation if open
+      console.log('🔄 Setting up slave conversion form for account:', account.account_id);
       setConfirmingMasterId(null);
       setConfirmingDeleteId(null);
       setExpandedAccountId(account.account_id);
@@ -450,6 +453,7 @@ export const PendingAccountsManager: React.FC = () => {
         forceLot: 0,
         reverseTrade: false,
       });
+      console.log('✅ Conversion form set:', conversionForm);
     }
   };
 
@@ -473,34 +477,38 @@ export const PendingAccountsManager: React.FC = () => {
     setIsConverting(true);
 
     try {
-      const endpoint = `${baseUrl}/accounts/pending/${accountId}/to-master`;
-      const payload = {
-        name: `Account ${accountId}`,
-        broker: 'MetaQuotes',
-        platform: accountPlatform || 'Unknown',
-      };
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
+      // Actualizar el CSV de pending a master
+      console.log(`📝 Updating CSV account ${accountId} from pending to master...`);
+      const csvUpdateResponse = await fetch(`${baseUrl}/api/csv/pending/${accountId}/update-type`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': secretKey || '',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          newType: 'master',
+        }),
       });
 
-      if (response.ok) {
-        // Conversión exitosa - solo cerrar el modal sin mostrar mensaje
-        setConfirmingMasterId(null);
-        // Refresh master accounts immediately to ensure the new master appears in dropdowns
-        await loadMasterAccounts();
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to convert account to master');
+      if (!csvUpdateResponse.ok) {
+        const error = await csvUpdateResponse.json();
+        throw new Error(error.message || 'Failed to update CSV account type');
       }
-    } catch (error) {
-      // Si falla, revertir la actualización optimista
 
+      console.log('✅ CSV updated successfully');
+
+      // Cerrar el modal
+      setConfirmingMasterId(null);
+
+      // Mostrar mensaje de éxito
+      toast({
+        title: 'Success',
+        description: `Account ${accountId} converted to master successfully`,
+      });
+
+      // Refrescar la lista de master accounts
+      await loadMasterAccounts();
+    } catch (error) {
       console.error('Error converting account to master:', error);
       toast({
         title: 'Error',
@@ -514,54 +522,59 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Convert pending account (slave only - master uses convertToMaster)
   const convertAccount = async () => {
-    if (!expandedAccountId) return;
+    console.log('🚀 convertAccount called, expandedAccountId:', expandedAccountId);
+    console.log('🔧 Current conversionForm:', conversionForm);
+
+    if (!expandedAccountId) {
+      console.log('❌ No expandedAccountId, returning early');
+      return;
+    }
 
     setIsConverting(true);
 
     try {
-      const endpoint = `${baseUrl}/accounts/pending/${expandedAccountId}/to-slave`;
-      const payload = {
-        name: conversionForm.name,
-        description: conversionForm.description,
-        broker: conversionForm.broker,
-        platform: conversionForm.platform,
-        masterAccountId:
-          conversionForm.masterAccountId === 'none' ? null : conversionForm.masterAccountId,
-        lotCoefficient: conversionForm.lotCoefficient,
-        forceLot: conversionForm.forceLot,
-        reverseTrade: conversionForm.reverseTrade,
-      };
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        // Conversión exitosa - mostrar mensaje de despliegue si está conectada a un master
-        if (conversionForm.masterAccountId && conversionForm.masterAccountId !== 'none') {
-          toast({
-            title: 'Slave Account Deployed',
-            description: `Pending account ${expandedAccountId} has been converted to slave and deployed under master ${conversionForm.masterAccountId}`,
-          });
-        } else {
-          toast({
-            title: 'Account Converted',
-            description: `Pending account ${expandedAccountId} has been converted to slave successfully`,
-          });
+      // Actualizar el CSV de pending a slave
+      console.log(`📝 Updating CSV account ${expandedAccountId} from pending to slave...`);
+      const csvUpdateResponse = await fetch(
+        `${baseUrl}/api/csv/pending/${expandedAccountId}/update-type`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': secretKey || '',
+          },
+          body: JSON.stringify({
+            newType: 'slave',
+          }),
         }
-        setExpandedAccountId(null);
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to convert account');
-      }
-    } catch (error) {
-      // Si falla, revertir la actualización optimista
+      );
 
+      if (!csvUpdateResponse.ok) {
+        const error = await csvUpdateResponse.json();
+        throw new Error(error.message || 'Failed to update CSV account type');
+      }
+
+      console.log('✅ CSV updated successfully');
+
+      // Si hay un masterAccountId, también podríamos necesitar registrar la conexión
+      // Por ahora solo actualizamos el CSV
+
+      // Mostrar mensaje de éxito
+      if (conversionForm.masterAccountId && conversionForm.masterAccountId !== 'none') {
+        toast({
+          title: 'Slave Account Created',
+          description: `Account ${expandedAccountId} has been converted to slave. You may need to configure the connection separately.`,
+        });
+      } else {
+        toast({
+          title: 'Account Converted',
+          description: `Account ${expandedAccountId} has been converted to slave successfully`,
+        });
+      }
+
+      // Cerrar el formulario
+      setExpandedAccountId(null);
+    } catch (error) {
       console.error('Error converting account:', error);
       toast({
         title: 'Error',
