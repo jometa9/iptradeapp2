@@ -612,7 +612,7 @@ export const PendingAccountsManager: React.FC = () => {
         </CardHeader>
         {!isCollapsed && (
           <CardContent>
-            {pendingCount === 0 && !loadingPending ? (
+            {pendingCount === 0 ? (
               <div className="text-center py-4">
                 {/* Solo mostrar el mensaje de linking si realmente no hay cuentas Y no estamos cargando */}
                 {linkingStatus.isActive &&
