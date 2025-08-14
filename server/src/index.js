@@ -36,7 +36,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 30;
 
 // Debug: Let's see what environment variables are loaded
 console.log('Environment variables:');

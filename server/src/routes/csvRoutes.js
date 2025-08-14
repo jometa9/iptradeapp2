@@ -82,6 +82,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       accounts: {
         masterAccounts: rawData.accounts?.masterAccounts || {},
         unconnectedSlaves: rawData.accounts?.unconnectedSlaves || [],
+        pendingAccounts: rawData.accounts?.pendingAccounts || [],
       },
     };
   };
@@ -93,7 +94,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
   // Escuchar cambios en CSV files
   import('../services/csvManager.js')
-    .then(({ default: csvManager }) => {
+    .then(async ({ default: csvManager }) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
         const updatedData = {
@@ -221,17 +222,55 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       csvManager.on('accountDeleted', handleAccountDeleted);
       csvManager.on('accountConverted', handleAccountConverted);
 
+      // Esperar un momento para que csvManager cargue los archivos
+      // O forzar un escaneo si no hay archivos cargados
+      if (csvManager.csvFiles.size === 0) {
+        console.log('⏳ SSE: Waiting for CSV files to be loaded...');
+        // Dar más tiempo para que Link Platforms configure los archivos
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } else {
+        // Incluso si hay archivos, esperar un poco para que se complete el parsing
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
       // Enviar datos iniciales en formato correcto para el frontend
+      const accountsData = await csvManager.getAllActiveAccounts();
+      console.log(
+        `📊 SSE Initial data - Pending accounts: ${accountsData.pendingAccounts?.length || 0}`
+      );
+
       const initialData = {
         type: 'initial_data',
         timestamp: new Date().toISOString(),
         ...processDataForFrontend({
           // copierStatus: csvManager.getCopierStatus(),
-          accounts: csvManager.getAllActiveAccounts(),
+          accounts: accountsData,
         }),
       };
 
       sendUpdate(initialData);
+
+      // Si no había pending accounts en initial_data, forzar un update después
+      if (!accountsData.pendingAccounts || accountsData.pendingAccounts.length === 0) {
+        setTimeout(async () => {
+          const updatedData = await csvManager.getAllActiveAccounts();
+          if (updatedData.pendingAccounts && updatedData.pendingAccounts.length > 0) {
+            console.log('📤 SSE: Sending delayed pending accounts update');
+            sendUpdate({
+              type: 'pendingAccountsUpdate',
+              timestamp: new Date().toISOString(),
+              accounts: updatedData.pendingAccounts,
+              summary: {
+                totalAccounts: updatedData.pendingAccounts.length,
+                onlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'online')
+                  .length,
+                offlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'offline')
+                  .length,
+              },
+            });
+          }
+        }, 2000);
+      }
 
       // Enviar estado actual de Link Platforms al cliente que se conecta
       import('../controllers/linkPlatformsController.js')
@@ -352,6 +391,7 @@ router.get('/csv/events/frontend', (req, res) => {
       accounts: {
         masterAccounts: rawData.accounts?.masterAccounts || {},
         unconnectedSlaves: rawData.accounts?.unconnectedSlaves || [],
+        pendingAccounts: rawData.accounts?.pendingAccounts || [],
       },
     };
   };
@@ -363,7 +403,7 @@ router.get('/csv/events/frontend', (req, res) => {
 
   // Escuchar cambios en CSV files
   import('../services/csvManager.js')
-    .then(({ default: csvManager }) => {
+    .then(async ({ default: csvManager }) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
         const updatedData = {
@@ -382,17 +422,55 @@ router.get('/csv/events/frontend', (req, res) => {
       // Agregar listener al CSV Manager
       csvManager.on('fileUpdated', handleCSVUpdate);
 
+      // Esperar un momento para que csvManager cargue los archivos
+      // O forzar un escaneo si no hay archivos cargados
+      if (csvManager.csvFiles.size === 0) {
+        console.log('⏳ SSE: Waiting for CSV files to be loaded...');
+        // Dar más tiempo para que Link Platforms configure los archivos
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } else {
+        // Incluso si hay archivos, esperar un poco para que se complete el parsing
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
       // Enviar datos iniciales en formato correcto para el frontend
+      const accountsData = await csvManager.getAllActiveAccounts();
+      console.log(
+        `📊 SSE Initial data - Pending accounts: ${accountsData.pendingAccounts?.length || 0}`
+      );
+
       const initialData = {
         type: 'initial_data',
         timestamp: new Date().toISOString(),
         ...processDataForFrontend({
           // copierStatus: csvManager.getCopierStatus(),
-          accounts: csvManager.getAllActiveAccounts(),
+          accounts: accountsData,
         }),
       };
 
       sendUpdate(initialData);
+
+      // Si no había pending accounts en initial_data, forzar un update después
+      if (!accountsData.pendingAccounts || accountsData.pendingAccounts.length === 0) {
+        setTimeout(async () => {
+          const updatedData = await csvManager.getAllActiveAccounts();
+          if (updatedData.pendingAccounts && updatedData.pendingAccounts.length > 0) {
+            console.log('📤 SSE: Sending delayed pending accounts update');
+            sendUpdate({
+              type: 'pendingAccountsUpdate',
+              timestamp: new Date().toISOString(),
+              accounts: updatedData.pendingAccounts,
+              summary: {
+                totalAccounts: updatedData.pendingAccounts.length,
+                onlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'online')
+                  .length,
+                offlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'offline')
+                  .length,
+              },
+            });
+          }
+        }, 2000);
+      }
 
       // Cleanup cuando el cliente se desconecta
       req.on('close', () => {

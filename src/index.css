@@ -57,12 +57,23 @@ body {
 }
 
 .link-platforms-gradient-text {
-  background: linear-gradient(90deg, #00000020, #00000040, #00000060, #00000080, #000000);
+  background: linear-gradient(
+    90deg,
+    #000000,
+    #00000080,
+    #00000060,
+    #00000040,
+    #00000020,
+    #00000040,
+    #00000060,
+    #00000080,
+    #000000
+  );
   background-size: 400% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: gradient-flow 2.5s ease-in-out infinite;
+  animation: gradient-flow 5s ease-in-out infinite;
 }
 
 .link-platforms-success-text {

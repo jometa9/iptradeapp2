@@ -48,7 +48,7 @@ export const usePendingAccounts = () => {
       setError(null);
       console.log('🔍 Loading pending accounts...');
 
-      const response = await fetch(`${baseUrl}/api/csv/scan-pending`, {
+      const response = await fetch(`${baseUrl}/api/accounts/pending`, {
         method: 'GET',
         headers: {
           'x-api-key': secretKey,
@@ -57,37 +57,54 @@ export const usePendingAccounts = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Pending accounts loaded:', data.summary);
+        console.log('✅ Pending accounts loaded:', data);
+
+        // Convertir el objeto pendingAccounts a array
+        const accountsArray = Object.values(data.pendingAccounts || {}).map((account: any) => ({
+          account_id: account.id,
+          platform: account.platform || 'Unknown',
+          current_status: account.status || 'offline',
+          timestamp: account.timestamp,
+          ...account,
+        }));
 
         // Filtrar cuentas ocultas antes de establecer el estado
-        const visibleAccounts = filterVisibleAccounts(data.accounts);
+        const visibleAccounts = filterVisibleAccounts(accountsArray);
+
+        // Calcular estadísticas de plataforma
+        const platformStats = visibleAccounts.reduce(
+          (stats, account) => {
+            const platform = account.platform || 'Unknown';
+            if (!stats[platform]) {
+              stats[platform] = { total: 0, online: 0, offline: 0 };
+            }
+            stats[platform].total++;
+            if (account.current_status === 'online') {
+              stats[platform].online++;
+            } else {
+              stats[platform].offline++;
+            }
+            return stats;
+          },
+          {} as Record<string, { total: number; online: number; offline: number }>
+        );
+
         const filteredData = {
-          ...data,
           accounts: visibleAccounts,
           summary: {
-            ...data.summary,
             totalAccounts: visibleAccounts.length,
-            platformStats: visibleAccounts.reduce(
-              (stats, account) => {
-                const platform = account.platform || 'Unknown';
-                if (!stats[platform]) {
-                  stats[platform] = { total: 0, online: 0, offline: 0 };
-                }
-                stats[platform].total++;
-                if (account.current_status === 'online') {
-                  stats[platform].online++;
-                } else {
-                  stats[platform].offline++;
-                }
-                return stats;
-              },
-              {} as Record<string, { total: number; online: number; offline: number }>
-            ),
+            onlineAccounts: visibleAccounts.filter(a => a.current_status === 'online').length,
+            offlineAccounts: visibleAccounts.filter(a => a.current_status === 'offline').length,
+            platformStats,
           },
+          platforms: Object.keys(platformStats),
+          message: data.message,
         };
 
         setPendingData(filteredData);
-        console.log(`👁️ Filtered ${data.accounts.length - visibleAccounts.length} hidden accounts`);
+        console.log(
+          `👁️ Found ${accountsArray.length} accounts, showing ${visibleAccounts.length} (${accountsArray.length - visibleAccounts.length} hidden)`
+        );
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to load pending accounts');
@@ -112,6 +129,20 @@ export const usePendingAccounts = () => {
     SSEService.connect(secretKey);
 
     const handleSSEMessage = (data: any) => {
+      // Manejar initial_data que incluye pending accounts
+      if (data.type === 'initial_data' && data.accounts?.pendingAccounts) {
+        console.log('📨 Received initial_data with pending accounts via SSE');
+        const pendingArray = data.accounts.pendingAccounts;
+        if (Array.isArray(pendingArray) && pendingArray.length > 0) {
+          console.log(`📊 Initial data contains ${pendingArray.length} pending accounts`);
+          handleSSEMessage({
+            type: 'pendingAccountsUpdate',
+            accounts: pendingArray,
+          });
+          return;
+        }
+      }
+
       if (
         data.type === 'pendingAccountsUpdate' ||
         data.type === 'csvFileChanged' ||

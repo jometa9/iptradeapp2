@@ -696,7 +696,7 @@ export const getSlaveAccount = (req, res) => {
 };
 
 // Get all accounts overview
-export const getAllAccounts = (req, res) => {
+export const getAllAccounts = async (req, res) => {
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
   if (!apiKey) {
@@ -705,48 +705,32 @@ export const getAllAccounts = (req, res) => {
     });
   }
 
-  // Get user-specific accounts
-  const userAccounts = getUserAccounts(apiKey);
+  try {
+    // Get accounts from CSV instead of JSON
+    const accounts = await csvManager.getAllActiveAccounts();
 
-  const masterAccountsWithSlaves = {};
-  Object.entries(userAccounts.masterAccounts).forEach(([masterId, masterData]) => {
-    // Calculate real online status based on recent activity (same logic as getConnectivityStats)
-    const timeSinceActivity = masterData.lastActivity
-      ? Date.now() - new Date(masterData.lastActivity)
-      : null;
-    const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
-    const isMasterOnline = !isOffline; // Master is online if not offline due to inactivity
+    // Calculate statistics
+    const totalMasterAccounts = Object.keys(accounts.masterAccounts).length;
+    const totalSlaveAccounts = Object.keys(accounts.slaveAccounts).length;
+    const totalConnections = Object.values(accounts.masterAccounts).reduce(
+      (sum, master) => sum + master.connectedSlaves.length,
+      0
+    );
 
-    const connectedSlaves = Object.entries(userAccounts.connections)
-      .filter(([, connectedMasterId]) => connectedMasterId === masterId)
-      .map(([slaveId]) => ({
-        id: slaveId,
-        ...userAccounts.slaveAccounts[slaveId],
-        masterOnline: isMasterOnline, // Use calculated online status
-      }));
-
-    masterAccountsWithSlaves[masterId] = {
-      ...masterData,
-      connectedSlaves,
-      totalSlaves: connectedSlaves.length,
-    };
-  });
-
-  const unconnectedSlaves = Object.entries(userAccounts.slaveAccounts)
-    .filter(([slaveId]) => !userAccounts.connections[slaveId])
-    .map(([slaveId, slaveData]) => ({
-      id: slaveId,
-      ...slaveData,
-      masterOnline: false, // Unconnected slaves have no master
-    }));
-
-  res.json({
-    masterAccounts: masterAccountsWithSlaves,
-    unconnectedSlaves,
-    totalMasterAccounts: Object.keys(userAccounts.masterAccounts).length,
-    totalSlaveAccounts: Object.keys(userAccounts.slaveAccounts).length,
-    totalConnections: Object.keys(userAccounts.connections).length,
-  });
+    res.json({
+      masterAccounts: accounts.masterAccounts,
+      unconnectedSlaves: accounts.unconnectedSlaves,
+      totalMasterAccounts,
+      totalSlaveAccounts,
+      totalConnections,
+    });
+  } catch (error) {
+    console.error('Error getting all accounts:', error);
+    res.status(500).json({
+      error: 'Failed to get accounts',
+      message: error.message,
+    });
+  }
 };
 
 // Update master account
@@ -1067,7 +1051,7 @@ export const getSupportedPlatforms = (req, res) => {
 // ===== PENDING ACCOUNTS MANAGEMENT =====
 
 // Get all pending accounts
-export const getPendingAccounts = (req, res) => {
+export const getPendingAccounts = async (req, res) => {
   try {
     const apiKey = req.apiKey; // Set by requireValidSubscription middleware
     if (!apiKey) {
@@ -1076,9 +1060,23 @@ export const getPendingAccounts = (req, res) => {
         .json({ error: 'API Key required - use requireValidSubscription middleware' });
     }
 
-    const userAccounts = getUserAccounts(apiKey);
-    const pendingAccounts = userAccounts.pendingAccounts || {};
-    const pendingCount = Object.keys(pendingAccounts).length;
+    // Get pending accounts from CSV instead of JSON
+    const allAccounts = await csvManager.getAllActiveAccounts();
+    const pendingAccountsArray = allAccounts.pendingAccounts || [];
+    const pendingCount = pendingAccountsArray.length;
+
+    // Convert array to object format for backward compatibility
+    const pendingAccounts = {};
+    pendingAccountsArray.forEach(account => {
+      pendingAccounts[account.account_id] = {
+        id: account.account_id,
+        name: `Account ${account.account_id}`,
+        platform: account.platform,
+        status: account.status,
+        timestamp: account.timestamp,
+        config: account.config,
+      };
+    });
 
     res.json({
       pendingAccounts,

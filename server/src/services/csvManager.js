@@ -567,10 +567,13 @@ class CSVManager extends EventEmitter {
         return;
       }
 
-      const pendingAccounts = await this.scanSimplifiedPendingCSVFiles();
+      // Usar getAllActiveAccounts que ya parsea correctamente el nuevo formato
+      const allAccounts = await this.getAllActiveAccounts();
+      const pendingAccounts = allAccounts.pendingAccounts || [];
+
       console.log(`📤 Emitting pending accounts update with ${pendingAccounts.length} accounts`);
       pendingAccounts.forEach(acc => {
-        console.log(`   - ${acc.account_id}: ${acc.current_status}`);
+        console.log(`   - ${acc.account_id}: ${acc.status}`);
       });
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,
@@ -632,7 +635,17 @@ class CSVManager extends EventEmitter {
         return [];
       }
 
-      const content = readFileSync(filePath, 'utf8');
+      // Leer como buffer para detectar encoding
+      const buffer = readFileSync(filePath);
+      let content;
+
+      // Detectar UTF-16 LE BOM (FF FE)
+      if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+        content = buffer.toString('utf16le');
+      } else {
+        content = buffer.toString('utf8');
+      }
+
       const lines = content
         .trim()
         .split('\n')
@@ -771,58 +784,70 @@ class CSVManager extends EventEmitter {
       masterAccounts: {},
       slaveAccounts: {},
       unconnectedSlaves: [],
+      pendingAccounts: [],
     };
 
     this.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id && row.status === 'online') {
+        if (row.account_id) {
           const accountId = row.account_id;
           const accountType = row.account_type;
-          const platform = this.extractPlatformFromPath(filePath);
+          const platform = row.platform || this.extractPlatformFromPath(filePath);
 
-          if (accountType === 'master') {
-            accounts.masterAccounts[accountId] = {
-              id: accountId,
-              name: accountId,
+          // Incluir cuentas pending
+          if (accountType === 'pending') {
+            accounts.pendingAccounts.push({
+              account_id: accountId,
               platform: platform,
-              status: 'online',
-              lastPing: row.timestamp,
-              connectedSlaves: this.getConnectedSlaves(accountId),
-              totalSlaves: this.getConnectedSlaves(accountId).length,
-            };
-          } else if (accountType === 'slave') {
-            const masterId = this.getSlaveMaster(accountId);
+              status: row.status || 'offline',
+              timestamp: row.timestamp,
+              config: row.config || {},
+            });
+          } else if (row.status === 'online') {
+            if (accountType === 'master') {
+              accounts.masterAccounts[accountId] = {
+                id: accountId,
+                name: accountId,
+                platform: platform,
+                status: 'online',
+                lastPing: row.timestamp,
+                connectedSlaves: this.getConnectedSlaves(accountId),
+                totalSlaves: this.getConnectedSlaves(accountId).length,
+              };
+            } else if (accountType === 'slave') {
+              const masterId = this.getSlaveMaster(accountId);
 
-            if (masterId) {
-              // Es un slave conectado
-              if (!accounts.masterAccounts[masterId]) {
-                accounts.masterAccounts[masterId] = {
-                  id: masterId,
-                  name: masterId,
-                  platform: 'Unknown',
-                  status: 'offline',
-                  connectedSlaves: [],
-                  totalSlaves: 0,
-                };
+              if (masterId) {
+                // Es un slave conectado
+                if (!accounts.masterAccounts[masterId]) {
+                  accounts.masterAccounts[masterId] = {
+                    id: masterId,
+                    name: masterId,
+                    platform: 'Unknown',
+                    status: 'offline',
+                    connectedSlaves: [],
+                    totalSlaves: 0,
+                  };
+                }
+
+                accounts.masterAccounts[masterId].connectedSlaves.push({
+                  id: accountId,
+                  name: accountId,
+                  platform: platform,
+                  status: 'online',
+                  masterOnline: true,
+                });
+
+                accounts.masterAccounts[masterId].totalSlaves++;
+              } else {
+                // Es un slave no conectado
+                accounts.unconnectedSlaves.push({
+                  id: accountId,
+                  name: accountId,
+                  platform: platform,
+                  status: 'online',
+                });
               }
-
-              accounts.masterAccounts[masterId].connectedSlaves.push({
-                id: accountId,
-                name: accountId,
-                platform: platform,
-                status: 'online',
-                masterOnline: true,
-              });
-
-              accounts.masterAccounts[masterId].totalSlaves++;
-            } else {
-              // Es un slave no conectado
-              accounts.unconnectedSlaves.push({
-                id: accountId,
-                name: accountId,
-                platform: platform,
-                status: 'online',
-              });
             }
           }
         }

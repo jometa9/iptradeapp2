@@ -377,8 +377,9 @@ export const scanPendingAccounts = async (req, res) => {
   try {
     console.log('🔍 Starting simplified pending accounts scan...');
 
-    // Usar el nuevo método que soporta ambos formatos
-    const pendingAccounts = await csvManager.scanSimplifiedPendingCSVFiles();
+    // Usar getAllActiveAccounts que parsea correctamente el nuevo formato
+    const allAccounts = await csvManager.getAllActiveAccounts();
+    const pendingAccounts = allAccounts.pendingAccounts || [];
 
     // Agrupar por plataforma
     const platformStats = {};

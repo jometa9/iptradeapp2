@@ -5,7 +5,7 @@
  */
 import fetch from 'node-fetch';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'http://localhost:30/api';
 const TEST_API_KEY = 'test-api-key-12345678';
 
 async function testCompleteLogout() {

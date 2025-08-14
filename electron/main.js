@@ -15,7 +15,7 @@ const getServerPath = () => {
 const server = require(getServerPath());
 
 // Start the server
-const PORT = 3000;
+const PORT = 30;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

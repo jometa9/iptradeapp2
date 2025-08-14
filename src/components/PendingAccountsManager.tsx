@@ -1,15 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import {
-  Cable,
-  HousePlug,
-  PartyPopper,
-  Smile,
-  TrafficCone,
-  Trash,
-  Unplug,
-  XCircle,
-} from 'lucide-react';
+import { Cable, HousePlug, PartyPopper, Smile, TrafficCone, Unplug } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -57,7 +48,6 @@ export const PendingAccountsManager: React.FC = () => {
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   // Inicializar isCollapsed desde localStorage
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -149,12 +139,7 @@ export const PendingAccountsManager: React.FC = () => {
   });
 
   // Usar el hook para pending accounts
-  const {
-    pendingData,
-    loading: loadingPending,
-    error: pendingError,
-    deletePendingAccount: deletePendingFromCSV,
-  } = usePendingAccounts();
+  const { pendingData, loading: loadingPending, error: pendingError } = usePendingAccounts();
 
   // Usar el hook CSV solo para master accounts
   const { accounts: csvAccounts } = useCSVData();
@@ -431,13 +416,11 @@ export const PendingAccountsManager: React.FC = () => {
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
-      setConfirmingDeleteId(null);
       setConfirmingMasterId(account.account_id);
     } else {
       // For slave, show form directly and hide master confirmation if open
       console.log('🔄 Setting up slave conversion form for account:', account.account_id);
       setConfirmingMasterId(null);
-      setConfirmingDeleteId(null);
       setExpandedAccountId(account.account_id);
 
       // Refresh master accounts list to ensure we have the latest data
@@ -462,14 +445,6 @@ export const PendingAccountsManager: React.FC = () => {
     setExpandedAccountId(null);
     setIsConverting(false);
     setConfirmingMasterId(null);
-    setConfirmingDeleteId(null);
-  };
-
-  // Open delete confirmation
-  const openDeleteConfirmation = (accountId: string) => {
-    setExpandedAccountId(null);
-    setConfirmingMasterId(null);
-    setConfirmingDeleteId(accountId);
   };
 
   // Convert directly to master (no form needed)
@@ -586,32 +561,6 @@ export const PendingAccountsManager: React.FC = () => {
     }
   };
 
-  // Hide pending account (persistent)
-  const deletePendingAccount = async (accountId: string) => {
-    setIsConverting(true);
-    setConfirmingDeleteId(null); // Cierre inmediato del modal
-
-    try {
-      await deletePendingFromCSV(accountId);
-      console.log(`✅ Successfully hidden pending account: ${accountId}`);
-      toast({
-        title: 'Account Hidden',
-        description:
-          'Account hidden from view. It will reappear when you restart the app or run link platforms.',
-        variant: 'default',
-      });
-    } catch (error) {
-      console.error('Error hiding pending account:', error);
-      toast({
-        title: 'Error',
-        description: 'Error hiding pending account from view',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsConverting(false);
-    }
-  };
-
   const pendingCount = pendingData?.summary?.totalAccounts || 0;
   const accounts = pendingData?.accounts || [];
 
@@ -639,6 +588,16 @@ export const PendingAccountsManager: React.FC = () => {
                     No pending accounts
                   </Badge>
                 )}
+                {linkingStatus.isActive &&
+                  linkingStatus.step !== 'idle' &&
+                  (isCollapsed || pendingCount > 0) && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-gray-50  mt-0.5 link-platforms-gradient-text"
+                    >
+                      {getLinkingStatusDisplay(linkingStatus).message}
+                    </Badge>
+                  )}
               </CardTitle>
             </div>
             <Button
@@ -653,8 +612,9 @@ export const PendingAccountsManager: React.FC = () => {
         </CardHeader>
         {!isCollapsed && (
           <CardContent>
-            {pendingCount === 0 ? (
+            {pendingCount === 0 && !loadingPending ? (
               <div className="text-center py-4">
+                {/* Solo mostrar el mensaje de linking si realmente no hay cuentas Y no estamos cargando */}
                 {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' && (
@@ -667,24 +627,7 @@ export const PendingAccountsManager: React.FC = () => {
                 {linkingStatus.step === 'completed' && (
                   <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
                 )}
-                {linkingStatus.isActive && linkingStatus.step !== 'idle' ? (
-                  <p
-                    key={
-                      linkingStatus.step === 'starting' ? 'rotating-message' : linkingStatus.step
-                    }
-                    className={`text-muted-foreground ${
-                      linkingStatus.step === 'completed'
-                        ? 'link-platforms-success-text'
-                        : getLinkingStatusDisplay(linkingStatus).isLoading
-                          ? 'link-platforms-gradient-text'
-                          : 'text-gray-500 font-semibold'
-                    }`}
-                  >
-                    {getLinkingStatusDisplay(linkingStatus).message}
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground text-gray-600">No pending accounts</p>
-                )}
+                <p className="text-muted-foreground text-gray-600">No pending accounts</p>
 
                 <p className="text-[10px] text-muted-foreground mt-3 text-gray-400">
                   If you are not seeing your accounts, please check the following:
@@ -783,37 +726,6 @@ export const PendingAccountsManager: React.FC = () => {
                                 Cancel
                               </Button>
                             </>
-                          ) : confirmingDeleteId === account.account_id ? (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-red-50 h-9 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
-                                onClick={() => deletePendingAccount(account.account_id)}
-                                disabled={isConverting}
-                              >
-                                {isConverting ? (
-                                  <>
-                                    <div className="h-4 w-4 rounded-full border-2 border-red-600 border-t-transparent mr-1" />
-                                    Hiding...
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="h-4 w-4 p-0 mr-2" />
-                                    Delete
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-gray-50 h-9 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
-                                onClick={cancelConversion}
-                                disabled={isConverting}
-                              >
-                                Cancel
-                              </Button>
-                            </>
                           ) : expandedAccountId === account.account_id ? (
                             // Show conversion form buttons when form is open
                             <>
@@ -850,19 +762,8 @@ export const PendingAccountsManager: React.FC = () => {
                             // Normal buttons - only show if account is online
                             <>
                               {!isOnline ? (
-                                // Show offline status and delete only
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                    onClick={() => openDeleteConfirmation(account.account_id)}
-                                    disabled={isConverting}
-                                    title="Hide Pending Offline Account from View"
-                                  >
-                                    <Trash className="h-4 w-4 text-red-600" />
-                                  </Button>
-                                </>
+                                // Show offline status only
+                                <div className="text-xs text-gray-500">Account offline</div>
                               ) : (
                                 // Show normal buttons for online accounts
                                 <>
@@ -897,15 +798,6 @@ export const PendingAccountsManager: React.FC = () => {
                                     }
                                   >
                                     <Unplug className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="bg-white h-9 w-9 p-0 rounded-lg border-red-200 text-red-700 hover:bg-gray-50"
-                                    onClick={() => openDeleteConfirmation(account.account_id)}
-                                    disabled={isConverting}
-                                  >
-                                    <XCircle className="h-4 w-4" />
                                   </Button>
                                 </>
                               )}
