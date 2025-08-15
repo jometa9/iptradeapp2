@@ -255,7 +255,7 @@ export const usePendingAccounts = () => {
     const pollingInterval = setInterval(() => {
       console.log('⏰ [POLLING] Checking for pending accounts updates...');
       loadPendingAccounts();
-    }, 10000); // Cada 10 segundos
+    }, 1000); // Cada 10 segundos
 
     return () => {
       console.log('⏰ Clearing polling fallback');

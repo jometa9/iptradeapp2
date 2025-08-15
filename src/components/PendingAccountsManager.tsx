@@ -85,18 +85,18 @@ export const PendingAccountsManager: React.FC = () => {
   };
 
   const scanningMessages = [
-    'Searching your MetaTrader platforms...',
+    'Searching for new MetaTrader platforms...',
     'Your pending accounts are being processed...',
     'Checking Expert Advisor installation...',
-    'Linking your platforms...',
-    'Verifying platform connections...',
-    'Scanning for trading terminals...',
+    'Linking new platforms...',
+    'Verifying new platform connections...',
+    'Scanning for new trading terminals...',
     'The good traders have strong patience...',
-    'Establishing secure connections...',
+    'Establishing new secure connections...',
     'Please be patient...',
-    'Configuring platform integration...',
+    'Configuring new platform integration...',
     'To be continued...',
-    'Finalizing platform setup...',
+    'Finalizing new platform setup...',
     'Almost there...',
     'A lot of work to do...',
     'Too much files in the way...',
@@ -296,7 +296,7 @@ export const PendingAccountsManager: React.FC = () => {
                 message: '',
                 isActive: false,
               });
-            }, 3000);
+            }, 5000);
             break;
 
           case 'idle':

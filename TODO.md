@@ -13,10 +13,3 @@ Server   : MetaQuotes-Demo
 Login    : 94424443
 Password : NaS-PaK4
 Investor : @5JtCkQp
-
-
-- que bandeja de entrada figuren las pendings
-- que se pongan offline / online (y no pueda borrar)
-
-- landing en el header, agregar link a las secciones
-- solo dejar pantalla de landing y dashboard. KISS
