@@ -8,6 +8,24 @@ import { notifyAccountCreated, notifyTradingConfigCreated } from './eventNotifie
 import { createDisabledSlaveConfig } from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
 
+// Generate CSV2 format content for account conversion (WITH SPACES to match bot format)
+const generateCSV2Content = (accountId, accountType, platform, timestamp) => {
+  const upperType = accountType.toUpperCase();
+
+  let content = `[TYPE] [${upperType}] [${platform}] [${accountId}]\n`;
+  content += `[STATUS] [ONLINE] [${timestamp}]\n`;
+
+  if (accountType === 'master') {
+    // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE]
+    content += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+  } else if (accountType === 'slave') {
+    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MAX_LOT][MIN_LOT][MASTER_ID]
+    content += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]\n`;
+  }
+
+  return content;
+};
+
 // Get all CSV pending accounts
 export const getPendingCSVAccounts = (req, res) => {
   try {
@@ -36,7 +54,7 @@ export const getPendingCSVAccounts = (req, res) => {
   }
 };
 
-// Update CSV account type from pending to master/slave
+// Update CSV account type from pending to master/slave using new CSV2 format
 export const updateCSVAccountType = async (req, res) => {
   console.log('🚀 updateCSVAccountType called with:', {
     accountId: req.params.accountId,
@@ -61,16 +79,15 @@ export const updateCSVAccountType = async (req, res) => {
       });
     }
 
-    console.log(`🔄 Updating CSV account ${accountId} from pending to ${newType}...`);
+    console.log(
+      `🔄 Updating CSV account ${accountId} from pending to ${newType} using new CSV2 format...`
+    );
 
-    // Use the specific file path directly
-    const csvFilePath =
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
-
+    // Use cached CSV files from csvManager instead of hardcoded paths
     let filesUpdated = 0;
-    const allFiles = [csvFilePath];
+    const allFiles = Array.from(csvManager.csvFiles.keys());
     let platform = 'MT4'; // Default platform
-    let timestamp = Date.now(); // Default timestamp
+    let currentTimestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
 
     console.log(`📁 Found ${allFiles.length} CSV files to check`);
     console.log('📁 Files found:', allFiles);
@@ -89,39 +106,103 @@ export const updateCSVAccountType = async (req, res) => {
             continue;
           }
 
-          // Process the single line directly
-          const line = lines[0];
-          console.log(`📄 Processing line: ${line}`);
+          let foundAccount = false;
+          let accountPlatform = 'MT4';
 
-          // Check if it's the bracket format: [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
-          if (line.includes('[') && line.includes(']')) {
-            // Extract values from bracket format
-            const matches = line.match(/\[([^\]]+)\]/g);
-            if (matches && matches.length >= 5) {
-              const values = matches.map(m => m.replace(/[\[\]]/g, ''));
-              console.log(`📋 Extracted values: [${values.join('][')}]`);
+          // Check if this file contains the pending account in the new CSV2 format
+          for (const line of lines) {
+            // Clean the line from BOM and special characters
+            const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+            console.log(`📄 Processing line: ${line}`);
+            console.log(`📄 Clean line: ${cleanLine}`);
 
-              if (values[0] === '0' && values[1] === accountId) {
-                // Found the account - change from pending (0) to master (1) or slave (2)
-                const newIndicator = newType === 'master' ? '1' : '2';
-                const newStatus = newType.toUpperCase();
-                const newLine = `[${newIndicator}][${values[1]}][${values[2]}][${newStatus}][${values[4]}]`;
+            // Simple check: if the line contains the accountId, this is our file
+            if (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId)) {
+              // Extract platform from the line
+              const matches = cleanLine.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 3) {
+                const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+                console.log(`📋 Extracted values from line with account: [${values.join('][')}]`);
 
-                // Extract platform and timestamp from the original line
-                platform = values[2] || 'MT4';
-                timestamp = values[4] || Date.now();
-
-                // Write the updated line back to file
-                writeFileSync(filePath, newLine + '\n', 'utf8');
-                filesUpdated++;
-                console.log(`✏️ Updated account ${accountId} to ${newType} in ${filePath}`);
-                console.log(`📄 New content: ${newLine}`);
-              } else {
-                console.log(`❌ Account ${accountId} not found in this line`);
+                // Find platform (usually the second or third bracket)
+                accountPlatform = values.find(v => ['MT4', 'MT5', 'CTRADER'].includes(v)) || 'MT4';
+                foundAccount = true;
+                console.log(`✅ Found account ${accountId} on platform ${accountPlatform}`);
+                console.log(`🎯 Will update CONFIG line in this file`);
+                break;
               }
             }
+
+            // Legacy check for [TYPE][PENDING][PLATFORM][ACCOUNT_ID] format
+            if (cleanLine.includes('[TYPE]') && cleanLine.includes('[PENDING]')) {
+              const matches = cleanLine.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 4) {
+                const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+                console.log(`📋 Extracted TYPE values: [${values.join('][')}]`);
+
+                if (values[3] === accountId) {
+                  foundAccount = true;
+                  accountPlatform = values[2] || 'MT4';
+                  console.log(
+                    `✅ Found pending account ${accountId} on platform ${accountPlatform}`
+                  );
+                  break;
+                }
+              }
+            }
+            // Also check for old format for backward compatibility
+            else if (line.includes('[') && line.includes(']')) {
+              const matches = line.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 5) {
+                const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+                if (values[0] === '0' && values[1] === accountId) {
+                  foundAccount = true;
+                  accountPlatform = values[2] || 'MT4';
+                  console.log(
+                    `✅ Found pending account ${accountId} in old format on platform ${accountPlatform}`
+                  );
+                  break;
+                }
+              }
+            }
+          }
+
+          if (foundAccount) {
+            // Simple approach: just update the CONFIG line, bot will update TYPE
+            const fileContent = readFileSync(filePath, 'utf8');
+            const lines = fileContent.split('\n');
+            const currentTimestamp = Math.floor(Date.now() / 1000);
+
+            let newContent = '';
+            for (const line of lines) {
+              console.log(`🔍 Processing line: "${line}"`);
+              const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+              console.log(`🔍 Clean line: "${cleanLine}"`);
+
+              if (cleanLine.includes('[CONFIG]') && cleanLine.includes('[PENDING]')) {
+                console.log(`✅ Found CONFIG line with PENDING, updating to ${newType}`);
+                if (newType === 'master') {
+                  newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+                } else if (newType === 'slave') {
+                  newContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]\n`;
+                }
+              } else if (cleanLine.includes('[STATUS]')) {
+                // Update timestamp
+                console.log(`⏰ Updating STATUS timestamp`);
+                newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+              } else {
+                newContent += line + '\n';
+              }
+            }
+
+            writeFileSync(filePath, newContent, 'utf8');
+            filesUpdated++;
+            console.log(
+              `✏️ Updated CONFIG line for account ${accountId} to ${newType} in ${filePath} (bot will update TYPE)`
+            );
+            console.log(`📄 New content:\n${newContent}`);
           } else {
-            console.log(`❌ File format not recognized: ${filePath}`);
+            console.log(`❌ Account ${accountId} not found in this file`);
           }
         }
       } catch (error) {
@@ -148,7 +229,7 @@ export const updateCSVAccountType = async (req, res) => {
             broker: 'Unknown',
             platform: platform,
             registeredAt: new Date().toISOString(),
-            lastActivity: new Date(parseInt(timestamp) * 1000).toISOString(),
+            lastActivity: new Date().toISOString(),
             status: 'active',
             apiKey: apiKey,
             convertedFrom: 'pending_csv',
@@ -188,7 +269,7 @@ export const updateCSVAccountType = async (req, res) => {
             broker: 'Unknown',
             platform: platform,
             registeredAt: new Date().toISOString(),
-            lastActivity: new Date(parseInt(timestamp) * 1000).toISOString(),
+            lastActivity: new Date().toISOString(),
             status: 'active',
             apiKey: apiKey,
             convertedFrom: 'pending_csv',

@@ -13,3 +13,6 @@ Server   : MetaQuotes-Demo
 Login    : 94424443
 Password : NaS-PaK4
 Investor : @5JtCkQp
+
+- convert pending to master
+- convert pending to slave

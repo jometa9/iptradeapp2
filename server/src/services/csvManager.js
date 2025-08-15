@@ -50,6 +50,90 @@ class CSVManager extends EventEmitter {
     }
   }
 
+  // Parse new CSV2 format: [TYPE][PENDING][MT4][12345], [STATUS][ONLINE][timestamp], [CONFIG][PENDING]
+  parseCSV2Format(lines, filePath, currentTime) {
+    try {
+      if (lines.length < 3) return null; // Need at least TYPE, STATUS, CONFIG lines
+
+      let typeData = null;
+      let statusData = null;
+      let configData = null;
+
+      // Parse each line looking for the CSV2 format
+      for (const line of lines) {
+        if (line.startsWith('[TYPE]')) {
+          const matches = line.match(/\[([^\]]+)\]/g);
+          if (matches && matches.length >= 4) {
+            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            typeData = {
+              type: values[1], // PENDING, MASTER, SLAVE
+              platform: values[2], // MT4, MT5, CTRADER
+              accountId: values[3], // Account ID
+            };
+          }
+        } else if (line.startsWith('[STATUS]')) {
+          const matches = line.match(/\[([^\]]+)\]/g);
+          if (matches && matches.length >= 3) {
+            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            statusData = {
+              status: values[1], // ONLINE, OFFLINE
+              timestamp: parseInt(values[2]), // Unix timestamp
+            };
+          }
+        } else if (line.startsWith('[CONFIG]')) {
+          const matches = line.match(/\[([^\]]+)\]/g);
+          if (matches && matches.length >= 2) {
+            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            configData = {
+              configType: values[1], // PENDING, MASTER, SLAVE
+              details: values.slice(2), // Additional config details
+            };
+          }
+        }
+      }
+
+      // Check if this is a pending account in CSV2 format
+      if (
+        typeData &&
+        statusData &&
+        configData &&
+        (typeData.type === 'PENDING' || configData.configType === 'PENDING')
+      ) {
+        const accountTime = statusData.timestamp * 1000; // Convert to milliseconds
+        const timeDiff = (currentTime - accountTime) / 1000; // Difference in seconds
+
+        // Only include if not older than 1 hour
+        if (timeDiff <= 3600) {
+          const account = {
+            account_id: typeData.accountId,
+            platform: typeData.platform,
+            account_type: 'pending',
+            status: timeDiff <= 5 ? 'online' : 'offline',
+            current_status: timeDiff <= 5 ? 'online' : 'offline',
+            timestamp: statusData.timestamp,
+            timeDiff: timeDiff,
+            filePath: filePath,
+            format: 'csv2',
+          };
+
+          console.log(
+            `📱 Found CSV2 pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`
+          );
+          return account;
+        } else {
+          console.log(
+            `⏰ Ignoring CSV2 account ${typeData.accountId} - too old (${(timeDiff / 60).toFixed(1)} minutes)`
+          );
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error parsing CSV2 format in ${filePath}:`, error);
+      return null;
+    }
+  }
+
   // Nuevo método para escanear archivos pending simplificados
   async scanPendingCSVFiles() {
     try {
@@ -214,6 +298,13 @@ class CSVManager extends EventEmitter {
             }
 
             const lines = content.split('\n').filter(line => line.trim());
+
+            // Check if this is the new CSV2 format first
+            const csv2Account = this.parseCSV2Format(lines, filePath, currentTime);
+            if (csv2Account) {
+              validPendingAccounts.push(csv2Account);
+              continue;
+            }
 
             // Log detallado del contenido del archivo
             console.log(`\n📄 === CSV FILE CONTENT ===`);
