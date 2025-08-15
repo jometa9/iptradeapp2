@@ -15,7 +15,6 @@ Password : NaS-PaK4
 Investor : @5JtCkQp
 
 
-- hacer andar los eas para que detecten las pending
 - que bandeja de entrada figuren las pendings
 - que se pongan offline / online (y no pueda borrar)
 

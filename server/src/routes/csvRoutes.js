@@ -113,19 +113,41 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de pending accounts (sin forzar escaneo adicional)
       const handlePendingUpdate = payload => {
         try {
+          console.log(
+            `🔥 [SSE BACKEND] handlePendingUpdate called with ${payload.accounts?.length || 0} accounts`
+          );
+
           const accounts = payload.accounts || [];
+
+          // Log cada cuenta para debugging
+          accounts.forEach(acc => {
+            console.log(
+              `   📱 [SSE] Account ${acc.account_id}: status=${acc.status}, current_status=${acc.current_status || acc.status}`
+            );
+          });
+
           const summary = {
             totalAccounts: accounts.length,
-            onlineAccounts: accounts.filter(a => a.status === 'online').length,
-            offlineAccounts: accounts.filter(a => a.status === 'offline').length,
+            onlineAccounts: accounts.filter(a => (a.current_status || a.status) === 'online')
+              .length,
+            offlineAccounts: accounts.filter(a => (a.current_status || a.status) === 'offline')
+              .length,
             platformStats: accounts.reduce((acc, a) => {
               const plat = a.platform || 'Unknown';
               if (!acc[plat]) acc[plat] = { online: 0, offline: 0, total: 0 };
-              acc[plat][a.status === 'online' ? 'online' : 'offline'] += 1;
+              const status = a.current_status || a.status;
+              acc[plat][status === 'online' ? 'online' : 'offline'] += 1;
               acc[plat].total += 1;
               return acc;
             }, {}),
           };
+
+          console.log(
+            `🚀 [SSE BACKEND] Sending pendingAccountsUpdate to ${activeSSEConnections} connections`
+          );
+          console.log(
+            `   📊 Summary: ${summary.onlineAccounts} online, ${summary.offlineAccounts} offline`
+          );
 
           sendUpdate({
             type: 'pendingAccountsUpdate',
@@ -134,8 +156,10 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
             summary,
             platforms: Object.keys(summary.platformStats),
           });
+
+          console.log(`✅ [SSE BACKEND] pendingAccountsUpdate event sent successfully`);
         } catch (e) {
-          console.error('Error handling pending accounts update:', e);
+          console.error('❌ [SSE BACKEND] Error handling pending accounts update:', e);
         }
       };
 
@@ -693,6 +717,27 @@ router.get('/csv/connectivity/stats', requireValidSubscription, getConnectivityS
  *         description: Platform accounts scanned
  */
 router.post('/csv/scan-platform-accounts', requireValidSubscription, scanPlatformAccounts);
+
+// Refresh CSV data from existing files (no new search)
+router.post('/csv/refresh', requireValidSubscription, async (req, res) => {
+  try {
+    const csvManager = (await import('../services/csvManager.js')).default;
+
+    // Solo refrescar datos existentes, no hacer búsqueda completa
+    csvManager.refreshAllFileData();
+
+    const allAccounts = csvManager.getAllActiveAccounts();
+
+    res.json({
+      success: true,
+      message: 'CSV data refreshed from existing files',
+      accounts: allAccounts,
+    });
+  } catch (error) {
+    console.error('Error refreshing CSV data:', error);
+    res.status(500).json({ error: 'Failed to refresh CSV data' });
+  }
+});
 
 /**
  * @swagger

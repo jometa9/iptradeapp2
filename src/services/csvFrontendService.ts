@@ -255,6 +255,24 @@ class CSVFrontendService extends SimpleEventEmitter {
     }
   }
 
+  public async refreshCSVData(): Promise<void> {
+    try {
+      // Solo refrescar datos existentes, no hacer búsqueda completa
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/refresh`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': this.getApiKey(),
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this.processCSVData(data);
+      }
+    } catch (error) {
+      console.error('Error refreshing CSV data:', error);
+    }
+  }
+
   // Eventos que emite el servicio
   public onDataUpdate(callback: (data: any) => void) {
     this.on('dataUpdated', callback);

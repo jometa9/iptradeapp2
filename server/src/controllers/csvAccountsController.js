@@ -205,8 +205,8 @@ export const updateCSVAccountType = async (req, res) => {
         }
       }
 
-      // Trigger CSV scan to update the in-memory data
-      await csvManager.scanCSVFiles();
+      // Refresh CSV data from existing files (no new search)
+      csvManager.refreshAllFileData();
 
       // Emit SSE event to notify frontend of account conversion
       csvManager.emit('accountConverted', {
@@ -438,8 +438,8 @@ export const connectPlatforms = async (req, res) => {
     const previousCount = csvManager.csvFiles.size;
     console.log(`📊 Current CSV files: ${previousCount}`);
 
-    // Forzar escaneo completo
-    const files = await csvManager.scanCSVFiles();
+    // Usar archivos ya cargados (no hacer búsqueda completa)
+    const files = Array.from(csvManager.csvFiles.keys());
 
     const newCount = csvManager.csvFiles.size;
     const foundFiles = newCount - previousCount;
@@ -555,8 +555,8 @@ export const scanPlatformAccounts = async (req, res) => {
 
     const previousCount = csvManager.csvFiles.size;
 
-    // Forzar escaneo completo
-    await csvManager.scanCSVFiles();
+    // Refresh data from existing files (no new search)
+    csvManager.refreshAllFileData();
 
     const newCount = csvManager.csvFiles.size;
     const allAccounts = csvManager.getAllActiveAccounts();

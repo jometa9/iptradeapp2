@@ -15,6 +15,7 @@ import {
   getMasterAccount,
   // Pending accounts management
   getPendingAccounts,
+  getPendingAccountsFromCache,
   getSlaveAccount,
   getSupportedPlatforms,
   pingAccount,
@@ -328,6 +329,7 @@ router.post('/ping', authenticateAccount, pingAccount);
  *         description: List of pending accounts
  */
 router.get('/pending', requireValidSubscription, getPendingAccounts);
+router.get('/pending/cache', requireValidSubscription, getPendingAccountsFromCache);
 
 /**
  * @swagger

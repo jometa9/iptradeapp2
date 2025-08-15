@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
-import { join } from 'path';
+import { basename, join } from 'path';
 
 class CSVManager extends EventEmitter {
   constructor() {
@@ -24,10 +24,30 @@ class CSVManager extends EventEmitter {
       require('fs').mkdirSync(this.csvDirectory, { recursive: true });
     }
 
-    // No hacer escaneo inicial automático; esperará a que Link Platforms configure las rutas específicas
-    console.log(
-      '📋 CSV Manager initialized - waiting for platform linking to configure specific paths'
-    );
+    // Cargar rutas desde cache si existen
+    const cachedPaths = this.loadCSVPathsFromCache();
+    if (cachedPaths.length > 0) {
+      console.log(`📋 CSV Manager initialized - loaded ${cachedPaths.length} cached CSV paths`);
+      // Cargar archivos desde cache
+      cachedPaths.forEach(filePath => {
+        if (existsSync(filePath)) {
+          this.csvFiles.set(filePath, {
+            lastModified: this.getFileLastModified(filePath),
+            data: this.parseCSVFile(filePath),
+          });
+        }
+      });
+
+      // Iniciar file watching inmediatamente si hay archivos cargados
+      if (this.csvFiles.size > 0) {
+        console.log(`👀 Starting file watching for ${this.csvFiles.size} cached CSV files`);
+        this.startFileWatching();
+      }
+    } else {
+      console.log(
+        '📋 CSV Manager initialized - waiting for platform linking to configure specific paths'
+      );
+    }
   }
 
   // Nuevo método para escanear archivos pending simplificados
@@ -399,6 +419,43 @@ class CSVManager extends EventEmitter {
     }
   }
 
+  // Guardar rutas encontradas en cache
+  saveCSVPathsToCache() {
+    try {
+      const cachePath = join(process.cwd(), 'server', 'config', 'csv_watching_cache.json');
+      const csvFiles = Array.from(this.csvFiles.keys());
+
+      const cacheData = {
+        csvFiles: csvFiles,
+        timestamp: new Date().toISOString(),
+        version: '1.0',
+        totalFiles: csvFiles.length,
+        lastScan: new Date().toISOString(),
+      };
+
+      writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
+      console.log(`💾 Saved ${csvFiles.length} CSV paths to cache: ${cachePath}`);
+    } catch (error) {
+      console.error('Error saving CSV paths to cache:', error);
+    }
+  }
+
+  // Cargar rutas desde cache
+  loadCSVPathsFromCache() {
+    try {
+      const cachePath = join(process.cwd(), 'server', 'config', 'csv_watching_cache.json');
+
+      if (existsSync(cachePath)) {
+        const cacheData = JSON.parse(readFileSync(cachePath, 'utf8'));
+        console.log(`📋 Loaded ${cacheData.csvFiles.length} CSV paths from cache`);
+        return cacheData.csvFiles;
+      }
+    } catch (error) {
+      console.error('Error loading CSV paths from cache:', error);
+    }
+    return [];
+  }
+
   // Escanear todos los archivos IPTRADECSV2.csv en el sistema (método original)
   async scanCSVFiles() {
     try {
@@ -460,6 +517,9 @@ class CSVManager extends EventEmitter {
         console.log(`  - ${filePath}`);
       });
 
+      // Guardar rutas encontradas en cache
+      this.saveCSVPathsToCache();
+
       return Array.from(this.csvFiles.keys());
     } catch (error) {
       console.error('Error scanning CSV files:', error);
@@ -495,20 +555,21 @@ class CSVManager extends EventEmitter {
 
     // Polling cada 2 segundos para detectar cambios
     this.pollingInterval = setInterval(() => {
+      let hasChanges = false;
       this.csvFiles.forEach((fileData, filePath) => {
         try {
           const currentModified = this.getFileLastModified(filePath);
           const lastModified = lastModifiedTimes.get(filePath);
 
           if (currentModified > lastModified) {
-            console.log(`🔔 File change detected via polling: ${filePath}`);
-            console.log(`   📅 Last: ${new Date(lastModified).toISOString()}`);
-            console.log(`   📅 Current: ${new Date(currentModified).toISOString()}`);
+            hasChanges = true;
+            const fileName = basename(filePath);
+            console.log(`🔔 File change detected: ${fileName}`);
 
             lastModifiedTimes.set(filePath, currentModified);
+            this.lastFileChange = Date.now(); // Registrar el último cambio
 
             // Procesar el cambio
-            console.log(`📝 Processing CSV file update: ${filePath}`);
             this.refreshFileData(filePath);
 
             // Emitir evento para el frontend
@@ -537,14 +598,19 @@ class CSVManager extends EventEmitter {
       });
     }, 30000); // Cada 30 segundos
 
-    // Timer para re-evaluar cuentas pendientes cada 5 segundos
+    // Timer para re-evaluar cuentas pendientes cada 5 segundos (solo si no hay cambios recientes)
     if (this.pendingEvaluationInterval) {
       clearInterval(this.pendingEvaluationInterval);
     }
 
     this.pendingEvaluationInterval = setInterval(() => {
-      console.log(`🔄 Re-evaluating pending accounts status...`);
-      this.scanAndEmitPendingUpdates();
+      // Solo re-evaluar si no ha habido cambios recientes
+      const now = Date.now();
+      const lastChange = this.lastFileChange || 0;
+      if (now - lastChange > 3000) {
+        // Solo si no ha habido cambios en los últimos 3 segundos
+        this.scanAndEmitPendingUpdates();
+      }
     }, 5000); // Cada 5 segundos
   }
 
@@ -571,14 +637,36 @@ class CSVManager extends EventEmitter {
       const allAccounts = await this.getAllActiveAccounts();
       const pendingAccounts = allAccounts.pendingAccounts || [];
 
-      console.log(`📤 Emitting pending accounts update with ${pendingAccounts.length} accounts`);
-      pendingAccounts.forEach(acc => {
-        console.log(`   - ${acc.account_id}: ${acc.status}`);
-      });
+      // Solo mostrar logs si hay cambios significativos o es la primera vez
+      const currentState = JSON.stringify(
+        pendingAccounts.map(acc => ({
+          id: acc.account_id,
+          status: acc.status,
+          time: acc.timeSinceLastPing,
+        }))
+      );
+
+      if (!this.lastPendingState || this.lastPendingState !== currentState) {
+        console.log(
+          `📤 [CSV MANAGER] Emitting pending accounts update with ${pendingAccounts.length} accounts`
+        );
+        pendingAccounts.forEach(acc => {
+          const timeSinceStr = acc.timeSinceLastPing
+            ? `(${acc.timeSinceLastPing.toFixed(1)}s ago)`
+            : '(no timestamp)';
+          console.log(`   - ${acc.account_id}: ${acc.status} ${timeSinceStr}`);
+        });
+        this.lastPendingState = currentState;
+      }
+
+      console.log(
+        `🚀 [CSV MANAGER] Emitting pendingAccountsUpdate event with ${pendingAccounts.length} accounts`
+      );
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,
         timestamp: new Date().toISOString(),
       });
+      console.log(`✅ [CSV MANAGER] pendingAccountsUpdate event emitted`);
     } catch (error) {
       console.error('Error scanning pending accounts for SSE:', error);
     }
@@ -595,8 +683,6 @@ class CSVManager extends EventEmitter {
         data: newData,
       });
 
-      console.log(`📄 Refreshed data for ${filePath}`);
-
       // Emitir evento general
       this.emit('csvFileChanged', { filePath, data: newData });
 
@@ -611,7 +697,6 @@ class CSVManager extends EventEmitter {
   async checkAndEmitPendingUpdate(filePath) {
     try {
       // Simplificar: ante cualquier cambio de archivo observado, escanear y emitir
-      console.log(`🔄 Pending accounts related file changed: ${filePath}`);
       await this.scanAndEmitPendingUpdates();
     } catch (error) {
       console.error('Error checking pending update:', error);
@@ -621,11 +706,33 @@ class CSVManager extends EventEmitter {
   // Obtener timestamp de última modificación
   getFileLastModified(filePath) {
     try {
-      const stats = require('fs').statSync(filePath);
+      const stats = statSync(filePath);
       return stats.mtime.getTime();
     } catch (error) {
+      console.error(`Error getting file stats for ${filePath}:`, error.message);
       return 0;
     }
+  }
+
+  // Refrescar datos de todos los archivos ya cargados (sin buscar nuevos)
+  refreshAllFileData() {
+    console.log(`🔄 Refreshing data from ${this.csvFiles.size} existing CSV files...`);
+
+    this.csvFiles.forEach((fileData, filePath) => {
+      if (existsSync(filePath)) {
+        this.csvFiles.set(filePath, {
+          lastModified: this.getFileLastModified(filePath),
+          data: this.parseCSVFile(filePath),
+        });
+        console.log(`📄 Refreshed: ${filePath}`);
+      } else {
+        // Remover archivo si ya no existe
+        this.csvFiles.delete(filePath);
+        console.log(`🗑️ Removed non-existent file: ${filePath}`);
+      }
+    });
+
+    console.log(`✅ Refresh completed. ${this.csvFiles.size} files remain.`);
   }
 
   // Parsear archivo CSV con el nuevo formato de corchetes
@@ -697,12 +804,27 @@ class CSVManager extends EventEmitter {
               currentAccountData.status = values[1].toLowerCase(); // online/offline
               currentAccountData.timestamp = values[2];
 
-              // Calcular si realmente está online basado en timestamp
-              const now = Date.now() / 1000;
-              const pingTime = parseInt(values[2]) || 0;
-              const timeDiff = Math.abs(now - pingTime);
-              if (timeDiff > 5) {
-                currentAccountData.status = 'offline';
+              // Para cuentas pending, calcular si realmente está online basado en timestamp
+              if (currentAccountData.account_type === 'pending') {
+                const now = Date.now() / 1000;
+                const pingTime = parseInt(values[2]) || 0;
+                const timeDiff = now - pingTime; // No usar abs() para detectar timestamps futuros
+
+                // Si el timestamp es mayor a 5 segundos en el pasado, está offline
+                // También marcar offline si el timestamp está en el futuro (posible problema de sincronización)
+                const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos (igual que ACTIVITY_TIMEOUT)
+
+                if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
+                  currentAccountData.status = 'offline';
+                  console.log(
+                    `⏰ Pending account ${currentAccountId} marked offline - timestamp diff: ${timeDiff.toFixed(1)}s (threshold: ${PENDING_ONLINE_THRESHOLD}s)`
+                  );
+                } else {
+                  // El timestamp es reciente, mantener el status reportado por el EA
+                  console.log(
+                    `✅ Pending account ${currentAccountId} is ${currentAccountData.status} - timestamp diff: ${timeDiff.toFixed(1)}s (threshold: ${PENDING_ONLINE_THRESHOLD}s)`
+                  );
+                }
               }
             }
             break;
@@ -796,13 +918,37 @@ class CSVManager extends EventEmitter {
 
           // Incluir cuentas pending
           if (accountType === 'pending') {
-            accounts.pendingAccounts.push({
-              account_id: accountId,
-              platform: platform,
-              status: row.status || 'offline',
-              timestamp: row.timestamp,
-              config: row.config || {},
-            });
+            // Para debug, calcular tiempo desde el último ping
+            let timeSinceLastPing = null;
+            let calculatedStatus = row.status || 'offline';
+
+            if (row.timestamp) {
+              const now = Date.now() / 1000;
+              const pingTime = parseInt(row.timestamp) || 0;
+              timeSinceLastPing = now - pingTime;
+
+              // Aplicar lógica de 5 segundos para determinar status offline
+              const absTimeDiff = Math.abs(timeSinceLastPing);
+              calculatedStatus = absTimeDiff <= 5 ? 'online' : 'offline';
+            }
+
+            // Solo incluir si no ha pasado más de 1 hora (3600 segundos)
+            if (!timeSinceLastPing || timeSinceLastPing <= 3600) {
+              accounts.pendingAccounts.push({
+                account_id: accountId,
+                platform: platform,
+                status: calculatedStatus,
+                current_status: calculatedStatus, // Agregar current_status para compatibilidad con frontend
+                timestamp: row.timestamp,
+                timeSinceLastPing: timeSinceLastPing,
+                config: row.config || {},
+                filePath: filePath, // Para debug
+              });
+            } else {
+              console.log(
+                `⏰ Ignoring pending account ${accountId} - too old (${(timeSinceLastPing / 60).toFixed(1)} minutes)`
+              );
+            }
           } else if (row.status === 'online') {
             if (accountType === 'master') {
               accounts.masterAccounts[accountId] = {

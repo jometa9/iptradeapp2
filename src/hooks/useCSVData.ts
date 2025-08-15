@@ -100,10 +100,11 @@ export const useCSVData = (): UseCSVDataReturn => {
 
   const scanCSVFiles = async () => {
     try {
-      await csvFrontendService.scanCSVFiles();
+      // Solo refrescar datos existentes, no hacer búsqueda completa
+      await csvFrontendService.refreshCSVData();
       await loadData(); // Recargar datos
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error scanning CSV files');
+      setError(err instanceof Error ? err.message : 'Error refreshing CSV data');
     }
   };
 

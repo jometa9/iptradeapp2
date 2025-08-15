@@ -317,8 +317,13 @@ async function createTray() {
           // Procesar eventos relevantes para el copier status
           if (data.type === 'csv_updated' || data.type === 'initial_data') {
             const copierStatus = data.copierStatus?.globalStatus ? 'ON' : 'OFF';
-            tray.setContextMenu(createTrayMenu(copierStatus));
-            console.log(`📡 Tray: Copier status updated to ${copierStatus}`);
+
+            // Solo actualizar si el estado cambió
+            if (tray.lastCopierStatus !== copierStatus) {
+              tray.setContextMenu(createTrayMenu(copierStatus));
+              console.log(`📡 Tray: Copier status updated to ${copierStatus}`);
+              tray.lastCopierStatus = copierStatus;
+            }
           }
         } catch (error) {
           console.error('❌ Tray: Error parsing SSE message:', error);

@@ -29,15 +29,37 @@ export const SSEService = {
     globalEventSource.onmessage = event => {
       try {
         const data = JSON.parse(event.data);
-        // Filtrar mensajes de heartbeat y initial_data de los logs
+
+        // Log TODOS los mensajes para debugging completo
+        console.log('📡 [SSE RAW]', {
+          type: data.type,
+          hasAccounts: !!data.accounts,
+          accountsLength: data.accounts?.length || 0,
+          summary: data.summary,
+          timestamp: data.timestamp,
+        });
+
+        // Destacar eventos importantes
+        if (data.type === 'pendingAccountsUpdate') {
+          console.log('🎯 [SSE IMPORTANT] pendingAccountsUpdate event received!', data);
+        }
+
         if (data.type !== 'heartbeat' && data.type !== 'initial_data') {
-          console.log('📡 SSE: Message received:', data.type);
+          console.log('📡 SSE: Non-heartbeat message received:', data.type);
         }
 
         // Notificar a todos los listeners
-        globalListeners.forEach(callback => callback(data));
+        console.log(`📡 [SSE] Notifying ${globalListeners.size} listeners`);
+        globalListeners.forEach((callback, id) => {
+          try {
+            callback(data);
+          } catch (error) {
+            console.error(`❌ SSE: Error in listener ${id}:`, error);
+          }
+        });
       } catch (error) {
         console.error('❌ SSE: Error parsing message:', error);
+        console.error('❌ SSE: Raw event data:', event.data);
       }
     };
 

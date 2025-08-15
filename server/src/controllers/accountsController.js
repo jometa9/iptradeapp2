@@ -1073,6 +1073,7 @@ export const getPendingAccounts = async (req, res) => {
         name: `Account ${account.account_id}`,
         platform: account.platform,
         status: account.status,
+        current_status: account.current_status || account.status, // Agregar current_status para compatibilidad
         timestamp: account.timestamp,
         config: account.config,
       };
@@ -1089,6 +1090,67 @@ export const getPendingAccounts = async (req, res) => {
   } catch (error) {
     console.error('Error getting pending accounts:', error);
     res.status(500).json({ error: 'Failed to get pending accounts' });
+  }
+};
+
+// Get pending accounts from cache (for immediate loading on app start)
+export const getPendingAccountsFromCache = async (req, res) => {
+  try {
+    const apiKey = req.apiKey; // Set by requireValidSubscription middleware
+    if (!apiKey) {
+      return res
+        .status(401)
+        .json({ error: 'API Key required - use requireValidSubscription middleware' });
+    }
+
+    // Forzar carga desde cache si no hay archivos cargados
+    if (csvManager.csvFiles.size === 0) {
+      console.log('📋 No CSV files loaded, attempting to load from cache...');
+      const cachedPaths = csvManager.loadCSVPathsFromCache();
+      if (cachedPaths.length > 0) {
+        cachedPaths.forEach(filePath => {
+          if (existsSync(filePath)) {
+            csvManager.csvFiles.set(filePath, {
+              lastModified: csvManager.getFileLastModified(filePath),
+              data: csvManager.parseCSVFile(filePath),
+            });
+          }
+        });
+        console.log(`📋 Loaded ${csvManager.csvFiles.size} CSV files from cache`);
+      }
+    }
+
+    // Get pending accounts from CSV
+    const allAccounts = await csvManager.getAllActiveAccounts();
+    const pendingAccountsArray = allAccounts.pendingAccounts || [];
+    const pendingCount = pendingAccountsArray.length;
+
+    // Convert array to object format for backward compatibility
+    const pendingAccounts = {};
+    pendingAccountsArray.forEach(account => {
+      pendingAccounts[account.account_id] = {
+        id: account.account_id,
+        name: `Account ${account.account_id}`,
+        platform: account.platform,
+        status: account.status,
+        current_status: account.current_status || account.status, // Agregar current_status para compatibilidad
+        timestamp: account.timestamp,
+        config: account.config,
+      };
+    });
+
+    res.json({
+      pendingAccounts,
+      totalPending: pendingCount,
+      message:
+        pendingCount > 0
+          ? `Found ${pendingCount} account(s) awaiting configuration (from cache)`
+          : 'No pending accounts found',
+      fromCache: csvManager.csvFiles.size > 0,
+    });
+  } catch (error) {
+    console.error('Error getting pending accounts from cache:', error);
+    res.status(500).json({ error: 'Failed to get pending accounts from cache' });
   }
 };
 
