@@ -548,8 +548,28 @@ export const PendingAccountsManager: React.FC = () => {
     startConversion(expandedAccountId);
 
     try {
-      // Actualizar el CSV de pending a slave
-      console.log(`📝 Updating CSV account ${expandedAccountId} from pending to slave...`);
+      // Actualizar el CSV de pending a slave con configuraciones
+      console.log(
+        `📝 Updating CSV account ${expandedAccountId} from pending to slave with configs...`
+      );
+      console.log('🔧 Slave configurations:', {
+        masterAccountId: conversionForm.masterAccountId,
+        lotCoefficient: conversionForm.lotCoefficient,
+        forceLot: conversionForm.forceLot,
+        reverseTrade: conversionForm.reverseTrade,
+      });
+
+      // Validate configurations before sending
+      const slaveConfig = {
+        masterAccountId:
+          conversionForm.masterAccountId !== 'none' ? conversionForm.masterAccountId : null,
+        lotCoefficient: conversionForm.lotCoefficient,
+        forceLot: conversionForm.forceLot > 0 ? conversionForm.forceLot : null,
+        reverseTrade: conversionForm.reverseTrade,
+      };
+
+      console.log('📤 Sending slave config to server:', slaveConfig);
+
       const csvUpdateResponse = await fetch(
         `${baseUrl}/api/csv/pending/${expandedAccountId}/update-type`,
         {
@@ -560,6 +580,7 @@ export const PendingAccountsManager: React.FC = () => {
           },
           body: JSON.stringify({
             newType: 'slave',
+            slaveConfig: slaveConfig,
           }),
         }
       );
@@ -574,18 +595,30 @@ export const PendingAccountsManager: React.FC = () => {
       // Si hay un masterAccountId, también podríamos necesitar registrar la conexión
       // Por ahora solo actualizamos el CSV
 
-      // Mostrar mensaje de éxito
+      // Mostrar mensaje de éxito con configuraciones guardadas
+      const configSummary = [];
       if (conversionForm.masterAccountId && conversionForm.masterAccountId !== 'none') {
-        toast({
-          title: 'Slave Account Created',
-          description: `Account ${expandedAccountId} has been converted to slave. You may need to configure the connection separately.`,
-        });
-      } else {
-        toast({
-          title: 'Account Converted',
-          description: `Account ${expandedAccountId} has been converted to slave successfully`,
-        });
+        configSummary.push(`Connected to master: ${conversionForm.masterAccountId}`);
       }
+      if (conversionForm.lotCoefficient !== 1) {
+        configSummary.push(`Lot multiplier: ${conversionForm.lotCoefficient}x`);
+      }
+      if (conversionForm.forceLot > 0) {
+        configSummary.push(`Fixed lot: ${conversionForm.forceLot}`);
+      }
+      if (conversionForm.reverseTrade) {
+        configSummary.push('Reverse trading: enabled');
+      }
+
+      const configText =
+        configSummary.length > 0
+          ? `\n\nConfigurations saved:\n• ${configSummary.join('\n• ')}`
+          : '';
+
+      toast({
+        title: 'Slave Account Created Successfully',
+        description: `Account ${expandedAccountId} has been converted to slave with your specified settings.${configText}`,
+      });
 
       // Cerrar el formulario
       setExpandedAccountId(null);

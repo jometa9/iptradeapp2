@@ -126,6 +126,47 @@ export const createDisabledSlaveConfig = slaveAccountId => {
   return true; // Already exists
 };
 
+// Create slave configuration with specific settings from pending conversion
+export const createSlaveConfigWithSettings = (slaveAccountId, settings) => {
+  const configs = loadSlaveConfigs();
+
+  // Create base config
+  const baseConfig = getDisabledSlaveConfig();
+
+  // Apply provided settings
+  if (settings.masterAccountId) {
+    baseConfig.masterAccountId = settings.masterAccountId;
+  }
+
+  if (settings.lotCoefficient !== undefined) {
+    baseConfig.lotMultiplier = settings.lotCoefficient;
+  }
+
+  if (settings.forceLot !== undefined && settings.forceLot !== null) {
+    baseConfig.forceLot = settings.forceLot;
+  }
+
+  if (settings.reverseTrade !== undefined) {
+    baseConfig.reverseTrading = settings.reverseTrade;
+  }
+
+  // Update description to indicate it was converted from pending
+  baseConfig.description = 'Account converted from pending with custom settings';
+  baseConfig.lastUpdated = new Date().toISOString();
+
+  // Save the configuration
+  configs[slaveAccountId] = baseConfig;
+
+  if (saveSlaveConfigs(configs)) {
+    console.log(`✅ Created slave configuration for ${slaveAccountId} with settings:`, settings);
+    console.log(`📋 Final config:`, baseConfig);
+    return true;
+  } else {
+    console.error(`❌ Failed to create slave configuration for ${slaveAccountId}`);
+    return false;
+  }
+};
+
 // Reverse trading type mappings (same as master)
 const reverseTypeMapping = {
   BUY: 'SELL',

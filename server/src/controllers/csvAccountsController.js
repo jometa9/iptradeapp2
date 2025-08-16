@@ -5,11 +5,14 @@ import csvManager from '../services/csvManager.js';
 import { getUserAccounts, saveUserAccounts } from './configManager.js';
 import { createDisabledMasterConfig } from './copierStatusController.js';
 import { notifyAccountCreated, notifyTradingConfigCreated } from './eventNotifier.js';
-import { createDisabledSlaveConfig } from './slaveConfigController.js';
+import {
+  createDisabledSlaveConfig,
+  createSlaveConfigWithSettings,
+} from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
 
 // Generate CSV2 format content for account conversion (WITH SPACES to match bot format)
-const generateCSV2Content = (accountId, accountType, platform, timestamp) => {
+const generateCSV2Content = (accountId, accountType, platform, timestamp, slaveConfig = null) => {
   const upperType = accountType.toUpperCase();
 
   let content = `[TYPE] [${upperType}] [${platform}] [${accountId}]\n`;
@@ -19,8 +22,13 @@ const generateCSV2Content = (accountId, accountType, platform, timestamp) => {
     // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE]
     content += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
   } else if (accountType === 'slave') {
-    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MAX_LOT][MIN_LOT][MASTER_ID]
-    content += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]\n`;
+    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID]
+    const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
+    const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'FALSE';
+    const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
+    const masterId = slaveConfig?.masterAccountId || 'NULL';
+
+    content += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
   }
 
   return content;
@@ -59,10 +67,11 @@ export const updateCSVAccountType = async (req, res) => {
   console.log('🚀 updateCSVAccountType called with:', {
     accountId: req.params.accountId,
     newType: req.body.newType,
+    slaveConfig: req.body.slaveConfig,
   });
   try {
     const { accountId } = req.params;
-    const { newType } = req.body; // 'master' or 'slave'
+    const { newType, slaveConfig } = req.body; // 'master' or 'slave', plus slave configs
     const apiKey = req.apiKey;
 
     if (!accountId || !newType) {
@@ -184,7 +193,13 @@ export const updateCSVAccountType = async (req, res) => {
                 if (newType === 'master') {
                   newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
                 } else if (newType === 'slave') {
-                  newContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]\n`;
+                  // Generate slave config with provided settings
+                  const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
+                  const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'FALSE';
+                  const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
+                  const masterId = slaveConfig?.masterAccountId || 'NULL';
+
+                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
@@ -276,8 +291,14 @@ export const updateCSVAccountType = async (req, res) => {
           };
 
           if (saveUserAccounts(apiKey, userAccounts)) {
-            // Create disabled slave configuration
-            createDisabledSlaveConfig(accountId);
+            // Create slave configuration with provided settings
+            if (slaveConfig) {
+              console.log(`🔧 Creating slave config with settings:`, slaveConfig);
+              createSlaveConfigWithSettings(accountId, slaveConfig);
+            } else {
+              // Create disabled slave configuration as fallback
+              createDisabledSlaveConfig(accountId);
+            }
 
             console.log(
               `✅ Successfully registered account ${accountId} as slave in configured accounts system`
