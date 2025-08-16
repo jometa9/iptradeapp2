@@ -758,7 +758,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="bg-blue-50 h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
+                                  className="bg-white h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
                                   onClick={() =>
                                     convertToMaster(
                                       account.account_id,
@@ -782,7 +782,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="bg-gray-50 h-9  rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
+                                  className="bg-red-50 h-9  rounded-lg border-red-200 text-red-700 hover:bg-red-100"
                                   onClick={cancelConversion}
                                   disabled={isConverting}
                                 >
@@ -795,7 +795,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="bg-green-50 h-9 rounded-lg border-green-200 text-green-700 hover:bg-green-100"
+                                  className="bg-white h-9 rounded-lg border-green-200 text-green-700 hover:bg-gray-50"
                                   onClick={convertAccount}
                                   disabled={isConverting}
                                 >
@@ -814,7 +814,7 @@ export const PendingAccountsManager: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="bg-gray-50 h-9 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100"
+                                  className="bg-red-50 h-9 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
                                   onClick={cancelConversion}
                                   disabled={isConverting}
                                 >
@@ -822,7 +822,6 @@ export const PendingAccountsManager: React.FC = () => {
                                 </Button>
                               </>
                             ) : (
-                              // Normal buttons - only show if account is online
                               <>
                                 {!isOnline ? (
                                   // Show offline status only
