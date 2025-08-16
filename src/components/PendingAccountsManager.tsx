@@ -49,8 +49,11 @@ export const PendingAccountsManager: React.FC = () => {
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
 
-  // Estado para cuentas en proceso de conversión (se ocultan por 3 segundos)
+  // Estado para cuentas en proceso de conversión (se ocultan por 30 segundos)
   const [convertingAccounts, setConvertingAccounts] = useState<Set<string>>(new Set());
+
+  // Estado para mostrar el badge "Converting" (se muestra por 3 segundos)
+  const [showConvertingBadge, setShowConvertingBadge] = useState<Set<string>>(new Set());
 
   // Inicializar isCollapsed desde localStorage
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -472,16 +475,29 @@ export const PendingAccountsManager: React.FC = () => {
 
   // Función helper para manejar cuentas en conversión
   const startConversion = (accountId: string) => {
+    // Ocultar de la bandeja por 30 segundos
     setConvertingAccounts(prev => new Set([...prev, accountId]));
 
-    // Remover de conversión después de 3 segundos
+    // Mostrar badge "Converting" por 3 segundos
+    setShowConvertingBadge(prev => new Set([...prev, accountId]));
+
+    // Remover badge después de 3 segundos
+    setTimeout(() => {
+      setShowConvertingBadge(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(accountId);
+        return newSet;
+      });
+    }, 3000);
+
+    // Remover de conversión después de 30 segundos
     setTimeout(() => {
       setConvertingAccounts(prev => {
         const newSet = new Set(prev);
         newSet.delete(accountId);
         return newSet;
       });
-    }, 2500);
+    }, 30000);
   };
 
   // Convert directly to master (no form needed)
@@ -665,12 +681,12 @@ export const PendingAccountsManager: React.FC = () => {
                     No pending accounts
                   </Badge>
                 )}
-                {convertingAccounts.size > 0 && (
+                {showConvertingBadge.size > 0 && (
                   <Badge
                     variant="secondary"
                     className="bg-blue-50 text-blue-800 border border-blue-300 mt-0.5"
                   >
-                    Converting {convertingAccounts.size}...
+                    Converting {showConvertingBadge.size}...
                   </Badge>
                 )}
                 {linkingStatus.isActive &&
