@@ -80,6 +80,7 @@ export const PendingAccountsManager: React.FC = () => {
       MT4: 'MetaTrader 4',
       MT5: 'MetaTrader 5',
       CT: 'cTrader',
+      NT: 'NinjaTrader',
       CTRADER: 'cTrader',
       TRADINGVIEW: 'TradingView',
     };
@@ -89,6 +90,8 @@ export const PendingAccountsManager: React.FC = () => {
 
   const scanningMessages = [
     'Searching for new MetaTrader platforms...',
+    'Waiting for new cTrader platforms...',
+    'Looking for new NinjaTrader platforms...',
     'Your pending accounts are being processed...',
     'Checking Expert Advisor installation...',
     'Linking new platforms...',
@@ -717,12 +720,28 @@ export const PendingAccountsManager: React.FC = () => {
                 {linkingStatus.step === 'completed' && (
                   <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
                 )}
-
-                <p className="text-[10px] text-muted-foreground mt-3 text-gray-400">
-                  If you are not seeing your accounts, please check the following:
-                </p>
+                {linkingStatus.isActive &&
+                linkingStatus.step !== 'idle' &&
+                linkingStatus.step !== 'completed' ? (
+                  <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
+                    Linking your platforms, after that, please check the following:
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
+                    If you are not seeing your accounts, please check the following:
+                  </p>
+                )}
                 <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-2 text-gray-400">
-                  <li>Click on the "Link Platforms" button on the top right</li>
+                  {linkingStatus.isActive &&
+                  linkingStatus.step !== 'idle' &&
+                  linkingStatus.step !== 'completed' ? (
+                    <li>Wait for the process to finish</li>
+                  ) : (
+                    <li>
+                      Click on the "Link Platforms" button on the top right if you haven't done it
+                      yet
+                    </li>
+                  )}
                   <li>Open or refresh all your MetaTrader platforms</li>
                   <li>In MetaTrader, add IPTRADE Expert Advisor to the chart</li>
                   <li>Wait for the EA to connect to the app and it will appear here</li>

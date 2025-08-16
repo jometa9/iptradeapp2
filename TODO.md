@@ -14,4 +14,3 @@ Login    : 94424443
 Password : NaS-PaK4
 Investor : @5JtCkQp
 
-- 
