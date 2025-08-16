@@ -149,7 +149,7 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async getAllAccounts(): Promise<AccountsData> {
     try {
-      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/accounts/all`, {
+      const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/all`, {
         headers: {
           'x-api-key': this.getApiKey(),
         },

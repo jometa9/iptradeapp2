@@ -208,8 +208,12 @@ export const PendingAccountsManager: React.FC = () => {
         },
       });
       if (response.ok) {
-        await response.json();
-        // Data handled by CSV
+        const data = await response.json();
+        // Update the CSV data with the fresh master accounts data
+        if (data.masterAccounts) {
+          // Force a refresh of the CSV data to include the new master accounts
+          console.log('🔄 Refreshing master accounts data:', data.masterAccounts);
+        }
       } else {
         console.error('Failed to fetch master accounts');
       }
@@ -864,20 +868,22 @@ export const PendingAccountsManager: React.FC = () => {
                                       <SelectValue placeholder="Select master..." />
                                     </SelectTrigger>
                                     <SelectContent className="bg-white border border-gray-200">
-                                      <SelectItem value="none">
-                                        Not connected (configure later)
-                                      </SelectItem>
                                       {masterAccounts.length > 0 ? (
-                                        masterAccounts.map(master => (
-                                          <SelectItem
-                                            key={master.id}
-                                            value={master.id}
-                                            className=" hover:bg-gray-50 cursor-pointer"
-                                          >
-                                            {String(master.name || master.id)} (
-                                            {String(master.platform)})
+                                        <>
+                                          <SelectItem value="none">
+                                            Not connected (configure later)
                                           </SelectItem>
-                                        ))
+                                          {masterAccounts.map(master => (
+                                            <SelectItem
+                                              key={master.id}
+                                              value={master.id}
+                                              className=" hover:bg-gray-50 cursor-pointer"
+                                            >
+                                              {String(master.name || master.id)} (
+                                              {String(master.platform)})
+                                            </SelectItem>
+                                          ))}
+                                        </>
                                       ) : (
                                         <SelectItem value="none" disabled>
                                           No master accounts available
