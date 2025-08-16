@@ -50,7 +50,7 @@ class CSVManager extends EventEmitter {
     }
   }
 
-  // Parse new CSV2 format: [TYPE][PENDING][MT4][12345], [STATUS][ONLINE][timestamp], [CONFIG][PENDING]
+  // Parse new CSV2 format: [TYPE][PENDING][MT4][12345] or [TYPE] [PENDING] [MT4] [12345]
   parseCSV2Format(lines, filePath, currentTime) {
     try {
       if (lines.length < 3) return null; // Need at least TYPE, STATUS, CONFIG lines
@@ -61,29 +61,30 @@ class CSVManager extends EventEmitter {
 
       // Parse each line looking for the CSV2 format
       for (const line of lines) {
-        if (line.startsWith('[TYPE]')) {
+        // Handle both formats: [TYPE] and [TYPE] (with spaces)
+        if (line.includes('[TYPE]')) {
           const matches = line.match(/\[([^\]]+)\]/g);
           if (matches && matches.length >= 4) {
-            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
             typeData = {
               type: values[1], // PENDING, MASTER, SLAVE
               platform: values[2], // MT4, MT5, CTRADER
               accountId: values[3], // Account ID
             };
           }
-        } else if (line.startsWith('[STATUS]')) {
+        } else if (line.includes('[STATUS]')) {
           const matches = line.match(/\[([^\]]+)\]/g);
           if (matches && matches.length >= 3) {
-            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
             statusData = {
               status: values[1], // ONLINE, OFFLINE
               timestamp: parseInt(values[2]), // Unix timestamp
             };
           }
-        } else if (line.startsWith('[CONFIG]')) {
+        } else if (line.includes('[CONFIG]')) {
           const matches = line.match(/\[([^\]]+)\]/g);
           if (matches && matches.length >= 2) {
-            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
             configData = {
               configType: values[1], // PENDING, MASTER, SLAVE
               details: values.slice(2), // Additional config details
