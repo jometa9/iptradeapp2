@@ -32,6 +32,12 @@ export const linkPlatformsService = {
         console.error('❌ Link Platforms request failed:', response.status, response.statusText);
         const errorData = await response.json();
         console.error('❌ Error details:', errorData);
+
+        // Handle the case where Link Platforms is already running
+        if (response.status === 409) {
+          throw new Error(errorData.message || 'Link Platforms is already running');
+        }
+
         throw new Error(errorData.message || 'Link Platforms failed');
       }
 

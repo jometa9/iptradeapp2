@@ -44,6 +44,17 @@ class LinkPlatformsController {
 
   async linkPlatforms(req, res) {
     try {
+      // Check if Link Platforms is already running
+      if (this.isLinking) {
+        console.log('⚠️ Link Platforms is already running - rejecting new request');
+        return res.status(409).json({
+          success: false,
+          message:
+            'Link Platforms is already running. Please wait for the current process to complete.',
+          isLinking: true,
+        });
+      }
+
       console.log('🔗 Starting Link Platforms process...');
       console.log('👤 Manual user request - will perform full scan (ignore cache)');
 

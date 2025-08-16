@@ -74,6 +74,12 @@ async function startDevServer() {
               linkPlatformsController.isLinking
             );
 
+            // Check if Link Platforms is already running (shouldn't happen on fresh start, but safety check)
+            if (linkPlatformsController.isLinking) {
+              console.log('⚠️ Link Platforms is already running - skipping auto-start');
+              return;
+            }
+
             const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
             console.log('✅ Auto Link Platforms result:', result);
             console.log(

@@ -53,6 +53,13 @@ export const useLinkPlatforms = () => {
       return;
     }
 
+    // Check if already linking before making the request
+    if (isLinking) {
+      console.log('⚠️ Link Platforms is already running - ignoring button click');
+      setError('Link Platforms is already running. Please wait for it to complete.');
+      return;
+    }
+
     setIsLinkingWithLog(true, 'manual button click');
     setError(null);
 
@@ -78,9 +85,20 @@ export const useLinkPlatforms = () => {
       const errorMessage = err instanceof Error ? err.message : 'Link Platforms failed';
       setError(errorMessage);
       console.error('❌ Link Platforms error:', err);
+
+      // If the error is about already running, don't stop the spinner since it's running elsewhere
+      if (errorMessage.includes('already running')) {
+        console.log('ℹ️ Link Platforms is running elsewhere - keeping spinner active');
+        // Don't set isLinking to false here, let the SSE events handle it
+        return;
+      }
+
       throw err;
     } finally {
-      setIsLinkingWithLog(false, 'manual request finished');
+      // Only stop spinner if it's not running elsewhere
+      if (!error || !error.includes('already running')) {
+        setIsLinkingWithLog(false, 'manual request finished');
+      }
     }
   };
 
