@@ -231,7 +231,7 @@ export const Dashboard: React.FC = () => {
           <UpdateCard />
 
           {/* Pending Accounts - Always visible at top for admin management */}
-          <PendingAccountsManager />
+          <PendingAccountsManager isLinking={isLinking} />
 
           {/* Main Trading Configuration */}
           <TradingAccountsConfig />

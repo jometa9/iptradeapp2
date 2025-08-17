@@ -40,10 +40,19 @@ interface LinkingStatus {
   isActive: boolean;
 }
 
-export const PendingAccountsManager: React.FC = () => {
+interface PendingAccountsManagerProps {
+  isLinking?: boolean; // Optional prop to override hook state
+}
+
+export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
+  isLinking: propIsLinking,
+}) => {
   const { secretKey, userInfo } = useAuth();
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
-  const { isLinking } = useLinkPlatforms();
+  const { isLinking: hookIsLinking } = useLinkPlatforms();
+
+  // Use prop if provided, otherwise fall back to hook
+  const isLinking = propIsLinking !== undefined ? propIsLinking : hookIsLinking;
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
