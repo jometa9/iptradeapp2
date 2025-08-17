@@ -103,7 +103,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const scanningMessages = [
     'Searching for new MetaTrader platforms...',
     'Waiting for new cTrader platforms...',
-    'Looking for new NinjaTrader platforms...',
     'Your pending accounts are being processed...',
     'Checking Expert Advisor installation...',
     'Linking new platforms...',
