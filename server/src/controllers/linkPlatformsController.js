@@ -169,6 +169,12 @@ class LinkPlatformsController {
       // Always reset linking state
       this.isLinking = false;
       console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
+
+      // Emit SSE event to notify frontend that linking has finished
+      this.emitLinkPlatformsEvent('idle', {
+        message: 'Link Platforms process finished',
+        isLinking: false,
+      });
     }
 
     return result;
@@ -239,65 +245,10 @@ class LinkPlatformsController {
     return isTimeValid;
   }
 
-  // Manual user request - ALWAYS full scan (ignore cache)
-  async findAndSyncMQLFoldersManual() {
-    console.log('❤️❤️❤️❤️❤️ Manual user request - will perform full scan (ignore cache)');
-    console.log('🔗 Starting manual Link Platforms process...');
-    console.log('🔍 Manual request - performing full scan (ignoring cache)');
-
-    // Track linking state
-    this.isLinking = true;
-    console.log('📊 Link Platforms state set to TRUE:', this.isLinking);
-
-    const result = {
-      mql4Folders: [],
-      mql5Folders: [],
-      created: 0,
-      synced: 0,
-      errors: [],
-      filesCreated: 0,
-      csvFiles: [],
-      usedCache: false,
-      backgroundScan: false,
-    };
-
-    // Emitir evento de inicio para el frontend
-    this.emitLinkPlatformsEvent('started', { message: 'Manual Link Platforms process started' });
-
-    try {
-      // SIEMPRE hacer búsqueda completa para requests manuales
-      await this.performFullScan(result);
-
-      // Para requests manuales, también configurar CSV watching para archivos existentes
-      console.log('🔧 Manual request: Configuring CSV watching for existing files...');
-      await this.configureCSVWatchingForExistingFiles();
-
-      // Emitir evento de finalización completa DESPUÉS de configurar CSV watching
-      this.emitLinkPlatformsEvent('completed', {
-        message: 'Link Platforms process completed successfully (including CSV configuration)',
-        result,
-      });
-    } catch (error) {
-      result.errors.push(`General error: ${error.message}`);
-
-      // Emitir evento de error
-      this.emitLinkPlatformsEvent('error', {
-        message: 'Link Platforms process failed',
-        error: error.message,
-        result,
-      });
-    } finally {
-      // Always reset linking state
-      this.isLinking = false;
-      console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
-    }
-
-    return result;
-  }
-
-  // Buscar y sincronizar MQL folders con cache optimizado (SOLO para auto-start)
-  async findAndSyncMQLFoldersOptimized() {
-    console.log('🔗 Starting optimized Link Platforms process...');
+  // Unified method - ALWAYS full system scan (replaces both manual and optimized)
+  async findAndSyncMQLFolders() {
+    console.log('🔗 Starting Link Platforms process...');
+    console.log('🔍 Performing full system scan for comprehensive search...');
 
     // Track linking state
     this.isLinking = true;
@@ -319,34 +270,19 @@ class LinkPlatformsController {
     this.emitLinkPlatformsEvent('started', { message: 'Link Platforms process started' });
 
     try {
-      // 1. Intentar cargar cache
-      this.loadCacheFromFile();
+      // PASO 1: Configurar CSV watching para archivos existentes PRIMERO
+      console.log('🔧 Step 1: Configuring CSV watching for existing files...');
+      await this.configureCSVWatchingForExistingFilesInternal();
 
-      if (this.isCacheValid()) {
-        console.log('⚡ Using cached paths for immediate processing...');
-        console.log('🚀 Auto-start with valid cache - NO background scan');
-        result.usedCache = true;
-        result.backgroundScan = false; // NO background scan en auto-start
+      // PASO 2: Realizar scan completo de MetaTrader folders
+      console.log('🔧 Step 2: Performing full scan for MetaTrader folders...');
+      await this.performFullScan(result);
 
-        // Procesar rutas cacheadas inmediatamente
-        await this.processCachedPaths(this.cachedPaths, result);
-
-        // Configurar CSV watching para rutas cacheadas
-        if (result.csvFiles.length > 0) {
-          await this.configureCSVWatching(result.csvFiles);
-        }
-
-        // Emitir evento de finalización completa (sin background scan)
-        this.emitLinkPlatformsEvent('completed', {
-          message: 'Link Platforms completed using cached paths (auto-start)',
-          result,
-        });
-
-        console.log('✅ Auto-start completed - no background scan needed');
-      } else {
-        console.log('🔍 No valid cache found, performing full scan...');
-        await this.performFullScan(result);
-      }
+      // Emitir evento de finalización completa
+      this.emitLinkPlatformsEvent('completed', {
+        message: 'Link Platforms process completed successfully',
+        result,
+      });
     } catch (error) {
       result.errors.push(`General error: ${error.message}`);
 
@@ -360,9 +296,26 @@ class LinkPlatformsController {
       // Always reset linking state
       this.isLinking = false;
       console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
+
+      // Emit SSE event to notify frontend that linking has finished
+      this.emitLinkPlatformsEvent('idle', {
+        message: 'Link Platforms process finished',
+        isLinking: false,
+      });
     }
 
     return result;
+  }
+
+  // Legacy methods for backward compatibility
+  async findAndSyncMQLFoldersManual() {
+    console.log('❤️❤️❤️❤️❤️ Manual user request - redirecting to unified method');
+    return await this.findAndSyncMQLFolders();
+  }
+
+  async findAndSyncMQLFoldersOptimized() {
+    console.log('🔗 Auto-start request - redirecting to unified method');
+    return await this.findAndSyncMQLFolders();
   }
 
   // Procesar rutas cacheadas
@@ -605,6 +558,66 @@ class LinkPlatformsController {
     }
   }
 
+  // Función interna para configurar CSV watching sin emitir eventos (usada dentro del proceso principal)
+  async configureCSVWatchingForExistingFilesInternal() {
+    console.log('🔧 Configuring CSV watching for existing files in the system...');
+
+    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
+    if (this.operatingSystem === 'macos') {
+      console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
+
+      try {
+        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        console.log(`🔍 Executing: ${findCommand}`);
+
+        // Usar exec asíncrono para evitar crash por exit code 1
+        let stdout = '';
+        try {
+          const result = await execAsync(findCommand, { encoding: 'utf8' });
+          stdout = result.stdout;
+        } catch (error) {
+          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
+          // Usamos el stdout aunque haya error
+          if (error.stdout) {
+            stdout = error.stdout;
+            console.log(
+              `⚠️ Find command returned error code but found files, using results anyway`
+            );
+          }
+        }
+        const allCsvFiles = stdout
+          .trim()
+          .split('\n')
+          .filter(line => line.trim());
+
+        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
+        allCsvFiles.forEach(file => console.log(`   - ${file}`));
+
+        // Configurar watching para todos los archivos encontrados
+        allCsvFiles.forEach(csvPath => {
+          if (fs.existsSync(csvPath)) {
+            csvManager.csvFiles.set(csvPath, {
+              lastModified: csvManager.getFileLastModified(csvPath),
+              data: csvManager.parseCSVFile(csvPath),
+            });
+            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
+          }
+        });
+
+        // Configurar file watching
+        csvManager.startFileWatching();
+
+        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
+      } catch (error) {
+        console.error(`❌ Error during system-wide CSV search for existing files:`, error);
+      }
+    } else {
+      // Para otros sistemas operativos, usar la lógica original
+      console.log('🔧 Using original CSV watching logic for non-macOS systems');
+    }
+  }
+
   // Nueva función para configurar el CSV watching para archivos existentes en el sistema
   async configureCSVWatchingForExistingFiles() {
     console.log('🔧 Configuring CSV watching for existing files in the system...');
@@ -663,6 +676,12 @@ class LinkPlatformsController {
       // Para otros sistemas operativos, usar la lógica original
       console.log('🔧 Using original CSV watching logic for non-macOS systems');
     }
+
+    // Emit idle event after CSV watching configuration is complete
+    this.emitLinkPlatformsEvent('idle', {
+      message: 'CSV watching configuration completed',
+      isLinking: false,
+    });
   }
 
   // Nueva función para configurar el CSV watching específicamente en las rutas encontradas

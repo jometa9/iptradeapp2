@@ -87,10 +87,8 @@ async function startDevServer() {
               linkPlatformsController.isLinking
             );
 
-            // Ensure CSV watching is configured for existing files after auto-start
-            console.log('🔧 Auto-start: Configuring CSV watching for existing files...');
-            await linkPlatformsController.configureCSVWatchingForExistingFiles();
-            console.log('✅ Auto-start: CSV watching configured successfully');
+            // CSV watching is now integrated into the main process, no need for separate call
+            console.log('✅ Auto-start: Link Platforms completed with integrated CSV watching');
           } catch (err) {
             console.error('❌ Auto Link Platforms failed on start:', err);
           }

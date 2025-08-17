@@ -14,7 +14,44 @@ export interface LinkPlatformsResult {
   };
 }
 
+export interface LinkingStatus {
+  isLinking: boolean;
+  timestamp: string;
+  lastResult?: any;
+  lastTimestamp?: string;
+}
+
 export const linkPlatformsService = {
+  async getLinkingStatus(secretKey: string): Promise<LinkingStatus> {
+    try {
+      console.log('📊 Getting linking status from:', `${baseUrl}/api/link-platforms/status`);
+
+      const response = await fetch(`${baseUrl}/api/link-platforms/status`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey,
+        },
+      });
+
+      if (!response.ok) {
+        console.error(
+          '❌ Get linking status request failed:',
+          response.status,
+          response.statusText
+        );
+        throw new Error(`Failed to get linking status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('📊 Linking status result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Get linking status service error:', error);
+      throw error;
+    }
+  },
+
   async linkPlatforms(secretKey: string): Promise<LinkPlatformsResult> {
     try {
       console.log('🌐 Making Link Platforms request to:', `${baseUrl}/api/link-platforms`);

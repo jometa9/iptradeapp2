@@ -241,6 +241,36 @@ export const useLinkPlatforms = () => {
     };
   }, [secretKey]);
 
+  // Polling fallback: Check linking status every second when isLinking is true
+  useEffect(() => {
+    if (!isLinking || !secretKey) return;
+
+    console.log('🔄 Starting polling fallback for linking status...');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        console.log('📊 Polling linking status...');
+        const status = await linkPlatformsService.getLinkingStatus(secretKey);
+
+        if (!status.isLinking && isLinking) {
+          console.log('✅ Polling detected linking finished - updating state');
+          setIsLinkingWithLog(false, 'polling detected completion');
+
+          // Clear hidden accounts when linking finishes
+          clearHiddenAccounts();
+        }
+      } catch (error) {
+        console.error('❌ Error polling linking status:', error);
+        // Don't change state on polling errors to avoid false negatives
+      }
+    }, 1000); // Poll every second
+
+    return () => {
+      console.log('🛑 Stopping polling fallback for linking status');
+      clearInterval(pollInterval);
+    };
+  }, [isLinking, secretKey, setIsLinkingWithLog, clearHiddenAccounts]);
+
   console.log('🔗 useLinkPlatforms hook returning state:', { isLinking, hasError: !!error });
 
   return {
