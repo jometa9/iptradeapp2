@@ -683,12 +683,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     {pendingCount}
                   </Badge>
                 ) : (
-                  <Badge
-                    variant="secondary"
-                    className="bg-gray-50 text-gray-600 border border-gray-300 mt-0.5"
-                  >
-                    No pending accounts
-                  </Badge>
+                  isCollapsed && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-gray-50 text-gray-600 border border-gray-300 mt-0.5"
+                    >
+                      No pending accounts
+                    </Badge>
+                  )
                 )}
                 {showConvertingBadge.size > 0 && (
                   <Badge
@@ -743,7 +745,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                 )}
 
                 {linkingStatus.step === 'completed' && (
-                  <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                  <>
+                    <PartyPopper className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                    <p className="text-muted-foreground text-gray-600">
+                      Link Platforms process completed!
+                    </p>
+                  </>
                 )}
                 {linkingStatus.isActive &&
                 linkingStatus.step !== 'idle' &&
