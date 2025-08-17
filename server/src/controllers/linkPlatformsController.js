@@ -43,6 +43,13 @@ class LinkPlatformsController {
   }
 
   async linkPlatforms(req, res) {
+    console.log('🚀 ===== LINK PLATFORMS ENDPOINT CALLED =====');
+    console.log('📡 Request method:', req.method);
+    console.log('📡 Request URL:', req.url);
+    console.log('📡 Request headers:', req.headers);
+    console.log('📡 API Key present:', req.headers['x-api-key'] ? 'YES' : 'NO');
+    console.log('📊 Current isLinking state:', this.isLinking);
+
     try {
       // Check if Link Platforms is already running
       if (this.isLinking) {
@@ -60,6 +67,15 @@ class LinkPlatformsController {
 
       const result = await this.findAndSyncMQLFoldersManual();
 
+      console.log('✅ Link Platforms process completed successfully');
+      console.log('📊 Result summary:', {
+        mql4Folders: result.mql4Folders?.length || 0,
+        mql5Folders: result.mql5Folders?.length || 0,
+        created: result.created,
+        synced: result.synced,
+        errors: result.errors?.length || 0,
+      });
+
       res.json({
         success: true,
         message: 'Link Platforms process completed',
@@ -67,6 +83,7 @@ class LinkPlatformsController {
       });
     } catch (error) {
       console.error('❌ Link Platforms error:', error);
+      console.error('❌ Error stack:', error.stack);
       res.status(500).json({
         success: false,
         message: 'Link Platforms process failed',

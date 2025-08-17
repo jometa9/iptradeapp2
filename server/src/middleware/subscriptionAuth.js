@@ -228,6 +228,7 @@ export const requireValidSubscription = async (req, res, next) => {
   const apiKey = extractApiKey(req);
 
   if (!apiKey) {
+    console.log('❌ No API key provided, returning 401');
     return res.status(401).json({
       error: 'API Key required',
       message:
@@ -241,8 +242,6 @@ export const requireValidSubscription = async (req, res, next) => {
     const now = Date.now();
 
     if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
-      // Use cached validation data silently (only log in debug mode)
-      // Use cached validation data
       req.user = cachedValidation.userData;
       req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
       req.apiKey = apiKey;
@@ -250,14 +249,10 @@ export const requireValidSubscription = async (req, res, next) => {
       return next();
     }
 
-    // No cache or cache expired, perform validation
-    console.log(
-      '🔄 Cache miss or expired, validating subscription for:',
-      apiKey.substring(0, 8) + '...'
-    );
     const validation = await validateSubscription(apiKey);
 
     if (!validation.valid) {
+      console.log('❌ Subscription validation failed:', validation.error);
       return res.status(401).json({
         error: validation.error,
         details: validation,
@@ -277,9 +272,10 @@ export const requireValidSubscription = async (req, res, next) => {
     req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
     req.apiKey = apiKey; // Add apiKey for account isolation
 
+    console.log('✅ Auth successful (validated), proceeding to next middleware');
     next();
   } catch (error) {
-    console.error('Error in requireValidSubscription middleware:', error);
+    console.error('❌ Error in requireValidSubscription middleware:', error);
     return res.status(500).json({
       error: 'Internal server error validating subscription',
     });

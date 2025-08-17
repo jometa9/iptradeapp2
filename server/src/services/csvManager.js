@@ -43,10 +43,6 @@ class CSVManager extends EventEmitter {
         console.log(`👀 Starting file watching for ${this.csvFiles.size} cached CSV files`);
         this.startFileWatching();
       }
-    } else {
-      console.log(
-        '📋 CSV Manager initialized - waiting for platform linking to configure specific paths'
-      );
     }
   }
 
@@ -656,7 +652,6 @@ class CSVManager extends EventEmitter {
           if (currentModified > lastModified) {
             hasChanges = true;
             const fileName = basename(filePath);
-            console.log(`🔔 File change detected: ${fileName}`);
 
             lastModifiedTimes.set(filePath, currentModified);
             this.lastFileChange = Date.now(); // Registrar el último cambio
@@ -684,10 +679,7 @@ class CSVManager extends EventEmitter {
     }
 
     this.heartbeatInterval = setInterval(() => {
-      console.log(`💓 CSV Polling heartbeat - ${this.csvFiles.size} files being monitored:`);
-      this.csvFiles.forEach((fileData, filePath) => {
-        console.log(`   👁️ Polling: ${filePath.split('/').pop()}`);
-      });
+      this.csvFiles.forEach((fileData, filePath) => {});
     }, 30000); // Cada 30 segundos
 
     // Timer para re-evaluar cuentas pendientes cada 5 segundos (solo si no hay cambios recientes)
@@ -739,9 +731,6 @@ class CSVManager extends EventEmitter {
       );
 
       if (!this.lastPendingState || this.lastPendingState !== currentState) {
-        console.log(
-          `📤 [CSV MANAGER] Emitting pending accounts update with ${pendingAccounts.length} accounts`
-        );
         pendingAccounts.forEach(acc => {
           const timeSinceStr = acc.timeSinceLastPing
             ? `(${acc.timeSinceLastPing.toFixed(1)}s ago)`
@@ -751,14 +740,10 @@ class CSVManager extends EventEmitter {
         this.lastPendingState = currentState;
       }
 
-      console.log(
-        `🚀 [CSV MANAGER] Emitting pendingAccountsUpdate event with ${pendingAccounts.length} accounts`
-      );
       this.emit('pendingAccountsUpdate', {
         accounts: pendingAccounts,
         timestamp: new Date().toISOString(),
       });
-      console.log(`✅ [CSV MANAGER] pendingAccountsUpdate event emitted`);
     } catch (error) {
       console.error('Error scanning pending accounts for SSE:', error);
     }

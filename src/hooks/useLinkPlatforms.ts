@@ -23,13 +23,17 @@ export const useLinkPlatforms = () => {
 
   // Check if Link Platforms is currently running on server
   const checkLinkingStatus = async () => {
-    if (!secretKey) return;
+    // TEMPORAL: Permitir ejecución sin secretKey para testing
+    if (!secretKey) {
+      console.log('⚠️ checkLinkingStatus - NO SECRETKEY, pero continuando para testing...');
+      // return; // ← COMENTADO TEMPORALMENTE
+    }
 
     try {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(`http://localhost:${serverPort}/api/link-platforms/status`, {
         headers: {
-          'x-api-key': secretKey,
+          'x-api-key': secretKey || 'test-key', // TEMPORAL: usar test-key si no hay secretKey
         },
       });
 
@@ -39,11 +43,13 @@ export const useLinkPlatforms = () => {
 
         if (status.isLinking) {
           console.log('🔄 Link Platforms is already running - activating spinner');
-          setIsLinkingWithLog(true, 'server status check');
+          setIsLinkingWithLog(true, 'server status check - process running');
+        } else {
+          setIsLinkingWithLog(false, 'server status check - process completed');
         }
       }
     } catch (error) {
-      console.log('ℹ️ Could not check Link Platforms status (probably not running)');
+      setIsLinkingWithLog(false, 'status check failed - assuming completed');
     }
   };
 
@@ -66,15 +72,22 @@ export const useLinkPlatforms = () => {
     try {
       console.log('🔗 Starting Link Platforms process...');
 
-      // REMOVIDO: Ya no limpiamos las cuentas ocultas al inicio
-      // console.log('🧹 Clearing hidden accounts due to manual Link Platforms initiation');
-      // clearHiddenAccounts();
-
       const result = await linkPlatformsService.linkPlatforms(secretKey);
 
       setLastResult(result);
 
-      console.log('✅ Link Platforms completed:', result);
+      // IMPORTANT: If the HTTP request completes successfully, it means the process finished
+      // We should stop the spinner immediately since there's no background scan
+      if (result.success && !result.result.backgroundScan) {
+        console.log(
+          '✅ Link Platforms completed immediately (no background scan) - stopping spinner'
+        );
+        console.log(
+          '🧹 Clearing hidden pending accounts after successful Link Platforms completion'
+        );
+        clearHiddenAccounts();
+        setIsLinkingWithLog(false, 'HTTP request completed without background scan');
+      }
 
       if (result.result.errors.length > 0) {
         console.warn('⚠️ Link Platforms completed with errors:', result.result.errors);
@@ -104,10 +117,6 @@ export const useLinkPlatforms = () => {
 
   // SSE listener para eventos de Link Platforms
   useEffect(() => {
-    if (!secretKey) return;
-
-    console.log('🔗 Link Platforms: Setting up SSE listener...');
-
     // Verificar estado inicial solo una vez
     if (!hasCheckedInitialStatus.current) {
       hasCheckedInitialStatus.current = true;
@@ -231,6 +240,8 @@ export const useLinkPlatforms = () => {
       }
     };
   }, [secretKey]);
+
+  console.log('🔗 useLinkPlatforms hook returning state:', { isLinking, hasError: !!error });
 
   return {
     linkPlatforms,
