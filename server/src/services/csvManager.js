@@ -1026,17 +1026,40 @@ class CSVManager extends EventEmitter {
                 `⏰ Ignoring pending account ${accountId} - too old (${(timeSinceLastPing / 60).toFixed(1)} minutes)`
               );
             }
-          } else if (row.status === 'online') {
+          } else {
+            // Calcular estado basado en timestamp para todas las cuentas
+            let calculatedStatus = 'offline';
+            let timeSinceLastPing = null;
+
+            if (row.timestamp) {
+              const now = Date.now() / 1000;
+              const pingTime = parseInt(row.timestamp) || 0;
+              timeSinceLastPing = now - pingTime;
+              const absTimeDiff = Math.abs(timeSinceLastPing);
+              calculatedStatus = absTimeDiff <= 5 ? 'online' : 'offline';
+            }
+
             if (accountType === 'master') {
               accounts.masterAccounts[accountId] = {
                 id: accountId,
                 name: accountId,
                 platform: platform,
-                status: 'online',
+                status: calculatedStatus,
                 lastPing: row.timestamp,
+                timeSinceLastPing: timeSinceLastPing,
                 connectedSlaves: this.getConnectedSlaves(accountId),
                 totalSlaves: this.getConnectedSlaves(accountId).length,
               };
+
+              if (calculatedStatus === 'offline') {
+                console.log(
+                  `📴 Master account ${accountId} is offline - time diff: ${timeSinceLastPing?.toFixed(1)}s`
+                );
+              } else {
+                console.log(
+                  `✅ Master account ${accountId} is online - time diff: ${timeSinceLastPing?.toFixed(1)}s`
+                );
+              }
             } else if (accountType === 'slave') {
               const masterId = this.getSlaveMaster(accountId);
 
@@ -1057,18 +1080,30 @@ class CSVManager extends EventEmitter {
                   id: accountId,
                   name: accountId,
                   platform: platform,
-                  status: 'online',
+                  status: calculatedStatus,
+                  timeSinceLastPing: timeSinceLastPing,
                   masterOnline: true,
                 });
 
                 accounts.masterAccounts[masterId].totalSlaves++;
+
+                if (calculatedStatus === 'offline') {
+                  console.log(
+                    `📴 Slave account ${accountId} is offline - time diff: ${timeSinceLastPing?.toFixed(1)}s`
+                  );
+                } else {
+                  console.log(
+                    `✅ Slave account ${accountId} is online - time diff: ${timeSinceLastPing?.toFixed(1)}s`
+                  );
+                }
               } else {
                 // Es un slave no conectado
                 accounts.unconnectedSlaves.push({
                   id: accountId,
                   name: accountId,
                   platform: platform,
-                  status: 'online',
+                  status: calculatedStatus,
+                  timeSinceLastPing: timeSinceLastPing,
                 });
               }
             }

@@ -92,7 +92,7 @@ class CSVFrontendService extends SimpleEventEmitter {
     this.eventSource = eventSource;
   }
 
-  private processCSVData(data: any) {
+  private async processCSVData(data: any) {
     console.log('📥 Processing CSV data:', data);
 
     // Siempre emitir dataUpdated para mantener todo sincronizado
@@ -105,7 +105,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         this.emit('csvUpdated', data);
 
         // Forzar actualización inmediata
-        this.refreshCSVData();
+        await this.refreshCSVData();
         break;
 
       case 'initial_data':
@@ -126,7 +126,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         this.emit('accountDeleted', data);
 
         // Forzar actualización inmediata
-        this.refreshCSVData();
+        await this.refreshCSVData();
         break;
 
       case 'accountConverted':
@@ -156,28 +156,6 @@ class CSVFrontendService extends SimpleEventEmitter {
       default:
         console.log('ℹ️ Unhandled event:', data);
         break;
-    }
-  }
-
-  // Método para forzar actualización inmediata
-  private async refreshCSVData() {
-    try {
-      const [copierStatus, accounts] = await Promise.all([
-        this.getCopierStatus(),
-        this.getAllAccounts(),
-      ]);
-
-      this.emit('csvUpdated', { copierStatus, accounts });
-      this.emit('dataUpdated', { copierStatus, accounts });
-
-      // Notificar a todos los componentes
-      window.dispatchEvent(
-        new CustomEvent('csvDataUpdated', {
-          detail: { copierStatus, accounts },
-        })
-      );
-    } catch (error) {
-      console.error('Error refreshing CSV data:', error);
     }
   }
 
@@ -313,16 +291,36 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async refreshCSVData(): Promise<void> {
     try {
-      // Solo refrescar datos existentes, no hacer búsqueda completa
+      // Primero, obtener datos actualizados del servidor
       const response = await fetch(`http://localhost:${this.serverPort}/api/csv/refresh`, {
         method: 'POST',
         headers: {
           'x-api-key': this.getApiKey(),
         },
       });
+
       if (response.ok) {
         const data = await response.json();
+
+        // Procesar la respuesta del servidor
         this.processCSVData(data);
+
+        // Obtener datos actualizados de copier y accounts
+        const [copierStatus, accounts] = await Promise.all([
+          this.getCopierStatus(),
+          this.getAllAccounts(),
+        ]);
+
+        // Emitir eventos con los datos actualizados
+        this.emit('csvUpdated', { copierStatus, accounts });
+        this.emit('dataUpdated', { copierStatus, accounts });
+
+        // Notificar a todos los componentes
+        window.dispatchEvent(
+          new CustomEvent('csvDataUpdated', {
+            detail: { copierStatus, accounts },
+          })
+        );
       }
     } catch (error) {
       console.error('Error refreshing CSV data:', error);

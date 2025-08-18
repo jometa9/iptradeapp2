@@ -2,28 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import csvManager from '../services/csvManager.js';
-import {
-  getUserAccounts,
-  loadAccountsConfig,
-  saveAccountsConfig,
-  saveUserAccounts,
-} from './configManager.js';
-import {
-  createDisabledMasterConfig,
-  loadUserCopierStatus,
-  saveUserCopierStatus,
-} from './copierStatusController.js';
+import { getUserAccounts, loadAccountsConfig, saveUserAccounts } from './configManager.js';
+import { createDisabledMasterConfig, loadUserCopierStatus } from './copierStatusController.js';
 import {
   notifyAccountConverted,
   notifyAccountCreated,
   notifyTradingConfigCreated,
 } from './eventNotifier.js';
 import linkPlatformsController from './linkPlatformsController.js';
-import {
-  createDisabledSlaveConfig,
-  loadSlaveConfigs,
-  saveSlaveConfigs,
-} from './slaveConfigController.js';
+import { createDisabledSlaveConfig, loadSlaveConfigs } from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
 
 // Accounts management file
@@ -87,265 +74,61 @@ const PENDING_DELETION_TIMEOUT = 3600000; // 1 hour in milliseconds
 // Check and update account status based on activity
 const checkAccountActivity = () => {
   try {
-    const config = loadAccountsConfig();
+    // Get all accounts from CSV files
+    const allAccounts = csvManager.getAllActiveAccounts();
     let hasChanges = false;
     const now = new Date();
 
-    // Check all users' accounts
-    for (const [apiKey, userAccounts] of Object.entries(config.userAccounts)) {
-      // Skip if apiKey is undefined or null
-      if (!apiKey) {
-        console.warn('⚠️ Skipping user accounts with undefined apiKey');
-        continue;
-      }
+    // Process all accounts (pending, master, and slave)
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      let fileContent = readFileSync(filePath, 'utf8');
+      let fileModified = false;
 
-      let userHasChanges = false;
+      fileData.data.forEach(account => {
+        const accountId = account.account_id;
+        const accountType = account.account_type;
+        const lastActivity = new Date(account.timestamp);
+        const timeSinceActivity = now - lastActivity;
+        const currentStatus = account.current_status || account.status;
 
-      // Check master accounts for this user
-      for (const [accountId, account] of Object.entries(userAccounts.masterAccounts)) {
-        if (account.lastActivity) {
-          const lastActivity = new Date(account.lastActivity);
-          const timeSinceActivity = now - lastActivity;
+        // Check if account should be marked as offline
+        if (timeSinceActivity > ACTIVITY_TIMEOUT && currentStatus !== 'offline') {
+          console.log(
+            `📴 ${accountType} account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+          );
 
-          if (timeSinceActivity > ACTIVITY_TIMEOUT) {
-            if (account.status !== 'offline') {
-              account.status = 'offline';
-              userHasChanges = true;
-              console.log(
-                `📴 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
-              );
-
-              // Disable copy trading for offline master
-              const copierStatus = loadUserCopierStatus(apiKey);
-              if (copierStatus.masterAccounts[accountId] !== false) {
-                copierStatus.masterAccounts[accountId] = false;
-                saveUserCopierStatus(apiKey, copierStatus);
-                console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
-              }
-
-              // Disable copy trading for all connected slaves
-              const connectedSlaves = Object.entries(userAccounts.connections || {})
-                .filter(([, masterId]) => masterId === accountId)
-                .map(([slaveId]) => slaveId);
-
-              if (connectedSlaves.length > 0) {
-                const slaveConfigs = loadSlaveConfigs();
-                let slavesUpdated = false;
-
-                connectedSlaves.forEach(slaveId => {
-                  if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled === true) {
-                    slaveConfigs[slaveId].enabled = false;
-                    slavesUpdated = true;
-                    console.log(
-                      `🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`
-                    );
-                  }
-                });
-
-                if (slavesUpdated) {
-                  saveSlaveConfigs(slaveConfigs);
-                }
-                console.log(
-                  `📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`
-                );
-              }
-            }
-          } else {
-            if (account.status === 'offline') {
-              account.status = 'active';
-              userHasChanges = true;
-              console.log(
-                `📡 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
-              );
-            }
-          }
-        } else {
-          if (account.status !== 'offline') {
-            account.status = 'offline';
-            userHasChanges = true;
-            console.log(
-              `📴 Master account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
-            );
-
-            // Disable copy trading for offline master
-            const copierStatus = loadUserCopierStatus(apiKey);
-            if (copierStatus.masterAccounts[accountId] !== false) {
-              copierStatus.masterAccounts[accountId] = false;
-              saveUserCopierStatus(apiKey, copierStatus);
-              console.log(`🚫 Copy trading disabled for offline master ${accountId}`);
-            }
-
-            // Disable copy trading for all connected slaves
-            const connectedSlaves = Object.entries(userAccounts.connections || {})
-              .filter(([, masterId]) => masterId === accountId)
-              .map(([slaveId]) => slaveId);
-
-            if (connectedSlaves.length > 0) {
-              const slaveConfigs = loadSlaveConfigs();
-              let slavesUpdated = false;
-
-              connectedSlaves.forEach(slaveId => {
-                if (slaveConfigs[slaveId] && slaveConfigs[slaveId].enabled === false) {
-                  slaveConfigs[slaveId].enabled = false;
-                  slavesUpdated = true;
-                  console.log(
-                    `🚫 Copy trading disabled for connected slave ${slaveId} (master ${accountId} offline)`
-                  );
-                }
-              });
-
-              if (slavesUpdated) {
-                saveSlaveConfigs(slaveConfigs);
-              }
-              console.log(
-                `📴 Disabled ${connectedSlaves.length} connected slave(s) for offline master ${accountId}`
-              );
-            }
-          }
+          // Update status in CSV file
+          const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
+          fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+          fileModified = true;
+          hasChanges = true;
         }
-      }
+        // Check if account should be marked as online
+        else if (timeSinceActivity <= ACTIVITY_TIMEOUT && currentStatus === 'offline') {
+          console.log(`📡 ${accountType} account ${accountId} back online`);
 
-      // Check slave accounts for this user
-      for (const [accountId, account] of Object.entries(userAccounts.slaveAccounts)) {
-        if (account.lastActivity) {
-          const lastActivity = new Date(account.lastActivity);
-          const timeSinceActivity = now - lastActivity;
-
-          if (timeSinceActivity > ACTIVITY_TIMEOUT) {
-            if (account.status !== 'offline') {
-              account.status = 'offline';
-              userHasChanges = true;
-              console.log(
-                `📴 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
-              );
-
-              // Disable copy trading for offline slave
-              const slaveConfigs = loadSlaveConfigs();
-              if (
-                slaveConfigs[accountId] &&
-                slaveConfigs[accountId].config &&
-                slaveConfigs[accountId].config.enabled === true
-              ) {
-                slaveConfigs[accountId].config.enabled = false;
-                slaveConfigs[accountId].lastUpdated = new Date().toISOString();
-                saveSlaveConfigs(slaveConfigs);
-                console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
-              }
-            }
-          } else {
-            if (account.status === 'offline') {
-              account.status = 'active';
-              userHasChanges = true;
-              console.log(
-                `📡 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
-              );
-            }
-          }
-        } else {
-          if (account.status !== 'offline') {
-            account.status = 'offline';
-            userHasChanges = true;
-            console.log(
-              `📴 Slave account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
-            );
-
-            // Disable copy trading for offline slave
-            const slaveConfigs = loadSlaveConfigs();
-            if (
-              slaveConfigs[accountId] &&
-              slaveConfigs[accountId].config &&
-              slaveConfigs[accountId].config.enabled === true
-            ) {
-              slaveConfigs[accountId].config.enabled = false;
-              slaveConfigs[accountId].lastUpdated = new Date().toISOString();
-              saveSlaveConfigs(slaveConfigs);
-              console.log(`🚫 Copy trading disabled for offline slave ${accountId}`);
-            }
-          }
+          // Update status in CSV file
+          const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
+          fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+          fileModified = true;
+          hasChanges = true;
         }
-      }
+      });
 
-      // Check pending accounts for this user
-      const accountsToDelete = [];
-
-      for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
-        if (account.lastActivity) {
-          const lastActivity = new Date(account.lastActivity);
-          const timeSinceActivity = now - lastActivity;
-
-          // Check if account should be deleted (1 hour offline)
-          if (timeSinceActivity > PENDING_DELETION_TIMEOUT) {
-            accountsToDelete.push(accountId);
-            console.log(
-              `🗑️ Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked for deletion (${Math.round(timeSinceActivity / 1000 / 60)} minutes inactive)`
-            );
-          } else if (timeSinceActivity > ACTIVITY_TIMEOUT) {
-            if (account.status !== 'offline') {
-              account.status = 'offline';
-              userHasChanges = true;
-              console.log(
-                `📴 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
-              );
-            }
-          } else {
-            if (account.status === 'offline') {
-              account.status = 'pending';
-              userHasChanges = true;
-              console.log(
-                `📡 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) back online`
-              );
-            }
-          }
-        } else {
-          if (account.status !== 'offline') {
-            account.status = 'offline';
-            userHasChanges = true;
-            console.log(
-              `📴 Pending account ${accountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) has no activity, marked as offline`
-            );
-          }
-        }
-      }
-
-      // Delete accounts that have been offline for more than 1 hour
-      for (const accountId of accountsToDelete) {
-        delete userAccounts.pendingAccounts[accountId];
-        userHasChanges = true;
-        console.log(`🗑️ Deleted pending account ${accountId} after 1 hour of inactivity`);
-      }
-
-      if (userHasChanges) {
-        hasChanges = true;
+      // Save changes to file if modified
+      if (fileModified) {
+        writeFileSync(filePath, fileContent, 'utf8');
+        console.log(`💾 Updated status in file: ${filePath}`);
       }
     }
 
-    // Save changes if any were made
+    // Refresh CSV data if changes were made
     if (hasChanges) {
-      saveAccountsConfig(config);
+      csvManager.refreshAllFileData();
 
-      // Emit event to notify frontend of pending account changes
-      console.log('📢 Emitting pending accounts update due to activity changes');
-
-      // Collect all pending accounts from all users for the update
-      const allPendingAccounts = [];
-      for (const [apiKey, userAccounts] of Object.entries(config.users || {})) {
-        if (userAccounts.pendingAccounts) {
-          for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
-            allPendingAccounts.push({
-              account_id: accountId,
-              platform: account.platform || 'Unknown',
-              timestamp: account.lastActivity || account.createdAt || new Date().toISOString(),
-              status: account.status || 'offline',
-              current_status: account.status || 'offline',
-              filePath: 'registered_accounts.json',
-            });
-          }
-        }
-      }
-
-      // Emit the update event
-      csvManager.emit('pendingAccountsUpdate', {
-        accounts: allPendingAccounts,
+      // Emit event to notify frontend of account changes
+      csvManager.emit('csvUpdated', {
+        type: 'statusUpdate',
         timestamp: new Date().toISOString(),
       });
     }

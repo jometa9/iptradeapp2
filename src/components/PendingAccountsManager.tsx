@@ -496,7 +496,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         newSet.delete(accountId);
         return newSet;
       });
-    }, 3000);
+    }, 5000);
 
     // Remover de conversión después de 30 segundos
     setTimeout(() => {
