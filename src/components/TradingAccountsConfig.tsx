@@ -36,6 +36,7 @@ import {
   shouldShowSubscriptionLimitsCard,
   validateLotSize,
 } from '../lib/subscriptionUtils';
+import csvFrontendService from '../services/csvFrontendService';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -112,6 +113,7 @@ export function TradingAccountsConfig() {
   const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
   const [recentlyDeployedSlaves, setRecentlyDeployedSlaves] = useState<Set<string>>(new Set());
   const [slaveConfigs, setSlaveConfigs] = useState<Record<string, SlaveConfig>>({});
+  const [hiddenAccounts, setHiddenAccounts] = useState<Set<string>>(new Set());
 
   // Usar el hook unificado SSE
   const {
@@ -145,43 +147,50 @@ export function TradingAccountsConfig() {
 
     const allAccounts: TradingAccount[] = [];
 
+    // Filtrar cuentas ocultas
+    const shouldShowAccount = (accountId: string) => !hiddenAccounts.has(accountId);
+
     // Agregar master accounts
     Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]: [string, any]) => {
-      allAccounts.push({
-        id,
-        accountNumber: master.accountNumber || id,
-        platform: master.platform || 'Unknown',
-        server: master.server || '',
-        password: master.password || '',
-        accountType: 'master',
-        status: master.status || 'offline',
-        lotCoefficient: master.lotCoefficient || 1,
-        forceLot: master.forceLot || 0,
-        reverseTrade: master.reverseTrade || false,
-        connectedSlaves: master.connectedSlaves || [],
-        totalSlaves: master.totalSlaves || 0,
-        masterOnline: master.masterOnline || false,
-      });
+      if (shouldShowAccount(id)) {
+        allAccounts.push({
+          id,
+          accountNumber: master.accountNumber || id,
+          platform: master.platform || 'Unknown',
+          server: master.server || '',
+          password: master.password || '',
+          accountType: 'master',
+          status: master.status || 'offline',
+          lotCoefficient: master.lotCoefficient || 1,
+          forceLot: master.forceLot || 0,
+          reverseTrade: master.reverseTrade || false,
+          connectedSlaves: master.connectedSlaves || [],
+          totalSlaves: master.totalSlaves || 0,
+          masterOnline: master.masterOnline || false,
+        });
+      }
     });
 
     // Agregar unconnected slaves
     (csvAccounts.unconnectedSlaves || []).forEach((slave: any) => {
-      allAccounts.push({
-        id: slave.id,
-        accountNumber: slave.accountNumber || slave.id,
-        platform: slave.platform || 'Unknown',
-        server: slave.server || '',
-        password: slave.password || '',
-        accountType: 'slave',
-        status: slave.status || 'offline',
-        lotCoefficient: slave.lotCoefficient || 1,
-        forceLot: slave.forceLot || 0,
-        reverseTrade: slave.reverseTrade || false,
-      });
+      if (shouldShowAccount(slave.id)) {
+        allAccounts.push({
+          id: slave.id,
+          accountNumber: slave.accountNumber || slave.id,
+          platform: slave.platform || 'Unknown',
+          server: slave.server || '',
+          password: slave.password || '',
+          accountType: 'slave',
+          status: slave.status || 'offline',
+          lotCoefficient: slave.lotCoefficient || 1,
+          forceLot: slave.forceLot || 0,
+          reverseTrade: slave.reverseTrade || false,
+        });
+      }
     });
 
     return allAccounts;
-  }, [csvAccounts]);
+  }, [csvAccounts, hiddenAccounts]);
 
   // Connectivity stats (simulado desde datos CSV)
   const connectivityStats = React.useMemo(() => {
@@ -583,59 +592,79 @@ export function TradingAccountsConfig() {
     }, 100);
   };
 
-  const handleDeleteAccount = (id: string) => {
+  const handleDeleteAccount = async (id: string) => {
     setDeleteConfirmId(id);
   };
 
+  const { toast } = useToast();
+
+  // Función para ocultar una cuenta temporalmente
+  const hideAccountTemporarily = useCallback((accountId: string) => {
+    setHiddenAccounts(prev => {
+      const newSet = new Set(prev);
+      newSet.add(accountId);
+      return newSet;
+    });
+
+    // Después de 10 segundos, si la cuenta aún existe, la mostramos de nuevo
+    setTimeout(() => {
+      setHiddenAccounts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(accountId);
+        return newSet;
+      });
+    }, 10000);
+  }, []);
+
   const confirmDeleteAccount = async () => {
-    if (deleteConfirmId) {
-      try {
-        setIsSubmitting(true);
-        setIsDeletingAccount(deleteConfirmId);
+    if (!deleteConfirmId) return;
 
-        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+    try {
+      setIsSubmitting(true);
+      setIsDeletingAccount(deleteConfirmId);
 
-        // Find the account to determine if it's master or slave
-        const accountToDelete = accounts.find(acc => acc.id === deleteConfirmId);
-        if (!accountToDelete) {
-          throw new Error('Account not found');
-        }
+      // Ocultar la cuenta inmediatamente
+      hideAccountTemporarily(deleteConfirmId);
 
-        const endpoint =
-          accountToDelete.accountType === 'master'
-            ? `http://localhost:${serverPort}/api/accounts/master/${deleteConfirmId}`
-            : `http://localhost:${serverPort}/api/accounts/slave/${deleteConfirmId}`;
-
-        const response = await fetch(endpoint, {
-          method: 'DELETE',
-          headers: {
-            'x-api-key': secretKey || '',
-          },
+      const success = await csvFrontendService.convertToPending(deleteConfirmId);
+      if (success) {
+        toast({
+          title: 'Account deleted',
+          description: `Account ${deleteConfirmId} has been removed.`,
+          variant: 'default',
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to delete trading account');
-        }
-
-        await fetchAccounts();
-        await fetchPendingAccountsCount();
-
-        toastUtil({
-          title: 'Account Deleted',
-          description: 'The account has been removed successfully.',
-        });
-      } catch (error) {
-        console.error('Error deleting account:', error);
-        toastUtil({
+        setDeleteConfirmId(null);
+        setIsDeletingAccount(null);
+      } else {
+        toast({
           title: 'Error',
-          description: 'Failed to delete trading account. Please try again.',
+          description: `Failed to delete account ${deleteConfirmId}.`,
           variant: 'destructive',
         });
-      } finally {
-        setIsSubmitting(false);
-        setIsDeletingAccount(null);
-        setDeleteConfirmId(null);
+        // Si falla, mostrar la cuenta de nuevo
+        setHiddenAccounts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(deleteConfirmId);
+          return newSet;
+        });
       }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      toast({
+        title: 'Error',
+        description: 'An error occurred while deleting the account.',
+        variant: 'destructive',
+      });
+      // Si hay error, mostrar la cuenta de nuevo
+      setHiddenAccounts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(deleteConfirmId);
+        return newSet;
+      });
+    } finally {
+      setIsSubmitting(false);
+      setDeleteConfirmId(null);
+      setIsDeletingAccount(null);
     }
   };
 
@@ -1810,19 +1839,12 @@ export function TradingAccountsConfig() {
           {/* Accounts Table */}
           {accounts.length === 0 ? (
             <div className="text-center py-10">
-              {isLoading ? (
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-500"></div>
-                  <p className="text-muted-foreground">Loading your trading accounts...</p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-muted-foreground">No trading accounts configured yet.</p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Accounts must be added through the pending accounts section first
-                  </p>
-                </div>
-              )}
+              <div>
+                <p className="text-muted-foreground">No trading accounts configured yet.</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Accounts must be added through the pending accounts section first
+                </p>
+              </div>
             </div>
           ) : (
             <div className="mt-4 border rounded-xl border-gray-200 shadow-sm relative overflow-x-auto">

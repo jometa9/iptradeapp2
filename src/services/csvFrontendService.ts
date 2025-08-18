@@ -159,6 +159,32 @@ class CSVFrontendService extends SimpleEventEmitter {
     }
   }
 
+  // Convertir una cuenta a pending
+  public async convertToPending(accountId: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/csv/convert-to-pending/${accountId}`,
+        {
+          method: 'POST',
+          headers: {
+            'x-api-key': this.getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Procesar la respuesta y emitir eventos
+        this.processCSVData(data);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error converting account to pending:', error);
+      return false;
+    }
+  }
+
   // Métodos públicos para el frontend
   public async getCopierStatus(): Promise<CopierStatus> {
     try {

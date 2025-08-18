@@ -1229,6 +1229,57 @@ class CSVManager extends EventEmitter {
     return online;
   }
 
+  // Convertir una cuenta configurada a pending
+  convertToPending(accountId) {
+    try {
+      // Buscar el archivo CSV correcto para esta cuenta
+      let targetFile = null;
+
+      // Buscar en todos los archivos CSV monitoreados
+      this.csvFiles.forEach((fileData, filePath) => {
+        fileData.data.forEach(row => {
+          if (row.account_id === accountId) {
+            targetFile = filePath;
+          }
+        });
+      });
+
+      if (!targetFile) {
+        console.error(`❌ No CSV file found for account ${accountId}`);
+        return false;
+      }
+
+      // Leer el archivo completo
+      const content = readFileSync(targetFile, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim());
+
+      // Solo reemplazar MASTER/SLAVE por PENDING, sin agregar nada más
+      const updatedLines = lines.map(line => {
+        // Reemplazar MASTER o SLAVE por PENDING, manteniendo el resto igual
+        return line.replace(/MASTER|SLAVE/g, 'PENDING');
+      });
+
+      // Escribir archivo actualizado
+      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      console.log(`✅ Account ${accountId} converted to pending in ${targetFile}`);
+
+      // Refrescar datos en memoria
+      this.refreshFileData(targetFile);
+
+      // Emitir evento de conversión
+      this.emit('accountConverted', {
+        accountId,
+        newType: 'pending',
+        timestamp: new Date().toISOString(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error(`Error converting account ${accountId} to pending:`, error);
+      return false;
+    }
+  }
+
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
     try {

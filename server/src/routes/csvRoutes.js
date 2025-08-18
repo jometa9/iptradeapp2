@@ -826,4 +826,53 @@ router.post('/csv/connect-platforms', requireValidSubscription, connectPlatforms
  */
 router.post('/csv/register-as-pending', requireValidSubscription, registerCSVAsPending);
 
+/**
+ * @swagger
+ * /csv/convert-to-pending/{accountId}:
+ *   post:
+ *     summary: Convert a configured account back to pending status
+ *     tags: [CSV]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Account converted to pending successfully
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Error converting account
+ */
+router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const csvManager = (await import('../services/csvManager.js')).default;
+
+    const success = csvManager.convertToPending(accountId);
+    if (success) {
+      const allAccounts = csvManager.getAllActiveAccounts();
+      res.json({
+        success: true,
+        message: `Account ${accountId} converted to pending successfully`,
+        accounts: allAccounts,
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: `Account ${accountId} not found or could not be converted`,
+      });
+    }
+  } catch (error) {
+    console.error(`Error converting account ${req.params.accountId} to pending:`, error);
+    res.status(500).json({
+      success: false,
+      message: 'Error converting account to pending',
+      error: error.message,
+    });
+  }
+});
+
 export default router;
