@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { AlertTriangle, Power, PowerOff, RefreshCw, Shield, ShieldOff } from 'lucide-react';
 
@@ -14,8 +14,18 @@ import { toast } from './ui/use-toast';
 
 export const CopierStatusControls: React.FC = () => {
   const { updateGlobalStatus, copierStatus } = useCSVData();
+  const [localGlobalStatus, setLocalGlobalStatus] = useState(copierStatus?.globalStatus || false);
+  const [hasLocalOverride, setHasLocalOverride] = useState(false);
+
+  useEffect(() => {
+    if (!hasLocalOverride && copierStatus?.globalStatus !== undefined) {
+      setLocalGlobalStatus(copierStatus.globalStatus);
+    }
+  }, [copierStatus?.globalStatus, hasLocalOverride]);
 
   const toggleGlobalStatus = (enabled: boolean) => {
+    setLocalGlobalStatus(enabled);
+    setHasLocalOverride(true);
     updateGlobalStatus(enabled);
   };
 
@@ -214,10 +224,10 @@ export const CopierStatusControls: React.FC = () => {
               </div>
               <div className="flex items-center gap-3">
                 {getStatusBadge(localGlobalStatus)}
-                <Switch onCheckedChange={toggleGlobalStatus} />
+                <Switch checked={localGlobalStatus} onCheckedChange={toggleGlobalStatus} />
               </div>
             </div>
-            {! && (
+            {!localGlobalStatus && (
               <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                 <AlertTriangle className="w-4 h-4 inline mr-1" />
                 Global copier is OFF - No signals will be copied regardless of individual settings

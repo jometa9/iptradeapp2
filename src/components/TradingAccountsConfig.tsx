@@ -1291,7 +1291,7 @@ export function TradingAccountsConfig() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {!showGlobalConfirm && getStatusBadge(copierStatus?.globalStatus || false)}
+                {!showGlobalConfirm && getStatusBadge(localGlobalStatus)}
                 <Switch
                   checked={localGlobalStatus}
                   onCheckedChange={handleToggleGlobalStatus}

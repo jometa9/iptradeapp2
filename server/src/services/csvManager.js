@@ -1021,14 +1021,6 @@ class CSVManager extends EventEmitter {
                 config: row.config || {},
                 filePath: filePath, // Para debug
               });
-
-              console.log(
-                `${status === 'online' ? '✅' : '📴'} Pending account ${accountId} is ${status} - time diff: ${timeSinceLastPing?.toFixed(1)}s`
-              );
-            } else {
-              console.log(
-                `⏰ Ignoring pending account ${accountId} - too old (${(timeSinceLastPing / 60).toFixed(1)} minutes)`
-              );
             }
           }
 
@@ -1043,10 +1035,6 @@ class CSVManager extends EventEmitter {
               connectedSlaves: this.getConnectedSlaves(accountId),
               totalSlaves: this.getConnectedSlaves(accountId).length,
             };
-
-            console.log(
-              `${status === 'online' ? '✅' : '📴'} Master account ${accountId} is ${status} - time diff: ${timeSinceLastPing?.toFixed(1)}s`
-            );
           } else if (accountType === 'slave') {
             const masterId = this.getSlaveMaster(accountId);
 
@@ -1073,10 +1061,6 @@ class CSVManager extends EventEmitter {
               });
 
               accounts.masterAccounts[masterId].totalSlaves++;
-
-              console.log(
-                `${status === 'online' ? '✅' : '📴'} Slave account ${accountId} is ${status} - time diff: ${timeSinceLastPing?.toFixed(1)}s`
-              );
             } else {
               // Es un slave no conectado
               accounts.unconnectedSlaves.push({
@@ -1458,51 +1442,27 @@ class CSVManager extends EventEmitter {
                 updatedLines.push(cleanLine);
               } else if (cleanLine.includes('[CONFIG]')) {
                 // Actualizar la línea CONFIG según el tipo de cuenta
-                if (currentAccountType === 'MASTER' || currentAccountType === 'SLAVE') {
-                  // Para ambos tipos, forzar DISABLED si global está off
-                  const matches = cleanLine.match(/\[([^\]]+)\]/g);
-                  if (matches && matches.length >= 4) {
-                    const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
-
-                    if (currentAccountType === 'MASTER') {
-                      // Para masters, siempre usar el estado global
-                      updatedLines.push(
-                        `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
-                      );
-                    } else {
-                      // Para slaves, usar valores por defecto si no existen
-                      let lotMultiplier = '1.0';
-                      let forceLot = 'NULL';
-                      let reverseTrade = 'FALSE';
-                      let maxLot = 'NULL';
-                      let minLot = 'NULL';
-                      let masterId = 'NULL';
-
-                      // Si hay valores existentes, usarlos
-                      if (matches.length >= 4) {
-                        lotMultiplier = values[3] || lotMultiplier;
-                        forceLot = values[4] || forceLot;
-                        reverseTrade = values[5] || reverseTrade;
-                        maxLot = values[6] || maxLot;
-                        minLot = values[7] || minLot;
-                        masterId = values[8] || masterId;
-                      }
-
-                      // Siempre usar el estado global
-                      updatedLines.push(
-                        `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${maxLot}] [${minLot}] [${masterId}]`
-                      );
-                    }
-                    fileModified = true;
+                if (
+                  currentAccountType === 'MASTER' ||
+                  currentAccountType === 'SLAVE' ||
+                  currentAccountType === 'PENDING'
+                ) {
+                  // Siempre reemplazar la línea CONFIG con el estado global
+                  if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
+                    // Para masters y pending, siempre usar el estado global
+                    updatedLines.push(
+                      `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                    );
                   } else {
-                    updatedLines.push(cleanLine);
+                    // Para slaves, usar valores por defecto
+                    updatedLines.push(
+                      `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]`
+                    );
                   }
+                  fileModified = true;
                 } else {
                   updatedLines.push(cleanLine);
                 }
-              } else if (cleanLine.includes('[CONFIG]')) {
-                hasConfigLine = true;
-                updatedLines.push(cleanLine);
               } else {
                 updatedLines.push(cleanLine);
               }
@@ -1511,9 +1471,9 @@ class CSVManager extends EventEmitter {
             // Si no hay línea CONFIG, agregarla
             if (!hasConfigLine && currentAccountType) {
               fileModified = true;
-              if (currentAccountType === 'MASTER') {
+              if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
                 updatedLines.push(
-                  `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                  `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
                 );
               } else if (currentAccountType === 'SLAVE') {
                 updatedLines.push(
