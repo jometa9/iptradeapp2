@@ -340,6 +340,13 @@ export function TradingAccountsConfig() {
     }
   }, [error]);
 
+  const [localGlobalStatus, setLocalGlobalStatus] = useState(copierStatus?.globalStatus || false);
+
+  const handleToggleGlobalStatus = (enabled: boolean) => {
+    setLocalGlobalStatus(enabled); // Cambia el estado local inmediatamente
+    toggleGlobalStatus(enabled); // Envía la actualización al servidor
+  };
+
   // Toggle global copier status
   const toggleGlobalStatus = async (enabled: boolean) => {
     await performGlobalToggle(enabled);
@@ -1285,10 +1292,9 @@ export function TradingAccountsConfig() {
               </div>
               <div className="flex items-center gap-3">
                 {!showGlobalConfirm && getStatusBadge(copierStatus?.globalStatus || false)}
-
                 <Switch
-                  checked={copierStatus?.globalStatus || false}
-                  onCheckedChange={toggleGlobalStatus}
+                  checked={localGlobalStatus}
+                  onCheckedChange={handleToggleGlobalStatus}
                   disabled={updatingCopier === 'global'}
                 />
               </div>

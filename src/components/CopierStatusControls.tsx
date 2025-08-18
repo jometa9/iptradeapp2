@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { AlertTriangle, Power, PowerOff, RefreshCw, Shield, ShieldOff } from 'lucide-react';
 
@@ -13,57 +13,10 @@ import { toast } from './ui/use-toast';
 // Types moved to useCSVData hook
 
 export const CopierStatusControls: React.FC = () => {
-  const [updating, setUpdating] = useState<string | null>(null);
-  // secretKey not used in this component
+  const { updateGlobalStatus, copierStatus } = useCSVData();
 
-  // Usar el hook unificado que maneja todo con SSE
-  const {
-    copierStatus,
-    accounts,
-    slaveConfigs,
-    loading,
-    error,
-    updateGlobalStatus,
-    updateMasterStatus,
-    updateSlaveConfig,
-    emergencyShutdown,
-    resetAllToOn,
-    scanCSVFiles,
-    refresh,
-  } = useCSVData();
-
-  useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Error',
-        description: error,
-        variant: 'destructive',
-      });
-    }
-  }, [error]);
-
-  // Toggle global copier status using SSE
-  const toggleGlobalStatus = async (enabled: boolean) => {
-    try {
-      console.log('🔄 Toggling global copier status to:', enabled);
-      setUpdating('global');
-      await updateGlobalStatus(enabled);
-      console.log('✅ Global copier status updated successfully');
-      toast({
-        title: 'Success',
-        description: `Global copier ${enabled ? 'enabled' : 'disabled'}`,
-      });
-    } catch (error) {
-      console.error('❌ Error updating global status:', error);
-      toast({
-        title: 'Error',
-        description:
-          error instanceof Error ? error.message : 'Failed to update global copier status',
-        variant: 'destructive',
-      });
-    } finally {
-      setUpdating(null);
-    }
+  const toggleGlobalStatus = (enabled: boolean) => {
+    updateGlobalStatus(enabled);
   };
 
   // Toggle master account status using SSE
@@ -260,15 +213,11 @@ export const CopierStatusControls: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {getStatusBadge(copierStatus?.globalStatus || false)}
-                <Switch
-                  checked={copierStatus?.globalStatus || false}
-                  onCheckedChange={toggleGlobalStatus}
-                  disabled={updating === 'global'}
-                />
+                {getStatusBadge(localGlobalStatus)}
+                <Switch onCheckedChange={toggleGlobalStatus} />
               </div>
             </div>
-            {!copierStatus?.globalStatus && (
+            {! && (
               <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                 <AlertTriangle className="w-4 h-4 inline mr-1" />
                 Global copier is OFF - No signals will be copied regardless of individual settings

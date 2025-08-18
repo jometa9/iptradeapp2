@@ -56,7 +56,6 @@ export const useCSVData = (): UseCSVDataReturn => {
   const updateGlobalStatus = async (enabled: boolean) => {
     try {
       await csvFrontendService.updateGlobalStatus(enabled);
-      await loadData(); // Recargar datos
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error updating global status');
     }
