@@ -2,14 +2,6 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 
 import csvManager from '../services/csvManager.js';
-import { getUserAccounts, saveUserAccounts } from './configManager.js';
-import { createDisabledMasterConfig } from './copierStatusController.js';
-import { notifyAccountCreated, notifyTradingConfigCreated } from './eventNotifier.js';
-import {
-  createDisabledSlaveConfig,
-  createSlaveConfigWithSettings,
-} from './slaveConfigController.js';
-import { createDefaultTradingConfig } from './tradingConfigController.js';
 
 // Generate CSV2 format content for account conversion (WITH SPACES to match bot format)
 const generateCSV2Content = (accountId, accountType, platform, timestamp, slaveConfig = null) => {
@@ -226,87 +218,6 @@ export const updateCSVAccountType = async (req, res) => {
     }
 
     if (filesUpdated > 0) {
-      // Register the account in the configured accounts system
-      const userAccounts = getUserAccounts(apiKey);
-
-      if (newType === 'master') {
-        // Check if account already exists as master or slave
-        if (userAccounts.masterAccounts[accountId] || userAccounts.slaveAccounts[accountId]) {
-          console.log(
-            `⚠️ Account ${accountId} already exists as configured account, skipping registration`
-          );
-        } else {
-          // Register as master account
-          userAccounts.masterAccounts[accountId] = {
-            id: accountId,
-            name: accountId,
-            description: `Converted from pending CSV account`,
-            broker: 'Unknown',
-            platform: platform,
-            registeredAt: new Date().toISOString(),
-            lastActivity: new Date().toISOString(),
-            status: 'active',
-            apiKey: apiKey,
-            convertedFrom: 'pending_csv',
-          };
-
-          if (saveUserAccounts(apiKey, userAccounts)) {
-            // Create disabled master configuration for copy control
-            createDisabledMasterConfig(accountId, apiKey);
-            // Create default trading configuration
-            createDefaultTradingConfig(accountId);
-
-            // Notify about account creation
-            notifyAccountCreated(accountId, 'master', apiKey);
-            notifyTradingConfigCreated(accountId, {
-              lotMultiplier: 1.0,
-              forceLot: null,
-              reverseTrading: false,
-            });
-
-            console.log(
-              `✅ Successfully registered account ${accountId} as master in configured accounts system`
-            );
-          }
-        }
-      } else if (newType === 'slave') {
-        // Check if account already exists as master or slave
-        if (userAccounts.masterAccounts[accountId] || userAccounts.slaveAccounts[accountId]) {
-          console.log(
-            `⚠️ Account ${accountId} already exists as configured account, skipping registration`
-          );
-        } else {
-          // Register as slave account
-          userAccounts.slaveAccounts[accountId] = {
-            id: accountId,
-            name: accountId,
-            description: `Converted from pending CSV account`,
-            broker: 'Unknown',
-            platform: platform,
-            registeredAt: new Date().toISOString(),
-            lastActivity: new Date().toISOString(),
-            status: 'active',
-            apiKey: apiKey,
-            convertedFrom: 'pending_csv',
-          };
-
-          if (saveUserAccounts(apiKey, userAccounts)) {
-            // Create slave configuration with provided settings
-            if (slaveConfig) {
-              console.log(`🔧 Creating slave config with settings:`, slaveConfig);
-              createSlaveConfigWithSettings(accountId, slaveConfig);
-            } else {
-              // Create disabled slave configuration as fallback
-              createDisabledSlaveConfig(accountId);
-            }
-
-            console.log(
-              `✅ Successfully registered account ${accountId} as slave in configured accounts system`
-            );
-          }
-        }
-      }
-
       // Refresh CSV data from existing files (no new search)
       csvManager.refreshAllFileData();
 
@@ -315,6 +226,7 @@ export const updateCSVAccountType = async (req, res) => {
         accountId: accountId,
         newType: newType,
         platform: platform,
+        status: 'online', // La cuenta está online cuando se convierte
         apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
         timestamp: new Date().toISOString(),
       });

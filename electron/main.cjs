@@ -371,8 +371,8 @@ function createWindow() {
   const windowConfig = {
     width: 1000,
     minWidth: 1000,
-    height: 750,
-    minHeight: 750,
+    height: 800,
+    minHeight: 800,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
     title: 'IPTRADE',
     webPreferences: {

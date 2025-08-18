@@ -93,35 +93,91 @@ class CSVFrontendService extends SimpleEventEmitter {
   }
 
   private processCSVData(data: any) {
+    console.log('📥 Processing CSV data:', data);
+
+    // Siempre emitir dataUpdated para mantener todo sincronizado
+    this.emit('dataUpdated', data);
+
     switch (data.type) {
       case 'csv_updated':
         // Archivo CSV actualizado
+        console.log('📄 CSV file updated:', data);
         this.emit('csvUpdated', data);
+
+        // Forzar actualización inmediata
+        this.refreshCSVData();
         break;
 
       case 'initial_data':
-        // Datos iniciales
+        console.log('🔰 Initial data received:', data);
         this.emit('initialData', data);
         break;
 
       case 'heartbeat':
-        // Heartbeat para mantener conexión
+        // Solo log si hay cambios importantes
+        if (data.changes) {
+          console.log('💓 Heartbeat with changes:', data.changes);
+        }
         this.emit('heartbeat', data);
         break;
 
       case 'accountDeleted':
-        // Cuenta eliminada
+        console.log('🗑️ Account deleted:', data);
         this.emit('accountDeleted', data);
+
+        // Forzar actualización inmediata
+        this.refreshCSVData();
         break;
 
       case 'accountConverted':
-        // Cuenta convertida
+        console.log('🔄 Account converted:', data);
         this.emit('accountConverted', data);
+
+        // Forzar actualización inmediata de CSV y estado
+        this.refreshCSVData();
+
+        // Notificar a todos los componentes
+        window.dispatchEvent(
+          new CustomEvent('accountConverted', {
+            detail: {
+              accountId: data.accountId,
+              newType: data.newType,
+              platform: data.platform,
+              status: data.status || 'online',
+              timestamp: new Date().toISOString(),
+            },
+          })
+        );
+
+        // También emitir un evento general de actualización
+        window.dispatchEvent(new CustomEvent('csvDataUpdated'));
         break;
 
       default:
-        // Otros tipos de datos
-        this.emit('dataUpdated', data);
+        console.log('ℹ️ Unhandled event:', data);
+        break;
+    }
+  }
+
+  // Método para forzar actualización inmediata
+  private async refreshCSVData() {
+    try {
+      const [copierStatus, accounts] = await Promise.all([
+        this.getCopierStatus(),
+        this.getAllAccounts(),
+      ]);
+
+      this.emit('csvUpdated', { copierStatus, accounts });
+      this.emit('dataUpdated', { copierStatus, accounts });
+
+      // Notificar a todos los componentes
+      window.dispatchEvent(
+        new CustomEvent('csvDataUpdated', {
+          detail: { copierStatus, accounts },
+        })
+      );
+    } catch (error) {
+      console.error('Error refreshing CSV data:', error);
     }
   }
 

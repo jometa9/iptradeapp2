@@ -121,7 +121,23 @@ export function TradingAccountsConfig() {
     error,
     updateMasterStatus,
     updateSlaveConfig,
+    refresh: refreshCSVData,
   } = useCSVData();
+
+  // Escuchar eventos de conversión de cuentas
+  useEffect(() => {
+    const handleAccountConverted = () => {
+      console.log('🔄 Account converted, refreshing trading config...');
+      refreshCSVData();
+    };
+
+    // Suscribirse a eventos
+    window.addEventListener('accountConverted', handleAccountConverted);
+
+    return () => {
+      window.removeEventListener('accountConverted', handleAccountConverted);
+    };
+  }, [refreshCSVData]);
 
   // Convertir datos CSV a formato esperado
   const accounts = React.useMemo(() => {

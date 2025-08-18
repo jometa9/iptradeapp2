@@ -119,6 +119,23 @@ export const useCSVData = (): UseCSVDataReturn => {
     }
   }, [secretKey]);
 
+  // Polling fallback para asegurar actualizaciones rápidas
+  useEffect(() => {
+    if (!secretKey) return;
+
+    console.log('⏰ Setting up polling fallback for CSV data (every 1 second)');
+
+    const pollingInterval = setInterval(() => {
+      console.log('⏰ [POLLING] Checking for CSV updates...');
+      loadData();
+    }, 1000); // Cada 1 segundo
+
+    return () => {
+      console.log('⏰ Clearing CSV polling fallback');
+      clearInterval(pollingInterval);
+    };
+  }, [secretKey, loadData]);
+
   useEffect(() => {
     // Configurar listeners para actualizaciones en tiempo real
     const handleInitialData = (data: any) => {
@@ -144,46 +161,52 @@ export const useCSVData = (): UseCSVDataReturn => {
     };
 
     const handleHeartbeat = (data: any) => {
-      console.log('Heartbeat received:', data);
-      // La conexión está viva
+      if (data.changes) {
+        console.log('Heartbeat with changes:', data.changes);
+        loadData(); // Recargar datos si hay cambios
+      }
     };
 
     const handleAccountDeleted = (data: any) => {
-      console.log('Account deleted event received:', data);
-      // Forzar actualización de datos cuando se elimina una cuenta
-      if (data.type === 'accountDeleted') {
-        console.log(
-          `🔄 Account ${data.accountId} (${data.accountType}) was deleted, refreshing data...`
-        );
-        // Forzar recarga inmediata de datos
-        loadData();
-      }
+      console.log('Account deleted:', data);
+      loadData(); // Recargar datos
     };
 
     const handleAccountConverted = (data: any) => {
-      console.log('Account converted event received:', data);
-      // Forzar actualización de datos cuando se convierte una cuenta
-      if (data.type === 'accountConverted') {
-        console.log(
-          `🔄 Account ${data.accountId} was converted to ${data.newType}, refreshing data...`
-        );
-        // Forzar recarga inmediata de datos
-        loadData();
-      }
+      console.log('Account converted:', data);
+      loadData(); // Recargar datos
     };
 
-    // Escuchar eventos específicos
+    // Escuchar eventos específicos del servicio
     csvFrontendService.on('initialData', handleInitialData);
     csvFrontendService.on('csvUpdated', handleCSVUpdate);
     csvFrontendService.on('heartbeat', handleHeartbeat);
     csvFrontendService.on('accountDeleted', handleAccountDeleted);
     csvFrontendService.on('accountConverted', handleAccountConverted);
 
+    // Escuchar eventos DOM para sincronización entre componentes
+    const handleCSVDataUpdated = (event: any) => {
+      console.log('CSV data updated event:', event);
+      if (event.detail) {
+        if (event.detail.copierStatus) {
+          setCopierStatus(event.detail.copierStatus);
+        }
+        if (event.detail.accounts) {
+          setAccounts(event.detail.accounts);
+        }
+      } else {
+        loadData(); // Si no hay detalles, recargar todo
+      }
+    };
+
+    window.addEventListener('csvDataUpdated', handleCSVDataUpdated);
+
     // Cleanup
     return () => {
       csvFrontendService.disconnect();
+      window.removeEventListener('csvDataUpdated', handleCSVDataUpdated);
     };
-  }, []);
+  }, [loadData]); // Incluir loadData en las dependencias
 
   return {
     copierStatus,
