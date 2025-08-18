@@ -317,6 +317,21 @@ class CSVManagerUnified extends EventEmitter {
     return this.updateAccount(accountId, { config });
   }
 
+  // Verificar si el copier global está habilitado
+  isGlobalCopierEnabled() {
+    try {
+      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        return config.globalStatus === true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error reading global copier status:', error);
+      return false;
+    }
+  }
+
   // Obtener estadísticas
   getStatistics() {
     const accounts = this.readCSV();

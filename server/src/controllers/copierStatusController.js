@@ -142,28 +142,45 @@ export const getGlobalStatus = (req, res) => {
 };
 
 // Set global copier status
-export const setGlobalStatus = (req, res) => {
+export const setGlobalStatus = async (req, res) => {
+  console.log('🔄 Setting global copier status with body:', req.body);
   const { enabled } = req.body;
 
   if (enabled === undefined) {
+    console.error('❌ Missing enabled parameter in request body');
     return res.status(400).json({
       error: 'enabled parameter is required (true/false)',
     });
   }
 
-  const config = loadCopierStatus();
-  config.globalStatus = Boolean(enabled);
+  try {
+    // Importar csvManager
+    const csvManager = (await import('../services/csvManager.js')).default;
 
-  if (saveCopierStatus(config)) {
-    const status = config.globalStatus ? 'ON' : 'OFF';
-    console.log(`Global copier status changed to: ${status}`);
+    // Actualizar el estado global en el archivo de configuración
+    const config = loadCopierStatus();
+    config.globalStatus = Boolean(enabled);
+    saveCopierStatus(config);
+
+    // Actualizar todos los archivos CSV usando el csvManager
+    const filesUpdated = await csvManager.updateGlobalStatus(enabled);
+    const status = enabled ? 'ON' : 'OFF';
+
+    console.log(`✅ Global copier status changed to: ${status} (${filesUpdated} files updated)`);
+
+    // Forzar un escaneo y emisión de actualizaciones
+    await csvManager.scanAndEmitPendingUpdates();
+
     res.json({
       message: `Global copier status set to ${status}`,
-      globalStatus: config.globalStatus,
+      globalStatus: enabled,
       status,
+      filesUpdated,
+      timestamp: new Date().toISOString(),
     });
-  } else {
-    res.status(500).json({ error: 'Failed to save global copier status' });
+  } catch (error) {
+    console.error('❌ Failed to update global copier status:', error);
+    res.status(500).json({ error: 'Failed to update global copier status' });
   }
 };
 

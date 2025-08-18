@@ -1,3 +1,4 @@
+import csvManager from '../services/csvManager.js';
 import csvManagerUnified from '../services/csvManagerUnified.js';
 import { notifyAccountConverted } from './eventNotifier.js';
 
@@ -179,15 +180,15 @@ export const getCopierStatus = (req, res) => {
     const accounts = csvManagerUnified.getAllActiveAccounts();
     const stats = csvManagerUnified.getStatistics();
 
-    // Calcular estado global basado en las cuentas
-    const enabledMasters = stats.master.enabled;
+    // Obtener estado global desde el archivo de configuración
+    const globalStatus = csvManagerUnified.isGlobalCopierEnabled();
     const totalMasters = stats.master.total;
 
     res.json({
       success: true,
       data: {
-        globalStatus: enabledMasters > 0,
-        globalStatusText: enabledMasters > 0 ? 'ON' : 'OFF',
+        globalStatus: globalStatus,
+        globalStatusText: globalStatus ? 'ON' : 'OFF',
         masterAccounts: Object.entries(accounts.masterAccounts).reduce((acc, [id, master]) => {
           acc[id] = {
             masterStatus: master.enabled,
@@ -207,21 +208,16 @@ export const getCopierStatus = (req, res) => {
 };
 
 // Actualizar estado global del copier
-export const updateGlobalCopierStatus = (req, res) => {
+export const updateGlobalCopierStatus = async (req, res) => {
   try {
     const { enabled } = req.body;
 
-    // En el sistema CSV, el estado global se determina por los masters habilitados
-    // Podemos habilitar/deshabilitar todos los masters de una vez
-    const masters = csvManagerUnified.getMasterAccounts();
-
-    masters.forEach(master => {
-      csvManagerUnified.updateMasterConfig(master.accountId, { enabled });
-    });
+    // Actualizar el estado global usando csvManager
+    await csvManager.updateGlobalStatus(enabled);
 
     res.json({
       success: true,
-      message: `All masters ${enabled ? 'enabled' : 'disabled'}`,
+      message: `Global copier status ${enabled ? 'enabled' : 'disabled'}`,
     });
   } catch (error) {
     console.error('Error updating global copier status:', error);

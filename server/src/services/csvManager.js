@@ -1165,23 +1165,17 @@ class CSVManager extends EventEmitter {
 
   // Verificar si el copier global está habilitado
   isGlobalCopierEnabled() {
-    // Buscar en CSV si el global está habilitado
-    let enabled = false;
-
-    this.csvFiles.forEach(fileData => {
-      fileData.data.forEach(row => {
-        if (row.account_id === 'GLOBAL' && row.action === 'config' && row.data) {
-          try {
-            const config = JSON.parse(row.data);
-            enabled = config.globalEnabled === true;
-          } catch (e) {
-            // Ignore parsing errors
-          }
-        }
-      });
-    });
-
-    return enabled;
+    try {
+      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        return config.globalStatus === true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error reading global copier status:', error);
+      return false;
+    }
   }
 
   // Verificar si un master está habilitado
@@ -1207,11 +1201,33 @@ class CSVManager extends EventEmitter {
 
   // Verificar si un master es efectivo (global + master enabled + online)
   isMasterEffective(masterId) {
-    return (
-      this.isGlobalCopierEnabled() &&
-      this.isMasterEnabled(masterId) &&
-      this.isAccountOnline(masterId)
-    );
+    // Primero verificar el estado global
+    const globalEnabled = this.isGlobalCopierEnabled();
+    if (!globalEnabled) {
+      return false;
+    }
+
+    // Luego verificar el estado del master en su CSV
+    let masterEnabled = false;
+    let masterOnline = false;
+
+    this.csvFiles.forEach(fileData => {
+      fileData.data.forEach(row => {
+        if (row.account_id === masterId) {
+          // Verificar el estado online/offline
+          if (row.status === 'online') {
+            masterOnline = true;
+          }
+
+          // Verificar la configuración ENABLED/DISABLED
+          if (row.config && row.config.enabled === true) {
+            masterEnabled = true;
+          }
+        }
+      });
+    });
+
+    return globalEnabled && masterEnabled && masterOnline;
   }
 
   // Verificar si una cuenta está online
@@ -1389,13 +1405,155 @@ class CSVManager extends EventEmitter {
   }
 
   // Actualizar estado global del copier
-  updateGlobalStatus(enabled) {
-    const config = {
-      globalEnabled: enabled,
-      timestamp: new Date().toISOString(),
-    };
+  async updateGlobalStatus(enabled) {
+    try {
+      // 1. Actualizar el archivo de configuración global
+      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      const config = {
+        globalStatus: enabled,
+        timestamp: new Date().toISOString(),
+      };
 
-    this.writeConfig('GLOBAL', config);
+      // Asegurar que el directorio existe
+      const configDir = join(process.cwd(), 'config');
+      if (!existsSync(configDir)) {
+        require('fs').mkdirSync(configDir, { recursive: true });
+      }
+
+      // Guardar la configuración global
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`✅ Updated global copier status to ${enabled ? 'ON' : 'OFF'} in config`);
+
+      // 2. Actualizar todos los archivos CSV2 que tenemos cacheados
+      let updatedFiles = 0;
+      console.log(`🔍 Updating ${this.csvFiles.size} cached CSV files...`);
+
+      // Procesar cada archivo cacheado
+      for (const [filePath, fileData] of this.csvFiles.entries()) {
+        try {
+          if (existsSync(filePath)) {
+            let fileModified = false;
+            const content = readFileSync(filePath, 'utf8');
+            const lines = content.split('\n').filter(line => line.trim());
+            let updatedLines = [];
+            let currentAccountId = null;
+            let currentAccountType = null;
+            let hasConfigLine = false;
+
+            for (const line of lines) {
+              // Limpiar la línea de caracteres especiales
+              const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+              if (cleanLine.includes('[TYPE]')) {
+                // Extraer tipo y ID de la cuenta
+                const matches = cleanLine.match(/\[([^\]]+)\]/g);
+                if (matches && matches.length >= 4) {
+                  const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+                  currentAccountType = values[1]; // MASTER o SLAVE
+                  currentAccountId = values[3];
+                }
+                updatedLines.push(cleanLine);
+              } else if (cleanLine.includes('[STATUS]')) {
+                // Mantener la línea STATUS exactamente como está
+                updatedLines.push(cleanLine);
+              } else if (cleanLine.includes('[CONFIG]')) {
+                // Actualizar la línea CONFIG según el tipo de cuenta
+                if (currentAccountType === 'MASTER' || currentAccountType === 'SLAVE') {
+                  // Para ambos tipos, forzar DISABLED si global está off
+                  const matches = cleanLine.match(/\[([^\]]+)\]/g);
+                  if (matches && matches.length >= 4) {
+                    const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+
+                    if (currentAccountType === 'MASTER') {
+                      // Para masters, siempre usar el estado global
+                      updatedLines.push(
+                        `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                      );
+                    } else {
+                      // Para slaves, usar valores por defecto si no existen
+                      let lotMultiplier = '1.0';
+                      let forceLot = 'NULL';
+                      let reverseTrade = 'FALSE';
+                      let maxLot = 'NULL';
+                      let minLot = 'NULL';
+                      let masterId = 'NULL';
+
+                      // Si hay valores existentes, usarlos
+                      if (matches.length >= 4) {
+                        lotMultiplier = values[3] || lotMultiplier;
+                        forceLot = values[4] || forceLot;
+                        reverseTrade = values[5] || reverseTrade;
+                        maxLot = values[6] || maxLot;
+                        minLot = values[7] || minLot;
+                        masterId = values[8] || masterId;
+                      }
+
+                      // Siempre usar el estado global
+                      updatedLines.push(
+                        `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${maxLot}] [${minLot}] [${masterId}]`
+                      );
+                    }
+                    fileModified = true;
+                  } else {
+                    updatedLines.push(cleanLine);
+                  }
+                } else {
+                  updatedLines.push(cleanLine);
+                }
+              } else if (cleanLine.includes('[CONFIG]')) {
+                hasConfigLine = true;
+                updatedLines.push(cleanLine);
+              } else {
+                updatedLines.push(cleanLine);
+              }
+            }
+
+            // Si no hay línea CONFIG, agregarla
+            if (!hasConfigLine && currentAccountType) {
+              fileModified = true;
+              if (currentAccountType === 'MASTER') {
+                updatedLines.push(
+                  `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                );
+              } else if (currentAccountType === 'SLAVE') {
+                updatedLines.push(
+                  `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]`
+                );
+              }
+            }
+
+            if (fileModified) {
+              writeFileSync(filePath, updatedLines.join('\n') + '\n', 'utf8');
+              updatedFiles++;
+              console.log(
+                `✅ Updated ${currentAccountType} account ${currentAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'} in ${filePath}`
+              );
+
+              // Refrescar datos en memoria
+              this.refreshFileData(filePath);
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing file ${filePath}:`, error);
+        }
+      }
+
+      // Emitir evento de actualización
+      this.emit('globalStatusChanged', {
+        enabled,
+        filesUpdated: updatedFiles,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Forzar actualización de datos
+      await this.refreshAllFileData();
+      await this.scanAndEmitPendingUpdates();
+
+      return updatedFiles;
+    } catch (error) {
+      console.error('Error updating global copier status:', error);
+      throw error;
+    }
   }
 
   // Actualizar estado de master

@@ -342,12 +342,6 @@ export function TradingAccountsConfig() {
 
   // Toggle global copier status
   const toggleGlobalStatus = async (enabled: boolean) => {
-    // If disabling, show confirmation buttons instead of switch
-    if (!enabled) {
-      setShowGlobalConfirm(true);
-      return;
-    }
-
     await performGlobalToggle(enabled);
   };
 
@@ -1291,35 +1285,12 @@ export function TradingAccountsConfig() {
               </div>
               <div className="flex items-center gap-3">
                 {!showGlobalConfirm && getStatusBadge(copierStatus?.globalStatus || false)}
-                {showGlobalConfirm ? (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                      onClick={() => performGlobalToggle(false)}
-                      disabled={updatingCopier === 'global'}
-                    >
-                      <Unplug className="h-4 w-4 mr-2" />
-                      {updatingCopier === 'global' ? 'Stopping...' : 'Stop'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
-                      onClick={cancelGlobalDisable}
-                      disabled={updatingCopier === 'global'}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <Switch
-                    checked={copierStatus?.globalStatus || false}
-                    onCheckedChange={toggleGlobalStatus}
-                    disabled={updatingCopier === 'global'}
-                  />
-                )}
+
+                <Switch
+                  checked={copierStatus?.globalStatus || false}
+                  onCheckedChange={toggleGlobalStatus}
+                  disabled={updatingCopier === 'global'}
+                />
               </div>
             </div>
           </div>

@@ -45,17 +45,20 @@ export const CopierStatusControls: React.FC = () => {
   // Toggle global copier status using SSE
   const toggleGlobalStatus = async (enabled: boolean) => {
     try {
+      console.log('🔄 Toggling global copier status to:', enabled);
       setUpdating('global');
       await updateGlobalStatus(enabled);
+      console.log('✅ Global copier status updated successfully');
       toast({
         title: 'Success',
         description: `Global copier ${enabled ? 'enabled' : 'disabled'}`,
       });
     } catch (error) {
-      console.error('Error updating global status:', error);
+      console.error('❌ Error updating global status:', error);
       toast({
         title: 'Error',
-        description: 'Failed to update global copier status',
+        description:
+          error instanceof Error ? error.message : 'Failed to update global copier status',
         variant: 'destructive',
       });
     } finally {
@@ -296,9 +299,10 @@ export const CopierStatusControls: React.FC = () => {
                           onCheckedChange={enabled => toggleMasterStatus(masterId, enabled)}
                           disabled={
                             isUpdating ||
-                            !copierStatus?.globalStatus ||
-                            masterStatus?.status === 'offline'
+                            !copierStatus?.globalStatus || // Global copier off
+                            masterStatus?.status === 'offline' // Master offline
                           }
+                          aria-disabled={!copierStatus?.globalStatus} // For better accessibility
                           title={
                             masterStatus?.status === 'offline'
                               ? 'Account is offline - copy trading disabled'
@@ -346,11 +350,12 @@ export const CopierStatusControls: React.FC = () => {
                                     }
                                     disabled={
                                       isSlaveUpdating ||
-                                      !copierStatus?.globalStatus ||
-                                      masterStatus?.masterStatus !== true ||
-                                      !slave.masterOnline ||
-                                      slave.status === 'offline'
+                                      !copierStatus?.globalStatus || // Global copier off
+                                      masterStatus?.masterStatus !== true || // Master disabled
+                                      !slave.masterOnline || // Master offline
+                                      slave.status === 'offline' // Slave offline
                                     }
+                                    aria-disabled={!copierStatus?.globalStatus} // For better accessibility
                                     title={
                                       slave.status === 'offline'
                                         ? 'Account is offline - copy trading disabled'
@@ -405,9 +410,10 @@ export const CopierStatusControls: React.FC = () => {
                           onCheckedChange={enabled => toggleSlaveStatus(slave.id, enabled)}
                           disabled={
                             isSlaveUpdating ||
-                            !copierStatus?.globalStatus ||
-                            slave.status === 'offline'
+                            !copierStatus?.globalStatus || // Global copier off
+                            slave.status === 'offline' // Slave offline
                           }
+                          aria-disabled={!copierStatus?.globalStatus} // For better accessibility
                           title={
                             slave.status === 'offline'
                               ? 'Account is offline - copy trading disabled'

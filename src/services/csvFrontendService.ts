@@ -194,7 +194,9 @@ class CSVFrontendService extends SimpleEventEmitter {
         },
       });
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        // Extraer los datos del formato de respuesta del servidor
+        return data.data || data;
       }
     } catch (error) {
       console.error('Error getting copier status:', error);
@@ -228,7 +230,8 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async updateGlobalStatus(enabled: boolean): Promise<void> {
     try {
-      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/global`, {
+      console.log('🔄 Updating global copier status to:', enabled);
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/copier/global`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -236,8 +239,20 @@ class CSVFrontendService extends SimpleEventEmitter {
         },
         body: JSON.stringify({ enabled }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update global status');
+      }
+
+      const data = await response.json();
+      console.log('✅ Global copier status updated:', data);
+
+      // Forzar actualización inmediata
+      await this.refreshCSVData();
     } catch (error) {
-      console.error('Error updating global status:', error);
+      console.error('❌ Error updating global status:', error);
+      throw error; // Re-throw para que el componente pueda manejarlo
     }
   }
 
