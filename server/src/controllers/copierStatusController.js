@@ -220,6 +220,7 @@ export const getMasterStatus = (req, res) => {
 
 // Set copier status for specific master account (user-based)
 export const setMasterStatus = async (req, res) => {
+  console.log(`🔄 setMasterStatus called with:`, req.body);
   const { masterAccountId, enabled } = req.body;
   const apiKey = req.apiKey;
 
@@ -266,9 +267,32 @@ export const setMasterStatus = async (req, res) => {
 
     // Actualizar también el CSV para sincronizar con el frontend
     try {
-      const csvManager = await import('../services/csvManager.js');
-      await csvManager.default.updateMasterStatus(masterAccountId, enabled);
-      console.log(`✅ CSV updated for master ${masterAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`);
+      // Actualizar directamente el archivo CSV
+      const targetFile =
+        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+
+      if (existsSync(targetFile)) {
+        const content = readFileSync(targetFile, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+
+        // Buscar y actualizar la línea CONFIG
+        const updatedLines = lines.map(line => {
+          if (line.includes('[CONFIG]') && line.includes('[MASTER]')) {
+            console.log(
+              `🔄 Updating CONFIG line from ${line} to [CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}]`
+            );
+            return `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}]`;
+          }
+          return line;
+        });
+
+        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+        console.log(
+          `✅ CSV updated for master ${masterAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+        );
+      } else {
+        console.log(`❌ CSV file not found: ${targetFile}`);
+      }
     } catch (error) {
       console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);
       // No fallar la respuesta si el CSV no se puede actualizar
