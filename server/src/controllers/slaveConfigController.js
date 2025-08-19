@@ -459,6 +459,21 @@ export const setSlaveConfig = async (req, res) => {
   if (saveSlaveConfigs(configs)) {
     console.log(`Slave config updated for ${slaveAccountId}:`, configs[slaveAccountId]);
 
+    // Actualizar también el CSV para sincronizar con el frontend
+    if (enabled !== undefined) {
+      try {
+        const csvManager = await import('../services/csvManager.js');
+        const slaveConfig = configs[slaveAccountId];
+        await csvManager.default.updateSlaveStatus(slaveAccountId, enabled, slaveConfig);
+        console.log(
+          `✅ CSV updated for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+        );
+      } catch (error) {
+        console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
+        // No fallar la respuesta si el CSV no se puede actualizar
+      }
+    }
+
     // Include subscription info in response
     const responseData = {
       message: 'Slave configuration saved successfully',

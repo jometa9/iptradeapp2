@@ -399,24 +399,60 @@ export function TradingAccountsConfig() {
   // Get effective copier status for master account
   const getMasterEffectiveStatus = (masterAccountId: string) => {
     if (!copierStatus) return false;
+
+    // Buscar la cuenta en los datos CSV para obtener el estado enabled/disabled
+    const masterAccount = csvAccounts?.masterAccounts?.[masterAccountId];
+    if (masterAccount) {
+      // El estado enabled viene del config.enabled
+      return masterAccount.config?.enabled === true;
+    }
+
+    // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
-    // Default to false if no config exists (new accounts should be disabled by default)
     return copierStatus.globalStatus && masterStatus?.masterStatus === true;
   };
 
   // Get effective copier status for slave account
   const getSlaveEffectiveStatus = (slaveAccountId: string, masterAccountId?: string) => {
     if (!copierStatus) return false;
-    const slaveConfig = slaveConfigs[slaveAccountId];
-    // Default to false if no config exists (new accounts should be disabled by default)
-    const slaveEnabled = slaveConfig?.config?.enabled === true;
-    // If slave is not connected to a master, it can never be active
-    if (!masterAccountId || masterAccountId === '' || masterAccountId === 'none') {
-      return false;
+
+    // Buscar la cuenta slave en los datos CSV para obtener el estado enabled/disabled
+    // Primero buscar en slaveAccounts (slaves conectados)
+    let slaveAccount = csvAccounts?.slaveAccounts?.[slaveAccountId];
+
+    // Si no se encuentra, buscar en unconnectedSlaves (slaves desconectados)
+    if (!slaveAccount && csvAccounts?.unconnectedSlaves) {
+      slaveAccount = csvAccounts.unconnectedSlaves.find(
+        (slave: any) => slave.id === slaveAccountId || slave.accountNumber === slaveAccountId
+      );
     }
-    // If slave is connected to a master, check master status too
-    const masterStatus = getMasterEffectiveStatus(masterAccountId);
-    return copierStatus.globalStatus && masterStatus && slaveEnabled;
+
+    if (slaveAccount) {
+      // El estado enabled viene del config.enabled
+      const slaveEnabled = slaveAccount.config?.enabled === true;
+
+      // Si el slave está conectado a un master, verificar que el master esté habilitado
+      if (masterAccountId && masterAccountId !== '' && masterAccountId !== 'none') {
+        const masterStatus = getMasterEffectiveStatus(masterAccountId);
+        return copierStatus.globalStatus && masterStatus && slaveEnabled;
+      } else {
+        // Si el slave está desconectado, solo verificar el estado global y el estado del slave
+        return copierStatus.globalStatus && slaveEnabled;
+      }
+    }
+
+    // Fallback al sistema anterior si no encontramos la cuenta en CSV
+    const slaveConfig = slaveConfigs[slaveAccountId];
+    const slaveEnabled = slaveConfig?.config?.enabled === true;
+
+    // Si el slave está conectado a un master, verificar que el master esté habilitado
+    if (masterAccountId && masterAccountId !== '' && masterAccountId !== 'none') {
+      const masterStatus = getMasterEffectiveStatus(masterAccountId);
+      return copierStatus.globalStatus && masterStatus && slaveEnabled;
+    } else {
+      // Si el slave está desconectado, solo verificar el estado global y el estado del slave
+      return copierStatus.globalStatus && slaveEnabled;
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2267,11 +2303,26 @@ export function TradingAccountsConfig() {
                         </td>
                         <td className="w-32 px-4 py-2 align-middle">
                           <div className="flex items-center justify-center">
-                            <Tooltip tip="Connect this slave to a master to enable copy trading.">
-                              <div className="flex items-center justify-center">
-                                <Switch checked={false} disabled={true} />
-                              </div>
-                            </Tooltip>
+                            <Switch
+                              checked={getSlaveEffectiveStatus(orphanSlave.accountNumber)}
+                              onCheckedChange={enabled =>
+                                toggleSlaveStatus(orphanSlave.accountNumber, enabled)
+                              }
+                              disabled={
+                                updatingCopier === `slave-${orphanSlave.accountNumber}` ||
+                                !copierStatus?.globalStatus ||
+                                orphanSlave.status === 'offline'
+                              }
+                              title={
+                                orphanSlave.status === 'offline'
+                                  ? 'Account is offline - copy trading disabled'
+                                  : !copierStatus?.globalStatus
+                                    ? 'Global copier is OFF'
+                                    : getSlaveEffectiveStatus(orphanSlave.accountNumber)
+                                      ? 'Stop copy trading'
+                                      : 'Start copy trading'
+                              }
+                            />
                           </div>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">

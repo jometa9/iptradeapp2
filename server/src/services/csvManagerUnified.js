@@ -504,6 +504,21 @@ class CSVManagerUnified extends EventEmitter {
         });
       });
 
+    // Procesar todos los slaves (conectados y desconectados)
+    accounts
+      .filter(acc => acc.type === 'slave')
+      .forEach(slave => {
+        result.slaveAccounts[slave.accountId] = {
+          id: slave.accountId,
+          name: slave.accountId,
+          platform: slave.platform,
+          status: slave.status,
+          enabled: slave.config.enabled || false,
+          masterId: slave.masterId || null,
+          lastPing: slave.timestamp.toISOString(),
+        };
+      });
+
     // Procesar pending
     this.getPendingAccounts().forEach(pending => {
       result.pendingAccounts.push({

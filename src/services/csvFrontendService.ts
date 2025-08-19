@@ -211,13 +211,16 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async getAllAccounts(): Promise<AccountsData> {
     try {
+      // Usar el endpoint correcto que lee las cuentas del sistema
       const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/all`, {
         headers: {
           'x-api-key': this.getApiKey(),
         },
       });
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        // Extraer los datos del formato de respuesta del servidor
+        return data.data || data;
       }
     } catch (error) {
       console.error('Error getting accounts:', error);
@@ -272,31 +275,47 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async updateMasterStatus(masterId: string, enabled: boolean): Promise<void> {
     try {
-      await fetch(`http://localhost:${this.serverPort}/api/csv/copier/master`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.getApiKey(),
-        },
-        body: JSON.stringify({ masterId, enabled }),
-      });
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/csv/copier/master`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.getApiKey(),
+          },
+          body: JSON.stringify({ masterAccountId: masterId, enabled }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to update master status');
+      }
     } catch (error) {
       console.error('Error updating master status:', error);
+      throw error;
     }
   }
 
   public async updateSlaveConfig(slaveId: string, enabled: boolean): Promise<void> {
     try {
-      await fetch(`http://localhost:${this.serverPort}/api/csv/slave-config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.getApiKey(),
-        },
-        body: JSON.stringify({ slaveId, enabled }),
-      });
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/slave-config`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.getApiKey(),
+          },
+          body: JSON.stringify({ slaveAccountId: slaveId, enabled }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to update slave config');
+      }
     } catch (error) {
       console.error('Error updating slave config:', error);
+      throw error;
     }
   }
 

@@ -219,7 +219,7 @@ export const getMasterStatus = (req, res) => {
 };
 
 // Set copier status for specific master account (user-based)
-export const setMasterStatus = (req, res) => {
+export const setMasterStatus = async (req, res) => {
   const { masterAccountId, enabled } = req.body;
   const apiKey = req.apiKey;
 
@@ -263,6 +263,16 @@ export const setMasterStatus = (req, res) => {
       globalConfig.globalStatus &&
       userCopierStatus.globalStatus &&
       userCopierStatus.masterAccounts[masterAccountId];
+
+    // Actualizar también el CSV para sincronizar con el frontend
+    try {
+      const csvManager = await import('../services/csvManager.js');
+      await csvManager.default.updateMasterStatus(masterAccountId, enabled);
+      console.log(`✅ CSV updated for master ${masterAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    } catch (error) {
+      console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);
+      // No fallar la respuesta si el CSV no se puede actualizar
+    }
 
     console.log(
       `Copier status for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) changed to: ${status}`

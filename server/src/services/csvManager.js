@@ -1336,19 +1336,30 @@ class CSVManager extends EventEmitter {
       const content = readFileSync(targetFile, 'utf8');
       const lines = content.split('\n').filter(line => line.trim());
 
-      // Buscar y actualizar la línea CONFIG
+      // Buscar y actualizar la línea CONFIG para la cuenta específica
       let configUpdated = false;
+      let currentAccountId = null;
       const updatedLines = lines.map(line => {
-        // Detectar si es línea CONFIG con corchetes
-        if (line.includes('[CONFIG]') && line.includes(`[${accountId}]`)) {
+        // Detectar línea TYPE para identificar la cuenta actual
+        if (line.includes('[TYPE]')) {
+          const matches = line.match(
+            /\[TYPE\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
+          );
+          if (matches) {
+            currentAccountId = matches[4]; // El accountId está en la cuarta posición
+          }
+        }
+
+        // Detectar si es línea CONFIG para la cuenta actual
+        if (line.includes('[CONFIG]') && currentAccountId === accountId) {
           // Construir nueva línea CONFIG según el tipo de cuenta
           if (config.type === 'master') {
             configUpdated = true;
-            return `[CONFIG][MASTER][${config.enabled ? 'ENABLED' : 'DISABLED'}][${config.name || 'Master Account'}]`;
+            return `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`;
           } else if (config.type === 'slave') {
             configUpdated = true;
             const slaveConfig = config.slaveConfig || {};
-            return `[CONFIG][SLAVE][${config.enabled ? 'ENABLED' : 'DISABLED'}][${slaveConfig.lotMultiplier || '1.0'}][${slaveConfig.forceLot || 'NULL'}][${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}][${slaveConfig.maxLotSize || 'NULL'}][${slaveConfig.minLotSize || 'NULL'}][${slaveConfig.masterId || 'NULL'}]`;
+            return `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.maxLotSize || 'NULL'}] [${slaveConfig.minLotSize || 'NULL'}] [${slaveConfig.masterId || 'NULL'}]`;
           }
         }
         return line;
@@ -1552,6 +1563,23 @@ class CSVManager extends EventEmitter {
     };
 
     return this.writeConfig(masterId, config);
+  }
+
+  // Actualizar estado de slave
+  updateSlaveStatus(slaveId, enabled, slaveConfig = null) {
+    const config = {
+      type: 'slave',
+      enabled,
+      slaveConfig: slaveConfig || {
+        lotMultiplier: 1.0,
+        forceLot: null,
+        reverseTrading: false,
+        maxLotSize: null,
+        minLotSize: null,
+      },
+    };
+
+    return this.writeConfig(slaveId, config);
   }
 
   // Emergency shutdown
