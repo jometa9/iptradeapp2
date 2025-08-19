@@ -108,6 +108,18 @@ export function TradingAccountsConfig() {
   useEffect(() => {
     collapsedMastersRef.current = collapsedMasters;
   }, [collapsedMasters]);
+
+  // Scroll to edit form when editing account
+  useEffect(() => {
+    if (editingAccount && editFormRef.current) {
+      setTimeout(() => {
+        editFormRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 100); // Small delay to ensure the form is rendered
+    }
+  }, [editingAccount]);
   const [showGlobalConfirm, setShowGlobalConfirm] = useState(false);
   const [updatingCopier, setUpdatingCopier] = useState<string | null>(null);
   const [recentlyDeployedSlaves, setRecentlyDeployedSlaves] = useState<Set<string>>(new Set());
@@ -245,6 +257,7 @@ export function TradingAccountsConfig() {
   });
 
   const formRef = useRef<HTMLDivElement>(null);
+  const editFormRef = useRef<HTMLDivElement>(null);
 
   // Platform options
   const platformOptions = [
@@ -1311,6 +1324,7 @@ export function TradingAccountsConfig() {
           {/* Add/Edit Account Form */}
           {(isAddingAccount || editingAccount) && (
             <Card
+              ref={editFormRef}
               className={
                 editingAccount
                   ? formState.accountType === 'master'
