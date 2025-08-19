@@ -16,7 +16,7 @@ const generateCSV2Content = (accountId, accountType, platform, timestamp, slaveC
   } else if (accountType === 'slave') {
     // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
-    const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'FALSE';
+    const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
     const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
     const masterId = slaveConfig?.masterAccountId || 'NULL';
 
@@ -84,17 +84,20 @@ export const updateCSVAccountType = async (req, res) => {
       `🔄 Updating CSV account ${accountId} from pending to ${newType} using new CSV2 format...`
     );
 
-    // Use cached CSV files from csvManager instead of hardcoded paths
+    // Use specific CSV file paths where the system actually writes status updates
     let filesUpdated = 0;
-    const allFiles = Array.from(csvManager.csvFiles.keys());
+    const csvFiles = [
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+    ];
     let platform = 'MT4'; // Default platform
     let currentTimestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
 
-    console.log(`📁 Found ${allFiles.length} CSV files to check`);
-    console.log('📁 Files found:', allFiles);
+    console.log(`📁 Checking ${csvFiles.length} specific CSV files`);
+    console.log('📁 Files to check:', csvFiles);
 
     // Process each file
-    for (const filePath of allFiles) {
+    for (const filePath of csvFiles) {
       try {
         console.log(`🔍 Checking file: ${filePath}`);
         if (existsSync(filePath)) {
@@ -180,14 +183,17 @@ export const updateCSVAccountType = async (req, res) => {
               const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
               console.log(`🔍 Clean line: "${cleanLine}"`);
 
-              if (cleanLine.includes('[CONFIG]') && cleanLine.includes('[PENDING]')) {
+              if (
+                cleanLine.includes('[CONFIG]') &&
+                (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
+              ) {
                 console.log(`✅ Found CONFIG line with PENDING, updating to ${newType}`);
                 if (newType === 'master') {
                   newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
-                  const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'FALSE';
+                  const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
 
