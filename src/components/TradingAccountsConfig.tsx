@@ -777,14 +777,14 @@ export function TradingAccountsConfig() {
             lotMultiplier: formState.lotCoefficient,
             forceLot: formState.forceLot > 0 ? formState.forceLot : null,
             reverseTrading: formState.reverseTrade,
-            enabled: true,
+            // No enviar 'enabled' para mantener el estado original del CSV
             ...(formState.connectedToMaster !== 'none' &&
               formState.connectedToMaster !== '' && {
                 masterId: formState.connectedToMaster,
               }),
           };
 
-          console.log('📤 Sending payload:', payload);
+          console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
 
           response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
             method: 'POST',
@@ -807,13 +807,14 @@ export function TradingAccountsConfig() {
           });
         }
 
-        // If it's a slave account with specific configurations, set them after creating the account
+        // If it's a NEW slave account with specific configurations, set them after creating the account
         if (
+          !editingAccount && // Solo para cuentas nuevas, no para edición
           response.ok &&
           (formState.lotCoefficient !== 1 || formState.forceLot > 0 || formState.reverseTrade)
         ) {
           const slaveConfigPayload = {
-            slaveAccountId: editingAccount ? editingAccount.accountNumber : formState.accountNumber,
+            slaveAccountId: formState.accountNumber,
             lotMultiplier: Number(formState.lotCoefficient),
             forceLot: Number(formState.forceLot) > 0 ? Number(formState.forceLot) : null,
             reverseTrading: formState.reverseTrade,
