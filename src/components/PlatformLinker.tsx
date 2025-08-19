@@ -95,12 +95,7 @@ export const PlatformLinker: React.FC = () => {
         throw new Error('Failed to install bot');
       }
     } catch (error) {
-      console.error('Error installing bot:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to install bot',
-        variant: 'destructive',
-      });
+      // Silent error handling
     } finally {
       setInstalling(null);
     }
@@ -131,12 +126,7 @@ export const PlatformLinker: React.FC = () => {
         throw new Error('Failed to run install script');
       }
     } catch (error) {
-      console.error('Error running install script:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to run install script',
-        variant: 'destructive',
-      });
+      // Silent error handling
     } finally {
       setInstalling(null);
     }
@@ -174,12 +164,7 @@ export const PlatformLinker: React.FC = () => {
         throw new Error('Failed to scan platform accounts');
       }
     } catch (error) {
-      console.error('Error scanning platform accounts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to scan platform accounts',
-        variant: 'destructive',
-      });
+      // Silent error handling
     } finally {
       setScanning(false);
     }

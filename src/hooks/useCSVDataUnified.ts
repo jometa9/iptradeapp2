@@ -42,7 +42,6 @@ export function useCSVDataUnified(): UseCSVDataReturn {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch CSV data';
       setError(errorMessage);
-      console.error('Error fetching CSV data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -171,7 +170,6 @@ export function useCSVDataUnified(): UseCSVDataReturn {
   // Suscribirse a actualizaciones en tiempo real
   useEffect(() => {
     const unsubscribe = csvUnifiedService.subscribeToUpdates(data => {
-      console.log('CSV update received:', data);
       // Actualizar datos automáticamente cuando hay cambios
       fetchData();
     });

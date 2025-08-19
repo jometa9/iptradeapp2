@@ -32,7 +32,6 @@ export const useAutoLinkPlatforms = () => {
     const previousCount = Object.keys(previousAccounts.masterAccounts || {}).length;
 
     if (currentCount !== previousCount) {
-      console.log(`📊 Account count changed: ${previousCount} -> ${currentCount}`);
       return true;
     }
 
@@ -43,14 +42,12 @@ export const useAutoLinkPlatforms = () => {
     // Verificar si se agregaron o eliminaron cuentas
     for (const id of currentMasterIds) {
       if (!previousMasterIds.has(id)) {
-        console.log(`➕ New account detected: ${id}`);
         return true;
       }
     }
 
     for (const id of previousMasterIds) {
       if (!currentMasterIds.has(id)) {
-        console.log(`➖ Account removed: ${id}`);
         return true;
       }
     }
@@ -61,7 +58,6 @@ export const useAutoLinkPlatforms = () => {
       const previousAccount = previousAccounts.masterAccounts?.[accountId];
 
       if (previousAccount && hasAccountChanged(currentAccount, previousAccount)) {
-        console.log(`✏️ Account modified: ${accountId}`);
         return true;
       }
     }
@@ -87,19 +83,10 @@ export const useAutoLinkPlatforms = () => {
       if (hasChanges) {
         // Solo ejecutar si ya se ejecutó al menos una vez (evitar ejecutar al inicio)
         if (hasExecutedOnce.current) {
-          console.log('🔄 Account changes detected, executing Link Platforms...');
-
-          // REMOVIDO: Ya no limpiamos las cuentas ocultas automáticamente
-          // console.log('🧹 Clearing hidden accounts due to auto Link Platforms execution');
-          // clearHiddenAccounts();
-
           linkPlatforms().catch(error => {
-            console.error('Auto Link Platforms failed:', error);
+            // Silent error handling
           });
         } else {
-          console.log(
-            '🔄 Account changes detected, but skipping first execution (server handles it)'
-          );
           hasExecutedOnce.current = true;
         }
       }

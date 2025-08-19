@@ -32,7 +32,6 @@ import {
   getAccountLimitMessage,
   getLotSizeMessage,
   getPlanDisplayName,
-  isUnlimitedPlan,
   shouldShowSubscriptionLimitsCard,
   validateLotSize,
 } from '../lib/subscriptionUtils';
@@ -129,7 +128,6 @@ export function TradingAccountsConfig() {
   // Escuchar eventos de conversión de cuentas
   useEffect(() => {
     const handleAccountConverted = () => {
-      console.log('🔄 Account converted, refreshing trading config...');
       refreshCSVData();
     };
 
@@ -267,7 +265,6 @@ export function TradingAccountsConfig() {
   const fetchAccounts = useCallback(async () => {
     // Los datos ya están disponibles via SSE
     // No necesitamos hacer fetch manual
-    console.log('📊 Datos cargados automáticamente via SSE');
   }, []);
 
   // Mark slave account as recently deployed
@@ -298,17 +295,16 @@ export function TradingAccountsConfig() {
         await response.json();
         // Data handled by SSE
       } else {
-        console.error('Failed to fetch pending accounts count');
+        // Silent error handling
       }
     } catch (error) {
-      console.error('Error loading pending accounts count:', error);
+      // Silent error handling
     }
   }, [secretKey]);
 
   // Polling adicional cada 3 segundos para asegurar actualizaciones rápidas
   useEffect(() => {
     // Los datos se actualizan automáticamente via SSE
-    console.log('📊 Datos actualizados automáticamente via SSE - no se necesita polling');
   }, []);
 
   // Load copier status on component mount
@@ -326,7 +322,6 @@ export function TradingAccountsConfig() {
   // Los datos de copier se cargan automáticamente via SSE
   const loadCopierData = useCallback(async () => {
     // Los datos ya están disponibles via SSE
-    console.log('📊 Datos de copier cargados automáticamente via SSE');
   }, []);
 
   // Los datos se actualizan automáticamente via SSE
@@ -345,18 +340,16 @@ export function TradingAccountsConfig() {
   // Sync global status with server
   useEffect(() => {
     if (copierStatus?.globalStatus !== undefined) {
-      console.log('🔄 Syncing global status:', copierStatus.globalStatus);
       setLocalGlobalStatus(copierStatus.globalStatus);
     }
   }, [copierStatus?.globalStatus]);
 
   const handleToggleGlobalStatus = async (enabled: boolean) => {
-    console.log('🔄 Toggling global status to:', enabled);
     setLocalGlobalStatus(enabled);
     try {
       await csvFrontendService.updateGlobalStatus(enabled);
     } catch (error) {
-      console.error('❌ Error updating global status:', error);
+      // Silent error handling
       // Revert on error
       setLocalGlobalStatus(!enabled);
     }
@@ -376,7 +369,7 @@ export function TradingAccountsConfig() {
         description: `Master ${masterAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
     } catch (error) {
-      console.error('Error updating master status:', error);
+      // Silent error handling
       toastUtil({
         title: 'Error',
         description: 'Failed to update master copier status',
@@ -394,7 +387,7 @@ export function TradingAccountsConfig() {
         description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
     } catch (error) {
-      console.error('Error updating slave status:', error);
+      // Silent error handling
       toastUtil({
         title: 'Error',
         description: 'Failed to update slave status',
@@ -479,7 +472,6 @@ export function TradingAccountsConfig() {
 
         if (response.ok) {
           const slaveConfig = await response.json();
-          console.log('Loaded slave config for editing:', slaveConfig);
 
           // Actualizar el formulario con la configuración específica del slave
           formData = {
@@ -490,7 +482,7 @@ export function TradingAccountsConfig() {
           };
         }
       } catch (error) {
-        console.error('Error loading slave config for editing:', error);
+        // Silent error handling
       }
     }
 
@@ -558,7 +550,7 @@ export function TradingAccountsConfig() {
         });
       }
     } catch (error) {
-      console.error('Error deleting account:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'An error occurred while deleting the account.',
@@ -606,7 +598,7 @@ export function TradingAccountsConfig() {
         throw new Error('Failed to disconnect slave account');
       }
     } catch (error) {
-      console.error('Error disconnecting slave account:', error);
+      // Silent error handling
       toastUtil({
         title: 'Error',
         description: 'Failed to disconnect slave account',
@@ -643,7 +635,7 @@ export function TradingAccountsConfig() {
       setDisconnectAllConfirmId(null);
       fetchAccounts();
     } catch (error) {
-      console.error('Error disconnecting all slaves:', error);
+      // Silent error handling
       toastUtil({
         title: 'Error',
         description: 'Failed to disconnect all slave accounts',
@@ -864,7 +856,7 @@ export function TradingAccountsConfig() {
 
       handleCancel();
     } catch (error) {
-      console.error('Error saving account:', error);
+      // Silent error handling
       toastUtil({
         title: 'Error',
         description:
@@ -1140,20 +1132,7 @@ export function TradingAccountsConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Logs de depuración */}
-      {userInfo &&
-        (() => {
-          console.log('🔍 TradingAccountsConfig - Render', {
-            subscriptionType: userInfo.subscriptionType,
-            isUnlimitedPlan: isUnlimitedPlan(userInfo),
-            shouldShowSubscriptionLimitsCard: shouldShowSubscriptionLimitsCard(
-              userInfo,
-              accounts.length
-            ),
-            currentAccountCount: accounts.length,
-          });
-          return null;
-        })()}
+      {/* Debug logs removed */}
 
       {/* Subscription Info Card para planes con límites */}
       {userInfo && shouldShowSubscriptionLimitsCard(userInfo, accounts.length) && (
@@ -1298,12 +1277,6 @@ export function TradingAccountsConfig() {
                     const pendingValue = connectivityStats
                       ? connectivityStats.pending
                       : accounts.filter(acc => acc.status === 'pending').length;
-                    console.log(
-                      'Pending value:',
-                      pendingValue,
-                      'connectivityStats:',
-                      !!connectivityStats
-                    );
                     return pendingValue;
                   })()}
                 </div>

@@ -148,12 +148,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     }
   }, [linkingStatus.step, linkingStatus.isActive, scanningMessages.length]);
 
-  // Debug initial state
-  console.log('🔍 PendingAccountsManager mounted - Initial state:', {
-    isLinking,
-    linkingStep: linkingStatus.step,
-    linkingActive: linkingStatus.isActive,
-  });
+  // Debug initial state removed
 
   // Usar el hook para pending accounts
   const {
@@ -242,13 +237,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         // Update the CSV data with the fresh master accounts data
         if (data.masterAccounts) {
           // Force a refresh of the CSV data to include the new master accounts
-          console.log('🔄 Refreshing master accounts data:', data.masterAccounts);
         }
       } else {
-        console.error('Failed to fetch master accounts');
+        // Silent error handling
       }
     } catch (error) {
-      console.error('Error loading master accounts:', error);
+      // Silent error handling
     } finally {
       setIsRefreshingMasters(false);
     }

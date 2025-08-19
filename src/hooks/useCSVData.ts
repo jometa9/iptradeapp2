@@ -124,13 +124,9 @@ export const useCSVData = (): UseCSVDataReturn => {
             csvFrontendService.getAllAccounts(),
           ]);
 
-          console.log('📊 Initial copier status:', copierData);
-
-          // Actualizar estados
           setCopierStatus(copierData);
           setAccounts(accountsData);
         } catch (err) {
-          console.error('❌ Error loading initial data:', err);
           setError(err instanceof Error ? err.message : 'Error loading initial data');
         } finally {
           setLoading(false);
@@ -145,15 +141,11 @@ export const useCSVData = (): UseCSVDataReturn => {
   useEffect(() => {
     if (!secretKey) return;
 
-    console.log('⏰ Setting up polling fallback for CSV data (every 1 second)');
-
     const pollingInterval = setInterval(() => {
-      console.log('⏰ [POLLING] Checking for CSV updates...');
       loadData();
     }, 1000); // Cada 1 segundo
 
     return () => {
-      console.log('⏰ Clearing CSV polling fallback');
       clearInterval(pollingInterval);
     };
   }, [secretKey, loadData]);
@@ -161,7 +153,6 @@ export const useCSVData = (): UseCSVDataReturn => {
   useEffect(() => {
     // Configurar listeners para actualizaciones en tiempo real
     const handleInitialData = (data: any) => {
-      console.log('Initial data received:', data);
       if (data.copierStatus) {
         setCopierStatus(data.copierStatus);
       }
@@ -172,7 +163,6 @@ export const useCSVData = (): UseCSVDataReturn => {
     };
 
     const handleCSVUpdate = (data: any) => {
-      console.log('CSV file updated:', data);
       // Actualizar directamente con los datos recibidos
       if (data.copierStatus) {
         setCopierStatus(data.copierStatus);
@@ -184,18 +174,15 @@ export const useCSVData = (): UseCSVDataReturn => {
 
     const handleHeartbeat = (data: any) => {
       if (data.changes) {
-        console.log('Heartbeat with changes:', data.changes);
         loadData(); // Recargar datos si hay cambios
       }
     };
 
     const handleAccountDeleted = (data: any) => {
-      console.log('Account deleted:', data);
       loadData(); // Recargar datos
     };
 
     const handleAccountConverted = (data: any) => {
-      console.log('Account converted:', data);
       loadData(); // Recargar datos
     };
 
@@ -208,7 +195,6 @@ export const useCSVData = (): UseCSVDataReturn => {
 
     // Escuchar eventos DOM para sincronización entre componentes
     const handleCSVDataUpdated = (event: any) => {
-      console.log('CSV data updated event:', event);
       if (event.detail) {
         if (event.detail.copierStatus) {
           setCopierStatus(event.detail.copierStatus);

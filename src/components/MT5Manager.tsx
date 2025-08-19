@@ -130,7 +130,7 @@ const MT5Manager: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching connection status:', error);
+      // Silent error handling
     }
   };
 
@@ -143,7 +143,7 @@ const MT5Manager: React.FC = () => {
         setStoredAccounts(data.accounts);
       }
     } catch (error) {
-      console.error('Error fetching stored accounts:', error);
+      // Silent error handling
     }
   };
 
@@ -156,7 +156,7 @@ const MT5Manager: React.FC = () => {
         setAccountInfo(data.account);
       }
     } catch (error) {
-      console.error('Error fetching account info:', error);
+      // Silent error handling
     }
   };
 
@@ -169,7 +169,7 @@ const MT5Manager: React.FC = () => {
         setPositions(data.positions);
       }
     } catch (error) {
-      console.error('Error fetching positions:', error);
+      // Silent error handling
     }
   };
 
@@ -182,7 +182,7 @@ const MT5Manager: React.FC = () => {
         setOrders(data.orders);
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      // Silent error handling
     }
   };
 

@@ -48,7 +48,6 @@ export const usePendingAccounts = () => {
       try {
         setError(null);
         const endpoint = useCache ? '/api/accounts/pending/cache' : '/api/accounts/pending';
-        console.log(`🔍 Loading pending accounts${useCache ? ' from cache' : ''}...`);
 
         const response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'GET',
@@ -59,7 +58,6 @@ export const usePendingAccounts = () => {
 
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ Pending accounts loaded:', data);
 
           // Convertir el objeto pendingAccounts a array
           const accountsArray = Object.values(data.pendingAccounts || {}).map((account: any) => ({
@@ -104,18 +102,13 @@ export const usePendingAccounts = () => {
           };
 
           setPendingData(filteredData);
-          console.log(
-            `👁️ Found ${accountsArray.length} accounts, showing ${visibleAccounts.length} (${accountsArray.length - visibleAccounts.length} hidden)`
-          );
         } else {
           const errorData = await response.json();
           setError(errorData.error || 'Failed to load pending accounts');
-          console.error('❌ Failed to load pending accounts:', errorData);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         setError(message);
-        console.error('❌ Error loading pending accounts:', err);
       } finally {
         setLoading(false);
       }
@@ -127,27 +120,14 @@ export const usePendingAccounts = () => {
   useEffect(() => {
     if (!secretKey) return;
 
-    console.log('📋 Pending Accounts: Setting up SSE listener...');
-
     // Conectar al SSE (solo creará conexión si no existe)
     SSEService.connect(secretKey);
 
     const handleSSEMessage = (data: any) => {
-      // Log TODOS los eventos SSE para debugging
-      console.log('🔍 [DEBUG] SSE Event received in usePendingAccounts:', {
-        type: data.type,
-        hasAccounts: !!data.accounts,
-        accountsLength: data.accounts?.length || 0,
-        timestamp: data.timestamp,
-        summary: data.summary,
-      });
-
       // Manejar initial_data que incluye pending accounts
       if (data.type === 'initial_data' && data.accounts?.pendingAccounts) {
-        console.log('📨 Received initial_data with pending accounts via SSE');
         const pendingArray = data.accounts.pendingAccounts;
         if (Array.isArray(pendingArray) && pendingArray.length > 0) {
-          console.log(`📊 Initial data contains ${pendingArray.length} pending accounts`);
           handleSSEMessage({
             type: 'pendingAccountsUpdate',
             accounts: pendingArray,
@@ -161,18 +141,9 @@ export const usePendingAccounts = () => {
         data.type === 'csvFileChanged' ||
         data.type === 'csv_updated'
       ) {
-        console.log('🎯 [PENDING UPDATE] Processing pending accounts update via SSE');
-        console.log('🎯 [PENDING UPDATE] Event details:', {
-          type: data.type,
-          accounts: data.accounts,
-          summary: data.summary,
-        });
-
         // En lugar de recargar todo, actualizar solo los datos que han cambiado
         // pero respetando las cuentas ocultas
         if (data.accounts && Array.isArray(data.accounts)) {
-          console.log('🔄 Updating pending accounts from SSE while respecting hidden accounts');
-
           // Filtrar cuentas ocultas de los nuevos datos
           const visibleNewAccounts = filterVisibleAccounts(data.accounts);
 
@@ -209,25 +180,14 @@ export const usePendingAccounts = () => {
           };
 
           setPendingData(updatedPendingData);
-          console.log(
-            `👁️ SSE update: ${data.accounts.length - visibleNewAccounts.length} hidden accounts filtered`
-          );
-          console.log(
-            `📊 SSE update: ${updatedPendingData.summary.onlineAccounts} online, ${updatedPendingData.summary.offlineAccounts} offline`
-          );
-          visibleNewAccounts.forEach(acc => {
-            console.log(`   👤 ${acc.account_id}: ${acc.current_status || acc.status}`);
-          });
         } else {
           // Si no hay datos específicos, hacer reload completo
-          console.log('🔄 [FALLBACK] No specific account data, doing full reload');
           loadPendingAccounts();
         }
       }
 
       // NUEVO: Forzar refresh cada vez que llegue un evento de pending accounts
       if (data.type === 'pendingAccountsUpdate') {
-        console.log('🔄 [FORCE REFRESH] Forcing refresh due to pendingAccountsUpdate event');
         setTimeout(() => {
           loadPendingAccounts();
         }, 500); // Pequeño delay para evitar múltiples calls
@@ -240,7 +200,6 @@ export const usePendingAccounts = () => {
 
     return () => {
       if (listenerIdRef.current) {
-        console.log('🔌 Pending Accounts: Removing SSE listener');
         SSEService.removeListener(listenerIdRef.current);
       }
     };
@@ -250,15 +209,11 @@ export const usePendingAccounts = () => {
   useEffect(() => {
     if (!secretKey) return;
 
-    console.log('⏰ Setting up polling fallback for pending accounts (every 10 seconds)');
-
     const pollingInterval = setInterval(() => {
-      console.log('⏰ [POLLING] Checking for pending accounts updates...');
       loadPendingAccounts();
     }, 1000); // Cada 10 segundos
 
     return () => {
-      console.log('⏰ Clearing polling fallback');
       clearInterval(pollingInterval);
     };
   }, [secretKey, loadPendingAccounts]);
@@ -268,16 +223,13 @@ export const usePendingAccounts = () => {
     const loadInitialData = async () => {
       try {
         // Primero intentar cargar desde cache para mostrar datos inmediatamente
-        console.log('🚀 Initial load: trying cache first...');
         await loadPendingAccounts(true); // useCache = true
 
         // Si no hay datos en cache, cargar desde el endpoint regular
         if (!pendingData || pendingData.accounts.length === 0) {
-          console.log('🔄 No cache data, loading from regular endpoint...');
           await loadPendingAccounts(false); // useCache = false
         }
       } catch (error) {
-        console.error('❌ Error in initial load:', error);
         // Fallback al endpoint regular
         await loadPendingAccounts(false);
       }
@@ -295,8 +247,6 @@ export const usePendingAccounts = () => {
       }
 
       try {
-        console.log(`🗑️ Hiding pending account: ${accountId}`);
-
         // Encontrar la cuenta para obtener su plataforma
         const accountToHide = pendingData?.accounts.find(
           account => account.account_id === accountId
@@ -344,7 +294,6 @@ export const usePendingAccounts = () => {
           };
 
           setPendingData(updatedPendingData);
-          console.log('✅ Pending account hidden and removed from view');
 
           return {
             success: true,
@@ -356,7 +305,6 @@ export const usePendingAccounts = () => {
           throw new Error('No pending data available');
         }
       } catch (error) {
-        console.error('❌ Error hiding pending account:', error);
         throw error;
       }
     },

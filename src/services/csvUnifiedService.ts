@@ -169,7 +169,7 @@ class CSVUnifiedService {
     });
 
     this.eventSource.onerror = error => {
-      console.error('SSE error:', error);
+      // Silent error handling
     };
 
     // Retornar función de limpieza

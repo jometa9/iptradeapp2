@@ -23,9 +23,6 @@ export const Dashboard: React.FC = () => {
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
 
-  console.log('🎯 Dashboard rendered - Link Platforms button should be visible');
-  console.log('🔗 isLinking state:', isLinking);
-
   const [userIP, setUserIP] = useState<string>('Loading...');
   // Inicializar showIP desde localStorage
   const [showIP, setShowIP] = useState<boolean>(() => {
@@ -39,7 +36,6 @@ export const Dashboard: React.FC = () => {
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
 
   const getOSInfo = () => {
-    console.log('🖥️ Current operating system detected:', operatingSystem);
     switch (operatingSystem) {
       case 'windows':
         return { text: 'Windows' };
@@ -92,8 +88,7 @@ export const Dashboard: React.FC = () => {
     try {
       await logout();
     } catch (error) {
-      console.error('Error during logout:', error);
-      // Even if logout fails, we still want to redirect the user
+      // Silent error handling
     }
   };
 
@@ -107,7 +102,6 @@ export const Dashboard: React.FC = () => {
       await navigator.clipboard.writeText(userIP || 'Unknown');
     } catch {
       // Silent fail - no notification to user
-      console.log('Failed to copy IP to clipboard');
     }
   };
 
@@ -117,24 +111,12 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleLinkPlatforms = async () => {
-    const osInfo = getOSInfo();
-    console.log(`🔗 Link Platforms button clicked! (OS: ${osInfo.text} ${osInfo.icon})`);
-    console.log('📊 Current isLinking state:', isLinking);
     try {
-      console.log(`🔄 Starting Link Platforms process for ${osInfo.text}...`);
+      const osInfo = getOSInfo();
       const result = await linkPlatforms();
-      console.log('✅ Link Platforms HTTP request completed:', result);
-      console.log('📊 isLinking state after HTTP request:', isLinking);
-
-      // Si hay background scan, el spinner debería mantenerse
-      if (result?.result?.backgroundScan) {
-        console.log(
-          '🔄 Background scan active - spinner should continue until backgroundScanEvent'
-        );
-      }
+      // Silent processing
     } catch (error) {
-      console.error('❌ Link Platforms failed:', error);
-      console.log('📊 Error isLinking state:', isLinking);
+      // Silent error handling
     }
   };
 

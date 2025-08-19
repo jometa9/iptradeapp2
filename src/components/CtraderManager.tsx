@@ -107,7 +107,7 @@ export const CtraderManager: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('Error loading cTrader status:', error);
+      // Silent error handling
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ export const CtraderManager: React.FC = () => {
         setMasterAccounts(masters);
       }
     } catch (error) {
-      console.error('Error loading master accounts:', error);
+      // Silent error handling
     }
   }, [baseUrl, secretKey]);
 
@@ -179,7 +179,7 @@ export const CtraderManager: React.FC = () => {
         setTimeout(() => clearInterval(checkAuth), 300000);
       }
     } catch (error) {
-      console.error('Error initiating cTrader auth:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error initiating authentication with cTrader',
@@ -229,7 +229,7 @@ export const CtraderManager: React.FC = () => {
         await loadStatus();
       } else {
         const error = await response.json();
-        console.error('❌ REST API failed:', error);
+        // Silent error handling
         toast({
           title: 'Connection Failed',
           description: error.details || 'Failed to get accounts from cTrader',
@@ -237,7 +237,7 @@ export const CtraderManager: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('❌ Error getting cTrader accounts:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error connecting to cTrader API',
@@ -288,6 +288,7 @@ export const CtraderManager: React.FC = () => {
         await loadStatus();
       } else {
         const error = await response.json();
+        // Silent error handling
         toast({
           title: 'Refresh Failed',
           description: error.details || 'Failed to refresh accounts from cTrader',
@@ -295,7 +296,7 @@ export const CtraderManager: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('❌ Error refreshing cTrader accounts:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error refreshing cTrader accounts',
@@ -329,7 +330,7 @@ export const CtraderManager: React.FC = () => {
         await loadStatus();
       }
     } catch (error) {
-      console.error('Error disconnecting from cTrader API:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error disconnecting from cTrader API',
@@ -385,7 +386,7 @@ export const CtraderManager: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error registering cTrader master:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error registering master account',
@@ -449,7 +450,7 @@ export const CtraderManager: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error registering cTrader slave:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error registering slave account',
@@ -485,7 +486,7 @@ export const CtraderManager: React.FC = () => {
         await loadStatus();
       }
     } catch (error) {
-      console.error('Error revoking cTrader auth:', error);
+      // Silent error handling
       toast({
         title: 'Error',
         description: 'Error revoking authentication',

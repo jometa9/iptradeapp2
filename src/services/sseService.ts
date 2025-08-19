@@ -24,23 +24,21 @@ export const SSEService = {
       try {
         const data = JSON.parse(event.data);
 
-        // Log TODOS los mensajes para debugging completo
-
-        globalListeners.forEach((callback, id) => {
+        // Notify all listeners
+        globalListeners.forEach(listener => {
           try {
-            callback(data);
+            listener(data);
           } catch (error) {
-            console.error(`❌ SSE: Error in listener ${id}:`, error);
+            // Silent error handling
           }
         });
       } catch (error) {
-        console.error('❌ SSE: Error parsing message:', error);
-        console.error('❌ SSE: Raw event data:', event.data);
+        // Silent error handling
       }
     };
 
     globalEventSource.onerror = error => {
-      console.error('❌ SSE: Connection error:', error);
+      // Silent error handling
     };
   },
 

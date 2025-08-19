@@ -19,12 +19,9 @@ export const useHiddenPendingAccounts = () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         setHiddenAccounts(parsed);
-        console.log(
-          `📋 Loaded ${Object.keys(parsed).length} hidden pending accounts from localStorage`
-        );
       }
     } catch (error) {
-      console.error('Error loading hidden accounts from localStorage:', error);
+      // Silent error handling
     }
   }, []);
 
@@ -42,7 +39,6 @@ export const useHiddenPendingAccounts = () => {
       // Guardar en localStorage
       try {
         localStorage.setItem(HIDDEN_ACCOUNTS_KEY, JSON.stringify(updated));
-        console.log(`👻 Hidden pending account: ${accountId} (${platform})`);
       } catch (error) {
         console.error('Error saving hidden accounts to localStorage:', error);
       }
@@ -59,7 +55,6 @@ export const useHiddenPendingAccounts = () => {
       // Guardar en localStorage
       try {
         localStorage.setItem(HIDDEN_ACCOUNTS_KEY, JSON.stringify(rest));
-        console.log(`👁️ Unhidden pending account: ${accountId}`);
       } catch (error) {
         console.error('Error saving hidden accounts to localStorage:', error);
       }
@@ -75,7 +70,6 @@ export const useHiddenPendingAccounts = () => {
     // Limpiar localStorage
     try {
       localStorage.removeItem(HIDDEN_ACCOUNTS_KEY);
-      console.log('🧹 Cleared all hidden pending accounts');
     } catch (error) {
       console.error('Error clearing hidden accounts from localStorage:', error);
     }
