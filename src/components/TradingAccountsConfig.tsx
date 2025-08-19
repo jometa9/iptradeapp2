@@ -901,61 +901,48 @@ export function TradingAccountsConfig() {
 
     // Use connectivity stats from backend if available, otherwise fallback to frontend calculation
     if (connectivityStats) {
-      const { slaves, masters, pending, offline } = connectivityStats;
-      const relevantTotal = slaves.total + masters.total + pending + offline;
+      const { online, offline, total } = connectivityStats;
 
-      if (relevantTotal === 0) return 'none';
+      if (total === 0) return 'none';
 
-      const offlinePercentage = (offline / relevantTotal) * 100;
-      const pendingPercentage = (pending / relevantTotal) * 100;
+      // Si todas las cuentas están online
+      if (online === total && offline === 0) {
+        return 'optimal';
+      }
 
-      // Priority: offline > pending > mixed > optimal
-      if (offlinePercentage > 50 || offline > slaves.total + masters.total) {
+      // Si todas las cuentas están offline
+      if (offline === total && online === 0) {
         return 'offline';
       }
 
-      if (pendingPercentage > 40 || pending > slaves.total + masters.total) {
-        return 'pending';
-      }
-
-      if (offline > 0 || pending > 0) {
+      // Si hay una mezcla de online y offline
+      if (online > 0 && offline > 0) {
         return 'mixed';
-      }
-
-      if (offline === 0 && pending === 0) {
-        return 'optimal';
       }
 
       return 'warning';
     }
 
     // Fallback to frontend calculation
-    const slavesCount = accounts.filter(acc => acc.accountType === 'slave').length;
-    const mastersCount = accounts.filter(acc => acc.accountType === 'master').length;
+    const onlineCount = accounts.filter(acc => acc.status === 'online').length;
     const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
-    const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
-    const relevantTotal = slavesCount + mastersCount + offlineCount + pendingCount;
+    const total = accounts.length;
 
-    if (relevantTotal === 0) return 'none';
+    if (total === 0) return 'none';
 
-    const offlinePercentage = (offlineCount / relevantTotal) * 100;
-    const pendingPercentage = (pendingCount / relevantTotal) * 100;
+    // Si todas las cuentas están online
+    if (onlineCount === total && offlineCount === 0) {
+      return 'optimal';
+    }
 
-    // Priority: offline > pending > mixed > optimal
-    if (offlinePercentage > 50 || offlineCount > slavesCount + mastersCount) {
+    // Si todas las cuentas están offline
+    if (offlineCount === total && onlineCount === 0) {
       return 'offline';
     }
 
-    if (pendingPercentage > 40 || pendingCount > slavesCount + mastersCount) {
-      return 'pending';
-    }
-
-    if (offlineCount > 0 || pendingCount > 0) {
+    // Si hay una mezcla de online y offline
+    if (onlineCount > 0 && offlineCount > 0) {
       return 'mixed';
-    }
-
-    if (offlineCount === 0 && pendingCount === 0) {
-      return 'optimal';
     }
 
     return 'warning';
@@ -972,10 +959,9 @@ export function TradingAccountsConfig() {
 
     // Use connectivity stats from backend if available
     if (connectivityStats) {
-      const { slaves, masters, pending, offline } = connectivityStats;
-      const relevantTotal = slaves.total + masters.total + pending + offline;
+      const { online, offline, total } = connectivityStats;
 
-      if (relevantTotal === 0) {
+      if (total === 0) {
         return {
           message: 'No relevant accounts found',
           recommendation: 'Add master or slave accounts to get started',
@@ -983,17 +969,15 @@ export function TradingAccountsConfig() {
         };
       }
 
-      const slavesPercentage = Math.round((slaves.total / relevantTotal) * 100);
-      const mastersPercentage = Math.round((masters.total / relevantTotal) * 100);
-      const offlinePercentage = Math.round((offline / relevantTotal) * 100);
-      const pendingPercentage = Math.round((pending / relevantTotal) * 100);
+      const onlinePercentage = Math.round((online / total) * 100);
+      const offlinePercentage = Math.round((offline / total) * 100);
 
       const status = getServerStatus();
 
       switch (status) {
         case 'optimal':
           return {
-            message: `${mastersPercentage}% masters, ${slavesPercentage}% slaves - All operational`,
+            message: `${onlinePercentage}% of accounts are online - All operational`,
             recommendation: 'All systems operational - copy trading active',
             severity: 'success',
           };
@@ -1003,16 +987,10 @@ export function TradingAccountsConfig() {
             recommendation: 'Check network connections and account credentials',
             severity: 'error',
           };
-        case 'pending':
-          return {
-            message: `${pendingPercentage}% of accounts are pending`,
-            recommendation: 'Connect slaves to masters to enable copy trading',
-            severity: 'warning',
-          };
         case 'mixed':
           return {
-            message: `Mixed status: ${mastersPercentage}% masters, ${slavesPercentage}% slaves, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
-            recommendation: 'Connect slaves to masters and address offline accounts',
+            message: `Mixed status: ${onlinePercentage}% online, ${offlinePercentage}% offline`,
+            recommendation: 'Address offline accounts to improve system performance',
             severity: 'warning',
           };
         case 'warning':

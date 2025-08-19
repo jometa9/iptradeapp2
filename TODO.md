@@ -17,4 +17,5 @@ Investor : @5JtCkQp
 - unificar los tooltips
 - global copier status
 
+- server status cerrar
 - trading config actions running
