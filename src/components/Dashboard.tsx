@@ -185,15 +185,7 @@ export const Dashboard: React.FC = () => {
                 >
                   <HelpCircle className="w-4 h-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-600 hover:text-gray-900"
-                  title="Community"
-                  onClick={handleCommunity}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                </Button>
+               
                 <Button
                   variant="ghost"
                   size="sm"

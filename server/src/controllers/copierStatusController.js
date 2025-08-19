@@ -451,5 +451,60 @@ export const resetAllToOn = (req, res) => {
   }
 };
 
+// Get global copier statistics
+export const getGlobalCopierStats = (req, res) => {
+  const apiKey = req.apiKey;
+
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API Key required' });
+  }
+
+  const userAccounts = getUserAccounts(apiKey);
+  const stats = {
+    slaves: 0,
+    masters: 0,
+    pendings: 0,
+    offline: 0,
+    total: 0,
+  };
+
+  // Count masters and check their status
+  Object.values(userAccounts.masterAccounts || {}).forEach(account => {
+    stats.masters++;
+    if (account.status === 'offline') {
+      stats.offline++;
+    }
+  });
+
+  // Count slaves and check their status
+  Object.values(userAccounts.slaveAccounts || {}).forEach(account => {
+    stats.slaves++;
+    if (account.status === 'offline') {
+      stats.offline++;
+    }
+  });
+
+  // Count pending accounts (they are considered in the offline count)
+  const pendingAccounts = userAccounts.pendingAccounts || {};
+  const pendingAccountsList = Object.entries(pendingAccounts).filter(
+    ([_, account]) => account !== null && Object.keys(account).length > 0
+  );
+  stats.pendings = pendingAccountsList.length;
+
+  // Add pending accounts to offline count only if they exist
+  if (stats.pendings > 0) {
+    stats.offline += stats.pendings;
+  }
+
+  // Calculate total accounts
+  stats.total = stats.masters + stats.slaves + stats.pendings;
+
+  res.json({
+    ...stats,
+    timestamp: new Date().toISOString(),
+    message: `Global copier stats calculated successfully`,
+  });
+};
+
 // Export internal functions for use in other controllers
 export { loadCopierStatus, saveCopierStatus };

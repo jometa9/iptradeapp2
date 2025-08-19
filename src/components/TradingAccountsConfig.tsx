@@ -361,40 +361,24 @@ export function TradingAccountsConfig() {
   };
 
   // Toggle master account copier status usando SSE
-  const toggleMasterStatus = async (masterAccountId: string, enabled: boolean) => {
+  const toggleAccountStatus = async (accountId: string, enabled: boolean) => {
     try {
-      await updateMasterStatus(masterAccountId, enabled);
+      await csvFrontendService.updateAccountStatus(accountId, enabled);
       toastUtil({
         title: 'Success',
-        description: `Master ${masterAccountId} ${enabled ? 'enabled' : 'disabled'}`,
+        description: `Account ${accountId} ${enabled ? 'enabled' : 'disabled'}`,
       });
     } catch (error) {
       // Silent error handling
       toastUtil({
         title: 'Error',
-        description: 'Failed to update master copier status',
+        description: error instanceof Error ? error.message : 'Failed to update account status',
         variant: 'destructive',
       });
     }
   };
 
   // Toggle slave account copier status usando SSE
-  const toggleSlaveStatus = async (slaveAccountId: string, enabled: boolean) => {
-    try {
-      await updateSlaveConfig(slaveAccountId, enabled);
-      toastUtil({
-        title: 'Success',
-        description: `Slave ${slaveAccountId} ${enabled ? 'enabled' : 'disabled'}`,
-      });
-    } catch (error) {
-      // Silent error handling
-      toastUtil({
-        title: 'Error',
-        description: 'Failed to update slave status',
-        variant: 'destructive',
-      });
-    }
-  };
 
   // Get effective copier status for master account
   const getMasterEffectiveStatus = (masterAccountId: string) => {
@@ -1821,7 +1805,7 @@ export function TradingAccountsConfig() {
                                 <Switch
                                   checked={getMasterEffectiveStatus(masterAccount.accountNumber)}
                                   onCheckedChange={enabled =>
-                                    toggleMasterStatus(masterAccount.accountNumber, enabled)
+                                    toggleAccountStatus(masterAccount.accountNumber, enabled)
                                   }
                                   disabled={
                                     updatingCopier === `master-${masterAccount.accountNumber}` ||
@@ -2004,7 +1988,7 @@ export function TradingAccountsConfig() {
                                         masterAccount.accountNumber
                                       )}
                                       onCheckedChange={enabled =>
-                                        toggleSlaveStatus(slaveAccount.accountNumber, enabled)
+                                        toggleAccountStatus(slaveAccount.accountNumber, enabled)
                                       }
                                       disabled={
                                         updatingCopier === `slave-${slaveAccount.accountNumber}` ||
@@ -2306,7 +2290,7 @@ export function TradingAccountsConfig() {
                             <Switch
                               checked={getSlaveEffectiveStatus(orphanSlave.accountNumber)}
                               onCheckedChange={enabled =>
-                                toggleSlaveStatus(orphanSlave.accountNumber, enabled)
+                                toggleAccountStatus(orphanSlave.accountNumber, enabled)
                               }
                               disabled={
                                 updatingCopier === `slave-${orphanSlave.accountNumber}` ||

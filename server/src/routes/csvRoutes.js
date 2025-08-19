@@ -875,4 +875,74 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
   }
 });
 
+/**
+ * @swagger
+ * /csv/account/{accountId}/status:
+ *   post:
+ *     summary: Update individual account copy trading status
+ *     tags: [CSV]
+ *     parameters:
+ *       - in: path
+ *         name: accountId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ *                 description: Whether to enable or disable copy trading for this account
+ *     responses:
+ *       200:
+ *         description: Account status updated successfully
+ *       400:
+ *         description: Invalid parameters
+ *       404:
+ *         description: Account not found
+ *       500:
+ *         description: Error updating account status
+ */
+router.post('/csv/account/:accountId/status', requireValidSubscription, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { enabled } = req.body;
+
+    if (enabled === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'enabled parameter is required',
+      });
+    }
+
+    const csvManager = (await import('../services/csvManager.js')).default;
+    const success = await csvManager.updateAccountStatus(accountId, enabled);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: `Account ${accountId} ${enabled ? 'enabled' : 'disabled'}`,
+        accountId,
+        enabled,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Account not found or could not be updated',
+      });
+    }
+  } catch (error) {
+    console.error(`Error updating account ${req.params.accountId} status:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update account status',
+    });
+  }
+});
+
 export default router;

@@ -1593,6 +1593,83 @@ class CSVManager extends EventEmitter {
     }
   }
 
+  // Actualizar estado de una cuenta específica
+  async updateAccountStatus(accountId, enabled) {
+    try {
+      // Buscar el archivo CSV correcto para esta cuenta
+      let targetFile = null;
+      let accountType = null;
+
+      // Buscar en todos los archivos CSV monitoreados
+      this.csvFiles.forEach((fileData, filePath) => {
+        fileData.data.forEach(row => {
+          if (row.account_id === accountId) {
+            targetFile = filePath;
+            accountType = row.account_type;
+          }
+        });
+      });
+
+      if (!targetFile) {
+        console.error(`❌ No CSV file found for account ${accountId}`);
+        return false;
+      }
+
+      // Leer el archivo completo
+      const content = readFileSync(targetFile, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim());
+      let currentAccountId = null;
+      const updatedLines = [];
+
+      for (const line of lines) {
+        // Detectar línea TYPE para identificar la cuenta actual
+        if (line.includes('[TYPE]')) {
+          const matches = line.match(/\[([^\]]+)\]/g);
+          if (matches && matches.length >= 4) {
+            currentAccountId = matches[3].replace(/[\[\]]/g, '').trim();
+          }
+          updatedLines.push(line);
+        } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+          // Actualizar la línea CONFIG para la cuenta específica
+          const matches = line.match(/\[([^\]]+)\]/g);
+          if (matches && matches.length >= 2) {
+            const configType = matches[1].replace(/[\[\]]/g, '').trim();
+            if (configType === 'MASTER' || configType === 'SLAVE') {
+              // Mantener el resto de la configuración igual, solo actualizar el estado
+              const newLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+              updatedLines.push(newLine);
+              console.log(`✅ Updated CONFIG line for account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`);
+            } else {
+              updatedLines.push(line);
+            }
+          } else {
+            updatedLines.push(line);
+          }
+        } else {
+          updatedLines.push(line);
+        }
+      }
+
+      // Escribir archivo actualizado
+      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+
+      // Refrescar datos en memoria
+      this.refreshFileData(targetFile);
+
+      // Emitir evento de actualización
+      this.emit('accountStatusChanged', {
+        accountId,
+        enabled,
+        timestamp: new Date().toISOString(),
+      });
+
+      return true;
+    } catch (error) {
+      console.error(`Error updating account ${accountId} status:`, error);
+      return false;
+    }
+  }
+
   // Actualizar estado de master
   updateMasterStatus(masterId, enabled, name = null) {
     const config = {

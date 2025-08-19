@@ -275,17 +275,14 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async updateMasterStatus(masterId: string, enabled: boolean): Promise<void> {
     try {
-      const response = await fetch(
-        `http://localhost:${this.serverPort}/api/csv/copier/master`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.getApiKey(),
-          },
-          body: JSON.stringify({ masterAccountId: masterId, enabled }),
-        }
-      );
+      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/copier/master`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
+        },
+        body: JSON.stringify({ masterAccountId: masterId, enabled }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to update master status');
@@ -298,23 +295,61 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async updateSlaveConfig(slaveId: string, enabled: boolean): Promise<void> {
     try {
-      const response = await fetch(
-        `http://localhost:${this.serverPort}/api/slave-config`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': this.getApiKey(),
-          },
-          body: JSON.stringify({ slaveAccountId: slaveId, enabled }),
-        }
-      );
+      const response = await fetch(`http://localhost:${this.serverPort}/api/slave-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.getApiKey(),
+        },
+        body: JSON.stringify({ slaveAccountId: slaveId, enabled }),
+      });
 
       if (!response.ok) {
         throw new Error('Failed to update slave config');
       }
     } catch (error) {
       console.error('Error updating slave config:', error);
+      throw error;
+    }
+  }
+
+  public async updateAccountStatus(accountId: string, enabled: boolean): Promise<void> {
+    try {
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/csv/account/${accountId}/status`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.getApiKey(),
+          },
+          body: JSON.stringify({ enabled }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update account status');
+      }
+
+      // Obtener datos actualizados de copier y accounts
+      const [copierStatus, accounts] = await Promise.all([
+        this.getCopierStatus(),
+        this.getAllAccounts(),
+      ]);
+
+      // Emitir eventos con los datos actualizados
+      this.emit('csvUpdated', { copierStatus, accounts });
+      this.emit('dataUpdated', { copierStatus, accounts });
+
+      // Notificar a todos los componentes
+      window.dispatchEvent(
+        new CustomEvent('csvDataUpdated', {
+          detail: { copierStatus, accounts },
+        })
+      );
+    } catch (error) {
+      console.error('Error updating account status:', error);
       throw error;
     }
   }

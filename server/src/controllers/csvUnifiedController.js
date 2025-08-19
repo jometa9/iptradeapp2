@@ -310,3 +310,38 @@ export const getStatistics = (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+// Actualizar estado de una cuenta específica
+export const updateAccountStatus = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { enabled } = req.body;
+
+    if (enabled === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'enabled parameter is required',
+      });
+    }
+
+    const success = await csvManager.updateAccountStatus(accountId, enabled);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: `Account ${accountId} ${enabled ? 'enabled' : 'disabled'}`,
+        accountId,
+        enabled,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Failed to update account status',
+      });
+    }
+  } catch (error) {
+    console.error('Error updating account status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

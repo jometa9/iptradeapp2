@@ -16,3 +16,5 @@ Investor : @5JtCkQp
 
 - unificar los tooltips
 - global copier status
+
+- trading config actions running

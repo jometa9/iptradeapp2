@@ -3,6 +3,7 @@ import express from 'express';
 import {
   emergencyShutdown,
   getAllStatuses,
+  getGlobalCopierStats,
   getGlobalStatus,
   getMasterStatus,
   removeMasterStatus,
@@ -125,5 +126,17 @@ router.post('/copier/emergency-shutdown', requireValidSubscription, emergencyShu
  *         description: All copiers reset to ON
  */
 router.post('/copier/reset-all-on', requireValidSubscription, resetAllToOn);
+
+/**
+ * @swagger
+ * /copier/stats:
+ *   get:
+ *     summary: Get global copier statistics
+ *     tags: [Copier]
+ *     responses:
+ *       200:
+ *         description: Global copier statistics including counts of masters, slaves, pending accounts and offline status
+ */
+router.get('/copier/stats', requireValidSubscription, getGlobalCopierStats);
 
 export default router;
