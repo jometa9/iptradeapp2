@@ -291,12 +291,73 @@ export const getSlaveConfig = (req, res) => {
     return res.status(400).json({ error: 'Slave account ID is required' });
   }
 
-  const configs = loadSlaveConfigs();
-  const slaveConfig = configs[slaveAccountId] || getDefaultSlaveConfig();
+  // Primero intentar leer la configuración del CSV
+  let csvConfig = null;
+  try {
+    const csvFiles = [
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+    ];
+
+    for (const filePath of csvFiles) {
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        if (content.includes(`[${slaveAccountId}]`)) {
+          const lines = content.split('\n');
+
+          for (const line of lines) {
+            const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+            if (cleanLine.includes('[CONFIG]') && cleanLine.includes('[SLAVE]')) {
+              const matches = cleanLine.match(/\[([^\]]*)\]/g);
+              if (matches && matches.length >= 7) {
+                const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+
+                csvConfig = {
+                  enabled: values[2] === 'ENABLED',
+                  lotMultiplier: parseFloat(values[3]) || 1.0,
+                  forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
+                  reverseTrading: values[5] === 'TRUE',
+                  masterId: values[6] !== 'NULL' ? values[6] : null,
+                  maxLotSize: null,
+                  minLotSize: null,
+                  allowedSymbols: [],
+                  blockedSymbols: [],
+                  allowedOrderTypes: [],
+                  blockedOrderTypes: [],
+                  tradingHours: {
+                    enabled: false,
+                    startTime: '00:00',
+                    endTime: '23:59',
+                    timezone: 'UTC',
+                  },
+                  description: '',
+                  lastUpdated: new Date().toISOString(),
+                };
+
+                console.log(`✅ Loaded slave config from CSV for ${slaveAccountId}:`, csvConfig);
+                break;
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error reading CSV config for ${slaveAccountId}:`, error);
+  }
+
+  // Si no se encontró en CSV, usar la configuración del JSON como fallback
+  if (!csvConfig) {
+    const configs = loadSlaveConfigs();
+    csvConfig = configs[slaveAccountId] || getDefaultSlaveConfig();
+    console.log(`📄 Using JSON config as fallback for ${slaveAccountId}:`, csvConfig);
+  }
 
   res.json({
     slaveAccountId,
-    config: slaveConfig,
+    config: csvConfig,
     status: 'success',
   });
 };
@@ -468,44 +529,68 @@ export const setSlaveConfig = async (req, res) => {
     console.log(`Slave config updated for ${slaveAccountId}:`, configs[slaveAccountId]);
 
     // Actualizar también el CSV para sincronizar con el frontend
-    console.log(`🔄 CSV update check - enabled: ${enabled}, slaveAccountId: ${slaveAccountId}`);
-    if (enabled !== undefined) {
-      console.log(
-        `🔄 About to update CSV for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-      );
-      console.log(`🔄 enabled value: ${enabled}, type: ${typeof enabled}`);
-      try {
-        // Actualizar directamente el archivo CSV
-        const targetFile =
-          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+    console.log(`🔄 CSV update check - slaveAccountId: ${slaveAccountId}`);
+    try {
+      // Buscar el archivo CSV correcto para esta cuenta
+      const csvFiles = [
+        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+      ];
 
-        if (existsSync(targetFile)) {
-          console.log(`✅ CSV file exists: ${targetFile}`);
-          const content = readFileSync(targetFile, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
+      let targetFile = null;
+      let foundAccount = false;
 
-          // Buscar y actualizar la línea CONFIG
-          const updatedLines = lines.map(line => {
-            if (line.includes('[CONFIG]') && line.includes('[SLAVE]')) {
-              console.log(
-                `🔄 Updating CONFIG line from ${line} to [CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}]`
-              );
-              return `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}]`;
-            }
-            return line;
-          });
-
-          writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
-          console.log(
-            `✅ CSV updated for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-          );
-        } else {
-          console.log(`❌ CSV file not found: ${targetFile}`);
+      // Buscar en qué archivo está la cuenta
+      for (const filePath of csvFiles) {
+        if (existsSync(filePath)) {
+          const content = readFileSync(filePath, 'utf8');
+          if (content.includes(`[${slaveAccountId}]`)) {
+            targetFile = filePath;
+            foundAccount = true;
+            console.log(`✅ Found account ${slaveAccountId} in file: ${filePath}`);
+            break;
+          }
         }
-      } catch (error) {
-        console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
-        // No fallar la respuesta si el CSV no se puede actualizar
       }
+
+      if (targetFile && foundAccount) {
+        console.log(`✅ CSV file exists: ${targetFile}`);
+        const content = readFileSync(targetFile, 'utf8');
+        const lines = content.split('\n');
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+
+        let newContent = '';
+        for (const line of lines) {
+          const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+          if (cleanLine.includes('[CONFIG]') && cleanLine.includes('[SLAVE]')) {
+            // Generar la configuración completa del slave
+            const slaveConfig = configs[slaveAccountId];
+            const lotMultiplier = slaveConfig?.lotMultiplier || 1.0;
+            const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
+            const reverseTrade = slaveConfig?.reverseTrading ? 'TRUE' : 'FALSE';
+            const masterId = slaveConfig?.masterId || 'NULL';
+            const enabled = slaveConfig?.enabled ? 'ENABLED' : 'DISABLED';
+
+            const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+            console.log(`🔄 Updating CONFIG line from "${cleanLine}" to "${newConfigLine.trim()}"`);
+            newContent += newConfigLine;
+          } else if (cleanLine.includes('[STATUS]')) {
+            // Actualizar timestamp
+            newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+          } else {
+            newContent += line + '\n';
+          }
+        }
+
+        writeFileSync(targetFile, newContent, 'utf8');
+        console.log(`✅ CSV updated for slave ${slaveAccountId} with complete configuration`);
+      } else {
+        console.log(`❌ CSV file not found or account ${slaveAccountId} not found in CSV files`);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
+      // No fallar la respuesta si el CSV no se puede actualizar
     }
 
     // Include subscription info in response

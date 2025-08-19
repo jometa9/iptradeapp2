@@ -33,7 +33,6 @@ import {
   getLotSizeMessage,
   getPlanDisplayName,
   shouldShowSubscriptionLimitsCard,
-  validateLotSize,
 } from '../lib/subscriptionUtils';
 import csvFrontendService from '../services/csvFrontendService';
 import { Badge } from './ui/badge';
@@ -686,51 +685,16 @@ export function TradingAccountsConfig() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('🚀 handleSubmit called');
     e.preventDefault();
     setIsSubmitting(true);
-
-    // Validate lot size for free users
-    if (userInfo && formState.accountType === 'slave') {
-      if (formState.forceLot > 0) {
-        const lotValidation = validateLotSize(userInfo, formState.forceLot);
-        if (!lotValidation.valid) {
-          toastUtil({
-            title: 'Invalid Lot Size',
-            description: lotValidation.error,
-            variant: 'destructive',
-          });
-          setIsSubmitting(false);
-          return;
-        }
-      }
-    }
-
-    // Check if user can add more accounts (only for new accounts)
-    if (!editingAccount && !canAddMoreAccounts) {
-      toastUtil({
-        title: 'Account Limit Reached',
-        description: `Your ${planDisplayName} plan has reached its account limit. Please upgrade to add more accounts.`,
-        variant: 'destructive',
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!formState.accountNumber || !formState.serverIp) {
-      toastUtil({
-        title: 'Error',
-        description: 'Please fill in all required fields.',
-        variant: 'destructive',
-      });
-      setIsSubmitting(false);
-      return;
-    }
 
     try {
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       let response;
       let payload;
 
+      console.log('🔍 DEBUG: Account type:', formState.accountType);
       if (formState.accountType === 'master') {
         payload = {
           masterAccountId: formState.accountNumber,
@@ -771,6 +735,7 @@ export function TradingAccountsConfig() {
           });
         }
       } else {
+        console.log('🔍 DEBUG: Processing slave account');
         // Slave account
         payload = {
           slaveAccountId: formState.accountNumber,
@@ -799,30 +764,38 @@ export function TradingAccountsConfig() {
             body: JSON.stringify(payload),
           });
         } else if (editingAccount && editingAccount.accountType === 'slave') {
-          // Para edición de cuentas slave, solo enviamos los datos de conexión
+          console.log('🔍 DEBUG: Editing existing slave account');
+          console.log('🔍 Form values:', {
+            lotCoefficient: formState.lotCoefficient,
+            forceLot: formState.forceLot,
+            reverseTrade: formState.reverseTrade,
+          });
+
+          // Para edición de cuentas slave, enviamos las configuraciones de trading
           payload = {
             slaveAccountId: editingAccount.accountNumber,
-            name: editingAccount.accountNumber,
-            description: '',
-            broker: editingAccount.server, // Mantenemos el valor original
-            platform: editingAccount.platform, // Mantenemos el valor original
+            lotMultiplier: formState.lotCoefficient,
+            forceLot: formState.forceLot > 0 ? formState.forceLot : null,
+            reverseTrading: formState.reverseTrade,
+            enabled: true,
             ...(formState.connectedToMaster !== 'none' &&
               formState.connectedToMaster !== '' && {
-                masterAccountId: formState.connectedToMaster,
+                masterId: formState.connectedToMaster,
               }),
           };
 
-          response = await fetch(
-            `http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': secretKey || '',
-              },
-              body: JSON.stringify(payload),
-            }
-          );
+          console.log('📤 Sending payload:', payload);
+
+          response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': secretKey || '',
+            },
+            body: JSON.stringify(payload),
+          });
+
+          console.log('📡 Response status:', response.status);
         } else {
           response = await fetch(`http://localhost:${serverPort}/api/accounts/slave`, {
             method: 'POST',
