@@ -194,17 +194,18 @@ export function TradingAccountsConfig() {
   const connectivityStats = React.useMemo(() => {
     if (!csvAccounts) return null;
 
-    const totalMasters = Object.keys(csvAccounts.masterAccounts || {}).length;
-    const totalSlaves = csvAccounts.unconnectedSlaves?.length || 0;
-    const onlineMasters = Object.values(csvAccounts.masterAccounts || {}).filter(
-      (master: any) => master.status === 'online'
-    ).length;
+    // Usar los datos que vienen de la API
+    const totalMasters = csvAccounts.totalMasterAccounts || 0;
+    const totalSlaves = csvAccounts.totalSlaveAccounts || 0;
+    const totalPending = csvAccounts.totalPendingAccounts || 0;
+    const totalOffline = csvAccounts.offline || 0;
+    const total = csvAccounts.total || 0;
 
     return {
-      total: totalMasters + totalSlaves,
-      online: onlineMasters,
-      pending: totalSlaves,
-      offline: totalMasters - onlineMasters,
+      total,
+      online: total - totalOffline,
+      pending: totalPending,
+      offline: totalOffline,
       slaves: { total: totalSlaves },
       masters: { total: totalMasters },
     };

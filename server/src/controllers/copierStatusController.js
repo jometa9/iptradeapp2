@@ -502,7 +502,7 @@ export const getGlobalCopierStats = (req, res) => {
   res.json({
     ...stats,
     timestamp: new Date().toISOString(),
-    message: `Global copier stats calculated successfully`,
+    message: 'Global copier stats calculated successfully',
   });
 };
 

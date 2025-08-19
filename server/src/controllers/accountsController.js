@@ -494,18 +494,33 @@ export const getAllAccounts = async (req, res) => {
 
     // Calculate statistics
     const totalMasterAccounts = Object.keys(accounts.masterAccounts).length;
-    const totalSlaveAccounts = Object.keys(accounts.slaveAccounts).length;
+    const totalSlaveAccounts = accounts.unconnectedSlaves.length;
+    const totalPendingAccounts = accounts.pendingAccounts.length;
     const totalConnections = Object.values(accounts.masterAccounts).reduce(
       (sum, master) => sum + master.connectedSlaves.length,
       0
     );
+
+    // Calcular estadísticas adicionales
+    const offlineAccounts =
+      Object.values(accounts.masterAccounts).filter(acc => acc.status === 'offline').length +
+      accounts.unconnectedSlaves.filter(acc => acc.status === 'offline').length;
+    const onlineAccounts =
+      Object.values(accounts.masterAccounts).filter(acc => acc.status === 'online').length +
+      accounts.unconnectedSlaves.filter(acc => acc.status === 'online').length +
+      accounts.pendingAccounts.filter(acc => acc.status === 'online').length;
+    const totalAccounts = totalMasterAccounts + totalSlaveAccounts + totalPendingAccounts;
 
     res.json({
       masterAccounts: accounts.masterAccounts,
       unconnectedSlaves: accounts.unconnectedSlaves,
       totalMasterAccounts,
       totalSlaveAccounts,
+      totalPendingAccounts,
       totalConnections,
+      offline: offlineAccounts,
+      online: onlineAccounts,
+      total: totalAccounts,
     });
   } catch (error) {
     console.error('Error getting all accounts:', error);

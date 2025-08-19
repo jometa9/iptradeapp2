@@ -31,9 +31,28 @@ interface CopierStatus {
   totalMasterAccounts: number;
 }
 
+interface GlobalStats {
+  slaves: number;
+  masters: number;
+  pendings: number;
+  offline: number;
+  total: number;
+  timestamp: string;
+  message: string;
+}
+
 interface AccountsData {
   masterAccounts: Record<string, any>;
   unconnectedSlaves: Array<any>;
+  globalStats?: {
+    slaves: number;
+    masters: number;
+    pendings: number;
+    offline: number;
+    total: number;
+    timestamp: string;
+    message: string;
+  };
 }
 
 class CSVFrontendService extends SimpleEventEmitter {
@@ -380,6 +399,32 @@ class CSVFrontendService extends SimpleEventEmitter {
     } catch (error) {
       console.error('Error reset all to on:', error);
     }
+  }
+
+  public async getGlobalStats(): Promise<GlobalStats> {
+    try {
+      const response = await fetch(`http://localhost:${this.serverPort}/api/copier/stats`, {
+        headers: {
+          'x-api-key': this.getApiKey(),
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Error getting global stats:', error);
+    }
+
+    return {
+      slaves: 0,
+      masters: 0,
+      pendings: 0,
+      offline: 0,
+      total: 0,
+      timestamp: new Date().toISOString(),
+      message: 'Failed to load global stats',
+    };
   }
 
   public async scanCSVFiles(): Promise<void> {
