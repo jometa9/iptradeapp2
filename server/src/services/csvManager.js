@@ -19,6 +19,9 @@ class CSVManager extends EventEmitter {
   }
 
   init() {
+    // Inicializar el estado global del copier
+    this.initGlobalCopierStatus();
+
     // Crear directorio si no existe
     if (!existsSync(this.csvDirectory)) {
       require('fs').mkdirSync(this.csvDirectory, { recursive: true });
@@ -893,14 +896,6 @@ class CSVManager extends EventEmitter {
 
                 if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
                   currentAccountData.status = 'offline';
-                  console.log(
-                    `⏰ Pending account ${currentAccountId} marked offline - timestamp diff: ${timeDiff.toFixed(1)}s (threshold: ${PENDING_ONLINE_THRESHOLD}s)`
-                  );
-                } else {
-                  // El timestamp es reciente, mantener el status reportado por el EA
-                  console.log(
-                    `✅ Pending account ${currentAccountId} is ${currentAccountData.status} - timestamp diff: ${timeDiff.toFixed(1)}s (threshold: ${PENDING_ONLINE_THRESHOLD}s)`
-                  );
                 }
               }
             }
@@ -1032,6 +1027,8 @@ class CSVManager extends EventEmitter {
               status: status,
               lastPing: row.timestamp,
               timeSinceLastPing: timeSinceLastPing,
+              // Reflect CSV config for UI switches
+              config: row.config || {},
               connectedSlaves: this.getConnectedSlaves(accountId),
               totalSlaves: this.getConnectedSlaves(accountId).length,
             };
@@ -1069,6 +1066,8 @@ class CSVManager extends EventEmitter {
                 platform: platform,
                 status: status,
                 timeSinceLastPing: timeSinceLastPing,
+                // Expose CSV config for UI switches
+                config: row.config || {},
               });
             }
           }
@@ -1092,6 +1091,7 @@ class CSVManager extends EventEmitter {
             platform: row.platform || 'Unknown',
             status: row.status || 'offline',
             masterOnline: true,
+            config: row.config || {},
           });
         }
       });
@@ -1147,6 +1147,39 @@ class CSVManager extends EventEmitter {
     };
   }
 
+  // Inicializar el estado global del copier
+  initGlobalCopierStatus() {
+    try {
+      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      const configDir = join(process.cwd(), 'config');
+
+      // Crear directorio config si no existe
+      if (!existsSync(configDir)) {
+        require('fs').mkdirSync(configDir, { recursive: true });
+      }
+
+      // Si el archivo no existe, crear con estado por defecto
+      if (!existsSync(configPath)) {
+        const defaultConfig = {
+          globalStatus: false, // Por defecto deshabilitado
+          timestamp: new Date().toISOString(),
+        };
+        writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
+        console.log('📝 Created default global copier status config');
+      }
+
+      // Leer y validar el archivo
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      if (typeof config.globalStatus !== 'boolean') {
+        config.globalStatus = false;
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        console.log('⚠️ Fixed invalid global copier status config');
+      }
+    } catch (error) {
+      console.error('❌ Error initializing global copier status:', error);
+    }
+  }
+
   // Verificar si el copier global está habilitado
   isGlobalCopierEnabled() {
     try {
@@ -1157,7 +1190,7 @@ class CSVManager extends EventEmitter {
       }
       return false;
     } catch (error) {
-      console.error('Error reading global copier status:', error);
+      console.error('❌ Error reading global copier status:', error);
       return false;
     }
   }
@@ -1261,7 +1294,6 @@ class CSVManager extends EventEmitter {
 
       // Escribir archivo actualizado
       writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
-      console.log(`✅ Account ${accountId} converted to pending in ${targetFile}`);
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
@@ -1339,7 +1371,6 @@ class CSVManager extends EventEmitter {
 
       // Escribir archivo actualizado
       writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
-      console.log(`✅ Config updated in CSV for account ${accountId} at ${targetFile}`);
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
@@ -1406,7 +1437,6 @@ class CSVManager extends EventEmitter {
 
       // Guardar la configuración global
       writeFileSync(configPath, JSON.stringify(config, null, 2));
-      console.log(`✅ Updated global copier status to ${enabled ? 'ON' : 'OFF'} in config`);
 
       // 2. Actualizar todos los archivos CSV2 que tenemos cacheados
       let updatedFiles = 0;
@@ -1485,9 +1515,6 @@ class CSVManager extends EventEmitter {
             if (fileModified) {
               writeFileSync(filePath, updatedLines.join('\n') + '\n', 'utf8');
               updatedFiles++;
-              console.log(
-                `✅ Updated ${currentAccountType} account ${currentAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'} in ${filePath}`
-              );
 
               // Refrescar datos en memoria
               this.refreshFileData(filePath);
@@ -1553,7 +1580,6 @@ class CSVManager extends EventEmitter {
     if (this.scanTimer) {
       clearInterval(this.scanTimer);
       this.scanTimer = null;
-      console.log('🔄 Periodic CSV scan stopped');
     }
 
     // Cerrar watchers
@@ -1561,8 +1587,6 @@ class CSVManager extends EventEmitter {
       watcher.close();
     });
     this.watchers.clear();
-
-    console.log('🧹 CSV Manager cleanup completed');
   }
 }
 

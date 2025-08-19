@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+
 import csvManager from '../services/csvManager.js';
 import csvManagerUnified from '../services/csvManagerUnified.js';
 import { notifyAccountConverted } from './eventNotifier.js';
@@ -177,28 +180,24 @@ export const deleteAccount = (req, res) => {
 // Obtener estado del copier
 export const getCopierStatus = (req, res) => {
   try {
-    const accounts = csvManagerUnified.getAllActiveAccounts();
-    const stats = csvManagerUnified.getStatistics();
+    // Obtener estado global directamente del archivo de configuración
+    const configPath = join(process.cwd(), 'config', 'copier_status.json');
+    let globalStatus = false;
 
-    // Obtener estado global desde el archivo de configuración
-    const globalStatus = csvManagerUnified.isGlobalCopierEnabled();
-    const totalMasters = stats.master.total;
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      globalStatus = config.globalStatus === true;
+    }
+
+    console.log('📊 getCopierStatus - Global status from file:', globalStatus);
 
     res.json({
       success: true,
       data: {
         globalStatus: globalStatus,
         globalStatusText: globalStatus ? 'ON' : 'OFF',
-        masterAccounts: Object.entries(accounts.masterAccounts).reduce((acc, [id, master]) => {
-          acc[id] = {
-            masterStatus: master.enabled,
-            effectiveStatus: master.enabled && master.status === 'online',
-            status: master.status,
-          };
-          return acc;
-        }, {}),
-        totalMasterAccounts: totalMasters,
-        statistics: stats,
+        masterAccounts: {},
+        totalMasterAccounts: 0,
       },
     });
   } catch (error) {

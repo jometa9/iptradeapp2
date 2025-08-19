@@ -56,6 +56,7 @@ export const useCSVData = (): UseCSVDataReturn => {
   const updateGlobalStatus = async (enabled: boolean) => {
     try {
       await csvFrontendService.updateGlobalStatus(enabled);
+      // No necesitamos loadData() aquí porque los eventos del servicio actualizarán los datos
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error updating global status');
     }
@@ -111,10 +112,32 @@ export const useCSVData = (): UseCSVDataReturn => {
     await loadData();
   };
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales y sincronizar estado global
   useEffect(() => {
     if (secretKey) {
-      loadData();
+      const loadInitialData = async () => {
+        try {
+          setLoading(true);
+          // Cargar datos iniciales
+          const [copierData, accountsData] = await Promise.all([
+            csvFrontendService.getCopierStatus(),
+            csvFrontendService.getAllAccounts(),
+          ]);
+
+          console.log('📊 Initial copier status:', copierData);
+
+          // Actualizar estados
+          setCopierStatus(copierData);
+          setAccounts(accountsData);
+        } catch (err) {
+          console.error('❌ Error loading initial data:', err);
+          setError(err instanceof Error ? err.message : 'Error loading initial data');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadInitialData();
     }
   }, [secretKey]);
 

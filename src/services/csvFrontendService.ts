@@ -248,11 +248,25 @@ class CSVFrontendService extends SimpleEventEmitter {
       const data = await response.json();
       console.log('✅ Global copier status updated:', data);
 
-      // Forzar actualización inmediata
-      await this.refreshCSVData();
+      // Obtener datos actualizados de copier y accounts
+      const [copierStatus, accounts] = await Promise.all([
+        this.getCopierStatus(),
+        this.getAllAccounts(),
+      ]);
+
+      // Emitir eventos con los datos actualizados
+      this.emit('csvUpdated', { copierStatus, accounts });
+      this.emit('dataUpdated', { copierStatus, accounts });
+
+      // Notificar a todos los componentes
+      window.dispatchEvent(
+        new CustomEvent('csvDataUpdated', {
+          detail: { copierStatus, accounts },
+        })
+      );
     } catch (error) {
       console.error('❌ Error updating global status:', error);
-      throw error; // Re-throw para que el componente pueda manejarlo
+      throw error;
     }
   }
 

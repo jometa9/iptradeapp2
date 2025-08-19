@@ -340,117 +340,25 @@ export function TradingAccountsConfig() {
     }
   }, [error]);
 
-  const [localGlobalStatus, setLocalGlobalStatus] = useState(copierStatus?.globalStatus || false);
+  const [localGlobalStatus, setLocalGlobalStatus] = useState<boolean>(false);
 
-  const handleToggleGlobalStatus = (enabled: boolean) => {
-    setLocalGlobalStatus(enabled); // Cambia el estado local inmediatamente
-    toggleGlobalStatus(enabled); // Envía la actualización al servidor
-  };
+  // Sync global status with server
+  useEffect(() => {
+    if (copierStatus?.globalStatus !== undefined) {
+      console.log('🔄 Syncing global status:', copierStatus.globalStatus);
+      setLocalGlobalStatus(copierStatus.globalStatus);
+    }
+  }, [copierStatus?.globalStatus]);
 
-  // Toggle global copier status
-  const toggleGlobalStatus = async (enabled: boolean) => {
-    await performGlobalToggle(enabled);
-  };
-
-  // Perform the actual global toggle operation
-  const performGlobalToggle = async (enabled: boolean) => {
+  const handleToggleGlobalStatus = async (enabled: boolean) => {
+    console.log('🔄 Toggling global status to:', enabled);
+    setLocalGlobalStatus(enabled);
     try {
-      setUpdatingCopier('global');
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-
-      // If disabling global copier, first disable all individual accounts
-      if (!enabled) {
-        // Get all master accounts that are currently enabled
-        const enabledMasters = Object.entries(copierStatus?.masterAccounts || {})
-          .filter(([, status]: [string, any]) => status.masterStatus)
-          .map(([masterId]) => masterId);
-
-        // Get all slave accounts that are currently enabled
-        const enabledSlaves = Object.entries(slaveConfigs || {})
-          .filter(([, config]) => config.config?.enabled !== false)
-          .map(([slaveId]) => slaveId);
-
-        // Disable all masters
-        for (const masterId of enabledMasters) {
-          await fetch(`http://localhost:${serverPort}/api/copier/master`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': secretKey || '',
-            },
-            body: JSON.stringify({ masterAccountId: masterId, enabled: false }),
-          });
-        }
-
-        // Disable all slaves
-        for (const slaveId of enabledSlaves) {
-          await fetch(`http://localhost:${serverPort}/api/slave-config`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': secretKey || '',
-            },
-            body: JSON.stringify({ slaveAccountId: slaveId, enabled: false }),
-          });
-        }
-
-        // State updated automatically via SSE
-
-        // Update slave configs to disabled
-        setSlaveConfigs(prev => {
-          const updatedConfigs: Record<string, SlaveConfig> = {};
-          Object.entries(prev).forEach(([slaveId, config]) => {
-            updatedConfigs[slaveId] = {
-              ...config,
-              config: {
-                ...config.config,
-                enabled: false,
-              },
-            };
-          });
-          return updatedConfigs;
-        });
-      }
-
-      // Now update global status
-      const response = await fetch(`http://localhost:${serverPort}/api/copier/global`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': secretKey || '',
-        },
-        body: JSON.stringify({ enabled }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-
-        // State updated automatically via SSE
-
-        toastUtil({
-          title: 'Success',
-          description: enabled
-            ? result.message
-            : 'Global copier and all individual accounts have been disabled',
-        });
-
-        // Reload copier data after a small delay to ensure server has updated
-        setTimeout(() => {
-          loadCopierData();
-        }, 500);
-      } else {
-        throw new Error('Failed to update global copier status');
-      }
+      await csvFrontendService.updateGlobalStatus(enabled);
     } catch (error) {
-      console.error('Error updating global status:', error);
-      toastUtil({
-        title: 'Error',
-        description: 'Failed to update global copier status',
-        variant: 'destructive',
-      });
-    } finally {
-      setUpdatingCopier(null);
-      setShowGlobalConfirm(false);
+      console.error('❌ Error updating global status:', error);
+      // Revert on error
+      setLocalGlobalStatus(!enabled);
     }
   };
 
