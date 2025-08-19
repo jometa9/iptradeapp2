@@ -1068,6 +1068,37 @@ export function TradingAccountsConfig() {
     });
   };
 
+  // Helper function to get CSV configuration status for an account
+  const getCSVConfigurationStatus = (accountId: string) => {
+    // Use the existing functions that read from CSV data
+    if (!accounts || accounts.length === 0)
+      return { enabled: false, masterId: null, type: 'unknown' };
+
+    // Find the account in the accounts array
+    const account = accounts.find(acc => acc.accountNumber === accountId);
+    if (!account) {
+      return { enabled: false, masterId: null, type: 'unknown' };
+    }
+
+    if (account.accountType === 'master') {
+      const enabled = getMasterEffectiveStatus(accountId);
+      return {
+        enabled,
+        masterId: null,
+        type: 'master',
+      };
+    } else if (account.accountType === 'slave') {
+      const enabled = getSlaveEffectiveStatus(accountId, account.connectedToMaster);
+      return {
+        enabled,
+        masterId: account.connectedToMaster !== 'none' ? account.connectedToMaster : null,
+        type: 'slave',
+      };
+    }
+
+    return { enabled: false, masterId: null, type: 'unknown' };
+  };
+
   // Helper function to get status display text
   const getStatusDisplayText = (status: string) => {
     switch (status) {
@@ -1107,6 +1138,52 @@ export function TradingAccountsConfig() {
         OFF
       </Badge>
     );
+  };
+
+  // Helper function to render configuration badge based on CSV status
+  const getConfigurationBadge = (accountId: string) => {
+    const csvStatus = getCSVConfigurationStatus(accountId);
+
+    if (csvStatus.type === 'master') {
+      // For master accounts, show enabled/disabled status
+      return csvStatus.enabled ? (
+        <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 border border-green-400 text-green-800 inline-block">
+          Enabled
+        </div>
+      ) : (
+        <div className="rounded-full px-2 py-0.5 text-xs bg-red-100 border border-red-300 text-red-800 inline-block">
+          Disabled
+        </div>
+      );
+    } else if (csvStatus.type === 'slave') {
+      // For slave accounts, prioritize enabled/disabled status over connection status
+      if (!csvStatus.enabled) {
+        return (
+          <div className="rounded-full px-2 py-0.5 text-xs bg-red-100 border border-red-300 text-red-800 inline-block">
+            Disabled
+          </div>
+        );
+      } else if (csvStatus.masterId) {
+        return (
+          <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 border border-green-400 text-green-800 inline-block">
+            Connected
+          </div>
+        );
+      } else {
+        return (
+          <div className="rounded-full px-2 py-0.5 text-xs bg-orange-100 border border-orange-300 text-orange-800 inline-block">
+            Not connected
+          </div>
+        );
+      }
+    } else {
+      // Unknown account type
+      return (
+        <div className="rounded-full px-2 py-0.5 text-xs bg-gray-100 border border-gray-300 text-gray-800 inline-block">
+          Unknown
+        </div>
+      );
+    }
   };
 
   const fadeInDownAnimation = {
@@ -1809,28 +1886,34 @@ export function TradingAccountsConfig() {
                               {getPlatformDisplayName(masterAccount.platform)}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
-                              {accounts.filter(
-                                acc => acc.connectedToMaster === masterAccount.accountNumber
-                              ).length > 0 ? (
-                                <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
-                                  {
-                                    accounts.filter(
+                              <div className="flex gap-2 flex-wrap">
+                                {/* Badge principal de estado */}
+                                {getConfigurationBadge(masterAccount.accountNumber)}
+
+                                {/* Badge de slaves conectados */}
+                                {accounts.filter(
+                                  acc => acc.connectedToMaster === masterAccount.accountNumber
+                                ).length > 0 ? (
+                                  <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
+                                    {
+                                      accounts.filter(
+                                        acc => acc.connectedToMaster === masterAccount.accountNumber
+                                      ).length
+                                    }{' '}
+                                    slave
+                                    {accounts.filter(
                                       acc => acc.connectedToMaster === masterAccount.accountNumber
-                                    ).length
-                                  }{' '}
-                                  slave
-                                  {accounts.filter(
-                                    acc => acc.connectedToMaster === masterAccount.accountNumber
-                                  ).length > 1
-                                    ? 's'
-                                    : ''}{' '}
-                                  connected
-                                </div>
-                              ) : (
-                                <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
-                                  No slaves connected
-                                </div>
-                              )}
+                                    ).length > 1
+                                      ? 's'
+                                      : ''}{' '}
+                                    connected
+                                  </div>
+                                ) : (
+                                  <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
+                                    No slaves connected
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
                               {deleteConfirmId === masterAccount.id ? (
@@ -2014,6 +2097,9 @@ export function TradingAccountsConfig() {
                                 </td>
                                 <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
                                   <div className="flex gap-2 flex-wrap">
+                                    {/* Badge principal de estado */}
+                                    {getConfigurationBadge(slaveAccount.accountNumber)}
+
                                     {/* Mostrar configuraciones de slave usando slaveConfigs */}
                                     {(() => {
                                       const slaveConfig = slaveConfigs[slaveAccount.accountNumber];
@@ -2294,9 +2380,7 @@ export function TradingAccountsConfig() {
                           {getPlatformDisplayName(orphanSlave.platform)}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
-                          <div className="rounded-full px-2 py-0.5 text-xs bg-orange-100 border border-orange-300 text-orange-800 inline-block">
-                            Not connected
-                          </div>
+                          {getConfigurationBadge(orphanSlave.accountNumber)}
                         </td>
                         <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
                           {deleteConfirmId === orphanSlave.id ? (
