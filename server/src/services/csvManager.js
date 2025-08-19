@@ -1314,6 +1314,7 @@ class CSVManager extends EventEmitter {
 
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
+    console.log(`🔄 writeConfig called for account ${accountId} with config:`, config);
     try {
       // Buscar el archivo CSV correcto para esta cuenta
       let targetFile = null;
@@ -1327,6 +1328,35 @@ class CSVManager extends EventEmitter {
         });
       });
 
+      // Si no se encuentra en archivos monitoreados, buscar en el sistema de archivos
+      if (!targetFile) {
+        console.log(`🔍 Account ${accountId} not found in monitored files, searching system...`);
+
+        // Buscar en ubicaciones comunes de CSV
+        const searchPaths = [
+          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
+          process.env.HOME + '/**/IPTRADECSV2.csv',
+          '**/IPTRADECSV2.csv',
+        ];
+
+        for (const searchPath of searchPaths) {
+          try {
+            if (existsSync(searchPath)) {
+              // Verificar si el archivo contiene la cuenta
+              const content = readFileSync(searchPath, 'utf8');
+              if (content.includes(`[${accountId}]`)) {
+                targetFile = searchPath;
+                console.log(`✅ Found CSV file for account ${accountId}: ${targetFile}`);
+                break;
+              }
+            }
+          } catch (error) {
+            // Ignore errors for individual paths
+          }
+        }
+      }
+
       if (!targetFile) {
         console.error(`❌ No CSV file found for account ${accountId}`);
         return false;
@@ -1339,7 +1369,11 @@ class CSVManager extends EventEmitter {
       // Buscar y actualizar la línea CONFIG para la cuenta específica
       let configUpdated = false;
       let currentAccountId = null;
-      const updatedLines = lines.map(line => {
+      const updatedLines = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
         // Detectar línea TYPE para identificar la cuenta actual
         if (line.includes('[TYPE]')) {
           const matches = line.match(
@@ -1347,23 +1381,25 @@ class CSVManager extends EventEmitter {
           );
           if (matches) {
             currentAccountId = matches[4]; // El accountId está en la cuarta posición
+            console.log(`📋 Found TYPE line with accountId: ${currentAccountId}`);
           }
         }
-
-        // Detectar si es línea CONFIG para la cuenta actual
-        if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+        
+        // Si encontramos la cuenta objetivo, buscar la siguiente línea CONFIG
+        if (currentAccountId === accountId && line.includes('[CONFIG]')) {
+          console.log(`🔄 Found CONFIG line for account ${accountId}, updating...`);
           // Construir nueva línea CONFIG según el tipo de cuenta
           if (config.type === 'master') {
             configUpdated = true;
-            return `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`;
+            updatedLines.push(`[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`);
           } else if (config.type === 'slave') {
             configUpdated = true;
-            const slaveConfig = config.slaveConfig || {};
-            return `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.maxLotSize || 'NULL'}] [${slaveConfig.minLotSize || 'NULL'}] [${slaveConfig.masterId || 'NULL'}]`;
+            updatedLines.push(`[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}]`);
           }
+        } else {
+          updatedLines.push(line);
         }
-        return line;
-      });
+      }
 
       // Si no encontramos línea CONFIG, agregar una al final
       if (!configUpdated) {
@@ -1381,7 +1417,10 @@ class CSVManager extends EventEmitter {
       }
 
       // Escribir archivo actualizado
+      console.log(`📝 Writing updated CSV to: ${targetFile}`);
+      console.log(`📄 Updated content:`, updatedLines.join('\n'));
       writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      console.log(`✅ File written successfully`);
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
@@ -1567,6 +1606,9 @@ class CSVManager extends EventEmitter {
 
   // Actualizar estado de slave
   updateSlaveStatus(slaveId, enabled, slaveConfig = null) {
+    console.log(`🔄 updateSlaveStatus called for slave ${slaveId} with enabled=${enabled}`);
+    console.log(`🔄 updateSlaveStatus slaveConfig:`, slaveConfig);
+
     const config = {
       type: 'slave',
       enabled,
@@ -1579,7 +1621,10 @@ class CSVManager extends EventEmitter {
       },
     };
 
-    return this.writeConfig(slaveId, config);
+    console.log(`📝 Config to write:`, config);
+    const result = this.writeConfig(slaveId, config);
+    console.log(`✅ writeConfig result for slave ${slaveId}:`, result);
+    return result;
   }
 
   // Emergency shutdown

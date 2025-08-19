@@ -189,8 +189,6 @@ export const getCopierStatus = (req, res) => {
       globalStatus = config.globalStatus === true;
     }
 
-    console.log('📊 getCopierStatus - Global status from file:', globalStatus);
-
     res.json({
       success: true,
       data: {

@@ -6,6 +6,7 @@ import {
   removeSlaveConfig,
   resetSlaveConfig,
   setSlaveConfig,
+  testSlaveConfig,
 } from '../controllers/slaveConfigController.js';
 import {
   enforceLotSizeRestrictions,
@@ -56,6 +57,7 @@ const router = express.Router();
  */
 router.get('/', getAllSlaveConfigs);
 router.post('/', requireValidSubscription, enforceLotSizeRestrictions, setSlaveConfig);
+router.get('/test', testSlaveConfig);
 
 /**
  * @swagger

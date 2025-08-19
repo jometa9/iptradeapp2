@@ -301,8 +301,15 @@ export const getSlaveConfig = (req, res) => {
   });
 };
 
+// Test endpoint
+export const testSlaveConfig = async (req, res) => {
+  console.log(`🧪 testSlaveConfig called`);
+  res.json({ message: 'Test endpoint working' });
+};
+
 // Set slave configuration
 export const setSlaveConfig = async (req, res) => {
+  console.log(`🔄 setSlaveConfig called with:`, req.body);
   const {
     slaveAccountId,
     lotMultiplier,
@@ -446,6 +453,7 @@ export const setSlaveConfig = async (req, res) => {
   }
 
   if (enabled !== undefined) {
+    console.log(`🔄 Setting enabled=${enabled} for slave ${slaveAccountId}`);
     configs[slaveAccountId].enabled = Boolean(enabled);
   }
 
@@ -460,14 +468,40 @@ export const setSlaveConfig = async (req, res) => {
     console.log(`Slave config updated for ${slaveAccountId}:`, configs[slaveAccountId]);
 
     // Actualizar también el CSV para sincronizar con el frontend
+    console.log(`🔄 CSV update check - enabled: ${enabled}, slaveAccountId: ${slaveAccountId}`);
     if (enabled !== undefined) {
+      console.log(
+        `🔄 About to update CSV for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+      );
+      console.log(`🔄 enabled value: ${enabled}, type: ${typeof enabled}`);
       try {
-        const csvManager = await import('../services/csvManager.js');
-        const slaveConfig = configs[slaveAccountId];
-        await csvManager.default.updateSlaveStatus(slaveAccountId, enabled, slaveConfig);
-        console.log(
-          `✅ CSV updated for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-        );
+        // Actualizar directamente el archivo CSV
+        const targetFile =
+          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+
+        if (existsSync(targetFile)) {
+          console.log(`✅ CSV file exists: ${targetFile}`);
+          const content = readFileSync(targetFile, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+
+          // Buscar y actualizar la línea CONFIG
+          const updatedLines = lines.map(line => {
+            if (line.includes('[CONFIG]') && line.includes('[SLAVE]')) {
+              console.log(
+                `🔄 Updating CONFIG line from ${line} to [CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}]`
+              );
+              return `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}]`;
+            }
+            return line;
+          });
+
+          writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+          console.log(
+            `✅ CSV updated for slave ${slaveAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+          );
+        } else {
+          console.log(`❌ CSV file not found: ${targetFile}`);
+        }
       } catch (error) {
         console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
         // No fallar la respuesta si el CSV no se puede actualizar
