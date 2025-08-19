@@ -1270,7 +1270,7 @@ export function TradingAccountsConfig() {
 
             {/* Stats Row */}
             <div className="border-b border-gray-200 mx-4"></div>
-            <div className="grid grid-cols-5 gap-4 p-4 px-6">
+            <div className="grid grid-cols-6 gap-4 p-4 px-6">
               {/* Slaves */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
                 <div className="text-2xl font-bold text-green-700">
@@ -1302,6 +1302,14 @@ export function TradingAccountsConfig() {
                   })()}
                 </div>
                 <div className="text-xs text-orange-700 text-center">Pendings</div>
+              </div>
+
+              {/* Online */}
+              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-emerald-200 shadow-sm">
+                <div className="text-2xl font-bold text-emerald-700">
+                  {connectivityStats ? connectivityStats.online : 0}
+                </div>
+                <div className="text-xs text-emerald-700 text-center">Online</div>
               </div>
 
               {/* Offline */}
