@@ -141,6 +141,7 @@ export function TradingAccountsConfig() {
 
   // Cargar configuraciones de slaves
   useEffect(() => {
+    console.log('🔧 useEffect triggered, csvAccounts:', csvAccounts);
     const loadSlaveConfigs = async () => {
       if (!csvAccounts || !secretKey) return;
 
@@ -175,6 +176,7 @@ export function TradingAccountsConfig() {
         }
       }
 
+      console.log('🔧 Slave configs loaded:', newSlaveConfigs);
       setSlaveConfigs(newSlaveConfigs);
     };
 
@@ -207,28 +209,6 @@ export function TradingAccountsConfig() {
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
           masterOnline: master.masterOnline || false,
-        });
-      }
-    });
-
-    // Agregar connected slaves desde masters
-    Object.values(csvAccounts.masterAccounts || {}).forEach((master: any) => {
-      if (master.connectedSlaves) {
-        master.connectedSlaves.forEach((slave: any) => {
-          if (shouldShowAccount(slave.id)) {
-            allAccounts.push({
-              id: slave.id,
-              accountNumber: slave.accountNumber || slave.id,
-              platform: slave.platform || 'Unknown',
-              server: slave.server || '',
-              password: slave.password || '',
-              accountType: 'slave',
-              status: slave.status || 'offline',
-              lotCoefficient: slave.lotCoefficient || 1,
-              forceLot: slave.forceLot || 0,
-              reverseTrade: slave.reverseTrade || false,
-            });
-          }
         });
       }
     });
@@ -1128,25 +1108,42 @@ export function TradingAccountsConfig() {
       return { enabled: false, masterId: null, type: 'unknown' };
 
     // Find the account in the accounts array
-    const account = accounts.find(acc => acc.accountNumber === accountId);
-    if (!account) {
-      return { enabled: false, masterId: null, type: 'unknown' };
+    const account = accounts.find(acc => acc.accountNumber === accountId || acc.name === accountId);
+    if (account) {
+      if (account.accountType === 'master') {
+        const enabled = getMasterEffectiveStatus(accountId);
+        return {
+          enabled,
+          masterId: null,
+          type: 'master',
+        };
+      } else if (account.accountType === 'slave') {
+        const enabled = getSlaveEffectiveStatus(accountId, account.connectedToMaster);
+        return {
+          enabled,
+          masterId: account.connectedToMaster !== 'none' ? account.connectedToMaster : null,
+          type: 'slave',
+        };
+      }
     }
 
-    if (account.accountType === 'master') {
-      const enabled = getMasterEffectiveStatus(accountId);
-      return {
-        enabled,
-        masterId: null,
-        type: 'master',
-      };
-    } else if (account.accountType === 'slave') {
-      const enabled = getSlaveEffectiveStatus(accountId, account.connectedToMaster);
-      return {
-        enabled,
-        masterId: account.connectedToMaster !== 'none' ? account.connectedToMaster : null,
-        type: 'slave',
-      };
+    // If not found in accounts array, check if it's a connected slave
+    if (csvAccounts) {
+      // Search in connected slaves of all masters
+      for (const master of Object.values(csvAccounts.masterAccounts || {})) {
+        const connectedSlave = master.connectedSlaves?.find(slave => slave.id === accountId);
+        if (connectedSlave) {
+          // Use the config that already comes in connectedSlave
+          const enabled = connectedSlave.config?.enabled ?? false;
+          const masterId = connectedSlave.config?.masterId ?? null;
+
+          return {
+            enabled,
+            masterId,
+            type: 'slave',
+          };
+        }
+      }
     }
 
     return { enabled: false, masterId: null, type: 'unknown' };
@@ -1857,9 +1854,7 @@ export function TradingAccountsConfig() {
                   {accounts
                     .filter(account => account.accountType === 'master')
                     .map(masterAccount => {
-                      const connectedSlaves = accounts.filter(
-                        acc => acc.connectedToMaster === masterAccount.accountNumber
-                      );
+                      const connectedSlaves = masterAccount.connectedSlaves || [];
                       const hasSlaves = connectedSlaves.length > 0;
                       return (
                         <React.Fragment key={`master-group-${masterAccount.id}`}>
@@ -2062,251 +2057,259 @@ export function TradingAccountsConfig() {
 
                           {/* Slave accounts connected to this master */}
                           {!collapsedMasters[masterAccount.id] &&
-                            connectedSlaves.map(slaveAccount => (
-                              <tr
-                                key={slaveAccount.id}
-                                className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(slaveAccount.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
-                              >
-                                <td className="w-8 px-2 py-1.5 align-middle"></td>
-                                <td className="w-20 px-4 py-1.5 align-middle">
-                                  <div className="flex items-center justify-center h-full w-full">
-                                    <Tooltip tip={getStatusDisplayText(slaveAccount.status)}>
-                                      <span className="flex items-center justify-center h-5 w-5">
-                                        {getStatusIcon(slaveAccount.status)}
-                                      </span>
-                                    </Tooltip>
-                                  </div>
-                                </td>
-                                <td className="w-32 px-4 py-1.5 align-middle actions-column">
-                                  <div className="flex items-center justify-center">
-                                    <Switch
-                                      checked={getSlaveEffectiveStatus(
-                                        slaveAccount.accountNumber,
-                                        masterAccount.accountNumber
-                                      )}
-                                      onCheckedChange={enabled =>
-                                        toggleAccountStatus(slaveAccount.accountNumber, enabled)
-                                      }
-                                      disabled={
-                                        updatingCopier === `slave-${slaveAccount.accountNumber}` ||
-                                        !copierStatus?.globalStatus ||
-                                        !getMasterEffectiveStatus(masterAccount.accountNumber) ||
-                                        slaveAccount.status === 'offline' ||
-                                        !slaveAccount.masterOnline
-                                      }
-                                      title={
-                                        slaveAccount.status === 'offline'
-                                          ? 'Account is offline - copy trading disabled'
-                                          : !slaveAccount.masterOnline
-                                            ? 'Master account is offline - copy trading disabled'
-                                            : !copierStatus?.globalStatus
-                                              ? 'Global copier is OFF'
-                                              : !getMasterEffectiveStatus(
-                                                    masterAccount.accountNumber
-                                                  )
-                                                ? 'Master is not sending signals'
-                                                : getSlaveEffectiveStatus(
-                                                      slaveAccount.accountNumber,
+                            connectedSlaves.map(slaveAccount => {
+                              console.log('🔍 Slave account data:', slaveAccount);
+                              return (
+                                <tr
+                                  key={slaveAccount.id}
+                                  className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(slaveAccount.name) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                                >
+                                  <td className="w-8 px-2 py-1.5 align-middle"></td>
+                                  <td className="w-20 px-4 py-1.5 align-middle">
+                                    <div className="flex items-center justify-center h-full w-full">
+                                      <Tooltip tip={getStatusDisplayText(slaveAccount.status)}>
+                                        <span className="flex items-center justify-center h-5 w-5">
+                                          {getStatusIcon(slaveAccount.status)}
+                                        </span>
+                                      </Tooltip>
+                                    </div>
+                                  </td>
+                                  <td className="w-32 px-4 py-1.5 align-middle actions-column">
+                                    <div className="flex items-center justify-center">
+                                      <Switch
+                                        checked={getSlaveEffectiveStatus(
+                                          slaveAccount.name,
+                                          masterAccount.accountNumber
+                                        )}
+                                        onCheckedChange={enabled =>
+                                          toggleAccountStatus(slaveAccount.name, enabled)
+                                        }
+                                        disabled={
+                                          updatingCopier === `slave-${slaveAccount.name}` ||
+                                          !copierStatus?.globalStatus ||
+                                          !getMasterEffectiveStatus(masterAccount.accountNumber) ||
+                                          slaveAccount.status === 'offline' ||
+                                          !slaveAccount.masterOnline
+                                        }
+                                        title={
+                                          slaveAccount.status === 'offline'
+                                            ? 'Account is offline - copy trading disabled'
+                                            : !slaveAccount.masterOnline
+                                              ? 'Master account is offline - copy trading disabled'
+                                              : !copierStatus?.globalStatus
+                                                ? 'Global copier is OFF'
+                                                : !getMasterEffectiveStatus(
                                                       masterAccount.accountNumber
                                                     )
-                                                  ? 'Stop receiving signals from master'
-                                                  : 'Start receiving signals from master'
-                                      }
-                                    />
-                                  </div>
-                                </td>
-                                <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                  <div className="flex items-center gap-2">
-                                    {slaveAccount.accountNumber}
-                                    {recentlyDeployedSlaves.has(slaveAccount.accountNumber) && (
-                                      <div className="flex items-center gap-1">
-                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                        <span className="text-xs text-green-600 font-medium">
-                                          New
-                                        </span>
+                                                  ? 'Master is not sending signals'
+                                                  : getSlaveEffectiveStatus(
+                                                        slaveAccount.accountNumber,
+                                                        masterAccount.accountNumber
+                                                      )
+                                                    ? 'Stop receiving signals from master'
+                                                    : 'Start receiving signals from master'
+                                        }
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
+                                    <div className="flex items-center gap-2">
+                                      {slaveAccount.name}
+                                      {recentlyDeployedSlaves.has(slaveAccount.name) && (
+                                        <div className="flex items-center gap-1">
+                                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                          <span className="text-xs text-green-600 font-medium">
+                                            New
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm text-green-700 align-middle">
+                                    Slave
+                                  </td>
+                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
+                                    {getPlatformDisplayName(slaveAccount.platform)}
+                                  </td>
+                                  <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
+                                    <div className="flex gap-2 flex-wrap">
+                                      {/* Badge principal de estado */}
+                                      {getConfigurationBadge(slaveAccount.name)}
+
+                                      {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
+                                      {(() => {
+                                        const config = slaveAccount.config;
+                                        console.log(
+                                          '🔍 Slave config for',
+                                          slaveAccount.id,
+                                          ':',
+                                          config
+                                        );
+                                        const labels = [];
+
+                                        if (config) {
+                                          // Fixed lot tiene prioridad sobre multiplier
+                                          if (config.forceLot && config.forceLot > 0) {
+                                            labels.push(
+                                              <div
+                                                key="forceLot"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                              >
+                                                Fixed Lot {config.forceLot}
+                                              </div>
+                                            );
+                                          } else if (config.lotMultiplier) {
+                                            // Solo mostrar multiplier si no hay fixed lot
+                                            labels.push(
+                                              <div
+                                                key="lotMultiplier"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                              >
+                                                Multiplier {config.lotMultiplier}
+                                              </div>
+                                            );
+                                          }
+
+                                          // Reverse trading (siempre mostrar si está habilitado)
+                                          if (config.reverseTrading) {
+                                            labels.push(
+                                              <div
+                                                key="reverseTrading"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                              >
+                                                Reverse Trading
+                                              </div>
+                                            );
+                                          }
+
+                                          // Master ID (mostrar a qué master se conecta)
+                                          if (config.masterId) {
+                                            labels.push(
+                                              <div
+                                                key="masterId"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                              >
+                                                Master {config.masterId}
+                                              </div>
+                                            );
+                                          }
+                                        }
+
+                                        // Si no hay configuraciones específicas, no mostrar nada
+                                        return labels;
+
+                                        return labels;
+                                      })()}
+                                    </div>
+                                  </td>
+                                  <td className="w-32 px-4 py-1.5 whitespace-nowrap align-middle actions-column">
+                                    {deleteConfirmId === slaveAccount.id ? (
+                                      <div className="flex space-x-2">
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={confirmDeleteAccount}
+                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                        >
+                                          {isDeletingAccount === slaveAccount.id
+                                            ? 'Deleting...'
+                                            : 'Delete'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={cancelDeleteAccount}
+                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    ) : disconnectConfirmId === slaveAccount.id ? (
+                                      <div className="flex space-x-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            disconnectSlaveAccount(slaveAccount.accountNumber);
+                                          }}
+                                          disabled={isDisconnecting === slaveAccount.id}
+                                        >
+                                          {isDisconnecting === slaveAccount.id ? (
+                                            <>
+                                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                              Disconnecting...
+                                            </>
+                                          ) : (
+                                            <>Disconnect</>
+                                          )}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            cancelDisconnectAction();
+                                          }}
+                                          disabled={isDisconnecting === slaveAccount.id}
+                                          className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex space-x-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            handleEditAccount(slaveAccount);
+                                          }}
+                                          title="Edit Account"
+                                          disabled={isDeletingAccount === slaveAccount.id}
+                                        >
+                                          <Pencil className="h-4 w-4 text-blue-600" />
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setDisconnectConfirmId(slaveAccount.id);
+                                          }}
+                                          title="Disconnect from Master"
+                                          disabled={
+                                            isDeletingAccount === slaveAccount.id ||
+                                            isDisconnecting === slaveAccount.id
+                                          }
+                                        >
+                                          <Unlink className="h-4 w-4 text-orange-600" />
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            handleDeleteAccount(slaveAccount.id);
+                                          }}
+                                          title="Delete Account"
+                                          disabled={isDeletingAccount === slaveAccount.id}
+                                        >
+                                          <Trash className="h-4 w-4 text-red-600" />
+                                        </Button>
                                       </div>
                                     )}
-                                  </div>
-                                </td>
-                                <td className="px-4 py-1.5 whitespace-nowrap text-sm text-green-700 align-middle">
-                                  Slave
-                                </td>
-                                <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                  {getPlatformDisplayName(slaveAccount.platform)}
-                                </td>
-                                <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
-                                  <div className="flex gap-2 flex-wrap">
-                                    {/* Badge principal de estado */}
-                                    {getConfigurationBadge(slaveAccount.accountNumber)}
-
-                                    {/* Mostrar configuraciones de slave usando slaveConfigs */}
-                                    {(() => {
-                                      const slaveConfig = slaveConfigs[slaveAccount.accountNumber];
-                                      const config = slaveConfig?.config;
-                                      const labels = [];
-
-                                      if (config) {
-                                        // Fixed lot tiene prioridad sobre multiplier
-                                        if (config.forceLot && config.forceLot > 0) {
-                                          labels.push(
-                                            <div
-                                              key="forceLot"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
-                                            >
-                                              Fixed Lot {config.forceLot}
-                                            </div>
-                                          );
-                                        } else if (config.lotMultiplier) {
-                                          // Solo mostrar multiplier si no hay fixed lot
-                                          labels.push(
-                                            <div
-                                              key="lotMultiplier"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
-                                            >
-                                              Multiplier {config.lotMultiplier}
-                                            </div>
-                                          );
-                                        }
-
-                                        // Reverse trading (siempre mostrar si está habilitado)
-                                        if (config.reverseTrading) {
-                                          labels.push(
-                                            <div
-                                              key="reverseTrading"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
-                                            >
-                                              Reverse Trading
-                                            </div>
-                                          );
-                                        }
-
-                                        // Master ID (mostrar a qué master se conecta)
-                                        if (config.masterId) {
-                                          labels.push(
-                                            <div
-                                              key="masterId"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
-                                            >
-                                              Master {config.masterId}
-                                            </div>
-                                          );
-                                        }
-                                      }
-
-                                      // Si no hay configuraciones específicas, no mostrar nada
-                                      return labels;
-
-                                      return labels;
-                                    })()}
-                                  </div>
-                                </td>
-                                <td className="w-32 px-4 py-1.5 whitespace-nowrap align-middle actions-column">
-                                  {deleteConfirmId === slaveAccount.id ? (
-                                    <div className="flex space-x-2">
-                                      <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        onClick={confirmDeleteAccount}
-                                        disabled={isDeletingAccount === slaveAccount.id}
-                                        className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                                      >
-                                        {isDeletingAccount === slaveAccount.id
-                                          ? 'Deleting...'
-                                          : 'Delete'}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={cancelDeleteAccount}
-                                        disabled={isDeletingAccount === slaveAccount.id}
-                                        className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </div>
-                                  ) : disconnectConfirmId === slaveAccount.id ? (
-                                    <div className="flex space-x-2">
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          disconnectSlaveAccount(slaveAccount.accountNumber);
-                                        }}
-                                        disabled={isDisconnecting === slaveAccount.id}
-                                      >
-                                        {isDisconnecting === slaveAccount.id ? (
-                                          <>
-                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
-                                            Disconnecting...
-                                          </>
-                                        ) : (
-                                          <>Disconnect</>
-                                        )}
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          cancelDisconnectAction();
-                                        }}
-                                        disabled={isDisconnecting === slaveAccount.id}
-                                        className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
-                                      >
-                                        Cancel
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="flex space-x-2">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          handleEditAccount(slaveAccount);
-                                        }}
-                                        title="Edit Account"
-                                        disabled={isDeletingAccount === slaveAccount.id}
-                                      >
-                                        <Pencil className="h-4 w-4 text-blue-600" />
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          setDisconnectConfirmId(slaveAccount.id);
-                                        }}
-                                        title="Disconnect from Master"
-                                        disabled={
-                                          isDeletingAccount === slaveAccount.id ||
-                                          isDisconnecting === slaveAccount.id
-                                        }
-                                      >
-                                        <Unlink className="h-4 w-4 text-orange-600" />
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          handleDeleteAccount(slaveAccount.id);
-                                        }}
-                                        title="Delete Account"
-                                        disabled={isDeletingAccount === slaveAccount.id}
-                                      >
-                                        <Trash className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                         </React.Fragment>
                       );
                     })}
