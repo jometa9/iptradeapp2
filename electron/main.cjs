@@ -369,10 +369,11 @@ function createWindow() {
   const isMacOS = process.platform === 'darwin';
 
   const windowConfig = {
-    width: 1000,
-    minWidth: 1000,
+    width: 1250,
+    minWidth: 1250,
     height: 800,
     minHeight: 800,
+    resizable: true,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
     title: 'IPTRADE',
     webPreferences: {

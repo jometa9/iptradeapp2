@@ -1935,9 +1935,6 @@ export function TradingAccountsConfig() {
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
                               <div className="flex gap-2 flex-wrap">
-                                {/* Badge principal de estado */}
-                                {getConfigurationBadge(masterAccount.accountNumber)}
-
                                 {/* Badge de slaves conectados */}
                                 {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                   <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
@@ -2133,9 +2130,6 @@ export function TradingAccountsConfig() {
                                   </td>
                                   <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
                                     <div className="flex gap-2 flex-wrap">
-                                      {/* Badge principal de estado */}
-                                      {getConfigurationBadge(slaveAccount.name)}
-
                                       {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
                                       {(() => {
                                         const config = slaveAccount.config;
@@ -2155,7 +2149,7 @@ export function TradingAccountsConfig() {
                                                 key="forceLot"
                                                 className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
                                               >
-                                                Fixed Lot {config.forceLot}
+                                                {config.forceLot} Lot
                                               </div>
                                             );
                                           } else if (config.lotMultiplier) {
@@ -2165,7 +2159,7 @@ export function TradingAccountsConfig() {
                                                 key="lotMultiplier"
                                                 className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
                                               >
-                                                Multiplier {config.lotMultiplier}
+                                                {config.lotMultiplier}x
                                               </div>
                                             );
                                           }
@@ -2177,7 +2171,7 @@ export function TradingAccountsConfig() {
                                                 key="reverseTrading"
                                                 className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
                                               >
-                                                Reverse Trading
+                                                Reverse
                                               </div>
                                             );
                                           }
@@ -2189,7 +2183,7 @@ export function TradingAccountsConfig() {
                                                 key="masterId"
                                                 className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
                                               >
-                                                Master {config.masterId}
+                                                Listen {config.masterId}
                                               </div>
                                             );
                                           }
@@ -2415,7 +2409,7 @@ export function TradingAccountsConfig() {
                                       key="forceLot"
                                       className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
                                     >
-                                      Fixed Lot {config.forceLot}
+                                      {config.forceLot} Lot
                                     </div>
                                   );
                                 } else if (config.lotMultiplier) {
@@ -2425,7 +2419,7 @@ export function TradingAccountsConfig() {
                                       key="lotMultiplier"
                                       className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
                                     >
-                                      Multiplier {config.lotMultiplier}
+                                      {config.lotMultiplier}x
                                     </div>
                                   );
                                 }

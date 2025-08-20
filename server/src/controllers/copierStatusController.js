@@ -265,36 +265,64 @@ export const setMasterStatus = async (req, res) => {
       userCopierStatus.globalStatus &&
       userCopierStatus.masterAccounts[masterAccountId];
 
-    // Actualizar también el CSV para sincronizar con el frontend
+    // Actualizar CSV del master y de todas las slaves conectadas
     try {
-      // Actualizar directamente el archivo CSV
-      const targetFile =
-        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+      // Importar csvManager para usar su método updateAccountStatus
+      const csvManager = (await import('../services/csvManager.js')).default;
 
-      if (existsSync(targetFile)) {
-        const content = readFileSync(targetFile, 'utf8');
-        const lines = content.split('\n').filter(line => line.trim());
-
-        // Buscar y actualizar la línea CONFIG
-        const updatedLines = lines.map(line => {
-          if (line.includes('[CONFIG]') && line.includes('[MASTER]')) {
-            console.log(
-              `🔄 Updating CONFIG line from ${line} to [CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}]`
-            );
-            return `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}]`;
-          }
-          return line;
-        });
-
-        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      // Actualizar el CSV del master
+      const masterUpdated = await csvManager.updateAccountStatus(masterAccountId, enabled);
+      if (masterUpdated) {
         console.log(
           `✅ CSV updated for master ${masterAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
         );
       } else {
-        console.log(`❌ CSV file not found: ${targetFile}`);
+        console.log(`⚠️ Failed to update CSV for master ${masterAccountId}`);
+      }
+
+      // Obtener las slaves conectadas a este master desde ambas fuentes:
+      // 1. Configuración de cuentas registradas
+      const userAccounts = getUserAccounts(apiKey);
+      const configConnectedSlaves = Object.entries(userAccounts.connections || {})
+        .filter(([, masterId]) => masterId === masterAccountId)
+        .map(([slaveId]) => slaveId);
+
+      // 2. Datos del CSV (usando csvManager)
+      const csvConnectedSlaves = csvManager
+        .getConnectedSlaves(masterAccountId)
+        .map(slave => slave.id);
+
+      // Combinar ambas fuentes y eliminar duplicados
+      const allConnectedSlaves = [...new Set([...configConnectedSlaves, ...csvConnectedSlaves])];
+
+      console.log(`🔍 Found slaves connected to master ${masterAccountId}:`);
+      console.log(
+        `   📋 From accounts config: ${configConnectedSlaves.length} slaves:`,
+        configConnectedSlaves
+      );
+      console.log(`   📄 From CSV data: ${csvConnectedSlaves.length} slaves:`, csvConnectedSlaves);
+      console.log(`   🎯 Total unique slaves: ${allConnectedSlaves.length}:`, allConnectedSlaves);
+
+      // Actualizar el CSV de cada slave conectada
+      for (const slaveId of allConnectedSlaves) {
+        try {
+          const slaveUpdated = await csvManager.updateAccountStatus(slaveId, enabled);
+          if (slaveUpdated) {
+            console.log(
+              `✅ CSV updated for slave ${slaveId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+            );
+          } else {
+            console.log(`⚠️ Failed to update CSV for slave ${slaveId}`);
+          }
+        } catch (slaveError) {
+          console.error(`❌ Error updating CSV for slave ${slaveId}:`, slaveError);
+        }
       }
     } catch (error) {
-      console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);
+      console.error(
+        `❌ Error updating CSV files for master ${masterAccountId} and connected slaves:`,
+        error
+      );
       // No fallar la respuesta si el CSV no se puede actualizar
     }
 

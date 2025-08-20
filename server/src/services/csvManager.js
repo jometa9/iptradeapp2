@@ -1636,15 +1636,30 @@ class CSVManager extends EventEmitter {
           if (matches && matches.length >= 2) {
             const configType = matches[1].replace(/[\[\]]/g, '').trim();
             if (configType === 'MASTER' || configType === 'SLAVE') {
-              // Mantener el resto de la configuración igual, solo actualizar el estado
-              const newLine = line.replace(
-                /\[(ENABLED|DISABLED)\]/,
-                `[${enabled ? 'ENABLED' : 'DISABLED'}]`
-              );
+              let newLine;
+
+              // Diferentes patrones de reemplazo para MASTER y SLAVE debido a diferentes formatos
+              if (configType === 'MASTER') {
+                // Formato Master: [CONFIG] [MASTER] [ENABLED/DISABLED]
+                newLine = line.replace(
+                  /\[(ENABLED|DISABLED)\]/,
+                  `[${enabled ? 'ENABLED' : 'DISABLED'}]`
+                );
+              } else if (configType === 'SLAVE') {
+                // Formato Slave: [CONFIG][SLAVE][ENABLED/DISABLED][otros_campos...]
+                // Usar un regex más flexible que capture cualquier cosa después de SLAVE
+                newLine = line.replace(
+                  /(\[SLAVE\])\s*\[(ENABLED|DISABLED)\]/,
+                  `$1[${enabled ? 'ENABLED' : 'DISABLED'}]`
+                );
+              }
+
               updatedLines.push(newLine);
               console.log(
-                `✅ Updated CONFIG line for account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+                `✅ Updated CONFIG line for ${configType} account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
               );
+              console.log(`   Original: ${line}`);
+              console.log(`   Updated:  ${newLine}`);
             } else {
               updatedLines.push(line);
             }
