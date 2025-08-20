@@ -1693,7 +1693,7 @@ export function TradingAccountsConfig() {
                                 disabled={!canCustomizeLotSizesValue}
                                 className="bg-white border border-gray-200 shadow-sm"
                               />
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                 {canCustomizeLotSizesValue
                                   ? 'Multiplies the lot size from the master account'
                                   : 'Free plan users cannot customize lot multipliers'}
@@ -1746,7 +1746,7 @@ export function TradingAccountsConfig() {
                                 disabled={!canCustomizeLotSizesValue}
                                 className="bg-white border border-gray-200 shadow-sm"
                               />
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                 {canCustomizeLotSizesValue
                                   ? 'If set above 0, uses this fixed lot size instead of copying'
                                   : 'Free plan users are limited to 0.01 lot size'}
@@ -2367,10 +2367,6 @@ export function TradingAccountsConfig() {
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
                           <div className="flex gap-2 flex-wrap">
-                            {/* Badge principal de estado */}
-                            {getConfigurationBadge(orphanSlave.accountNumber)}
-
-                            {/* Mostrar configuraciones de slave usando datos del CSV */}
                             {(() => {
                               // Buscar la configuración en los datos del CSV
                               let config = null;
