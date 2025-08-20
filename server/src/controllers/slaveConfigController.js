@@ -325,8 +325,15 @@ export const testSlaveConfig = async (req, res) => {
 // Set slave configuration
 export const setSlaveConfig = async (req, res) => {
   console.log(`🔄 setSlaveConfig called with:`, req.body);
-  const { slaveAccountId, lotMultiplier, forceLot, reverseTrading, enabled, description } =
-    req.body;
+  const {
+    slaveAccountId,
+    lotMultiplier,
+    forceLot,
+    reverseTrading,
+    enabled,
+    description,
+    masterId,
+  } = req.body;
 
   if (!slaveAccountId) {
     return res.status(400).json({
@@ -410,6 +417,12 @@ export const setSlaveConfig = async (req, res) => {
 
   if (description !== undefined) {
     configs[slaveAccountId].description = description;
+  }
+
+  // Handle masterId update
+  if (masterId !== undefined) {
+    console.log(`🔄 Setting masterId=${masterId} for slave ${slaveAccountId}`);
+    configs[slaveAccountId].masterId = masterId === 'none' || masterId === '' ? null : masterId;
   }
 
   configs[slaveAccountId].lastUpdated = new Date().toISOString();

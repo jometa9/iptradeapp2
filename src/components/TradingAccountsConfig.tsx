@@ -805,17 +805,29 @@ export function TradingAccountsConfig() {
           });
 
           // Para edición de cuentas slave, enviamos las configuraciones de trading
+          console.log('🔍 connectedToMaster value:', formState.connectedToMaster);
+          console.log('🔍 connectedToMaster type:', typeof formState.connectedToMaster);
+
           payload = {
             slaveAccountId: editingAccount.accountNumber,
             lotMultiplier: formState.lotCoefficient,
             forceLot: formState.forceLot > 0 ? formState.forceLot : null,
             reverseTrading: formState.reverseTrade,
-            // No enviar 'enabled' para mantener el estado original del CSV
-            ...(formState.connectedToMaster !== 'none' &&
-              formState.connectedToMaster !== '' && {
-                masterId: formState.connectedToMaster,
-              }),
           };
+
+          // Manejar masterId explícitamente
+          if (
+            formState.connectedToMaster &&
+            formState.connectedToMaster !== 'none' &&
+            formState.connectedToMaster !== ''
+          ) {
+            payload.masterId = formState.connectedToMaster;
+            console.log('🔍 Adding masterId to payload:', formState.connectedToMaster);
+          } else {
+            // Explícitamente establecer masterId como null para desconectar
+            payload.masterId = null;
+            console.log('🔍 Setting masterId to null - slave will be disconnected');
+          }
 
           console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
 
