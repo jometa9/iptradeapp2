@@ -17,7 +17,7 @@ El bot debe **reescribir completamente** el archivo en cada ping con todas las l
 ```
 [TYPE][SLAVE][MT5][67890]
 [STATUS][ONLINE][1755131092]
-[CONFIG][SLAVE][ENABLED][1.5][NULL][FALSE][10][0.01][12345]
+[CONFIG][SLAVE][ENABLED][1.5][NULL][FALSE][12345]
 ```
 ### Ejemplo para una cuenta PENDING (no configurada):
 ```
@@ -48,15 +48,13 @@ El bot debe **reescribir completamente** el archivo en cada ping con todas las l
 - **NOMBRE**: Nombre descriptivo del master
 #### Para SLAVE:
 ```
-[CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MAX_LOT][MIN_LOT][MASTER_ID]
+[CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID]
 ```
 - **ENABLED/DISABLED**: Estado del slave
 - **LOT_MULT**: Multiplicador de lote (ej: 1.5)
 - **FORCE_LOT**: Lote fijo o NULL
 - **REVERSE**: TRUE o FALSE para trading inverso
-- **MAX_LOT**: Lote mximo o NULL
-- **MIN_LOT**: Lote mnimo o NULL
-- **MASTER_ID**: ID del master al que est conectado
+- **MASTER_ID**: ID del master al que está conectado
 #### Para PENDING:
 ```
 [CONFIG][PENDING]

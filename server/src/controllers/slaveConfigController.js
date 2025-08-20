@@ -46,25 +46,8 @@ const getDefaultSlaveConfig = () => ({
   forceLot: null,
   reverseTrading: false,
 
-  // Risk management
-  maxLotSize: null,
-  minLotSize: null,
-
-  // Symbol filtering
-  allowedSymbols: [], // Empty array means all symbols allowed
-  blockedSymbols: [],
-
-  // Order type filtering
-  allowedOrderTypes: [], // Empty array means all types allowed
-  blockedOrderTypes: [],
-
-  // Time-based filtering
-  tradingHours: {
-    enabled: false,
-    startTime: '00:00',
-    endTime: '23:59',
-    timezone: 'UTC',
-  },
+  // Master connection
+  masterId: null,
 
   // Additional settings
   enabled: true,
@@ -80,25 +63,8 @@ const getDisabledSlaveConfig = () => ({
   forceLot: null,
   reverseTrading: false,
 
-  // Risk management
-  maxLotSize: null,
-  minLotSize: null,
-
-  // Symbol filtering
-  allowedSymbols: [], // Empty array means all symbols allowed
-  blockedSymbols: [],
-
-  // Order type filtering
-  allowedOrderTypes: [], // Empty array means all types allowed
-  blockedOrderTypes: [],
-
-  // Time-based filtering
-  tradingHours: {
-    enabled: false,
-    startTime: '00:00',
-    endTime: '23:59',
-    timezone: 'UTC',
-  },
+  // Master connection
+  masterId: null,
 
   // Additional settings
   enabled: false, // Disabled by default for new accounts from pending
@@ -319,18 +285,6 @@ export const getSlaveConfig = (req, res) => {
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
                   masterId: values[6] !== 'NULL' ? values[6] : null,
-                  maxLotSize: null,
-                  minLotSize: null,
-                  allowedSymbols: [],
-                  blockedSymbols: [],
-                  allowedOrderTypes: [],
-                  blockedOrderTypes: [],
-                  tradingHours: {
-                    enabled: false,
-                    startTime: '00:00',
-                    endTime: '23:59',
-                    timezone: 'UTC',
-                  },
                   description: '',
                   lastUpdated: new Date().toISOString(),
                 };
@@ -371,21 +325,8 @@ export const testSlaveConfig = async (req, res) => {
 // Set slave configuration
 export const setSlaveConfig = async (req, res) => {
   console.log(`🔄 setSlaveConfig called with:`, req.body);
-  const {
-    slaveAccountId,
-    lotMultiplier,
-    forceLot,
-    reverseTrading,
-    maxLotSize,
-    minLotSize,
-    allowedSymbols,
-    blockedSymbols,
-    allowedOrderTypes,
-    blockedOrderTypes,
-    tradingHours,
-    enabled,
-    description,
-  } = req.body;
+  const { slaveAccountId, lotMultiplier, forceLot, reverseTrading, enabled, description } =
+    req.body;
 
   if (!slaveAccountId) {
     return res.status(400).json({
@@ -460,57 +401,6 @@ export const setSlaveConfig = async (req, res) => {
 
   if (reverseTrading !== undefined) {
     configs[slaveAccountId].reverseTrading = Boolean(reverseTrading);
-  }
-
-  if (maxLotSize !== undefined) {
-    if (maxLotSize === null || maxLotSize === '') {
-      configs[slaveAccountId].maxLotSize = null;
-    } else {
-      const lot = parseFloat(maxLotSize);
-      if (isNaN(lot) || lot <= 0) {
-        return res.status(400).json({ error: 'maxLotSize must be a positive number or null' });
-      }
-      configs[slaveAccountId].maxLotSize = lot;
-    }
-  }
-
-  if (minLotSize !== undefined) {
-    if (minLotSize === null || minLotSize === '') {
-      configs[slaveAccountId].minLotSize = null;
-    } else {
-      const lot = parseFloat(minLotSize);
-      if (isNaN(lot) || lot <= 0) {
-        return res.status(400).json({ error: 'minLotSize must be a positive number or null' });
-      }
-      configs[slaveAccountId].minLotSize = lot;
-    }
-  }
-
-  if (allowedSymbols !== undefined) {
-    configs[slaveAccountId].allowedSymbols = Array.isArray(allowedSymbols) ? allowedSymbols : [];
-  }
-
-  if (blockedSymbols !== undefined) {
-    configs[slaveAccountId].blockedSymbols = Array.isArray(blockedSymbols) ? blockedSymbols : [];
-  }
-
-  if (allowedOrderTypes !== undefined) {
-    configs[slaveAccountId].allowedOrderTypes = Array.isArray(allowedOrderTypes)
-      ? allowedOrderTypes
-      : [];
-  }
-
-  if (blockedOrderTypes !== undefined) {
-    configs[slaveAccountId].blockedOrderTypes = Array.isArray(blockedOrderTypes)
-      ? blockedOrderTypes
-      : [];
-  }
-
-  if (tradingHours !== undefined) {
-    configs[slaveAccountId].tradingHours = {
-      ...configs[slaveAccountId].tradingHours,
-      ...tradingHours,
-    };
   }
 
   if (enabled !== undefined) {

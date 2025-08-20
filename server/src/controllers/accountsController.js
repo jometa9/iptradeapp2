@@ -494,21 +494,32 @@ export const getAllAccounts = async (req, res) => {
 
     // Calculate statistics
     const totalMasterAccounts = Object.keys(accounts.masterAccounts).length;
-    const totalSlaveAccounts = accounts.unconnectedSlaves.length;
-    const totalPendingAccounts = accounts.pendingAccounts.length;
-    const totalConnections = Object.values(accounts.masterAccounts).reduce(
+    const totalConnectedSlaves = Object.values(accounts.masterAccounts).reduce(
       (sum, master) => sum + master.connectedSlaves.length,
       0
     );
+    const totalSlaveAccounts = accounts.unconnectedSlaves.length + totalConnectedSlaves;
+    const totalPendingAccounts = accounts.pendingAccounts.length;
+    const totalConnections = totalConnectedSlaves;
 
     // Calcular estadísticas adicionales
     const offlineAccounts =
       Object.values(accounts.masterAccounts).filter(acc => acc.status === 'offline').length +
-      accounts.unconnectedSlaves.filter(acc => acc.status === 'offline').length;
+      accounts.unconnectedSlaves.filter(acc => acc.status === 'offline').length +
+      Object.values(accounts.masterAccounts).reduce(
+        (sum, master) =>
+          sum + master.connectedSlaves.filter(slave => slave.status === 'offline').length,
+        0
+      );
     const onlineAccounts =
       Object.values(accounts.masterAccounts).filter(acc => acc.status === 'online').length +
       accounts.unconnectedSlaves.filter(acc => acc.status === 'online').length +
-      accounts.pendingAccounts.filter(acc => acc.status === 'online').length;
+      accounts.pendingAccounts.filter(acc => acc.status === 'online').length +
+      Object.values(accounts.masterAccounts).reduce(
+        (sum, master) =>
+          sum + master.connectedSlaves.filter(slave => slave.status === 'online').length,
+        0
+      );
     const totalAccounts = totalMasterAccounts + totalSlaveAccounts + totalPendingAccounts;
 
     res.json({

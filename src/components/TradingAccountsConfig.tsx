@@ -72,18 +72,7 @@ interface SlaveConfig {
     lotMultiplier?: number;
     forceLot?: number | null;
     reverseTrading?: boolean;
-    maxLotSize?: number | null;
-    minLotSize?: number | null;
-    allowedSymbols?: string[];
-    blockedSymbols?: string[];
-    allowedOrderTypes?: string[];
-    blockedOrderTypes?: string[];
-    tradingHours?: {
-      enabled: boolean;
-      startTime: string;
-      endTime: string;
-      timezone: string;
-    };
+    masterId?: string | null;
     description?: string;
   };
 }
@@ -150,6 +139,48 @@ export function TradingAccountsConfig() {
     };
   }, [refreshCSVData]);
 
+  // Cargar configuraciones de slaves
+  useEffect(() => {
+    const loadSlaveConfigs = async () => {
+      if (!csvAccounts || !secretKey) return;
+
+      const newSlaveConfigs: Record<string, SlaveConfig> = {};
+
+      // Obtener configuraciones para todas las cuentas slave
+      const slaveAccounts = [
+        ...Object.values(csvAccounts.masterAccounts || {}).flatMap(
+          master => master.connectedSlaves || []
+        ),
+        ...(csvAccounts.unconnectedSlaves || []),
+      ];
+
+      for (const slave of slaveAccounts) {
+        try {
+          const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+          const response = await fetch(
+            `http://localhost:${serverPort}/api/slave-config/${slave.id}`,
+            {
+              headers: {
+                'x-api-key': secretKey,
+              },
+            }
+          );
+
+          if (response.ok) {
+            const slaveConfig = await response.json();
+            newSlaveConfigs[slave.id] = slaveConfig;
+          }
+        } catch (error) {
+          console.error(`Error loading slave config for ${slave.id}:`, error);
+        }
+      }
+
+      setSlaveConfigs(newSlaveConfigs);
+    };
+
+    loadSlaveConfigs();
+  }, [csvAccounts, secretKey]);
+
   // Convertir datos CSV a formato esperado
   const accounts = React.useMemo(() => {
     if (!csvAccounts) return [];
@@ -176,6 +207,28 @@ export function TradingAccountsConfig() {
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
           masterOnline: master.masterOnline || false,
+        });
+      }
+    });
+
+    // Agregar connected slaves desde masters
+    Object.values(csvAccounts.masterAccounts || {}).forEach((master: any) => {
+      if (master.connectedSlaves) {
+        master.connectedSlaves.forEach((slave: any) => {
+          if (shouldShowAccount(slave.id)) {
+            allAccounts.push({
+              id: slave.id,
+              accountNumber: slave.accountNumber || slave.id,
+              platform: slave.platform || 'Unknown',
+              server: slave.server || '',
+              password: slave.password || '',
+              accountType: 'slave',
+              status: slave.status || 'offline',
+              lotCoefficient: slave.lotCoefficient || 1,
+              forceLot: slave.forceLot || 0,
+              reverseTrade: slave.reverseTrade || false,
+            });
+          }
         });
       }
     });
@@ -1891,22 +1944,10 @@ export function TradingAccountsConfig() {
                                 {getConfigurationBadge(masterAccount.accountNumber)}
 
                                 {/* Badge de slaves conectados */}
-                                {accounts.filter(
-                                  acc => acc.connectedToMaster === masterAccount.accountNumber
-                                ).length > 0 ? (
+                                {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                   <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
-                                    {
-                                      accounts.filter(
-                                        acc => acc.connectedToMaster === masterAccount.accountNumber
-                                      ).length
-                                    }{' '}
-                                    slave
-                                    {accounts.filter(
-                                      acc => acc.connectedToMaster === masterAccount.accountNumber
-                                    ).length > 1
-                                      ? 's'
-                                      : ''}{' '}
-                                    connected
+                                    {masterAccount.totalSlaves} slave
+                                    {masterAccount.totalSlaves > 1 ? 's' : ''} connected
                                   </div>
                                 ) : (
                                   <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
@@ -1981,26 +2022,24 @@ export function TradingAccountsConfig() {
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className={`h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 ${
-                                      !(masterAccount.totalSlaves && masterAccount.totalSlaves > 0)
-                                        ? 'invisible'
-                                        : ''
-                                    }`}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setDisconnectAllConfirmId(masterAccount.id);
-                                    }}
-                                    title="Disconnect All Slaves"
-                                    disabled={
-                                      isDeletingAccount === masterAccount.id ||
-                                      isDisconnecting === masterAccount.id
-                                    }
-                                  >
-                                    <Unlink className="h-4 w-4 text-orange-600" />
-                                  </Button>
+                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setDisconnectAllConfirmId(masterAccount.id);
+                                      }}
+                                      title="Disconnect All Slaves"
+                                      disabled={
+                                        isDeletingAccount === masterAccount.id ||
+                                        isDisconnecting === masterAccount.id
+                                      }
+                                    >
+                                      <Unlink className="h-4 w-4 text-orange-600" />
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2141,67 +2180,14 @@ export function TradingAccountsConfig() {
                                           );
                                         }
 
-                                        // Max lot size (solo si está configurado)
-                                        if (config.maxLotSize && config.maxLotSize > 0) {
+                                        // Master ID (mostrar a qué master se conecta)
+                                        if (config.masterId) {
                                           labels.push(
                                             <div
-                                              key="maxLotSize"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 border border-orange-400 inline-block"
+                                              key="masterId"
+                                              className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
                                             >
-                                              Max {config.maxLotSize}
-                                            </div>
-                                          );
-                                        }
-
-                                        // Min lot size (solo si está configurado)
-                                        if (config.minLotSize && config.minLotSize > 0) {
-                                          labels.push(
-                                            <div
-                                              key="minLotSize"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 border border-yellow-400 inline-block"
-                                            >
-                                              Min {config.minLotSize}
-                                            </div>
-                                          );
-                                        }
-
-                                        // Symbol filtering (solo si hay símbolos permitidos o bloqueados)
-                                        if (
-                                          config.allowedSymbols &&
-                                          config.allowedSymbols.length > 0
-                                        ) {
-                                          labels.push(
-                                            <div
-                                              key="allowedSymbols"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 border border-indigo-400 inline-block"
-                                            >
-                                              {config.allowedSymbols.length} symbols
-                                            </div>
-                                          );
-                                        }
-
-                                        if (
-                                          config.blockedSymbols &&
-                                          config.blockedSymbols.length > 0
-                                        ) {
-                                          labels.push(
-                                            <div
-                                              key="blockedSymbols"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 border border-red-400 inline-block"
-                                            >
-                                              {config.blockedSymbols.length} blocked
-                                            </div>
-                                          );
-                                        }
-
-                                        // Trading hours (solo si está habilitado)
-                                        if (config.tradingHours && config.tradingHours.enabled) {
-                                          labels.push(
-                                            <div
-                                              key="tradingHours"
-                                              className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 border border-teal-400 inline-block"
-                                            >
-                                              Hours
+                                              Master {config.masterId}
                                             </div>
                                           );
                                         }

@@ -915,9 +915,7 @@ class CSVManager extends EventEmitter {
                   lotMultiplier: parseFloat(values[3]) || 1.0,
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
-                  maxLotSize: values[6] !== 'NULL' ? parseFloat(values[6]) : null,
-                  minLotSize: values[7] !== 'NULL' ? parseFloat(values[7]) : null,
-                  masterId: values[8] !== 'NULL' ? values[8] : null,
+                  masterId: values[6] !== 'NULL' ? values[6] : null,
                 };
                 // Para compatibilidad con getAllActiveAccounts
                 currentAccountData.master_id = currentAccountData.config.masterId;
@@ -1029,8 +1027,8 @@ class CSVManager extends EventEmitter {
               timeSinceLastPing: timeSinceLastPing,
               // Reflect CSV config for UI switches
               config: row.config || {},
-              connectedSlaves: this.getConnectedSlaves(accountId),
-              totalSlaves: this.getConnectedSlaves(accountId).length,
+              connectedSlaves: [],
+              totalSlaves: 0,
             };
           } else if (accountType === 'slave') {
             const masterId = this.getSlaveMaster(accountId);
@@ -1055,6 +1053,7 @@ class CSVManager extends EventEmitter {
                 status: status,
                 timeSinceLastPing: timeSinceLastPing,
                 masterOnline: true,
+                config: row.config || {},
               });
 
               accounts.masterAccounts[masterId].totalSlaves++;
@@ -1370,10 +1369,10 @@ class CSVManager extends EventEmitter {
       let configUpdated = false;
       let currentAccountId = null;
       const updatedLines = [];
-      
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        
+
         // Detectar línea TYPE para identificar la cuenta actual
         if (line.includes('[TYPE]')) {
           const matches = line.match(
@@ -1384,14 +1383,16 @@ class CSVManager extends EventEmitter {
             console.log(`📋 Found TYPE line with accountId: ${currentAccountId}`);
           }
         }
-        
+
         // Si encontramos la cuenta objetivo, buscar la siguiente línea CONFIG
         if (currentAccountId === accountId && line.includes('[CONFIG]')) {
           console.log(`🔄 Found CONFIG line for account ${accountId}, updating...`);
           // Construir nueva línea CONFIG según el tipo de cuenta
           if (config.type === 'master') {
             configUpdated = true;
-            updatedLines.push(`[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`);
+            updatedLines.push(
+              `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`
+            );
           } else if (config.type === 'slave') {
             configUpdated = true;
             updatedLines.push(`[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}]`);
@@ -1636,9 +1637,14 @@ class CSVManager extends EventEmitter {
             const configType = matches[1].replace(/[\[\]]/g, '').trim();
             if (configType === 'MASTER' || configType === 'SLAVE') {
               // Mantener el resto de la configuración igual, solo actualizar el estado
-              const newLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+              const newLine = line.replace(
+                /\[(ENABLED|DISABLED)\]/,
+                `[${enabled ? 'ENABLED' : 'DISABLED'}]`
+              );
               updatedLines.push(newLine);
-              console.log(`✅ Updated CONFIG line for account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`);
+              console.log(
+                `✅ Updated CONFIG line for account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
+              );
             } else {
               updatedLines.push(line);
             }
