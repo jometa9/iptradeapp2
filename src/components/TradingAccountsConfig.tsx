@@ -2380,7 +2380,168 @@ export function TradingAccountsConfig() {
                           {getPlatformDisplayName(orphanSlave.platform)}
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
-                          {getConfigurationBadge(orphanSlave.accountNumber)}
+                          <div className="flex gap-2 flex-wrap">
+                            {/* Badge principal de estado */}
+                            {getConfigurationBadge(orphanSlave.accountNumber)}
+
+                            {/* Mostrar configuraciones de slave usando datos del CSV */}
+                            {(() => {
+                              // Buscar la configuración en los datos del CSV
+                              let config = null;
+
+                              // Buscar en unconnectedSlaves
+                              if (csvAccounts?.unconnectedSlaves) {
+                                const slave = csvAccounts.unconnectedSlaves.find(
+                                  s =>
+                                    s.id === orphanSlave.accountNumber ||
+                                    s.name === orphanSlave.accountNumber
+                                );
+                                if (slave) {
+                                  config = slave.config;
+                                }
+                              }
+
+                              // Si no se encuentra en unconnectedSlaves, buscar en slaveConfigs como fallback
+                              if (!config) {
+                                const slaveConfig = slaveConfigs[orphanSlave.accountNumber];
+                                config = slaveConfig?.config;
+                              }
+
+                              console.log(
+                                '🔍 DEBUG: Config for',
+                                orphanSlave.accountNumber,
+                                ':',
+                                config
+                              );
+                              const labels = [];
+
+                              if (config) {
+                                // Fixed lot tiene prioridad sobre multiplier
+                                if (config.forceLot && config.forceLot > 0) {
+                                  labels.push(
+                                    <div
+                                      key="forceLot"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                    >
+                                      Fixed Lot {config.forceLot}
+                                    </div>
+                                  );
+                                } else if (config.lotMultiplier) {
+                                  // Solo mostrar multiplier si no hay fixed lot
+                                  labels.push(
+                                    <div
+                                      key="lotMultiplier"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                    >
+                                      Multiplier {config.lotMultiplier}
+                                    </div>
+                                  );
+                                }
+
+                                // Reverse trading (siempre mostrar si está habilitado)
+                                if (config.reverseTrading) {
+                                  labels.push(
+                                    <div
+                                      key="reverseTrading"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                    >
+                                      Reverse Trading
+                                    </div>
+                                  );
+                                }
+
+                                // Max lot size (solo si está configurado)
+                                if (config.maxLotSize && config.maxLotSize > 0) {
+                                  labels.push(
+                                    <div
+                                      key="maxLotSize"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 border border-orange-400 inline-block"
+                                    >
+                                      Max {config.maxLotSize}
+                                    </div>
+                                  );
+                                }
+
+                                // Min lot size (solo si está configurado)
+                                if (config.minLotSize && config.minLotSize > 0) {
+                                  labels.push(
+                                    <div
+                                      key="minLotSize"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 border border-yellow-400 inline-block"
+                                    >
+                                      Min {config.minLotSize}
+                                    </div>
+                                  );
+                                }
+
+                                // Symbol filtering (solo si hay símbolos permitidos o bloqueados)
+                                if (config.allowedSymbols && config.allowedSymbols.length > 0) {
+                                  labels.push(
+                                    <div
+                                      key="allowedSymbols"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 border border-indigo-400 inline-block"
+                                    >
+                                      {config.allowedSymbols.length} symbols
+                                    </div>
+                                  );
+                                }
+
+                                if (config.blockedSymbols && config.blockedSymbols.length > 0) {
+                                  labels.push(
+                                    <div
+                                      key="blockedSymbols"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 border border-red-400 inline-block"
+                                    >
+                                      {config.blockedSymbols.length} blocked
+                                    </div>
+                                  );
+                                }
+
+                                // Order type filtering (solo si hay tipos permitidos o bloqueados)
+                                if (
+                                  config.allowedOrderTypes &&
+                                  config.allowedOrderTypes.length > 0
+                                ) {
+                                  labels.push(
+                                    <div
+                                      key="allowedOrderTypes"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 border border-teal-400 inline-block"
+                                    >
+                                      {config.allowedOrderTypes.length} order types
+                                    </div>
+                                  );
+                                }
+
+                                if (
+                                  config.blockedOrderTypes &&
+                                  config.blockedOrderTypes.length > 0
+                                ) {
+                                  labels.push(
+                                    <div
+                                      key="blockedOrderTypes"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-pink-100 text-pink-800 border border-pink-400 inline-block"
+                                    >
+                                      {config.blockedOrderTypes.length} blocked types
+                                    </div>
+                                  );
+                                }
+
+                                // Trading hours (solo si está habilitado)
+                                if (config.tradingHours && config.tradingHours.enabled) {
+                                  labels.push(
+                                    <div
+                                      key="tradingHours"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-cyan-100 text-cyan-800 border border-cyan-400 inline-block"
+                                    >
+                                      Trading Hours
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              return labels;
+                            })()}
+                          </div>
                         </td>
                         <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
                           {deleteConfirmId === orphanSlave.id ? (
