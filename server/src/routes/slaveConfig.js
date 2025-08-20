@@ -1,6 +1,8 @@
 import express from 'express';
 
 import {
+  disconnectAllSlavesFromMaster,
+  disconnectSlaveFromMaster,
   getAllSlaveConfigs,
   getSlaveConfig,
   removeSlaveConfig,
@@ -90,5 +92,9 @@ router.get('/test', testSlaveConfig);
 router.get('/:slaveAccountId', getSlaveConfig);
 router.post('/:slaveAccountId/reset', resetSlaveConfig);
 router.delete('/:slaveAccountId', removeSlaveConfig);
+
+// Disconnect routes
+router.post('/:slaveAccountId/disconnect/:masterAccountId', disconnectSlaveFromMaster);
+router.post('/master/:masterAccountId/disconnect-all', disconnectAllSlavesFromMaster);
 
 export default router;

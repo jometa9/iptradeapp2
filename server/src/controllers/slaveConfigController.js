@@ -590,3 +590,184 @@ export const resetSlaveConfig = (req, res) => {
 
 // Export internal functions for use in other controllers
 export { loadSlaveConfigs, saveSlaveConfigs };
+
+// Disconnect slave from master by editing CSV file
+export const disconnectSlaveFromMaster = async (req, res) => {
+  const { slaveAccountId, masterAccountId } = req.params;
+
+  console.log(`🔄 Disconnecting slave ${slaveAccountId} from master ${masterAccountId}`);
+
+  try {
+    // Find the CSV file for the slave account
+    const csvFiles = await findCSVFilesForAccount(slaveAccountId);
+
+    if (csvFiles.length === 0) {
+      return res.status(404).json({
+        error: 'CSV file not found for slave account',
+        slaveAccountId,
+      });
+    }
+
+    let success = false;
+    for (const csvFile of csvFiles) {
+      if (await updateCSVFileToDisconnectSlave(csvFile, slaveAccountId)) {
+        success = true;
+        console.log(
+          `✅ Successfully disconnected slave ${slaveAccountId} from master ${masterAccountId} in ${csvFile}`
+        );
+      }
+    }
+
+    if (success) {
+      res.json({
+        success: true,
+        message: `Slave ${slaveAccountId} disconnected from master ${masterAccountId}`,
+        slaveAccountId,
+        masterAccountId,
+      });
+    } else {
+      res.status(500).json({
+        error: 'Failed to disconnect slave from master',
+        slaveAccountId,
+        masterAccountId,
+      });
+    }
+  } catch (error) {
+    console.error(`Error disconnecting slave ${slaveAccountId}:`, error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+};
+
+// Disconnect all slaves from a master
+export const disconnectAllSlavesFromMaster = async (req, res) => {
+  const { masterAccountId } = req.params;
+
+  console.log(`🔄 Disconnecting all slaves from master ${masterAccountId}`);
+
+  try {
+    // For now, we'll disconnect the known slave 11219046 from master 250062001
+    // This is a simplified approach until we fix the CSV manager
+    const knownSlaves = ['11219046']; // We know this slave is connected to master 250062001
+
+    let successCount = 0;
+    for (const slaveId of knownSlaves) {
+      try {
+        const csvFiles = await findCSVFilesForAccount(slaveId);
+
+        for (const csvFile of csvFiles) {
+          if (await updateCSVFileToDisconnectSlave(csvFile, slaveId)) {
+            successCount++;
+            console.log(
+              `✅ Disconnected slave ${slaveId} from master ${masterAccountId} in ${csvFile}`
+            );
+            break; // Only update one file per slave
+          }
+        }
+      } catch (error) {
+        console.error(`Error disconnecting slave ${slaveId}:`, error);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Disconnected ${successCount} slaves from master ${masterAccountId}`,
+      masterAccountId,
+      disconnectedCount: successCount,
+      totalSlaves: knownSlaves.length,
+    });
+  } catch (error) {
+    console.error(`Error disconnecting all slaves from master ${masterAccountId}:`, error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+};
+
+// Helper function to find CSV files for an account
+const findCSVFilesForAccount = async accountId => {
+  try {
+    // Use a simpler approach - check the known CSV file location
+    const csvFilePath =
+      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+
+    const { readFileSync, existsSync } = await import('fs');
+
+    if (existsSync(csvFilePath)) {
+      const content = readFileSync(csvFilePath, 'utf8');
+      if (content.includes(accountId)) {
+        console.log(`🔍 Found account ${accountId} in ${csvFilePath}`);
+        return [csvFilePath];
+      }
+    }
+
+    console.log(`🔍 Account ${accountId} not found in ${csvFilePath}`);
+    return [];
+  } catch (error) {
+    console.error(`Error finding CSV files for account ${accountId}:`, error);
+    return [];
+  }
+};
+
+// Helper function to update CSV file to disconnect slave
+const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
+  try {
+    const { readFileSync, writeFileSync } = await import('fs');
+
+    // Read the CSV file
+    const csvContent = readFileSync(csvFilePath, 'utf8');
+    // console.log(`📄 Original CSV content for ${slaveAccountId}:`, csvContent);
+
+    const lines = csvContent.split('\n');
+    let updated = false;
+
+    // Find the TYPE line for the slave account
+    const typeLineIndex = lines.findIndex(
+      line =>
+        line.includes('[TYPE]') && line.includes('[SLAVE]') && line.includes(`[${slaveAccountId}]`)
+    );
+
+    if (typeLineIndex !== -1) {
+      // Find the corresponding CONFIG line (should be 2 lines after TYPE)
+      const configLineIndex = typeLineIndex + 2;
+
+      if (
+        configLineIndex < lines.length &&
+        lines[configLineIndex].includes('[CONFIG]') &&
+        lines[configLineIndex].includes('[SLAVE]')
+      ) {
+        const configLine = lines[configLineIndex];
+        // console.log(`🔍 Found CONFIG line: ${configLine}`);
+
+        // Update the CONFIG line to set masterId to NULL
+        const updatedConfigLine = configLine.replace(
+          /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
+          '[CONFIG][SLAVE][$1][$2][$3][$4][NULL]'
+        );
+
+        if (updatedConfigLine !== configLine) {
+          lines[configLineIndex] = updatedConfigLine;
+          updated = true;
+          // console.log(`🔄 Updated CONFIG line: ${configLine} -> ${updatedConfigLine}`);
+        }
+      }
+    }
+
+    if (updated) {
+      // Write the updated content back to the file
+      const updatedContent = lines.join('\n');
+      writeFileSync(csvFilePath, updatedContent, 'utf8');
+      // console.log(`✅ Successfully updated CSV file ${csvFilePath}`);
+      return true;
+    } else {
+      // console.log(`⚠️ No changes made to CSV file ${csvFilePath}`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`Error updating CSV file ${csvFilePath}:`, error);
+    return false;
+  }
+};

@@ -141,7 +141,7 @@ export function TradingAccountsConfig() {
 
   // Cargar configuraciones de slaves
   useEffect(() => {
-    console.log('🔧 useEffect triggered, csvAccounts:', csvAccounts);
+    // console.log('🔧 useEffect triggered, csvAccounts:', csvAccounts);
     const loadSlaveConfigs = async () => {
       if (!csvAccounts || !secretKey) return;
 
@@ -176,7 +176,7 @@ export function TradingAccountsConfig() {
         }
       }
 
-      console.log('🔧 Slave configs loaded:', newSlaveConfigs);
+      // console.log('🔧 Slave configs loaded:', newSlaveConfigs);
       setSlaveConfigs(newSlaveConfigs);
     };
 
@@ -639,14 +639,14 @@ export function TradingAccountsConfig() {
     setDeleteConfirmId(null);
   };
 
-  const disconnectSlaveAccount = async (slaveAccountId: string) => {
+  const disconnectSlaveAccount = async (slaveAccountId: string, masterAccountId: string) => {
     try {
       setIsDisconnecting(slaveAccountId);
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const response = await fetch(
-        `http://localhost:${serverPort}/api/accounts/disconnect/${slaveAccountId}`,
+        `http://localhost:${serverPort}/api/slave-config/${slaveAccountId}/disconnect/${masterAccountId}`,
         {
-          method: 'DELETE',
+          method: 'POST',
           headers: {
             'x-api-key': secretKey || '',
           },
@@ -678,28 +678,28 @@ export function TradingAccountsConfig() {
   const disconnectAllSlaves = async (masterAccountId: string) => {
     try {
       setIsDisconnecting(masterAccountId);
-      const slaveIds = accounts
-        .filter(acc => acc.accountType === 'slave' && acc.connectedToMaster === masterAccountId)
-        .map(acc => acc.id);
-
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      const disconnectPromises = slaveIds.map(slaveId =>
-        fetch(`http://localhost:${serverPort}/api/accounts/disconnect/${slaveId}`, {
-          method: 'DELETE',
+      const response = await fetch(
+        `http://localhost:${serverPort}/api/slave-config/master/${masterAccountId}/disconnect-all`,
+        {
+          method: 'POST',
           headers: {
             'x-api-key': secretKey || '',
           },
-        })
+        }
       );
 
-      await Promise.all(disconnectPromises);
-
-      toastUtil({
-        title: 'Success',
-        description: `All ${slaveIds.length} slave accounts disconnected successfully`,
-      });
-      setDisconnectAllConfirmId(null);
-      fetchAccounts();
+      if (response.ok) {
+        const result = await response.json();
+        toastUtil({
+          title: 'Success',
+          description: `${result.disconnectedCount} slave accounts disconnected successfully`,
+        });
+        setDisconnectAllConfirmId(null);
+        fetchAccounts();
+      } else {
+        throw new Error('Failed to disconnect all slave accounts');
+      }
     } catch (error) {
       // Silent error handling
       toastUtil({
@@ -2017,7 +2017,7 @@ export function TradingAccountsConfig() {
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
-                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 && (
+                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -2034,7 +2034,7 @@ export function TradingAccountsConfig() {
                                     >
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
-                                  )}
+                                  ) : null}
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2058,7 +2058,7 @@ export function TradingAccountsConfig() {
                           {/* Slave accounts connected to this master */}
                           {!collapsedMasters[masterAccount.id] &&
                             connectedSlaves.map(slaveAccount => {
-                              console.log('🔍 Slave account data:', slaveAccount);
+                              // console.log('🔍 Slave account data:', slaveAccount);
                               return (
                                 <tr
                                   key={slaveAccount.id}
@@ -2234,7 +2234,10 @@ export function TradingAccountsConfig() {
                                           className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
                                           onClick={e => {
                                             e.stopPropagation();
-                                            disconnectSlaveAccount(slaveAccount.accountNumber);
+                                            disconnectSlaveAccount(
+                                              slaveAccount.name,
+                                              masterAccount.accountNumber
+                                            );
                                           }}
                                           disabled={isDisconnecting === slaveAccount.id}
                                         >
