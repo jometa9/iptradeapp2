@@ -86,9 +86,23 @@ export const useHiddenPendingAccounts = () => {
   // Filtrar cuentas visibles
   const filterVisibleAccounts = useCallback(
     (accounts: any[]) => {
-      return accounts.filter(account => !isAccountHidden(account.account_id));
+      console.log(`🔍 [filterVisibleAccounts] Filtering ${accounts.length} accounts`);
+      console.log(`🔍 [filterVisibleAccounts] Hidden accounts:`, Object.keys(hiddenAccounts));
+
+      const filtered = accounts.filter(account => {
+        const isHidden = isAccountHidden(account.account_id);
+        if (isHidden) {
+          console.log(`🚫 [filterVisibleAccounts] Account ${account.account_id} is hidden`);
+        }
+        return !isHidden;
+      });
+
+      console.log(
+        `✅ [filterVisibleAccounts] After filtering: ${filtered.length} visible accounts`
+      );
+      return filtered;
     },
-    [isAccountHidden]
+    [isAccountHidden, hiddenAccounts]
   );
 
   return {

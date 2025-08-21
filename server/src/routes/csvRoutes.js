@@ -163,6 +163,30 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         }
       };
 
+      // NUEVO: Manejar eventos de conversión de cuentas
+      const handleAccountConverted = payload => {
+        try {
+          console.log(
+            `🔄 [SSE BACKEND] Account converted: ${payload.accountId} to ${payload.newType}`
+          );
+
+          // Forzar escaneo inmediato de pending accounts
+          csvManager.scanAndEmitPendingUpdates().then(() => {
+            console.log(`✅ [SSE BACKEND] Pending accounts updated after conversion`);
+          });
+
+          // Enviar evento de conversión
+          sendUpdate({
+            type: 'accountConverted',
+            timestamp: payload.timestamp || new Date().toISOString(),
+            accountId: payload.accountId,
+            newType: payload.newType,
+          });
+        } catch (e) {
+          console.error('❌ [SSE BACKEND] Error handling account conversion:', e);
+        }
+      };
+
       // Reemitir eventos de Link Platforms
       const handleLinkPlatformsEvent = payload => {
         try {
@@ -205,6 +229,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       csvManager.on('pendingAccountsUpdate', handlePendingUpdate);
       csvManager.on('linkPlatformsEvent', handleLinkPlatformsEvent);
       csvManager.on('backgroundScanEvent', handleBackgroundScanEvent);
+      csvManager.on('accountConverted', handleAccountConverted);
 
       // Reemitir eventos de eliminación de cuentas
       const handleAccountDeleted = payload => {
@@ -224,27 +249,9 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         }
       };
 
-      // Reemitir eventos de conversión de cuentas
-      const handleAccountConverted = payload => {
-        try {
-          console.log(
-            `📢 Forwarding accountConverted event: ${payload.newType} ${payload.accountId}`
-          );
-          sendUpdate({
-            type: 'accountConverted',
-            timestamp: payload.timestamp || new Date().toISOString(),
-            accountId: payload.accountId,
-            newType: payload.newType, // 'master' or 'slave'
-            platform: payload.platform,
-            apiKey: payload.apiKey,
-          });
-        } catch (e) {
-          console.error('Error handling accountConverted event:', e);
-        }
-      };
+      // Eliminar esta declaración duplicada de handleAccountConverted
 
       csvManager.on('accountDeleted', handleAccountDeleted);
-      csvManager.on('accountConverted', handleAccountConverted);
 
       // Esperar un momento para que csvManager cargue los archivos
       // O forzar un escaneo si no hay archivos cargados
@@ -377,8 +384,8 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         csvManager.off('pendingAccountsUpdate', handlePendingUpdate);
         csvManager.off('linkPlatformsEvent', handleLinkPlatformsEvent);
         csvManager.off('backgroundScanEvent', handleBackgroundScanEvent);
-        csvManager.off('accountDeleted', handleAccountDeleted);
         csvManager.off('accountConverted', handleAccountConverted);
+        csvManager.off('accountDeleted', handleAccountDeleted);
       });
     })
     .catch(error => {
@@ -851,9 +858,22 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
     const { accountId } = req.params;
     const csvManager = (await import('../services/csvManager.js')).default;
 
+    console.log(`🔄 Converting account ${accountId} to pending via API...`);
+
     const success = csvManager.convertToPending(accountId);
     if (success) {
+      // Obtener datos actualizados inmediatamente
       const allAccounts = csvManager.getAllActiveAccounts();
+
+      // Emitir evento SSE inmediatamente
+      csvManager.emit('accountConverted', {
+        accountId,
+        newType: 'pending',
+        timestamp: new Date().toISOString(),
+      });
+
+      console.log(`✅ Account ${accountId} converted to pending successfully via API`);
+
       res.json({
         success: true,
         message: `Account ${accountId} converted to pending successfully`,
@@ -941,6 +961,58 @@ router.post('/csv/account/:accountId/status', requireValidSubscription, async (r
     res.status(500).json({
       success: false,
       error: 'Failed to update account status',
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /csv/debug/pending:
+ *   get:
+ *     summary: Debug endpoint to check pending accounts status
+ *     tags: [CSV]
+ *     responses:
+ *       200:
+ *         description: Debug information about pending accounts
+ */
+router.get('/csv/debug/pending', requireValidSubscription, async (req, res) => {
+  try {
+    const csvManager = (await import('../services/csvManager.js')).default;
+
+    console.log(`🔍 [DEBUG] Pending accounts debug request`);
+
+    // Obtener información detallada
+    const allAccounts = csvManager.getAllActiveAccounts();
+    const pendingAccounts = allAccounts.pendingAccounts || [];
+
+    // Información de archivos CSV
+    const csvFilesInfo = Array.from(csvManager.csvFiles.entries()).map(([filePath, fileData]) => ({
+      filePath,
+      lastModified: fileData.lastModified,
+      rowCount: fileData.data.length,
+      data: fileData.data,
+    }));
+
+    const debugInfo = {
+      timestamp: new Date().toISOString(),
+      csvFilesCount: csvManager.csvFiles.size,
+      csvFiles: csvFilesInfo,
+      pendingAccountsCount: pendingAccounts.length,
+      pendingAccounts: pendingAccounts,
+      allAccounts: allAccounts,
+    };
+
+    console.log(`📊 [DEBUG] Debug info:`, debugInfo);
+
+    res.json({
+      success: true,
+      debug: debugInfo,
+    });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });

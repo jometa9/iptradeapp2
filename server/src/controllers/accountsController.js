@@ -964,10 +964,15 @@ export const getPendingAccounts = async (req, res) => {
         .json({ error: 'API Key required - use requireValidSubscription middleware' });
     }
 
+    // Forzar actualización de datos antes de obtener pending accounts
+    await csvManager.refreshAllFileData();
+
     // Get pending accounts from CSV instead of JSON
     const allAccounts = await csvManager.getAllActiveAccounts();
     const pendingAccountsArray = allAccounts.pendingAccounts || [];
     const pendingCount = pendingAccountsArray.length;
+
+    console.log(`📱 [getPendingAccounts] Found ${pendingCount} pending accounts`);
 
     // Convert array to object format for backward compatibility
     const pendingAccounts = {};

@@ -263,100 +263,26 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     }
   }, [pendingError]);
 
-  // Listen to SSE events for real-time Link Platforms progress
+  // SSE listener para actualizaciones de Link Platforms
   useEffect(() => {
     if (!secretKey) return;
 
     console.log('🔗 PendingAccountsManager: Setting up SSE listener for Link Platforms...');
 
-    // Connect to SSE
-    SSEService.connect(secretKey);
-
-    const handleSSEMessage = (data: { type: string; [key: string]: unknown }) => {
+    const handleSSEMessage = (data: any) => {
       console.log('📨 PendingAccountsManager SSE message received:', data);
 
       // Listen for Link Platforms events
       if (data.type === 'linkPlatformsEvent') {
-        console.log('🔗 Link Platforms SSE event detected:', data);
-
-        switch (data.eventType) {
-          case 'started':
-            console.log('🚀 Link Platforms started - showing initial status');
-            setLinkingStatus({
-              step: 'starting',
-              message: 'Starting link platforms process...',
-              isActive: true,
-            });
-            break;
-
-          case 'scanning':
-            console.log('🔍 Platform scanning started');
-            setLinkingStatus({
-              step: 'finding',
-              message: 'Scanning for MetaTrader installations...',
-              isActive: true,
-            });
-            break;
-
-          case 'syncing':
-            console.log('⚙️ Syncing process started');
-            setLinkingStatus({
-              step: 'syncing',
-              message: 'Syncing Expert Advisors to platforms...',
-              isActive: true,
-            });
-            break;
-
-          case 'completed':
-            console.log('✅ Link Platforms completed - showing success');
-            console.log('📋 Result data:', data.result);
-            setLinkingStatus({
-              step: 'completed',
-              message: 'Success! Platforms linked successfully',
-              isActive: true,
-            });
-
-            // Hide the status after 3 seconds
-            setTimeout(() => {
-              console.log('⏰ Hiding linking status after 3 seconds');
-              setLinkingStatus({
-                step: 'idle',
-                message: '',
-                isActive: false,
-              });
-            }, 5000);
-            break;
-
-          case 'idle':
-            console.log('💤 Link Platforms is idle - stopping status display');
-            setLinkingStatus({
-              step: 'idle',
-              message: '',
-              isActive: false,
-            });
-            break;
-
-          case 'error':
-            console.log('❌ Link Platforms failed');
-            setLinkingStatus({
-              step: 'error',
-              message: 'Error linking platforms. Please try again.',
-              isActive: true,
-            });
-
-            // Hide the error after 5 seconds
-            setTimeout(() => {
-              setLinkingStatus({
-                step: 'idle',
-                message: '',
-                isActive: false,
-              });
-            }, 5000);
-            break;
-        }
+        console.log('🔗 Link Platforms event received:', data.eventType);
+        setLinkingStatus({
+          step: data.eventType,
+          message: data.message || '',
+          isActive: data.eventType !== 'completed' && data.eventType !== 'error',
+        });
       }
 
-      // Listen for command execution events to show detailed progress
+      // Listen for command execution events
       if (data.type === 'commandExecution') {
         const command = data.command as string;
 
@@ -384,6 +310,18 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
           step: 'syncing',
           message: 'Syncing Expert Advisors to platforms...',
           isActive: true,
+        });
+      }
+
+      // NUEVO: Escuchar eventos de conversión de vuelta a pending
+      if (data.type === 'accountConverted' && data.newType === 'pending') {
+        console.log(
+          `🔄 Account ${data.accountId} converted back to pending, removing from convertingAccounts`
+        );
+        setConvertingAccounts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.accountId);
+          return newSet;
         });
       }
     };
@@ -705,14 +643,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   )}
               </CardTitle>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="h-8 px-2 text-[12px] text-gray-400"
-            >
-              {isCollapsed ? <>Show</> : <>Hide</>}
-            </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="h-8 px-2 text-[12px] text-gray-400"
+              >
+                {isCollapsed ? <>Show</> : <>Hide</>}
+              </Button>
           </div>
         </CardHeader>
         {!isCollapsed && (

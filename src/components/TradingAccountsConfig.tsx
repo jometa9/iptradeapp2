@@ -593,8 +593,11 @@ export function TradingAccountsConfig() {
       // Ocultar la cuenta inmediatamente
       hideAccountTemporarily(deleteConfirmId);
 
+      console.log(`🔄 Converting account ${deleteConfirmId} to pending...`);
       const success = await csvFrontendService.convertToPending(deleteConfirmId);
+
       if (success) {
+        console.log(`✅ Account ${deleteConfirmId} converted to pending successfully`);
         toast({
           title: 'Account deleted',
           description: `Account ${deleteConfirmId} has been removed.`,
@@ -602,7 +605,13 @@ export function TradingAccountsConfig() {
         });
         setDeleteConfirmId(null);
         setIsDeletingAccount(null);
+
+        // Forzar actualización inmediata de datos
+        setTimeout(() => {
+          fetchAccounts();
+        }, 100);
       } else {
+        console.log(`❌ Failed to convert account ${deleteConfirmId} to pending`);
         toast({
           title: 'Error',
           description: `Failed to delete account ${deleteConfirmId}.`,
@@ -616,7 +625,7 @@ export function TradingAccountsConfig() {
         });
       }
     } catch (error) {
-      // Silent error handling
+      console.error('Error deleting account:', error);
       toast({
         title: 'Error',
         description: 'An error occurred while deleting the account.',

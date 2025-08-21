@@ -1532,7 +1532,7 @@ class CSVManager extends EventEmitter {
                   if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
                     // Para masters y pending, siempre usar el estado global
                     updatedLines.push(
-                      `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                      `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [${currentAccountId}]`
                     );
                   } else {
                     // Para slaves, usar valores por defecto
@@ -1554,7 +1554,7 @@ class CSVManager extends EventEmitter {
               fileModified = true;
               if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
                 updatedLines.push(
-                  `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [Account ${currentAccountId}]`
+                  `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [${currentAccountId}]`
                 );
               } else if (currentAccountType === 'SLAVE') {
                 updatedLines.push(
