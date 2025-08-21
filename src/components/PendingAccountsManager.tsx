@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, HousePlug, PartyPopper, Smile, TrafficCone, Unplug } from 'lucide-react';
+import { Cable, HousePlug, Link, PartyPopper, Smile, TrafficCone, Unplug } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -42,14 +42,19 @@ interface LinkingStatus {
 
 interface PendingAccountsManagerProps {
   isLinking?: boolean; // Optional prop to override hook state
+  linkPlatforms?: () => Promise<any>; // Function from parent component
 }
 
 export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   isLinking: propIsLinking,
+  linkPlatforms: propLinkPlatforms,
 }) => {
   const { secretKey, userInfo } = useAuth();
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
-  const { isLinking: hookIsLinking } = useLinkPlatforms();
+  const { isLinking: hookIsLinking, linkPlatforms: hookLinkPlatforms } = useLinkPlatforms();
+
+  // Use prop if provided, otherwise fall back to hook
+  const linkPlatforms = propLinkPlatforms || hookLinkPlatforms;
 
   // Use prop if provided, otherwise fall back to hook
   const isLinking = propIsLinking !== undefined ? propIsLinking : hookIsLinking;
@@ -102,7 +107,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
   const scanningMessages = [
     'Searching for new MetaTrader platforms...',
-    'Waiting for new cTrader platforms...',
     'Your pending accounts are being processed...',
     'Checking Expert Advisor installation...',
     'Linking new platforms...',
@@ -614,14 +618,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     {pendingCount}
                   </Badge>
                 ) : (
-                  isCollapsed && (
-                    <Badge
-                      variant="secondary"
-                      className="bg-gray-50 text-gray-600 border border-gray-300 mt-0.5"
-                    >
-                      No pending accounts
-                    </Badge>
-                  )
+                  <Badge
+                    variant="secondary"
+                    className="bg-gray-50 text-gray-600 border border-gray-300 mt-0.5"
+                  >
+                    No pending accounts
+                  </Badge>
                 )}
                 {showConvertingBadge.size > 0 && (
                   <Badge
@@ -643,14 +645,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   )}
               </CardTitle>
             </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="h-8 px-2 text-[12px] text-gray-400"
-              >
-                {isCollapsed ? <>Show</> : <>Hide</>}
-              </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="h-8 px-2 text-[12px] text-gray-400"
+            >
+              {isCollapsed ? <>Show</> : <>Hide</>}
+            </Button>
           </div>
         </CardHeader>
         {!isCollapsed && (
@@ -687,11 +689,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                 linkingStatus.step !== 'idle' &&
                 linkingStatus.step !== 'completed' ? (
                   <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
-                    Linking your platforms, after that, please check the following:
+                    After linking, check the following:
                   </p>
                 ) : (
                   <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
-                    If you are not seeing your accounts, please check the following:
+                    Can't see your accounts?
                   </p>
                 )}
                 <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-2 text-gray-400">
@@ -700,23 +702,41 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   linkingStatus.step !== 'completed' ? (
                     <li>Wait for the process to finish</li>
                   ) : (
-                    <li>
-                      Click on the "Link Platforms" button on the top right if you haven't done it
-                      yet
-                    </li>
+                    <li>Click on the "Link Platforms" button</li>
                   )}
                   <li>Open or refresh all your MetaTrader platforms</li>
                   <li>In MetaTrader, add IPTRADE Expert Advisor to the chart</li>
                   <li>Wait for the EA to connect to the app and it will appear here</li>
                 </ul>
-                <p className="text-[10px] text-muted-foreground mt-2 text-gray-400">
+                {/* boton que ejecute lo mismo que link platforms */}
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      await linkPlatforms();
+                    } catch (error) {
+                      console.error('Error en linkPlatforms:', error);
+                    }
+                  }}
+                  disabled={isLinking}
+                  className={`bg-blue-50 mt-3 mb-1 h-9 pl-3 rounded-lg border-blue-200 shadow-lg text-blue-700 ${
+                    isLinking
+                      ? 'link-platforms-gradient-text border-gray-200 cursor-not-allowed'
+                      : 'border-blue-200 cursor-pointer'
+                  }`}
+                >
+                  <Link className={`h-4 w-4 mr-2 ${isLinking ? 'text-gray-700' : ''}`} />
+                  {isLinking ? 'Linking...' : 'Link Platforms'}
+                </Button>
+
+                <p className="text-[9px] mt-2">
                   <a
                     href="https://iptradecopier.com/docs"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-600 "
+                    className="text-gray-400 hover:text-gray-700"
                   >
-                    For more info or details, click here
+                    Click here for help
                   </a>
                 </p>
               </div>

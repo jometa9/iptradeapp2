@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, Link, LogOut, MessageCircle, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Link, LogOut, RefreshCw } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
@@ -185,7 +185,7 @@ export const Dashboard: React.FC = () => {
                 >
                   <HelpCircle className="w-4 h-4" />
                 </Button>
-               
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -205,7 +205,7 @@ export const Dashboard: React.FC = () => {
           <UpdateCard />
 
           {/* Pending Accounts - Always visible at top for admin management */}
-          <PendingAccountsManager isLinking={isLinking} />
+          <PendingAccountsManager isLinking={isLinking} linkPlatforms={linkPlatforms} />
 
           {/* Main Trading Configuration */}
           <TradingAccountsConfig />
