@@ -156,7 +156,6 @@ body {
   background: rgb(255, 255, 255);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgb(240, 246, 255);
   transition: all 0.3s ease;
 }
 
@@ -169,8 +168,8 @@ body {
   bottom: 0;
   background: radial-gradient(
     circle at center,
-    rgb(236, 243, 255) 0%,
-    rgb(244, 247, 251) 30%,
+    rgb(239, 246, 255) 0%,
+    rgb(251, 253, 255) 30%,
     transparent 100%
   );
   pointer-events: none;
