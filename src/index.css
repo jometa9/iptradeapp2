@@ -168,7 +168,7 @@ body {
   bottom: 0;
   background: radial-gradient(
     circle at center,
-    rgb(239, 246, 255) 0%,
+    rgb(247, 250, 255) 0%,
     rgb(251, 253, 255) 30%,
     transparent 100%
   );
