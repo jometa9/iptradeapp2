@@ -1499,72 +1499,23 @@ class CSVManager extends EventEmitter {
           if (existsSync(filePath)) {
             let fileModified = false;
             const content = readFileSync(filePath, 'utf8');
-            const lines = content.split('\n').filter(line => line.trim());
-            let updatedLines = [];
-            let currentAccountId = null;
-            let currentAccountType = null;
-            let hasConfigLine = false;
 
-            for (const line of lines) {
-              // Limpiar la línea de caracteres especiales
-              const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+            // Buscar y reemplazar directamente ENABLED/DISABLED en líneas CONFIG
+            const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+            const oldStatus = enabled ? 'DISABLED' : 'ENABLED';
 
-              if (cleanLine.includes('[TYPE]')) {
-                // Extraer tipo y ID de la cuenta
-                const matches = cleanLine.match(/\[([^\]]+)\]/g);
-                if (matches && matches.length >= 4) {
-                  const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
-                  currentAccountType = values[1]; // MASTER o SLAVE
-                  currentAccountId = values[3];
-                }
-                updatedLines.push(cleanLine);
-              } else if (cleanLine.includes('[STATUS]')) {
-                // Mantener la línea STATUS exactamente como está
-                updatedLines.push(cleanLine);
-              } else if (cleanLine.includes('[CONFIG]')) {
-                // Actualizar la línea CONFIG según el tipo de cuenta
-                if (
-                  currentAccountType === 'MASTER' ||
-                  currentAccountType === 'SLAVE' ||
-                  currentAccountType === 'PENDING'
-                ) {
-                  // Siempre reemplazar la línea CONFIG con el estado global
-                  if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
-                    // Para masters y pending, siempre usar el estado global
-                    updatedLines.push(
-                      `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [${currentAccountId}]`
-                    );
-                  } else {
-                    // Para slaves, usar valores por defecto
-                    updatedLines.push(
-                      `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]`
-                    );
-                  }
-                  fileModified = true;
-                } else {
-                  updatedLines.push(cleanLine);
-                }
-              } else {
-                updatedLines.push(cleanLine);
-              }
-            }
+            // Reemplazar ENABLED por DISABLED o viceversa en líneas CONFIG
+            let updatedContent = content;
 
-            // Si no hay línea CONFIG, agregarla
-            if (!hasConfigLine && currentAccountType) {
+            // Buscar líneas CONFIG que contengan el estado opuesto y reemplazarlo
+            const configLineRegex = new RegExp(`(\\[CONFIG\\].*?\\[)(${oldStatus})(\\].*)`, 'g');
+            if (configLineRegex.test(content)) {
+              updatedContent = content.replace(configLineRegex, `$1${newStatus}$3`);
               fileModified = true;
-              if (currentAccountType === 'MASTER' || currentAccountType === 'PENDING') {
-                updatedLines.push(
-                  `[CONFIG] [${currentAccountType}] [${enabled ? 'ENABLED' : 'DISABLED'}] [${currentAccountId}]`
-                );
-              } else if (currentAccountType === 'SLAVE') {
-                updatedLines.push(
-                  `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL]`
-                );
-              }
             }
 
             if (fileModified) {
-              writeFileSync(filePath, updatedLines.join('\n') + '\n', 'utf8');
+              writeFileSync(filePath, updatedContent, 'utf8');
               updatedFiles++;
 
               // Refrescar datos en memoria
