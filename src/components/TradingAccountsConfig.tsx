@@ -139,49 +139,33 @@ export function TradingAccountsConfig() {
     };
   }, [refreshCSVData]);
 
-  // Cargar configuraciones de slaves
+  // Cargar configuraciones de slaves desde los datos CSV
   useEffect(() => {
-    // console.log('🔧 useEffect triggered, csvAccounts:', csvAccounts);
-    const loadSlaveConfigs = async () => {
-      if (!csvAccounts || !secretKey) return;
+    if (!csvAccounts) return;
 
-      const newSlaveConfigs: Record<string, SlaveConfig> = {};
+    const newSlaveConfigs: Record<string, SlaveConfig> = {};
 
-      // Obtener configuraciones para todas las cuentas slave
-      const slaveAccounts = [
-        ...Object.values(csvAccounts.masterAccounts || {}).flatMap(
-          master => master.connectedSlaves || []
-        ),
-        ...(csvAccounts.unconnectedSlaves || []),
-      ];
+    // Obtener configuraciones para todas las cuentas slave desde los datos CSV
+    const slaveAccounts = [
+      ...Object.values(csvAccounts.masterAccounts || {}).flatMap(
+        master => master.connectedSlaves || []
+      ),
+      ...(csvAccounts.unconnectedSlaves || []),
+    ];
 
-      for (const slave of slaveAccounts) {
-        try {
-          const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-          const response = await fetch(
-            `http://localhost:${serverPort}/api/slave-config/${slave.id}`,
-            {
-              headers: {
-                'x-api-key': secretKey,
-              },
-            }
-          );
-
-          if (response.ok) {
-            const slaveConfig = await response.json();
-            newSlaveConfigs[slave.id] = slaveConfig;
-          }
-        } catch (error) {
-          console.error(`Error loading slave config for ${slave.id}:`, error);
-        }
+    // Usar la configuración que ya viene en los datos CSV
+    for (const slave of slaveAccounts) {
+      if (slave.config) {
+        newSlaveConfigs[slave.id] = {
+          slaveAccountId: slave.id,
+          config: slave.config,
+          status: 'success',
+        };
       }
+    }
 
-      // console.log('🔧 Slave configs loaded:', newSlaveConfigs);
-      setSlaveConfigs(newSlaveConfigs);
-    };
-
-    loadSlaveConfigs();
-  }, [csvAccounts, secretKey]);
+    setSlaveConfigs(newSlaveConfigs);
+  }, [csvAccounts]);
 
   // Convertir datos CSV a formato esperado
   const accounts = React.useMemo(() => {
@@ -523,32 +507,17 @@ export function TradingAccountsConfig() {
       connectedToMaster: account.connectedToMaster || 'none',
     };
 
-    // Si es una cuenta slave, cargar la configuración específica
+    // Si es una cuenta slave, usar la configuración que ya viene en los datos CSV
     if (account.accountType === 'slave') {
-      try {
-        const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-        const response = await fetch(
-          `http://localhost:${serverPort}/api/slave-config/${account.accountNumber}`,
-          {
-            headers: {
-              'x-api-key': secretKey || '',
-            },
-          }
-        );
-
-        if (response.ok) {
-          const slaveConfig = await response.json();
-
-          // Actualizar el formulario con la configuración específica del slave
-          formData = {
-            ...formData,
-            lotCoefficient: slaveConfig.config?.lotMultiplier || 1,
-            forceLot: slaveConfig.config?.forceLot || 0,
-            reverseTrade: slaveConfig.config?.reverseTrading || false,
-          };
-        }
-      } catch (error) {
-        // Silent error handling
+      const slaveConfig = slaveConfigs[account.accountNumber];
+      if (slaveConfig?.config) {
+        // Actualizar el formulario con la configuración específica del slave
+        formData = {
+          ...formData,
+          lotCoefficient: slaveConfig.config.lotMultiplier || 1,
+          forceLot: slaveConfig.config.forceLot || 0,
+          reverseTrade: slaveConfig.config.reverseTrading || false,
+        };
       }
     }
 

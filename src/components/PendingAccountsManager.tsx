@@ -719,13 +719,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     }
                   }}
                   disabled={isLinking}
-                  className={`bg-blue-50 mt-3 mb-1 h-9 pl-3 rounded-lg border-blue-200 shadow-lg text-blue-700 ${
+                  className={`bg-blue-50 mt-3 mb-1 h-9 pl-3 rounded-lg shadow-lg text-blue-700  ${
                     isLinking
-                      ? 'link-platforms-gradient-text border-gray-200 cursor-not-allowed'
+                      ? 'link-platforms-linking  cursor-not-allowed'
                       : 'border-blue-200 cursor-pointer'
                   }`}
                 >
-                  <Link className={`h-4 w-4 mr-2 ${isLinking ? 'text-gray-700' : ''}`} />
+                  <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
                   {isLinking ? 'Linking...' : 'Link Platforms'}
                 </Button>
 

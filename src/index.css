@@ -76,6 +76,51 @@ body {
   animation: gradient-flow 7.5s ease-in-out infinite;
 }
 
+.link-platforms-gradient-border {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#f0f9ff, #f0f9ff) padding-box,
+    linear-gradient(
+        90deg,
+        #3b82f6,
+        #60a5fa,
+        #93c5fd,
+        #dbeafe,
+        #eff6ff,
+        #dbeafe,
+        #93c5fd,
+        #60a5fa,
+        #3b82f6
+      )
+      border-box;
+  background-size: 400% 100%;
+  animation: gradient-flow 3s ease-in-out infinite;
+}
+
+.link-platforms-linking {
+  position: relative;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#f0f9ff, #f0f9ff) padding-box,
+    linear-gradient(
+        90deg,
+        #3b82f6,
+        #60a5fa,
+        #93c5fd,
+        #dbeafe,
+        #eff6ff,
+        #dbeafe,
+        #93c5fd,
+        #60a5fa,
+        #3b82f6
+      )
+      border-box;
+  background-size: 400% 100%;
+  animation: gradient-flow 3s ease-in-out infinite;
+  color: #374151 !important;
+}
+
 .link-platforms-success-text {
   background: linear-gradient(90deg, #374151 0%, #111827 50%, #374151 100%);
   background-size: 200% 100%;
