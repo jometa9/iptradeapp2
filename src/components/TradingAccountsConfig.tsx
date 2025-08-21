@@ -1667,7 +1667,7 @@ export function TradingAccountsConfig() {
                                         className="bg-white cursor-pointer hover:bg-gray-50"
                                       >
                                         {masterAcc.accountNumber} (
-                                        {masterAcc.platform.toUpperCase()} - {masterAcc.server})
+                                        {masterAcc.platform.toUpperCase()})
                                       </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -1857,14 +1857,12 @@ export function TradingAccountsConfig() {
                       Status
                     </th>
                     <th className="w-32 px-4 py-3 text-center text-xs uppercase align-middle">
-                      Copy Trading
+                      Copy
                     </th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Account</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Platform</th>
-                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">
-                      Configuration
-                    </th>
+                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">Config</th>
                     <th className="w-32 px-4 py-3 text-center text-xs uppercase align-middle">
                       Actions
                     </th>
