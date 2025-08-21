@@ -145,25 +145,53 @@ export function TradingAccountsConfig() {
 
     const newSlaveConfigs: Record<string, SlaveConfig> = {};
 
+    console.log('🔧 DEBUG: Processing csvAccounts:', csvAccounts);
+
     // Obtener configuraciones para todas las cuentas slave desde los datos CSV
-    const slaveAccounts = [
-      ...Object.values(csvAccounts.masterAccounts || {}).flatMap(
-        master => master.connectedSlaves || []
-      ),
-      ...(csvAccounts.unconnectedSlaves || []),
-    ];
+    const connectedSlaves = Object.values(csvAccounts.masterAccounts || {}).flatMap(
+      master => master.connectedSlaves || []
+    );
+    const unconnectedSlaves = csvAccounts.unconnectedSlaves || [];
+
+    console.log('🔧 DEBUG: Connected slaves found:', connectedSlaves);
+    console.log('🔧 DEBUG: Unconnected slaves found:', unconnectedSlaves);
+
+    const slaveAccounts = [...connectedSlaves, ...unconnectedSlaves];
+    console.log('🔧 DEBUG: Total slave accounts to process:', slaveAccounts);
 
     // Usar la configuración que ya viene en los datos CSV
     for (const slave of slaveAccounts) {
+      console.log('🔧 DEBUG: Processing slave:', slave);
       if (slave.config) {
-        newSlaveConfigs[slave.id] = {
+        // Usar tanto el ID como el accountNumber como claves para asegurar compatibilidad
+        const slaveConfig = {
           slaveAccountId: slave.id,
           config: slave.config,
           status: 'success',
         };
+
+        newSlaveConfigs[slave.id] = slaveConfig;
+        // También usar accountNumber si es diferente del ID
+        // Para slaves conectados, usar el id como accountNumber si no existe
+        const accountNumber = slave.accountNumber || slave.id;
+        if (accountNumber !== slave.id) {
+          newSlaveConfigs[accountNumber] = slaveConfig;
+        }
+
+        console.log(
+          '🔧 DEBUG: Loaded slave config for:',
+          slave.id,
+          'accountNumber:',
+          slave.accountNumber,
+          'config:',
+          slave.config
+        );
+      } else {
+        console.log('🔧 DEBUG: No config found for slave:', slave.id);
       }
     }
 
+    console.log('🔧 DEBUG: Total slave configs loaded:', Object.keys(newSlaveConfigs));
     setSlaveConfigs(newSlaveConfigs);
   }, [csvAccounts]);
 
@@ -176,7 +204,7 @@ export function TradingAccountsConfig() {
     // Filtrar cuentas ocultas
     const shouldShowAccount = (accountId: string) => !hiddenAccounts.has(accountId);
 
-    // Agregar master accounts
+    // Agregar master accounts y sus slaves conectados
     Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]: [string, any]) => {
       if (shouldShowAccount(id)) {
         allAccounts.push({
@@ -193,6 +221,25 @@ export function TradingAccountsConfig() {
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
           masterOnline: master.masterOnline || false,
+        });
+
+        // También agregar los slaves conectados a la lista principal
+        (master.connectedSlaves || []).forEach((slave: any) => {
+          if (shouldShowAccount(slave.id)) {
+            allAccounts.push({
+              id: slave.id,
+              accountNumber: slave.accountNumber || slave.id,
+              platform: slave.platform || 'Unknown',
+              server: slave.server || '',
+              password: slave.password || '',
+              accountType: 'slave',
+              status: slave.status || 'offline',
+              lotCoefficient: slave.lotCoefficient || 1,
+              forceLot: slave.forceLot || 0,
+              reverseTrade: slave.reverseTrade || false,
+              connectedToMaster: id, // Indicar a qué master está conectado
+            });
+          }
         });
       }
     });
@@ -509,7 +556,15 @@ export function TradingAccountsConfig() {
 
     // Si es una cuenta slave, usar la configuración que ya viene en los datos CSV
     if (account.accountType === 'slave') {
-      const slaveConfig = slaveConfigs[account.accountNumber];
+      // Para slaves conectados, usar el id como accountNumber si no existe
+      const accountNumber = account.accountNumber || account.id;
+
+      // Buscar la configuración tanto por accountNumber como por id
+      const slaveConfig = slaveConfigs[accountNumber] || slaveConfigs[account.id];
+      console.log('🔍 DEBUG: Editing slave account:', accountNumber, 'ID:', account.id);
+      console.log('🔍 DEBUG: Available slave configs keys:', Object.keys(slaveConfigs));
+      console.log('🔍 DEBUG: Found slave config:', slaveConfig);
+
       if (slaveConfig?.config) {
         // Actualizar el formulario con la configuración específica del slave
         formData = {
@@ -518,9 +573,13 @@ export function TradingAccountsConfig() {
           forceLot: slaveConfig.config.forceLot || 0,
           reverseTrade: slaveConfig.config.reverseTrading || false,
         };
+        console.log('🔍 DEBUG: Updated form data with slave config:', formData);
+      } else {
+        console.log('🔍 DEBUG: No slave config found for account:', accountNumber);
       }
     }
 
+    console.log('🔍 DEBUG: Final form data before setting state:', formData);
     setFormState(formData);
 
     setTimeout(() => {
@@ -1613,164 +1672,175 @@ export function TradingAccountsConfig() {
                         </Select>
                       </div>
 
-                      {formState.accountType === 'slave' &&
-                        (!editingAccount || editingAccount.accountType === 'slave') && (
-                          <>
-                            <div>
-                              <Label htmlFor="connectedToMaster">Connect to Master Account</Label>
-                              <Select
-                                name="connectedToMaster"
-                                value={formState.connectedToMaster}
-                                onValueChange={value =>
-                                  handleSelectChange('connectedToMaster', value)
-                                }
-                              >
-                                <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
-                                  <SelectValue
-                                    placeholder="Select Master Account (Optional)"
-                                    className="bg-white"
-                                  />
-                                </SelectTrigger>
-                                <SelectContent className="bg-white border border-gray-200">
-                                  <SelectItem
-                                    value="none"
-                                    className="cursor-pointer hover:bg-gray-50"
-                                  >
-                                    Not Connected
-                                  </SelectItem>
-                                  {accounts
-                                    .filter(acc => acc.accountType === 'master')
-                                    .map(masterAcc => (
-                                      <SelectItem
-                                        key={masterAcc.id}
-                                        value={masterAcc.accountNumber}
-                                        className="bg-white cursor-pointer hover:bg-gray-50"
-                                      >
-                                        {masterAcc.accountNumber} (
-                                        {masterAcc.platform.toUpperCase()})
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                      {(() => {
+                        console.log('🔍 DEBUG: Form condition check:', {
+                          formStateAccountType: formState.accountType,
+                          editingAccount: editingAccount,
+                          editingAccountType: editingAccount?.accountType,
+                          shouldShowSlaveFields:
+                            formState.accountType === 'slave' &&
+                            (!editingAccount || editingAccount.accountType === 'slave'),
+                        });
+                        return (
+                          formState.accountType === 'slave' &&
+                          (!editingAccount || editingAccount.accountType === 'slave')
+                        );
+                      })() && (
+                        <>
+                          <div>
+                            <Label htmlFor="connectedToMaster">Connect to Master Account</Label>
+                            <Select
+                              name="connectedToMaster"
+                              value={formState.connectedToMaster}
+                              onValueChange={value =>
+                                handleSelectChange('connectedToMaster', value)
+                              }
+                            >
+                              <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
+                                <SelectValue
+                                  placeholder="Select Master Account (Optional)"
+                                  className="bg-white"
+                                />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white border border-gray-200">
+                                <SelectItem
+                                  value="none"
+                                  className="cursor-pointer hover:bg-gray-50"
+                                >
+                                  Not Connected
+                                </SelectItem>
+                                {accounts
+                                  .filter(acc => acc.accountType === 'master')
+                                  .map(masterAcc => (
+                                    <SelectItem
+                                      key={masterAcc.id}
+                                      value={masterAcc.accountNumber}
+                                      className="bg-white cursor-pointer hover:bg-gray-50"
+                                    >
+                                      {masterAcc.accountNumber} ({masterAcc.platform.toUpperCase()})
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                            <div>
-                              <Label htmlFor="lotCoefficient">
-                                Lot Size Multiplier
-                                {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
-                              </Label>
-                              <Input
-                                id="lotCoefficient"
-                                name="lotCoefficient"
-                                type="number"
-                                min="0.01"
-                                max="100"
-                                step="0.01"
-                                value={
-                                  canCustomizeLotSizesValue
-                                    ? formState.lotCoefficient && formState.lotCoefficient !== 1
-                                      ? formState.lotCoefficient.toFixed(2)
-                                      : '1.00'
+                          <div>
+                            <Label htmlFor="lotCoefficient">
+                              Lot Size Multiplier
+                              {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
+                            </Label>
+                            <Input
+                              id="lotCoefficient"
+                              name="lotCoefficient"
+                              type="number"
+                              min="0.01"
+                              max="100"
+                              step="0.01"
+                              value={
+                                canCustomizeLotSizesValue
+                                  ? formState.lotCoefficient && formState.lotCoefficient !== 1
+                                    ? formState.lotCoefficient.toFixed(2)
                                     : '1.00'
-                                }
-                                onChange={e => {
-                                  const inputValue = e.target.value;
-                                  let value = 1;
+                                  : '1.00'
+                              }
+                              onChange={e => {
+                                const inputValue = e.target.value;
+                                let value = 1;
 
-                                  if (inputValue !== '') {
-                                    // Permitir valores con hasta 2 decimales
-                                    const parsedValue = parseFloat(inputValue);
-                                    if (!isNaN(parsedValue) && parsedValue > 0) {
-                                      // Redondear a 2 decimales para evitar problemas de precisión
-                                      value = Math.round(parsedValue * 100) / 100;
-                                    }
+                                if (inputValue !== '') {
+                                  // Permitir valores con hasta 2 decimales
+                                  const parsedValue = parseFloat(inputValue);
+                                  if (!isNaN(parsedValue) && parsedValue > 0) {
+                                    // Redondear a 2 decimales para evitar problemas de precisión
+                                    value = Math.round(parsedValue * 100) / 100;
                                   }
-
-                                  setFormState({
-                                    ...formState,
-                                    lotCoefficient: canCustomizeLotSizesValue ? value : 1,
-                                  });
-                                }}
-                                disabled={!canCustomizeLotSizesValue}
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                {canCustomizeLotSizesValue
-                                  ? 'Multiplies the lot size from the master account'
-                                  : 'Free plan users cannot customize lot multipliers'}
-                              </p>
-                            </div>
-
-                            <div>
-                              <Label htmlFor="forceLot">
-                                Force Fixed Lot Size
-                                {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
-                              </Label>
-                              <Input
-                                id="forceLot"
-                                name="forceLot"
-                                type="number"
-                                min="0"
-                                max={canCustomizeLotSizesValue ? '100' : '0.01'}
-                                step="0.01"
-                                value={
-                                  canCustomizeLotSizesValue
-                                    ? formState.forceLot && formState.forceLot > 0
-                                      ? formState.forceLot.toFixed(2)
-                                      : '0.00'
-                                    : formState.forceLot > 0
-                                      ? '0.01'
-                                      : '0.00'
                                 }
-                                onChange={e => {
-                                  const inputValue = e.target.value;
-                                  let value = 0;
 
-                                  if (inputValue !== '') {
-                                    // Permitir valores con hasta 2 decimales
-                                    const parsedValue = parseFloat(inputValue);
-                                    if (!isNaN(parsedValue)) {
-                                      // Redondear a 2 decimales para evitar problemas de precisión
-                                      value = Math.round(parsedValue * 100) / 100;
-                                    }
+                                setFormState({
+                                  ...formState,
+                                  lotCoefficient: canCustomizeLotSizesValue ? value : 1,
+                                });
+                              }}
+                              disabled={!canCustomizeLotSizesValue}
+                              className="bg-white border border-gray-200 shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              {canCustomizeLotSizesValue
+                                ? 'Multiplies the lot size from the master account'
+                                : 'Free plan users cannot customize lot multipliers'}
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="forceLot">
+                              Force Fixed Lot Size
+                              {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
+                            </Label>
+                            <Input
+                              id="forceLot"
+                              name="forceLot"
+                              type="number"
+                              min="0"
+                              max={canCustomizeLotSizesValue ? '100' : '0.01'}
+                              step="0.01"
+                              value={
+                                canCustomizeLotSizesValue
+                                  ? formState.forceLot && formState.forceLot > 0
+                                    ? formState.forceLot.toFixed(2)
+                                    : '0.00'
+                                  : formState.forceLot > 0
+                                    ? '0.01'
+                                    : '0.00'
+                              }
+                              onChange={e => {
+                                const inputValue = e.target.value;
+                                let value = 0;
+
+                                if (inputValue !== '') {
+                                  // Permitir valores con hasta 2 decimales
+                                  const parsedValue = parseFloat(inputValue);
+                                  if (!isNaN(parsedValue)) {
+                                    // Redondear a 2 decimales para evitar problemas de precisión
+                                    value = Math.round(parsedValue * 100) / 100;
                                   }
-
-                                  setFormState({
-                                    ...formState,
-                                    forceLot: canCustomizeLotSizesValue
-                                      ? value
-                                      : value > 0
-                                        ? 0.01
-                                        : 0,
-                                  });
-                                }}
-                                disabled={!canCustomizeLotSizesValue}
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                {canCustomizeLotSizesValue
-                                  ? 'If set above 0, uses this fixed lot size instead of copying'
-                                  : 'Free plan users are limited to 0.01 lot size'}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center space-x-2 pt-1">
-                              <Switch
-                                id="reverseTrade"
-                                checked={formState.reverseTrade}
-                                onCheckedChange={checked =>
-                                  setFormState({
-                                    ...formState,
-                                    reverseTrade: checked,
-                                  })
                                 }
-                              />
-                              <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                                Reverse trades (Buy → Sell, Sell → Buy)
-                              </Label>
-                            </div>
-                          </>
-                        )}
+
+                                setFormState({
+                                  ...formState,
+                                  forceLot: canCustomizeLotSizesValue
+                                    ? value
+                                    : value > 0
+                                      ? 0.01
+                                      : 0,
+                                });
+                              }}
+                              disabled={!canCustomizeLotSizesValue}
+                              className="bg-white border border-gray-200 shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              {canCustomizeLotSizesValue
+                                ? 'If set above 0, uses this fixed lot size instead of copying'
+                                : 'Free plan users are limited to 0.01 lot size'}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center space-x-2 pt-1">
+                            <Switch
+                              id="reverseTrade"
+                              checked={formState.reverseTrade}
+                              onCheckedChange={checked =>
+                                setFormState({
+                                  ...formState,
+                                  reverseTrade: checked,
+                                })
+                              }
+                            />
+                            <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
+                              Reverse trades (Buy → Sell, Sell → Buy)
+                            </Label>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="flex justify-end space-x-2 pt-2">
@@ -2054,18 +2124,39 @@ export function TradingAccountsConfig() {
                           {/* Slave accounts connected to this master */}
                           {!collapsedMasters[masterAccount.id] &&
                             connectedSlaves.map(slaveAccount => {
-                              // console.log('🔍 Slave account data:', slaveAccount);
+                              // Crear el objeto procesado directamente aquí para tener todos los campos correctos
+                              const accountToUse = {
+                                id: slaveAccount.id,
+                                accountNumber: slaveAccount.accountNumber || slaveAccount.id,
+                                platform: slaveAccount.platform || 'Unknown',
+                                server: slaveAccount.server || '',
+                                password: slaveAccount.password || '',
+                                accountType: 'slave',
+                                status: slaveAccount.status || 'offline',
+                                lotCoefficient: slaveAccount.lotCoefficient || 1,
+                                forceLot: slaveAccount.forceLot || 0,
+                                reverseTrade: slaveAccount.reverseTrade || false,
+                                connectedToMaster: masterAccount.id,
+                                config: slaveAccount.config,
+                                masterOnline: slaveAccount.masterOnline || true, // Para slaves conectados, asumir que el master está online
+                              };
+
+                              console.log('🔍 DEBUG: Slave account for rendering:', {
+                                original: slaveAccount,
+                                processed: accountToUse,
+                              });
+
                               return (
                                 <tr
-                                  key={slaveAccount.id}
-                                  className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(slaveAccount.name) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                                  key={accountToUse.id}
+                                  className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
                                 >
                                   <td className="w-8 px-2 py-1.5 align-middle"></td>
                                   <td className="w-20 px-4 py-1.5 align-middle">
                                     <div className="flex items-center justify-center h-full w-full">
-                                      <Tooltip tip={getStatusDisplayText(slaveAccount.status)}>
+                                      <Tooltip tip={getStatusDisplayText(accountToUse.status)}>
                                         <span className="flex items-center justify-center h-5 w-5">
-                                          {getStatusIcon(slaveAccount.status)}
+                                          {getStatusIcon(accountToUse.status)}
                                         </span>
                                       </Tooltip>
                                     </div>
@@ -2074,23 +2165,49 @@ export function TradingAccountsConfig() {
                                     <div className="flex items-center justify-center">
                                       <Switch
                                         checked={getSlaveEffectiveStatus(
-                                          slaveAccount.name,
+                                          accountToUse.accountNumber,
                                           masterAccount.accountNumber
                                         )}
                                         onCheckedChange={enabled =>
-                                          toggleAccountStatus(slaveAccount.name, enabled)
+                                          toggleAccountStatus(accountToUse.accountNumber, enabled)
                                         }
-                                        disabled={
-                                          updatingCopier === `slave-${slaveAccount.name}` ||
-                                          !copierStatus?.globalStatus ||
-                                          !getMasterEffectiveStatus(masterAccount.accountNumber) ||
-                                          slaveAccount.status === 'offline' ||
-                                          !slaveAccount.masterOnline
-                                        }
+                                        disabled={(() => {
+                                          const isUpdating =
+                                            updatingCopier ===
+                                            `slave-${accountToUse.accountNumber}`;
+                                          const globalStatusOff = !copierStatus?.globalStatus;
+                                          const masterNotEffective = !getMasterEffectiveStatus(
+                                            masterAccount.accountNumber
+                                          );
+                                          const slaveOffline = accountToUse.status === 'offline';
+                                          const masterNotOnline = !accountToUse.masterOnline;
+
+                                          console.log(
+                                            '🔍 DEBUG: Switch disabled conditions for slave:',
+                                            accountToUse.accountNumber,
+                                            {
+                                              isUpdating,
+                                              globalStatusOff,
+                                              masterNotEffective,
+                                              slaveOffline,
+                                              masterNotOnline,
+                                              accountToUse: accountToUse,
+                                              copierStatus: copierStatus,
+                                            }
+                                          );
+
+                                          return (
+                                            isUpdating ||
+                                            globalStatusOff ||
+                                            masterNotEffective ||
+                                            slaveOffline ||
+                                            masterNotOnline
+                                          );
+                                        })()}
                                         title={
-                                          slaveAccount.status === 'offline'
+                                          accountToUse.status === 'offline'
                                             ? 'Account is offline - copy trading disabled'
-                                            : !slaveAccount.masterOnline
+                                            : !accountToUse.masterOnline
                                               ? 'Master account is offline - copy trading disabled'
                                               : !copierStatus?.globalStatus
                                                 ? 'Global copier is OFF'
@@ -2099,7 +2216,7 @@ export function TradingAccountsConfig() {
                                                     )
                                                   ? 'Master is not sending signals'
                                                   : getSlaveEffectiveStatus(
-                                                        slaveAccount.accountNumber,
+                                                        accountToUse.accountNumber,
                                                         masterAccount.accountNumber
                                                       )
                                                     ? 'Stop receiving signals from master'
@@ -2110,8 +2227,8 @@ export function TradingAccountsConfig() {
                                   </td>
                                   <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
                                     <div className="flex items-center gap-2">
-                                      {slaveAccount.name}
-                                      {recentlyDeployedSlaves.has(slaveAccount.name) && (
+                                      {accountToUse.accountNumber}
+                                      {recentlyDeployedSlaves.has(accountToUse.accountNumber) && (
                                         <div className="flex items-center gap-1">
                                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                                           <span className="text-xs text-green-600 font-medium">
@@ -2125,16 +2242,16 @@ export function TradingAccountsConfig() {
                                     Slave
                                   </td>
                                   <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                    {getPlatformDisplayName(slaveAccount.platform)}
+                                    {getPlatformDisplayName(accountToUse.platform)}
                                   </td>
                                   <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
                                     <div className="flex gap-2 flex-wrap">
                                       {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
                                       {(() => {
-                                        const config = slaveAccount.config;
+                                        const config = accountToUse.config;
                                         console.log(
                                           '🔍 Slave config for',
-                                          slaveAccount.id,
+                                          accountToUse.id,
                                           ':',
                                           config
                                         );
@@ -2196,16 +2313,16 @@ export function TradingAccountsConfig() {
                                     </div>
                                   </td>
                                   <td className="w-32 px-4 py-1.5 whitespace-nowrap align-middle actions-column">
-                                    {deleteConfirmId === slaveAccount.id ? (
+                                    {deleteConfirmId === accountToUse.id ? (
                                       <div className="flex space-x-2">
                                         <Button
                                           size="sm"
                                           variant="destructive"
                                           onClick={confirmDeleteAccount}
-                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          disabled={isDeletingAccount === accountToUse.id}
                                           className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
                                         >
-                                          {isDeletingAccount === slaveAccount.id
+                                          {isDeletingAccount === accountToUse.id
                                             ? 'Deleting...'
                                             : 'Delete'}
                                         </Button>
@@ -2213,13 +2330,13 @@ export function TradingAccountsConfig() {
                                           size="sm"
                                           variant="outline"
                                           onClick={cancelDeleteAccount}
-                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          disabled={isDeletingAccount === accountToUse.id}
                                           className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                         >
                                           Cancel
                                         </Button>
                                       </div>
-                                    ) : disconnectConfirmId === slaveAccount.id ? (
+                                    ) : disconnectConfirmId === accountToUse.id ? (
                                       <div className="flex space-x-2">
                                         <Button
                                           size="sm"
@@ -2228,13 +2345,13 @@ export function TradingAccountsConfig() {
                                           onClick={e => {
                                             e.stopPropagation();
                                             disconnectSlaveAccount(
-                                              slaveAccount.name,
+                                              accountToUse.accountNumber,
                                               masterAccount.accountNumber
                                             );
                                           }}
-                                          disabled={isDisconnecting === slaveAccount.id}
+                                          disabled={isDisconnecting === accountToUse.id}
                                         >
-                                          {isDisconnecting === slaveAccount.id ? (
+                                          {isDisconnecting === accountToUse.id ? (
                                             <>
                                               <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
                                               Disconnecting...
@@ -2250,7 +2367,7 @@ export function TradingAccountsConfig() {
                                             e.stopPropagation();
                                             cancelDisconnectAction();
                                           }}
-                                          disabled={isDisconnecting === slaveAccount.id}
+                                          disabled={isDisconnecting === accountToUse.id}
                                           className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                         >
                                           Cancel
@@ -2264,10 +2381,10 @@ export function TradingAccountsConfig() {
                                           className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                           onClick={e => {
                                             e.stopPropagation();
-                                            handleEditAccount(slaveAccount);
+                                            handleEditAccount(accountToUse);
                                           }}
                                           title="Edit Account"
-                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          disabled={isDeletingAccount === accountToUse.id}
                                         >
                                           <Pencil className="h-4 w-4 text-blue-600" />
                                         </Button>
@@ -2277,12 +2394,12 @@ export function TradingAccountsConfig() {
                                           className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                           onClick={e => {
                                             e.stopPropagation();
-                                            setDisconnectConfirmId(slaveAccount.id);
+                                            setDisconnectConfirmId(accountToUse.id);
                                           }}
                                           title="Disconnect from Master"
                                           disabled={
-                                            isDeletingAccount === slaveAccount.id ||
-                                            isDisconnecting === slaveAccount.id
+                                            isDeletingAccount === accountToUse.id ||
+                                            isDisconnecting === accountToUse.id
                                           }
                                         >
                                           <Unlink className="h-4 w-4 text-orange-600" />
@@ -2293,10 +2410,10 @@ export function TradingAccountsConfig() {
                                           className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                           onClick={e => {
                                             e.stopPropagation();
-                                            handleDeleteAccount(slaveAccount.id);
+                                            handleDeleteAccount(accountToUse.id);
                                           }}
                                           title="Delete Account"
-                                          disabled={isDeletingAccount === slaveAccount.id}
+                                          disabled={isDeletingAccount === accountToUse.id}
                                         >
                                           <Trash className="h-4 w-4 text-red-600" />
                                         </Button>
@@ -2384,7 +2501,9 @@ export function TradingAccountsConfig() {
 
                               // Si no se encuentra en unconnectedSlaves, buscar en slaveConfigs como fallback
                               if (!config) {
-                                const slaveConfig = slaveConfigs[orphanSlave.accountNumber];
+                                const slaveConfig =
+                                  slaveConfigs[orphanSlave.accountNumber] ||
+                                  slaveConfigs[orphanSlave.id];
                                 config = slaveConfig?.config;
                               }
 
