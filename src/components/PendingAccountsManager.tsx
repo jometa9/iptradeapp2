@@ -603,7 +603,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
   return (
     <>
-      <Card className="bg-white">
+      <Card className={`bg-white ${!isCollapsed ? 'pending-accounts-blur-bg' : ''} `}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -620,7 +620,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                 ) : (
                   <Badge
                     variant="secondary"
-                    className="bg-gray-50 text-gray-600 border border-gray-300 mt-0.5"
+                    className="bg-gray-100 text-gray-600 border border-gray-300 mt-0.5"
                   >
                     No pending accounts
                   </Badge>
@@ -638,7 +638,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   (isCollapsed || pendingCount > 0) && (
                     <Badge
                       variant="secondary"
-                      className="bg-gray-50  mt-0.5 link-platforms-gradient-text"
+                      className="bg-gray-50  ml-0 pl-0 mt-0.5 link-platforms-gradient-text"
                     >
                       {getLinkingStatusDisplay(linkingStatus).message}
                     </Badge>
@@ -719,9 +719,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     }
                   }}
                   disabled={isLinking}
-                  className={`bg-blue-50 mt-3 mb-1 h-9 pl-3 rounded-lg shadow-lg text-blue-700  ${
+                  className={`bg-white mt-3 mb-1 h-9 pl-3 rounded-lg shadow-lg text-blue-700  ${
                     isLinking
-                      ? 'link-platforms-linking  cursor-not-allowed'
+                      ? 'link-platforms-linking  cursor-not-allowed '
                       : 'border-blue-200 cursor-pointer'
                   }`}
                 >

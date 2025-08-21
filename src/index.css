@@ -102,7 +102,7 @@ body {
   position: relative;
   border: 1px solid transparent;
   background:
-    linear-gradient(#f0f9ff, #f0f9ff) padding-box,
+    linear-gradient(#ffffff, #ffffff) padding-box,
     linear-gradient(
         90deg,
         #3b82f6,
@@ -149,6 +149,32 @@ body {
   100% {
     background-position: 200% 50%;
   }
+}
+
+.pending-accounts-blur-bg {
+  position: relative;
+  background: rgb(255, 255, 255);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(240, 246, 255);
+  transition: all 0.3s ease;
+}
+
+.pending-accounts-blur-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    circle at center,
+    rgb(236, 243, 255) 0%,
+    rgb(244, 247, 251) 30%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 ul,
