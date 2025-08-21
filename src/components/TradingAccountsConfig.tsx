@@ -1302,13 +1302,24 @@ export function TradingAccountsConfig() {
         </CardHeader>
         <CardContent>
           {/* Global Copier Status */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 shadow-sm">
+          <div
+            className={`border ${
+              localGlobalStatus ? 'border-blue-200 bg-blue-50' : 'border-orange-200 bg-orange-50'
+            } rounded-xl p-4 mb-4 shadow-sm`}
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Shield className="w-6 h-6 text-blue-900" />
+                <Shield
+                  className={`w-6 h-6 ${localGlobalStatus ? 'text-blue-900' : 'text-orange-900'}`}
+                />
                 <div>
-                  <h3 className="font-semibold text-blue-900">Global Copier Status</h3>
-                  <p className="text-sm text-blue-900">Master control for all copying operations</p>
+                  <h3
+                    className={`font-semibold ${
+                      localGlobalStatus ? 'text-blue-900' : 'text-orange-900'
+                    }`}
+                  >
+                    Global Copier Status
+                  </h3>
                 </div>
               </div>
               <div className="flex items-center gap-3">
