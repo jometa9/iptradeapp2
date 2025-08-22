@@ -18,3 +18,6 @@ Investor : @5JtCkQp
 - global copier status
 
 - trading config actions running
+
+
+- copier ea no escribe el timestamp cuando en el par esta el mercado cerrado

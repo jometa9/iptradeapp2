@@ -336,6 +336,7 @@ export function TradingAccountsConfig() {
   const accountTypeOptions = [
     { value: 'master', label: 'Master Account (Signal Provider)' },
     { value: 'slave', label: 'Slave Account (Signal Follower)' },
+    { value: 'pending', label: 'Pending Account (Not Configured)' },
   ];
 
   // Los datos se cargan automáticamente via SSE
@@ -523,6 +524,8 @@ export function TradingAccountsConfig() {
   const handleSelectChange = (name: string, value: string) => {
     if (name === 'accountType' && value === 'master') {
       setFormState({ ...formState, [name]: value, status: 'synchronized' });
+    } else if (name === 'accountType' && value === 'pending') {
+      setFormState({ ...formState, [name]: value, status: 'pending' });
     } else {
       setFormState({ ...formState, [name]: value });
     }
@@ -765,120 +768,149 @@ export function TradingAccountsConfig() {
       let payload;
 
       console.log('🔍 DEBUG: Account type:', formState.accountType);
-      if (formState.accountType === 'master') {
-        payload = {
-          masterAccountId: formState.accountNumber,
-          name: formState.accountNumber,
-          description: '',
-          broker: formState.serverIp,
-          platform: formState.platform.toUpperCase(),
-        };
+      console.log('🔍 DEBUG: Editing account:', editingAccount);
 
-        // Si estamos editando una cuenta slave y la convertimos a master
-        if (editingAccount && editingAccount.accountType === 'slave') {
-          // Primero eliminamos la cuenta slave
-          await fetch(`http://localhost:${serverPort}/api/accounts/slave/${editingAccount.id}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-          });
+      // Si estamos editando una cuenta y cambiando su tipo, usar los endpoints CSV
+      if (editingAccount) {
+        const accountId = editingAccount.id;
+        console.log(
+          `🔄 Editing account ${accountId} from ${editingAccount.accountType} to ${formState.accountType}`
+        );
 
-          // Luego creamos la cuenta master
-          response = await fetch(`http://localhost:${serverPort}/api/accounts/master`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } else if (editingAccount) {
+        // Si la cuenta actual es master o slave y queremos convertirla a pending
+        if (editingAccount.accountType !== 'pending' && formState.accountType === 'pending') {
+          // Convertir a pending usando el endpoint convert-to-pending
           response = await fetch(
-            `http://localhost:${serverPort}/api/accounts/master/${editingAccount.id}`,
+            `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
             {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
             }
           );
-        } else {
+
+          console.log('📡 Convert to pending response status:', response.status);
+        } else if (formState.accountType === 'master') {
+          // Convertir a master - primero convertir a pending, luego a master
+          if (editingAccount.accountType !== 'pending') {
+            // Primero convertir a pending
+            const pendingResponse = await fetch(
+              `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+              }
+            );
+
+            if (!pendingResponse.ok) {
+              throw new Error('Failed to convert account to pending first');
+            }
+
+            console.log('📡 Converted to pending first, now converting to master');
+          }
+
+          // Ahora convertir a master
+          const masterPayload = {
+            newType: 'master',
+          };
+
+          response = await fetch(
+            `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
+              body: JSON.stringify(masterPayload),
+            }
+          );
+
+          console.log('📡 Master conversion response status:', response.status);
+        } else if (formState.accountType === 'slave') {
+          // Convertir a slave - primero convertir a pending, luego a slave
+          if (editingAccount.accountType !== 'pending') {
+            // Primero convertir a pending
+            const pendingResponse = await fetch(
+              `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+              }
+            );
+
+            if (!pendingResponse.ok) {
+              throw new Error('Failed to convert account to pending first');
+            }
+
+            console.log('📡 Converted to pending first, now converting to slave');
+          }
+
+          // Ahora convertir a slave
+          const slavePayload = {
+            newType: 'slave',
+            slaveConfig: {
+              masterAccountId:
+                formState.connectedToMaster !== 'none' ? formState.connectedToMaster : null,
+              lotCoefficient: formState.lotCoefficient,
+              forceLot: formState.forceLot > 0 ? formState.forceLot : null,
+              reverseTrade: formState.reverseTrade,
+            },
+          };
+
+          response = await fetch(
+            `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
+              body: JSON.stringify(slavePayload),
+            }
+          );
+
+          console.log('📡 Slave conversion response status:', response.status);
+        }
+      } else {
+        // Crear nueva cuenta - usar la lógica existente
+        if (formState.accountType === 'master') {
+          payload = {
+            masterAccountId: formState.accountNumber,
+            name: formState.accountNumber,
+            description: '',
+            broker: formState.serverIp,
+            platform: formState.platform.toUpperCase(),
+          };
+
           response = await fetch(`http://localhost:${serverPort}/api/accounts/master`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
-        }
-      } else {
-        console.log('🔍 DEBUG: Processing slave account');
-        // Slave account
-        payload = {
-          slaveAccountId: formState.accountNumber,
-          name: formState.accountNumber,
-          description: '',
-          broker: formState.serverIp,
-          platform: formState.platform.toUpperCase(),
-          ...(formState.connectedToMaster !== 'none' &&
-            formState.connectedToMaster !== '' && {
-              masterAccountId: formState.connectedToMaster,
-            }),
-        };
-
-        // Si estamos editando una cuenta master y la convertimos a slave
-        if (editingAccount && editingAccount.accountType === 'master') {
-          // Primero eliminamos la cuenta master
-          await fetch(`http://localhost:${serverPort}/api/accounts/master/${editingAccount.id}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-          });
-
-          // Luego creamos la cuenta slave
-          response = await fetch(`http://localhost:${serverPort}/api/accounts/slave`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-        } else if (editingAccount && editingAccount.accountType === 'slave') {
-          console.log('🔍 DEBUG: Editing existing slave account');
-          console.log('🔍 Form values:', {
-            lotCoefficient: formState.lotCoefficient,
-            forceLot: formState.forceLot,
-            reverseTrade: formState.reverseTrade,
-          });
-
-          // Para edición de cuentas slave, enviamos las configuraciones de trading
-          console.log('🔍 connectedToMaster value:', formState.connectedToMaster);
-          console.log('🔍 connectedToMaster type:', typeof formState.connectedToMaster);
-
-          payload = {
-            slaveAccountId: editingAccount.accountNumber,
-            lotMultiplier: formState.lotCoefficient,
-            forceLot: formState.forceLot > 0 ? formState.forceLot : null,
-            reverseTrading: formState.reverseTrade,
-          };
-
-          // Manejar masterId explícitamente
-          if (
-            formState.connectedToMaster &&
-            formState.connectedToMaster !== 'none' &&
-            formState.connectedToMaster !== ''
-          ) {
-            payload.masterId = formState.connectedToMaster;
-            console.log('🔍 Adding masterId to payload:', formState.connectedToMaster);
-          } else {
-            // Explícitamente establecer masterId como null para desconectar
-            payload.masterId = null;
-            console.log('🔍 Setting masterId to null - slave will be disconnected');
-          }
-
-          console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
-
-          response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': secretKey || '',
-            },
-            body: JSON.stringify(payload),
-          });
-
-          console.log('📡 Response status:', response.status);
         } else {
+          console.log('🔍 DEBUG: Processing slave account');
+          // Slave account
+          payload = {
+            slaveAccountId: formState.accountNumber,
+            name: formState.accountNumber,
+            description: '',
+            broker: formState.serverIp,
+            platform: formState.platform.toUpperCase(),
+            ...(formState.connectedToMaster !== 'none' &&
+              formState.connectedToMaster !== '' && {
+                masterAccountId: formState.connectedToMaster,
+              }),
+          };
+
           response = await fetch(`http://localhost:${serverPort}/api/accounts/slave`, {
             method: 'POST',
             headers: {
@@ -887,31 +919,30 @@ export function TradingAccountsConfig() {
             },
             body: JSON.stringify(payload),
           });
-        }
 
-        // If it's a NEW slave account with specific configurations, set them after creating the account
-        if (
-          !editingAccount && // Solo para cuentas nuevas, no para edición
-          response.ok &&
-          (formState.lotCoefficient !== 1 || formState.forceLot > 0 || formState.reverseTrade)
-        ) {
-          const slaveConfigPayload = {
-            slaveAccountId: formState.accountNumber,
-            lotMultiplier: Number(formState.lotCoefficient),
-            forceLot: Number(formState.forceLot) > 0 ? Number(formState.forceLot) : null,
-            reverseTrading: formState.reverseTrade,
-            enabled: true,
-            description: 'Auto-configured from frontend',
-          };
+          // If it's a NEW slave account with specific configurations, set them after creating the account
+          if (
+            response.ok &&
+            (formState.lotCoefficient !== 1 || formState.forceLot > 0 || formState.reverseTrade)
+          ) {
+            const slaveConfigPayload = {
+              slaveAccountId: formState.accountNumber,
+              lotMultiplier: Number(formState.lotCoefficient),
+              forceLot: Number(formState.forceLot) > 0 ? Number(formState.forceLot) : null,
+              reverseTrading: formState.reverseTrade,
+              enabled: true,
+              description: 'Auto-configured from frontend',
+            };
 
-          await fetch(`http://localhost:${serverPort}/api/slave-config`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': secretKey || '',
-            },
-            body: JSON.stringify(slaveConfigPayload),
-          });
+            await fetch(`http://localhost:${serverPort}/api/slave-config`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
+              body: JSON.stringify(slaveConfigPayload),
+            });
+          }
         }
       }
 
@@ -1508,12 +1539,19 @@ export function TradingAccountsConfig() {
                     <div className="flex items-center gap-2">
                       {formState.accountType === 'master' ? (
                         <HousePlug className="h-5 w-5" />
-                      ) : (
+                      ) : formState.accountType === 'slave' ? (
                         <Unplug className="h-5 w-5" />
+                      ) : (
+                        <Clock className="h-5 w-5" />
                       )}
                       <span>
                         {editingAccount.accountNumber}{' '}
-                        {formState.accountType === 'master' ? 'Master' : 'Slave'} Configuration
+                        {formState.accountType === 'master'
+                          ? 'Master'
+                          : formState.accountType === 'slave'
+                            ? 'Slave'
+                            : 'Pending'}{' '}
+                        Configuration
                       </span>
                     </div>
                   ) : (
@@ -1543,18 +1581,10 @@ export function TradingAccountsConfig() {
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div
                       className={`grid gap-4 ${
-                        // Si estamos editando y solo se muestra el selector de tipo, usar una columna
+                        // Si estamos editando una cuenta master y seleccionamos master, usar una columna
                         editingAccount &&
-                        !(
-                          !editingAccount ||
-                          (editingAccount &&
-                            editingAccount.accountType === 'master' &&
-                            formState.accountType === 'master')
-                        ) &&
-                        !(
-                          formState.accountType === 'slave' &&
-                          (!editingAccount || editingAccount.accountType === 'slave')
-                        )
+                        editingAccount.accountType === 'master' &&
+                        formState.accountType === 'master'
                           ? 'grid-cols-1'
                           : 'grid-cols-1 md:grid-cols-2'
                       }`}
@@ -1563,7 +1593,9 @@ export function TradingAccountsConfig() {
                       {(!editingAccount ||
                         (editingAccount &&
                           editingAccount.accountType === 'master' &&
-                          formState.accountType === 'master')) && (
+                          formState.accountType === 'master' &&
+                          editingAccount.accountType === 'master') ||
+                        (editingAccount && formState.accountType === 'pending')) && (
                         <>
                           <div>
                             <Label htmlFor="accountNumber">Account Number</Label>
@@ -1633,18 +1665,10 @@ export function TradingAccountsConfig() {
 
                       <div
                         className={
-                          // Si estamos editando y solo se muestra el selector de tipo, hacer que ocupe todo el ancho
+                          // Si estamos editando una cuenta master y seleccionamos master, hacer que ocupe todo el ancho
                           editingAccount &&
-                          !(
-                            !editingAccount ||
-                            (editingAccount &&
-                              editingAccount.accountType === 'master' &&
-                              formState.accountType === 'master')
-                          ) &&
-                          !(
-                            formState.accountType === 'slave' &&
-                            (!editingAccount || editingAccount.accountType === 'slave')
-                          )
+                          editingAccount.accountType === 'master' &&
+                          formState.accountType === 'master'
                             ? 'col-span-1'
                             : ''
                         }
@@ -1679,11 +1703,19 @@ export function TradingAccountsConfig() {
                           editingAccountType: editingAccount?.accountType,
                           shouldShowSlaveFields:
                             formState.accountType === 'slave' &&
-                            (!editingAccount || editingAccount.accountType === 'slave'),
+                            (!editingAccount ||
+                              editingAccount.accountType === 'slave' ||
+                              (editingAccount &&
+                                editingAccount.accountType === 'master' &&
+                                formState.accountType === 'slave')),
                         });
                         return (
                           formState.accountType === 'slave' &&
-                          (!editingAccount || editingAccount.accountType === 'slave')
+                          (!editingAccount ||
+                            editingAccount.accountType === 'slave' ||
+                            (editingAccount &&
+                              editingAccount.accountType === 'master' &&
+                              formState.accountType === 'slave'))
                         );
                       })() && (
                         <>
@@ -2083,6 +2115,19 @@ export function TradingAccountsConfig() {
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      handleEditAccount(masterAccount);
+                                    }}
+                                    title="Edit Account"
+                                    disabled={isDeletingAccount === masterAccount.id}
+                                  >
+                                    <Pencil className="h-4 w-4 text-blue-600" />
+                                  </Button>
                                   {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                     <Button
                                       variant="outline"
@@ -2100,7 +2145,9 @@ export function TradingAccountsConfig() {
                                     >
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
-                                  ) : null}
+                                  ) : (
+                                    <div className="h-9 w-9 invisible"></div>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -2114,8 +2161,6 @@ export function TradingAccountsConfig() {
                                   >
                                     <Trash className="h-4 w-4 text-red-600" />
                                   </Button>
-                                  {/* Espacio invisible para mantener consistencia con slave accounts que tienen 3 botones */}
-                                  <div className="h-9 w-9 invisible"></div>
                                 </div>
                               )}
                             </td>

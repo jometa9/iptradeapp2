@@ -96,12 +96,13 @@ class CSVManager extends EventEmitter {
       }
 
       // Check if this is a pending account in CSV2 format
-      if (
-        typeData &&
-        statusData &&
-        configData &&
-        (typeData.type === 'PENDING' || configData.configType === 'PENDING')
-      ) {
+      // Use CONFIG as source of truth - if CONFIG says PENDING, it's pending
+      // If CONFIG says MASTER/SLAVE but TYPE says PENDING, use CONFIG
+      const isPending =
+        configData.configType === 'PENDING' ||
+        (typeData.type === 'PENDING' && configData.configType === 'PENDING');
+
+      if (typeData && statusData && configData && isPending) {
         const accountTime = statusData.timestamp * 1000; // Convert to milliseconds
         const timeDiff = (currentTime - accountTime) / 1000; // Difference in seconds
 
@@ -932,6 +933,21 @@ class CSVManager extends EventEmitter {
           case 'CONFIG':
             // Parsear configuración según tipo de cuenta
             if (currentAccountData) {
+              // Usar CONFIG como fuente de verdad para el tipo de cuenta
+              // Si CONFIG dice MASTER pero TYPE dice PENDING, usar MASTER
+              const configType = values[1].toLowerCase();
+              if (configType === 'master' && currentAccountData.account_type === 'pending') {
+                console.log(
+                  `🔄 [parseCSVFile] Account ${currentAccountData.account_id}: TYPE says PENDING but CONFIG says MASTER - using MASTER`
+                );
+                currentAccountData.account_type = 'master';
+              } else if (configType === 'slave' && currentAccountData.account_type === 'pending') {
+                console.log(
+                  `🔄 [parseCSVFile] Account ${currentAccountData.account_id}: TYPE says PENDING but CONFIG says SLAVE - using SLAVE`
+                );
+                currentAccountData.account_type = 'slave';
+              }
+
               if (currentAccountData.account_type === 'master') {
                 currentAccountData.config = {
                   enabled: values[2] === 'ENABLED',

@@ -80,9 +80,7 @@ export const updateCSVAccountType = async (req, res) => {
       });
     }
 
-    console.log(
-      `🔄 Updating CSV account ${accountId} from pending to ${newType} using new CSV2 format...`
-    );
+    console.log(`🔄 Updating CSV account ${accountId} to ${newType} using new CSV2 format...`);
 
     // Use specific CSV file paths where the system actually writes status updates
     let filesUpdated = 0;
@@ -92,6 +90,86 @@ export const updateCSVAccountType = async (req, res) => {
     ];
     let platform = 'MT4'; // Default platform
     let currentTimestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+
+    // Check if we're converting from master to slave and need to disconnect slaves
+    let isConvertingFromMaster = false;
+    let slavesToDisconnect = [];
+
+    // First pass: check if the account is currently a master
+    for (const filePath of csvFiles) {
+      try {
+        if (existsSync(filePath)) {
+          const content = readFileSync(filePath, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+
+          for (const line of lines) {
+            const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+            // Check if this account is currently a master
+            if (
+              cleanLine.includes('[TYPE]') &&
+              cleanLine.includes('[MASTER]') &&
+              cleanLine.includes(`[${accountId}]`)
+            ) {
+              isConvertingFromMaster = true;
+              console.log(
+                `🔍 Account ${accountId} is currently a master, will disconnect slaves if converting to slave`
+              );
+              break;
+            }
+          }
+
+          if (isConvertingFromMaster) break;
+        }
+      } catch (error) {
+        console.error(`Error checking master status in ${filePath}:`, error);
+      }
+    }
+
+    // If converting from master to slave, find and disconnect all connected slaves
+    if (isConvertingFromMaster && newType === 'slave') {
+      console.log(`🔄 Converting from master to slave - will disconnect all connected slaves`);
+
+      for (const filePath of csvFiles) {
+        try {
+          if (existsSync(filePath)) {
+            const content = readFileSync(filePath, 'utf8');
+            const lines = content.split('\n').filter(line => line.trim());
+
+            // Find all slave accounts connected to this master
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+              // Check if this is a slave CONFIG line connected to our master
+              if (
+                cleanLine.includes('[CONFIG]') &&
+                cleanLine.includes('[SLAVE]') &&
+                cleanLine.includes(`[${accountId}]`)
+              ) {
+                // Extract slave account ID from the TYPE line (should be a few lines above)
+                for (let j = Math.max(0, i - 5); j < i; j++) {
+                  const typeLine = lines[j].replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+                  if (typeLine.includes('[TYPE]') && typeLine.includes('[SLAVE]')) {
+                    const matches = typeLine.match(/\[([^\]]+)\]/g);
+                    if (matches && matches.length >= 4) {
+                      const slaveId = matches[3].replace(/[\[\]]/g, '').trim();
+                      if (slaveId && slaveId !== accountId) {
+                        slavesToDisconnect.push({ slaveId, filePath });
+                        console.log(`🔍 Found slave ${slaveId} connected to master ${accountId}`);
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error finding slaves in ${filePath}:`, error);
+        }
+      }
+    }
 
     console.log(`📁 Checking ${csvFiles.length} specific CSV files`);
     console.log('📁 Files to check:', csvFiles);
@@ -137,8 +215,8 @@ export const updateCSVAccountType = async (req, res) => {
               }
             }
 
-            // Legacy check for [TYPE][PENDING][PLATFORM][ACCOUNT_ID] format
-            if (cleanLine.includes('[TYPE]') && cleanLine.includes('[PENDING]')) {
+            // Check for [TYPE][MASTER/SLAVE/PENDING][PLATFORM][ACCOUNT_ID] format
+            if (cleanLine.includes('[TYPE]')) {
               const matches = cleanLine.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 4) {
                 const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
@@ -148,7 +226,7 @@ export const updateCSVAccountType = async (req, res) => {
                   foundAccount = true;
                   accountPlatform = values[2] || 'MT4';
                   console.log(
-                    `✅ Found pending account ${accountId} on platform ${accountPlatform}`
+                    `✅ Found account ${accountId} (${values[1]}) on platform ${accountPlatform}`
                   );
                   break;
                 }
@@ -184,6 +262,24 @@ export const updateCSVAccountType = async (req, res) => {
               console.log(`🔍 Clean line: "${cleanLine}"`);
 
               if (
+                cleanLine.includes('[CONFIG]') &&
+                (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
+              ) {
+                console.log(
+                  `✅ Found CONFIG line for account ${accountId}, updating to ${newType}`
+                );
+                if (newType === 'master') {
+                  newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+                } else if (newType === 'slave') {
+                  // Generate slave config with provided settings
+                  const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
+                  const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
+                  const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
+                  const masterId = slaveConfig?.masterAccountId || 'NULL';
+
+                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+                }
+              } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
               ) {
@@ -224,6 +320,57 @@ export const updateCSVAccountType = async (req, res) => {
     }
 
     if (filesUpdated > 0) {
+      // If converting from master to slave, disconnect all connected slaves
+      if (isConvertingFromMaster && newType === 'slave' && slavesToDisconnect.length > 0) {
+        console.log(
+          `🔄 Disconnecting ${slavesToDisconnect.length} slaves from master ${accountId}`
+        );
+
+        for (const { slaveId, filePath } of slavesToDisconnect) {
+          try {
+            if (existsSync(filePath)) {
+              const content = readFileSync(filePath, 'utf8');
+              const lines = content.split('\n');
+              let newContent = '';
+              let slaveFound = false;
+
+              for (const line of lines) {
+                const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
+
+                // Check if this is the CONFIG line for the slave we want to disconnect
+                if (
+                  cleanLine.includes('[CONFIG]') &&
+                  cleanLine.includes('[SLAVE]') &&
+                  cleanLine.includes(`[${accountId}]`)
+                ) {
+                  // This is a slave connected to our master, disconnect it
+                  const lotMultiplier = cleanLine.match(/\[([^\]]+)\]/g)?.[2] || '1';
+                  const forceLot = cleanLine.match(/\[([^\]]+)\]/g)?.[3] || 'NULL';
+                  const reverseTrade = cleanLine.match(/\[([^\]]+)\]/g)?.[4] || 'FALSE';
+
+                  // Set masterId to NULL to disconnect
+                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [NULL]\n`;
+                  slaveFound = true;
+                  console.log(`✅ Disconnected slave ${slaveId} from master ${accountId}`);
+                } else if (cleanLine.includes('[STATUS]')) {
+                  // Update timestamp for the slave
+                  newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+                } else {
+                  newContent += line + '\n';
+                }
+              }
+
+              if (slaveFound) {
+                writeFileSync(filePath, newContent.replace(/\r\n/g, '\n'), 'utf8');
+                console.log(`✏️ Updated slave ${slaveId} to disconnect from master ${accountId}`);
+              }
+            }
+          } catch (error) {
+            console.error(`Error disconnecting slave ${slaveId}:`, error);
+          }
+        }
+      }
+
       // Refresh CSV data from existing files (no new search)
       csvManager.refreshAllFileData();
 
@@ -238,16 +385,23 @@ export const updateCSVAccountType = async (req, res) => {
       });
       console.log(`📢 SSE: Emitted accountConverted event for ${accountId} to ${newType}`);
 
+      const disconnectMessage =
+        isConvertingFromMaster && newType === 'slave' && slavesToDisconnect.length > 0
+          ? ` and disconnected ${slavesToDisconnect.length} slave(s)`
+          : '';
+
       res.json({
         success: true,
-        message: `Successfully updated account ${accountId} to ${newType} and registered in configured accounts system`,
+        message: `Successfully updated account ${accountId} to ${newType}${disconnectMessage} and registered in configured accounts system`,
         filesUpdated,
         accountRegistered: true,
+        slavesDisconnected:
+          isConvertingFromMaster && newType === 'slave' ? slavesToDisconnect.length : 0,
       });
     } else {
       res.status(404).json({
         error: 'Account not found',
-        message: `No pending account with ID ${accountId} found in CSV files`,
+        message: `No account with ID ${accountId} found in CSV files`,
       });
     }
   } catch (error) {
