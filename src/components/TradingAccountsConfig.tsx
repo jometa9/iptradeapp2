@@ -7,8 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Eye,
-  EyeOff,
   HousePlug,
   Info,
   Pencil,
@@ -1581,94 +1579,26 @@ export function TradingAccountsConfig() {
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div
                       className={`grid gap-4 ${
-                        // Si estamos editando una cuenta master y seleccionamos master, usar una columna
+                        // Si estamos editando una cuenta y seleccionamos master o pending, usar una columna
                         editingAccount &&
-                        editingAccount.accountType === 'master' &&
-                        formState.accountType === 'master'
+                        ((editingAccount.accountType === 'master' &&
+                          formState.accountType === 'master') ||
+                          formState.accountType === 'master' ||
+                          formState.accountType === 'pending')
                           ? 'grid-cols-1'
                           : 'grid-cols-1 md:grid-cols-2'
                       }`}
                     >
                       {/* Para cuentas nuevas o cuentas master existentes, mostrar todos los campos */}
-                      {(!editingAccount ||
-                        (editingAccount &&
-                          editingAccount.accountType === 'master' &&
-                          formState.accountType === 'master' &&
-                          editingAccount.accountType === 'master') ||
-                        (editingAccount && formState.accountType === 'pending')) && (
-                        <>
-                          <div>
-                            <Label htmlFor="accountNumber">Account Number</Label>
-                            <Input
-                              id="accountNumber"
-                              name="accountNumber"
-                              value={formState.accountNumber}
-                              onChange={handleChange}
-                              placeholder="12345678"
-                              required
-                              className="bg-white border border-gray-200"
-                            />
-                          </div>
-
-                          <div>
-                            <Label htmlFor="platform">Platform</Label>
-                            <Select
-                              name="platform"
-                              value={formState.platform}
-                              onValueChange={value => handlePlatformChange(value)}
-                            >
-                              <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
-                                <SelectValue placeholder="Select Platform" className="bg-white" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border border-gray-200">
-                                {platformOptions.map(option => (
-                                  <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                    className="bg-white cursor-pointer hover:bg-gray-50"
-                                  >
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div>
-                            <Label htmlFor="password">Password</Label>
-                            <div className="relative">
-                              <Input
-                                id="password"
-                                name="password"
-                                type={showPassword ? 'text' : 'password'}
-                                value={formState.password}
-                                onChange={handleChange}
-                                placeholder="••••••••"
-                                required={!editingAccount}
-                                className="bg-white pr-10 border border-gray-200 shadow-sm"
-                              />
-                              <button
-                                type="button"
-                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-gray-100 focus:outline-none rounded-r-md"
-                                onClick={() => setShowPassword(!showPassword)}
-                              >
-                                {showPassword ? (
-                                  <EyeOff className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                  <Eye className="h-4 w-4 text-gray-500" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
 
                       <div
                         className={
-                          // Si estamos editando una cuenta master y seleccionamos master, hacer que ocupe todo el ancho
+                          // Si estamos editando una cuenta y seleccionamos master o pending, hacer que ocupe todo el ancho
                           editingAccount &&
-                          editingAccount.accountType === 'master' &&
-                          formState.accountType === 'master'
+                          ((editingAccount.accountType === 'master' &&
+                            formState.accountType === 'master') ||
+                            formState.accountType === 'master' ||
+                            formState.accountType === 'pending')
                             ? 'col-span-1'
                             : ''
                         }
@@ -1735,23 +1665,43 @@ export function TradingAccountsConfig() {
                                 />
                               </SelectTrigger>
                               <SelectContent className="bg-white border border-gray-200">
-                                <SelectItem
-                                  value="none"
-                                  className="cursor-pointer hover:bg-gray-50"
-                                >
-                                  Not Connected
-                                </SelectItem>
-                                {accounts
-                                  .filter(acc => acc.accountType === 'master')
-                                  .map(masterAcc => (
-                                    <SelectItem
-                                      key={masterAcc.id}
-                                      value={masterAcc.accountNumber}
-                                      className="bg-white cursor-pointer hover:bg-gray-50"
-                                    >
-                                      {masterAcc.accountNumber} ({masterAcc.platform.toUpperCase()})
-                                    </SelectItem>
-                                  ))}
+                                {(() => {
+                                  const masterAccounts = accounts.filter(
+                                    acc => acc.accountType === 'master'
+                                  );
+                                  if (masterAccounts.length === 0) {
+                                    return (
+                                      <SelectItem
+                                        value="none"
+                                        className="cursor-pointer hover:bg-gray-50 text-gray-500"
+                                        disabled
+                                      >
+                                        No master accounts available
+                                      </SelectItem>
+                                    );
+                                  } else {
+                                    return (
+                                      <>
+                                        <SelectItem
+                                          value="none"
+                                          className="cursor-pointer hover:bg-gray-50"
+                                        >
+                                          Not Connected
+                                        </SelectItem>
+                                        {masterAccounts.map(masterAcc => (
+                                          <SelectItem
+                                            key={masterAcc.id}
+                                            value={masterAcc.accountNumber}
+                                            className="bg-white cursor-pointer hover:bg-gray-50"
+                                          >
+                                            {masterAcc.accountNumber} (
+                                            {masterAcc.platform.toUpperCase()})
+                                          </SelectItem>
+                                        ))}
+                                      </>
+                                    );
+                                  }
+                                })()}
                               </SelectContent>
                             </Select>
                           </div>
