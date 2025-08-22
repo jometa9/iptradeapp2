@@ -1990,11 +1990,11 @@ export function TradingAccountsConfig() {
                                 {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                   <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
                                     {masterAccount.totalSlaves} slave
-                                    {masterAccount.totalSlaves > 1 ? 's' : ''} connected
+                                    {masterAccount.totalSlaves > 1 ? 's' : ''}
                                   </div>
                                 ) : (
                                   <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
-                                    No slaves connected
+                                    No slaves
                                   </div>
                                 )}
                               </div>
@@ -2095,9 +2095,7 @@ export function TradingAccountsConfig() {
                                     >
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
-                                  ) : (
-                                    <div className="h-9 w-9 invisible"></div>
-                                  )}
+                                  ) : null}
                                   <Button
                                     variant="outline"
                                     size="sm"
