@@ -13,11 +13,3 @@ Server   : MetaQuotes-Demo
 Login    : 94424443
 Password : NaS-PaK4
 Investor : @5JtCkQp
-
-- unificar los tooltips
-- global copier status
-
-- trading config actions running
-
-
-- copier ea no escribe el timestamp cuando en el par esta el mercado cerrado
