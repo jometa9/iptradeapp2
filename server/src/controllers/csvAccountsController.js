@@ -208,7 +208,7 @@ export const updateCSVAccountType = async (req, res) => {
               }
             }
 
-            writeFileSync(filePath, newContent, 'utf8');
+            writeFileSync(filePath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
             console.log(
               `✏️ Updated CONFIG line for account ${accountId} to ${newType} in ${filePath} (bot will update TYPE)`

@@ -489,6 +489,9 @@ export const getAllAccounts = async (req, res) => {
   }
 
   try {
+    // Force refresh of CSV data to ensure we have the latest information
+    csvManager.refreshAllFileData();
+
     // Get accounts from CSV instead of JSON
     const accounts = await csvManager.getAllActiveAccounts();
 
@@ -689,8 +692,8 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
     csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
     csvContent += `[CONFIG] [PENDING]\n`;
 
-    // Write the pending account to CSV in new format
-    writeFileSync(csvFilePath, csvContent, 'utf8');
+    // Write the pending account to CSV in new format with Unix line endings
+    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Wrote account ${accountId} back to CSV as PENDING using new CSV2 format:`);
     console.log(csvContent);
     return true;
@@ -734,7 +737,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
     csvContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
 
     // Write the master account to CSV in new format
-    writeFileSync(csvFilePath, csvContent, 'utf8');
+    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Updated CSV account ${accountId} to MASTER using new CSV2 format:`);
     console.log(csvContent);
     return true;
@@ -777,8 +780,8 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
     csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
     csvContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}]\n`;
 
-    // Write the slave account to CSV in new format
-    writeFileSync(csvFilePath, csvContent, 'utf8');
+    // Write the slave account to CSV in new format with Unix line endings
+    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Updated CSV account ${accountId} to SLAVE using new CSV2 format:`);
     console.log(csvContent);
     return true;

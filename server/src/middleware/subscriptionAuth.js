@@ -79,20 +79,54 @@ export const validateSubscription = async apiKey => {
     console.log('🎯 Full request URL:', `${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
 
     const requestStart = Date.now();
-    const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
-    const requestDuration = Date.now() - requestStart;
 
-    console.log('⏱️ Request duration:', requestDuration + 'ms');
-    console.log('📡 Response status:', response.status);
-    console.log('📡 Response ok:', response.ok);
-    console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+    // Add timeout and better error handling for fetch
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-    if (!response.ok) {
-      console.log('❌ Response not ok - status:', response.status);
+    try {
+      const response = await fetch(`${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`, {});
+      clearTimeout(timeoutId);
+      const requestDuration = Date.now() - requestStart;
 
-      // If API key is not found in external API, treat as free user
-      if (response.status === 401 || response.status === 404) {
-        console.log('⚠️ API key not found in external API (401/404), treating as free user');
+      console.log('⏱️ Request duration:', requestDuration + 'ms');
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        console.log('❌ Response not ok - status:', response.status);
+
+        // If API key is not found in external API, treat as free user
+        if (response.status === 401 || response.status === 404) {
+          console.log('⚠️ API key not found in external API (401/404), treating as free user');
+          const freeUserData = {
+            valid: true,
+            userData: {
+              userId: 'user_' + apiKey.substring(0, 8),
+              email: 'user@free.com',
+              name: 'Free User',
+              subscriptionType: 'free',
+            },
+          };
+          console.log('✅ Returning free user data:', freeUserData);
+          return freeUserData;
+        }
+
+        const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
+        console.log('❌ Error response data:', errorData);
+        return { valid: false, error: errorData.error || 'Validation failed' };
+      }
+
+      const userData = await response.json();
+      console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
+
+      // Check if response contains error (some APIs return 200 with error field)
+      if (userData.error) {
+        console.log(
+          '⚠️ External API returned error in 200 response, treating as free user:',
+          userData.error
+        );
         const freeUserData = {
           valid: true,
           userData: {
@@ -102,54 +136,32 @@ export const validateSubscription = async apiKey => {
             subscriptionType: 'free',
           },
         };
-        console.log('✅ Returning free user data:', freeUserData);
+        console.log('✅ Returning free user data due to API error:', freeUserData);
         return freeUserData;
       }
 
-      const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
-      console.log('❌ Error response data:', errorData);
-      return { valid: false, error: errorData.error || 'Validation failed' };
+      // Validate that we have the required fields
+      if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
+        console.log('❌ Missing required fields in user data');
+        return { valid: false, error: 'Invalid user data format' };
+      }
+
+      // Validate subscription type
+      const validSubscriptionTypes = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
+      if (!validSubscriptionTypes.includes(userData.subscriptionType)) {
+        console.log('❌ Invalid subscription type:', userData.subscriptionType);
+        return { valid: false, error: 'Invalid subscription type' };
+      }
+
+      console.log('✅ Subscription validation successful');
+      console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
+      console.log('🔍 === SUBSCRIPTION VALIDATION END ===');
+      return { valid: true, userData };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      console.error('💥 Fetch error during subscription validation:', fetchError.message);
+      return { valid: false, error: 'Validation failed' };
     }
-
-    const userData = await response.json();
-    console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
-
-    // Check if response contains error (some APIs return 200 with error field)
-    if (userData.error) {
-      console.log(
-        '⚠️ External API returned error in 200 response, treating as free user:',
-        userData.error
-      );
-      const freeUserData = {
-        valid: true,
-        userData: {
-          userId: 'user_' + apiKey.substring(0, 8),
-          email: 'user@free.com',
-          name: 'Free User',
-          subscriptionType: 'free',
-        },
-      };
-      console.log('✅ Returning free user data due to API error:', freeUserData);
-      return freeUserData;
-    }
-
-    // Validate that we have the required fields
-    if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
-      console.log('❌ Missing required fields in user data');
-      return { valid: false, error: 'Invalid user data format' };
-    }
-
-    // Validate subscription type
-    const validSubscriptionTypes = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
-    if (!validSubscriptionTypes.includes(userData.subscriptionType)) {
-      console.log('❌ Invalid subscription type:', userData.subscriptionType);
-      return { valid: false, error: 'Invalid subscription type' };
-    }
-
-    console.log('✅ Subscription validation successful');
-    console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
-    console.log('🔍 === SUBSCRIPTION VALIDATION END ===');
-    return { valid: true, userData };
   } catch (error) {
     console.error('💥 Error validating subscription with external API:', error.message);
     console.error('💥 Error stack:', error.stack);

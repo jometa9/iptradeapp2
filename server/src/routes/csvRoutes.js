@@ -16,23 +16,13 @@ import {
   updateCSVAccountType,
 } from '../controllers/csvAccountsController.js';
 import { getSlaveConfig } from '../controllers/slaveConfigController.js';
+import { requireValidSubscription } from '../middleware/subscriptionAuth.js';
 
 const router = express.Router();
 
 // Contador de conexiones SSE activas y limitador por IP
 let activeSSEConnections = 0;
 const activeConnectionsByIP = new Map();
-
-// Middleware para validar API key (mantener compatibilidad)
-const requireValidSubscription = (req, res, next) => {
-  // Buscar API key en headers o query params (para SSE)
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API Key required' });
-  }
-  req.apiKey = apiKey;
-  next();
-};
 
 // Server-Sent Events para file watching real
 router.get('/csv/events', requireValidSubscription, (req, res) => {

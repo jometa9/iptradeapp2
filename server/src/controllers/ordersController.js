@@ -10,6 +10,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 
+import { detectOrderChanges } from '../services/orderChangeDetector.js';
 import {
   getSlaveConnection,
   isMasterAccountRegistered,
@@ -378,7 +379,7 @@ export const getOrders = (req, res) => {
   }
 
   // Check if copier is enabled for this master account
-      const copierEnabled = isCopierEnabled(masterAccount, apiKey);
+  const copierEnabled = isCopierEnabled(masterAccount, apiKey);
   if (!copierEnabled) {
     console.log(`Copier is OFF for master ${masterAccount}, slave ${slaveId} cannot copy orders`);
     res.setHeader('Content-Type', 'text/plain');
@@ -397,6 +398,16 @@ export const getOrders = (req, res) => {
         return res.send('0');
       }
       return res.status(500).send(`Error reading CSV for master account ${masterAccount}`);
+    }
+
+    // Detect if there are actual order changes
+    const changes = detectOrderChanges(masterAccount, data);
+    if (!changes.hasChanges) {
+      console.log(
+        `No order changes detected for master ${masterAccount}, slave ${slaveId} - skipping update`
+      );
+      res.setHeader('Content-Type', 'text/plain');
+      return res.send('0');
     }
 
     // Clean data and apply slave transformations
@@ -464,7 +475,9 @@ export const getOrders = (req, res) => {
       // If no orders passed the filter, return only counter (master online but no orders)
       if (transformedContent === lines[0]) {
         res.setHeader('Content-Type', 'text/plain');
-        console.log(`All orders filtered out for slave ${slaveId} from master ${masterAccount} - returning counter only`);
+        console.log(
+          `All orders filtered out for slave ${slaveId} from master ${masterAccount} - returning counter only`
+        );
         return res.send(lines[0]); // Return only the counter [X]
       }
 

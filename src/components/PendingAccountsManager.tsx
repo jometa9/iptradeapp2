@@ -171,7 +171,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   }, [originalPendingData]);
 
   // Usar el hook CSV solo para master accounts
-  const { accounts: csvAccounts } = useCSVData();
+  const { accounts: csvAccounts, refresh: refreshCSVData } = useCSVData();
 
   const masterAccounts = React.useMemo(() => {
     if (!csvAccounts?.masterAccounts) return [];
@@ -231,26 +231,15 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const loadMasterAccounts = useCallback(async () => {
     try {
       setIsRefreshingMasters(true);
-      const response = await fetch(`${baseUrl}/api/accounts/all`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Update the CSV data with the fresh master accounts data
-        if (data.masterAccounts) {
-          // Force a refresh of the CSV data to include the new master accounts
-        }
-      } else {
-        // Silent error handling
-      }
+      // Force a refresh of the CSV data to get the latest master accounts
+      await refreshCSVData();
+      await refreshPending();
     } catch (error) {
       // Silent error handling
     } finally {
       setIsRefreshingMasters(false);
     }
-  }, [secretKey, baseUrl]);
+  }, [refreshCSVData, refreshPending]);
 
   // loadAccountStats not used - using CSV data instead
 
@@ -723,7 +712,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     isLinking
                       ? 'link-platforms-linking  cursor-not-allowed '
                       : 'border-blue-200 cursor-pointer'
-                  }`}
+                  }  hover:shadow-lg transition-all duration-300`}
                 >
                   <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
                   {isLinking ? 'Linking...' : 'Link Platforms'}
@@ -951,6 +940,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                           masterAccountId: value,
                                         }))
                                       }
+                                      onOpenChange={open => {
+                                        if (open) {
+                                          // When selector opens, refresh master accounts data
+                                          loadMasterAccounts();
+                                        }
+                                      }}
                                     >
                                       <SelectTrigger className="bg-white border border-gray-200">
                                         <SelectValue placeholder="Select master..." />

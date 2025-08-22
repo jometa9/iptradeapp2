@@ -3,6 +3,9 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import { basename, join } from 'path';
 
+import { validateBeforeWrite } from './csvValidator2.js';
+import { detectOrderChanges } from './orderChangeDetector.js';
+
 class CSVManager extends EventEmitter {
   constructor() {
     super();
@@ -758,6 +761,31 @@ class CSVManager extends EventEmitter {
       const newData = this.parseCSVFile(filePath);
       const lastModified = this.getFileLastModified(filePath);
 
+      // Obtener el accountId del archivo
+      let accountId = null;
+      if (newData && newData.length > 0) {
+        accountId = newData[0].account_id;
+      }
+
+      // Si es una cuenta master, detectar cambios en órdenes
+      if (accountId && newData.length > 0 && newData[0].account_type === 'master') {
+        const content = readFileSync(filePath, 'utf8');
+        const changes = detectOrderChanges(accountId, content);
+
+        if (changes.hasChanges) {
+          console.log(`📊 Detected ORDER changes in master ${accountId}:`, changes);
+          // Emitir evento específico para cambios en órdenes
+          this.emit('orderChanged', {
+            accountId,
+            filePath,
+            changes,
+            timestamp: Date.now(),
+          });
+        } else {
+          console.log(`📍 Status update only for master ${accountId} - no ORDER changes`);
+        }
+      }
+
       this.csvFiles.set(filePath, {
         lastModified,
         data: newData,
@@ -910,12 +938,13 @@ class CSVManager extends EventEmitter {
                   name: values[3] || 'Master Account',
                 };
               } else if (currentAccountData.account_type === 'slave') {
+                const lastValue = values[values.length - 1];
                 currentAccountData.config = {
                   enabled: values[2] === 'ENABLED',
                   lotMultiplier: parseFloat(values[3]) || 1.0,
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
-                  masterId: values[6] !== 'NULL' ? values[6] : null,
+                  masterId: lastValue !== 'NULL' ? lastValue : null,
                 };
                 // Para compatibilidad con getAllActiveAccounts
                 currentAccountData.master_id = currentAccountData.config.masterId;
@@ -1105,8 +1134,12 @@ class CSVManager extends EventEmitter {
 
     this.csvFiles.forEach(fileData => {
       fileData.data.forEach(row => {
-        if (row.account_id === slaveId && row.master_id) {
-          masterId = row.master_id;
+        if (row.account_id === slaveId && row.account_type === 'slave') {
+          // Buscar masterId en la configuración del slave
+          if (row.config && row.config.masterId) {
+            masterId = row.config.masterId;
+            if (masterId === 'NULL') masterId = null;
+          }
         }
       });
     });
@@ -1417,11 +1450,29 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      // Escribir archivo actualizado
-      console.log(`📝 Writing updated CSV to: ${targetFile}`);
-      console.log(`📄 Updated content:`, updatedLines.join('\n'));
-      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
-      console.log(`✅ File written successfully`);
+      // Validar antes de escribir
+      const currentContent = readFileSync(targetFile, 'utf8');
+      const newContent = updatedLines.join('\n') + '\n';
+
+      const validationResult = validateBeforeWrite(currentContent, newContent);
+      if (!validationResult.valid) {
+        console.error(`❌ Validation failed: ${validationResult.error}`);
+        return false;
+      }
+
+      // Escribir archivo actualizado usando archivo temporal
+      const tmpFile = `${targetFile}.tmp`;
+      try {
+        writeFileSync(tmpFile, newContent, 'utf8');
+        require('fs').renameSync(tmpFile, targetFile);
+        console.log(`✅ File written successfully`);
+      } catch (error) {
+        console.error(`❌ Error writing file: ${error.message}`);
+        if (existsSync(tmpFile)) {
+          require('fs').unlinkSync(tmpFile);
+        }
+        return false;
+      }
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
