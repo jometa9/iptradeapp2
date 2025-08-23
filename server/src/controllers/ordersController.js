@@ -120,52 +120,88 @@ export function killProcessOnPort(port) {
         }
       });
     } else {
-      // Unix/Linux/macOS implementation
-      exec(`lsof -ti:${port}`, (error, stdout) => {
-        if (error || !stdout) {
-          console.log(`✅ No processes found using port ${port}`);
-          resolve();
-          return;
+      // Unix/Linux/macOS implementation - More thorough approach
+      // First try to find processes using the port
+      exec(`lsof -i:${port} -t`, (error, stdout) => {
+        let pids = [];
+
+        if (!error && stdout) {
+          pids = stdout
+            .trim()
+            .split('\n')
+            .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
         }
 
-        const pids = stdout
-          .trim()
-          .split('\n')
-          .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+        // If no processes found with lsof, try a more aggressive approach
+        if (pids.length === 0) {
+          // Try netstat approach (Linux)
+          exec(
+            `netstat -anp 2>/dev/null | grep :${port} | awk '{print $7}' | cut -d'/' -f1`,
+            (netstatError, netstatStdout) => {
+              if (!netstatError && netstatStdout) {
+                const netstatPids = netstatStdout
+                  .trim()
+                  .split('\n')
+                  .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+                pids = [...new Set([...pids, ...netstatPids])];
+              }
 
-        if (pids.length > 0) {
-          console.log(`🔸 Found processes using port ${port}: ${pids.join(', ')}`);
+              // If still no processes, try macOS-specific approach
+              if (pids.length === 0 && process.platform === 'darwin') {
+                exec(`lsof -ti:${port}`, (macError, macStdout) => {
+                  if (!macError && macStdout) {
+                    const macPids = macStdout
+                      .trim()
+                      .split('\n')
+                      .filter(pid => pid && !isNaN(pid) && pid !== process.pid.toString());
+                    pids = [...new Set([...pids, ...macPids])];
+                  }
+                  killProcesses(pids);
+                });
+              } else {
+                killProcesses(pids);
+              }
+            }
+          );
+        } else {
+          killProcesses(pids);
+        }
 
-          const killPromises = pids.map(pid => {
-            return new Promise(killResolve => {
-              // First try SIGTERM (graceful)
-              exec(`kill ${pid}`, killError => {
-                if (killError) {
-                  // If SIGTERM fails, use SIGKILL (force)
-                  exec(`kill -9 ${pid}`, forceKillError => {
-                    if (forceKillError) {
-                      console.log(`❌ Could not kill process ${pid}: ${forceKillError.message}`);
-                    } else {
-                      console.log(`✅ Force killed process ${pid}`);
-                    }
+        function killProcesses(pidsToKill) {
+          if (pidsToKill.length > 0) {
+            console.log(`🔸 Found processes using port ${port}: ${pidsToKill.join(', ')}`);
+
+            const killPromises = pidsToKill.map(pid => {
+              return new Promise(killResolve => {
+                // First try SIGTERM (graceful)
+                exec(`kill ${pid}`, killError => {
+                  if (killError) {
+                    // If SIGTERM fails, use SIGKILL (force)
+                    exec(`kill -9 ${pid}`, forceKillError => {
+                      if (forceKillError) {
+                        console.log(`❌ Could not kill process ${pid}: ${forceKillError.message}`);
+                      } else {
+                        console.log(`✅ Force killed process ${pid}`);
+                      }
+                      killResolve();
+                    });
+                  } else {
+                    console.log(`✅ Gracefully killed process ${pid}`);
                     killResolve();
-                  });
-                } else {
-                  console.log(`✅ Gracefully killed process ${pid}`);
-                  killResolve();
-                }
+                  }
+                });
               });
             });
-          });
 
-          Promise.all(killPromises).then(() => {
-            console.log(`🗑️  All processes on port ${port} terminated`);
-            // Wait a bit to ensure processes are fully terminated
-            setTimeout(() => resolve(), 1000);
-          });
-        } else {
-          console.log(`✅ No processes found using port ${port}`);
-          resolve();
+            Promise.all(killPromises).then(() => {
+              console.log(`🗑️  All processes on port ${port} terminated`);
+              // Wait a bit to ensure processes are fully terminated
+              setTimeout(() => resolve(), 1000);
+            });
+          } else {
+            console.log(`✅ No processes found using port ${port}`);
+            resolve();
+          }
         }
       });
     }
