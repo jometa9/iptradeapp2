@@ -707,23 +707,57 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
   console.log(`🔄 Disconnecting all slaves from master ${masterAccountId}`);
 
   try {
-    // For now, we'll disconnect the known slave 11219046 from master 250062001
-    // This is a simplified approach until we fix the CSV manager
-    const knownSlaves = ['11219046']; // We know this slave is connected to master 250062001
+    // Import csvManager to find slaves connected to this master
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+    
+    if (!csvManager || !csvManager.csvFiles) {
+      console.log(`⚠️ csvManager not available or no CSV files scanned`);
+      return res.status(500).json({
+        error: 'CSV manager not available',
+        message: 'No CSV files have been scanned yet'
+      });
+    }
+
+    // Find all slaves connected to this master
+    const connectedSlaves = [];
+    
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      fileData.data.forEach(account => {
+        if (account.account_type === 'slave' && 
+            account.config && 
+            account.config.masterId === masterAccountId) {
+          connectedSlaves.push({
+            slaveId: account.account_id,
+            filePath: filePath
+          });
+          console.log(`🔍 Found slave ${account.account_id} connected to master ${masterAccountId} in ${filePath}`);
+        }
+      });
+    }
+
+    if (connectedSlaves.length === 0) {
+      console.log(`⚠️ No slaves found connected to master ${masterAccountId}`);
+      return res.json({
+        success: true,
+        message: `No slaves found connected to master ${masterAccountId}`,
+        masterAccountId,
+        disconnectedCount: 0,
+        totalSlaves: 0,
+      });
+    }
+
+    console.log(`🔍 Found ${connectedSlaves.length} slaves connected to master ${masterAccountId}`);
 
     let successCount = 0;
-    for (const slaveId of knownSlaves) {
+    for (const { slaveId, filePath } of connectedSlaves) {
       try {
-        const csvFiles = await findCSVFilesForAccount(slaveId);
-
-        for (const csvFile of csvFiles) {
-          if (await updateCSVFileToDisconnectSlave(csvFile, slaveId)) {
-            successCount++;
-            console.log(
-              `✅ Disconnected slave ${slaveId} from master ${masterAccountId} in ${csvFile}`
-            );
-            break; // Only update one file per slave
-          }
+        if (await updateCSVFileToDisconnectSlave(filePath, slaveId)) {
+          successCount++;
+          console.log(
+            `✅ Disconnected slave ${slaveId} from master ${masterAccountId} in ${filePath}`
+          );
         }
       } catch (error) {
         console.error(`Error disconnecting slave ${slaveId}:`, error);
@@ -735,7 +769,7 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
       message: `Disconnected ${successCount} slaves from master ${masterAccountId}`,
       masterAccountId,
       disconnectedCount: successCount,
-      totalSlaves: knownSlaves.length,
+      totalSlaves: connectedSlaves.length,
     });
   } catch (error) {
     console.error(`Error disconnecting all slaves from master ${masterAccountId}:`, error);
@@ -749,22 +783,48 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
 // Helper function to find CSV files for an account
 const findCSVFilesForAccount = async accountId => {
   try {
-    // Use a simpler approach - check the known CSV file location
-    const csvFilePath =
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+    console.log(`🔍 Searching for account ${accountId} CSV files using scanned data...`);
+    
+    // Import csvManager to use scanned CSV files
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+    
+    if (!csvManager || !csvManager.csvFiles) {
+      console.log(`⚠️ csvManager not available or no CSV files scanned`);
+      return [];
+    }
 
-    const { readFileSync, existsSync } = await import('fs');
+    const foundFiles = [];
 
-    if (existsSync(csvFilePath)) {
-      const content = readFileSync(csvFilePath, 'utf8');
-      if (content.includes(accountId)) {
-        console.log(`🔍 Found account ${accountId} in ${csvFilePath}`);
-        return [csvFilePath];
+    // Search through scanned CSV files
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      // First check if the account exists in parsed data
+      const accountExists = fileData.data.some(account => account.account_id === accountId);
+
+      if (accountExists) {
+        console.log(`✅ Found account ${accountId} in scanned data: ${filePath}`);
+        foundFiles.push(filePath);
+      }
+
+      // Fallback: check raw file content if parsed data doesn't contain it
+      const { existsSync, readFileSync } = await import('fs');
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        if (content.includes(`[${accountId}]`)) {
+          console.log(`✅ Found account ${accountId} in raw content: ${filePath}`);
+          if (!foundFiles.includes(filePath)) {
+            foundFiles.push(filePath);
+          }
+        }
       }
     }
 
-    console.log(`🔍 Account ${accountId} not found in ${csvFilePath}`);
-    return [];
+    if (foundFiles.length === 0) {
+      console.log(`⚠️ Account ${accountId} not found in any scanned CSV file`);
+    }
+
+    return foundFiles;
   } catch (error) {
     console.error(`Error finding CSV files for account ${accountId}:`, error);
     return [];
@@ -843,11 +903,31 @@ const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
         const configLine = lines[configLineIndex];
         // console.log(`🔍 Found CONFIG line: ${configLine}`);
 
-        // Update the CONFIG line to set masterId to NULL
-        const updatedConfigLine = configLine.replace(
-          /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
-          '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL]'
-        );
+        // Update the CONFIG line to set masterId to NULL (handle both 7 and 8 parameter formats)
+        let updatedConfigLine = configLine;
+
+        // Try 8-parameter format first (new format with masterCsvPath)
+        if (
+          configLine.match(
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
+          )
+        ) {
+          updatedConfigLine = configLine.replace(
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
+            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL] [NULL]'
+          );
+        }
+        // Fallback to 7-parameter format (old format)
+        else if (
+          configLine.match(
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
+          )
+        ) {
+          updatedConfigLine = configLine.replace(
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
+            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL]'
+          );
+        }
 
         if (updatedConfigLine !== configLine) {
           lines[configLineIndex] = updatedConfigLine;

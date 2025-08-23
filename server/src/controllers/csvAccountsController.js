@@ -139,12 +139,9 @@ export const updateCSVAccountType = async (req, res) => {
 
     console.log(`🔄 Updating CSV account ${accountId} to ${newType} using new CSV2 format...`);
 
-    // Use specific CSV file paths where the system actually writes status updates
+    // Use csvManager to get scanned CSV files
     let filesUpdated = 0;
-    const csvFiles = [
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-    ];
+    const csvFiles = Array.from(csvManager.csvFiles.keys());
     let platform = 'MT4'; // Default platform
     let currentTimestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
 
@@ -440,12 +437,13 @@ export const updateCSVAccountType = async (req, res) => {
                   cleanLine.includes(`[${accountId}]`)
                 ) {
                   // This is a slave connected to our master, disconnect it
-                  const lotMultiplier = cleanLine.match(/\[([^\]]+)\]/g)?.[2] || '1';
-                  const forceLot = cleanLine.match(/\[([^\]]+)\]/g)?.[3] || 'NULL';
-                  const reverseTrade = cleanLine.match(/\[([^\]]+)\]/g)?.[4] || 'FALSE';
+                  const matches = cleanLine.match(/\[([^\]]+)\]/g) || [];
+                  const lotMultiplier = matches[3] ? matches[3].replace(/[\[\]]/g, '') : '1.0';
+                  const forceLot = matches[4] ? matches[4].replace(/[\[\]]/g, '') : 'NULL';
+                  const reverseTrade = matches[5] ? matches[5].replace(/[\[\]]/g, '') : 'FALSE';
 
-                  // Set masterId to NULL to disconnect
-                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [NULL]\n`;
+                  // Set masterId and masterCsvPath to NULL to disconnect (8-parameter format)
+                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [NULL] [NULL]\n`;
                   slaveFound = true;
                   console.log(`✅ Disconnected slave ${slaveId} from master ${accountId}`);
                 } else if (cleanLine.includes('[STATUS]')) {

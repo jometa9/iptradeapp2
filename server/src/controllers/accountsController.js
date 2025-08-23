@@ -674,14 +674,43 @@ export const updateSlaveAccount = (req, res) => {
 // Function to write account back to CSV as PENDING using new CSV2 format
 const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
   try {
-    // Choose the appropriate CSV file based on platform
-    const csvFilePath =
-      platform === 'MT5'
-        ? '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv'
-        : '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv';
+    // Use csvManager to find appropriate CSV file
+    let csvFilePath = null;
 
-    if (!existsSync(csvFilePath)) {
-      console.log('⚠️ CSV file not found, skipping CSV write');
+    // Find which cached file contains this account or find a suitable file for the platform
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      // Check if this file contains the account
+      const accountExists = fileData.data.some(
+        account =>
+          account.account_id === accountId ||
+          (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${accountId}]`))
+      );
+
+      if (accountExists) {
+        csvFilePath = filePath;
+        break;
+      }
+    }
+
+    // If no file found with the account, find a file for the platform
+    if (!csvFilePath) {
+      for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+        // Check if any account in this file matches the platform
+        const platformMatch = fileData.data.some(account => account.platform === platform);
+        if (platformMatch) {
+          csvFilePath = filePath;
+          break;
+        }
+      }
+    }
+
+    // If still no file found, use the first available file
+    if (!csvFilePath && csvManager.csvFiles.size > 0) {
+      csvFilePath = Array.from(csvManager.csvFiles.keys())[0];
+    }
+
+    if (!csvFilePath) {
+      console.log('⚠️ No CSV file found, skipping CSV write');
       return false;
     }
 

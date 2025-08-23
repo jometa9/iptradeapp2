@@ -1374,13 +1374,8 @@ class CSVManager extends EventEmitter {
       if (!targetFile) {
         console.log(`🔍 Account ${accountId} not found in monitored files, searching system...`);
 
-        // Buscar en ubicaciones comunes de CSV
-        const searchPaths = [
-          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-          '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-          process.env.HOME + '/**/IPTRADECSV2.csv',
-          '**/IPTRADECSV2.csv',
-        ];
+        // Buscar en ubicaciones comunes de CSV (sin rutas hardcodeadas)
+        const searchPaths = [process.env.HOME + '/**/IPTRADECSV2.csv', '**/IPTRADECSV2.csv'];
 
         for (const searchPath of searchPaths) {
           try {
