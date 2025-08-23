@@ -308,7 +308,7 @@ bool ModifySlaveOrder(string masterTicket, string symbol, string orderTypeStr,
    {
       int error = GetLastError();
       Print("=== SLAVE ORDER MODIFY FAILED ===");
-      Print("Error: ", error, " - ", ErrorDescription(error));
+      Print("Error: ");
       Print("Slave ticket: ", slaveTicket);
       Print("Master ticket: ", masterTicket);
       Print("=================================");
@@ -401,7 +401,7 @@ bool CloseSlaveOrder(string masterTicket)
    {
       int error = GetLastError();
       Print("=== SLAVE ORDER CLOSE FAILED ===");
-      Print("Error: ", error, " - ", ErrorDescription(error));
+      Print("Error: ");
       Print("Slave ticket: ", slaveTicket);
       Print("Master ticket: ", masterTicket);
       Print("================================");
@@ -530,7 +530,7 @@ bool ExecuteSlaveOrder(string masterTicket, string symbol, string orderTypeStr,
    {
       int error = GetLastError();
       Print("=== SLAVE ORDER FAILED ===");
-      Print("Error: ", error, " - ", ErrorDescription(error));
+      Print("Error: ");
       Print("Master ticket: ", masterTicket);
       Print("Symbol: ", symbol);
       Print("Type: ", slaveOrderType);
@@ -595,8 +595,9 @@ void CleanupOrphanedOrders(string csvOrderTickets[], int csvOrderCount)
 }
 
 //+------------------------------------------------------------------+
-//| Process slave orders from CSV                                    |
+//| Process slave orders from CSV (DEPRECATED - Windows uses direct reading) |
 //+------------------------------------------------------------------+
+/*
 void ProcessSlaveOrders()
 {
    // Read CSV file to get orders
@@ -707,6 +708,7 @@ void ProcessSlaveOrders()
    // Clean up orphaned orders (orders that are no longer in CSV)
    CleanupOrphanedOrders(csvOrderTickets, csvOrderCount);
 }
+*/
 
 //+------------------------------------------------------------------+
 //| Print all CSV content line by line                               |
@@ -842,22 +844,20 @@ void OnTimer()
          pingWritten = true;
       }
    }
-   // Execute SLAVE logic according to configured interval
+      // Execute SLAVE logic according to configured interval
    else if(currentStatus == "SLAVE")
    {
       // Parse slave configuration to get master CSV path
       ParseSlaveConfig();
 
-      // Try direct reading first (Windows only)
+      // Direct reading from master CSV (Windows only)
       if(StringLen(slaveMasterCsvPath) > 0 && slaveMasterCsvPath != "NULL")
       {
-         // Direct reading from master CSV (Windows)
          ProcessMasterOrdersDirectly();
       }
       else
       {
-         // Fallback: Process slave orders from server-written CSV (macOS/Wine)
-         ProcessSlaveOrders();
+         Print("❌ No master CSV path configured - direct copy trading disabled");
       }
 
       UpdateSlaveCSV();
@@ -1413,9 +1413,20 @@ void UpdateSlaveCSV()
    int readHandle = FileOpen(csvFileName, FILE_TXT|FILE_READ|FILE_COMMON);
    if(readHandle != INVALID_HANDLE)
    {
-      string line1 = FileReadString(readHandle); // TYPE line
-      string line2 = FileReadString(readHandle); // STATUS line
-      string line3 = FileReadString(readHandle); // CONFIG line
+      string line1 = "";
+      string line2 = "";
+      string line3 = "";
+
+      // Read lines more robustly to handle long CONFIG lines
+      if(!FileIsEnding(readHandle)) line1 = FileReadString(readHandle); // TYPE line
+      if(!FileIsEnding(readHandle)) line2 = FileReadString(readHandle); // STATUS line
+      if(!FileIsEnding(readHandle)) line3 = FileReadString(readHandle); // CONFIG line
+
+      Print("=== DEBUG CSV READ (UpdateSlaveCSV) ===");
+      Print("Line1: ", line1);
+      Print("Line2: ", line2);
+      Print("Line3: ", line3);
+      Print("Line3 length: ", StringLen(line3));
 
       // Read all additional lines to preserve them
       string additionalLines = "";
@@ -1836,17 +1847,17 @@ void ProcessMasterOrdersDirectly()
    // Process ORDER lines
    while(!FileIsEnding(handle))
    {
-      string line = FileReadString(handle);
-      if(StringLen(line) == 0) continue;
+      string orderLine = FileReadString(handle);
+      if(StringLen(orderLine) == 0) continue;
 
       // Stop if we hit another TYPE line (different account)
-      if(StringFind(line, "[TYPE]") >= 0)
+      if(StringFind(orderLine, "[TYPE]") >= 0)
       {
          break;
       }
 
       // Check if this is an ORDER line
-      if(StringFind(line, "[ORDER]") >= 0)
+      if(StringFind(orderLine, "[ORDER]") >= 0)
       {
          ordersFound++;
 
@@ -1856,14 +1867,14 @@ void ProcessMasterOrdersDirectly()
 
          // Extract fields between brackets
          int pos = 0;
-         while(pos < StringLen(line) && fieldCount < 20)
+         while(pos < StringLen(orderLine) && fieldCount < 20)
          {
-            int startPos = StringFind(line, "[", pos);
-            int endPos = StringFind(line, "]", startPos);
+            int startPos = StringFind(orderLine, "[", pos);
+            int endPos = StringFind(orderLine, "]", startPos);
 
             if(startPos >= 0 && endPos > startPos)
             {
-               string field = StringSubstr(line, startPos + 1, endPos - startPos - 1);
+               string field = StringSubstr(orderLine, startPos + 1, endPos - startPos - 1);
                fields[fieldCount] = field;
                fieldCount++;
                pos = endPos + 1;

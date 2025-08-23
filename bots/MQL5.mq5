@@ -505,7 +505,7 @@ void RemoveProcessedOrder(string ticket)
 //+------------------------------------------------------------------+
 //| Clean up orphaned slave orders (orders not in CSV anymore)      |
 //+------------------------------------------------------------------+
-void CleanupOrphanedOrders(string csvOrderTickets[], int csvOrderCount)
+void CleanupOrphanedOrders(string &csvOrderTickets[], int csvOrderCount)
 {
    if(!ENABLE_ORDER_CLEANUP) return;
 
@@ -682,8 +682,9 @@ bool ExecuteSlaveOrder(string masterTicket, string symbol, string orderTypeStr,
 }
 
 //+------------------------------------------------------------------+
-//| Process slave orders from CSV                                    |
+//| Process slave orders from CSV (DEPRECATED - Windows uses direct reading) |
 //+------------------------------------------------------------------+
+/*
 void ProcessSlaveOrders()
 {
    // Read CSV file to get orders
@@ -794,6 +795,7 @@ void ProcessSlaveOrders()
    // Clean up orphaned orders (orders that are no longer in CSV)
    CleanupOrphanedOrders(csvOrderTickets, csvOrderCount);
 }
+*/
 
 //+------------------------------------------------------------------+
 //| Clean string from BOM and special characters                     |
@@ -936,22 +938,20 @@ void OnTimer()
          pingWritten = true;
       }
    }
-       // Execute SLAVE logic according to configured interval
+           // Execute SLAVE logic according to configured interval
     else if(currentStatus == "SLAVE")
     {
        // Parse slave configuration to get master CSV path
        ParseSlaveConfig();
 
-       // Try direct reading first (Windows only)
+       // Direct reading from master CSV (Windows only)
        if(StringLen(slaveMasterCsvPath) > 0 && slaveMasterCsvPath != "NULL")
        {
-          // Direct reading from master CSV (Windows)
           ProcessMasterOrdersDirectly();
        }
        else
        {
-          // Fallback: Process slave orders from server-written CSV (macOS/Wine)
-          ProcessSlaveOrders();
+          Print("❌ No master CSV path configured - direct copy trading disabled");
        }
 
        UpdateSlaveCSV();
@@ -1197,12 +1197,23 @@ void ReadSimpleCSV()
 void UpdateSlaveCSV()
 {
    // First, read current CSV to get the actual status and preserve additional lines
-   int readHandle = FileOpen(csvFileName, FILE_CSV|FILE_READ|FILE_ANSI|FILE_COMMON, "\n");
+   int readHandle = FileOpen(csvFileName, FILE_TXT|FILE_READ|FILE_ANSI|FILE_COMMON);
    if(readHandle != INVALID_HANDLE)
    {
-      string line1 = FileReadString(readHandle); // TYPE line
-      string line2 = FileReadString(readHandle); // STATUS line
-      string line3 = FileReadString(readHandle); // CONFIG line
+      string line1 = "";
+      string line2 = "";
+      string line3 = "";
+
+      // Read lines more robustly to handle long CONFIG lines
+      if(!FileIsEnding(readHandle)) line1 = FileReadString(readHandle); // TYPE line
+      if(!FileIsEnding(readHandle)) line2 = FileReadString(readHandle); // STATUS line
+      if(!FileIsEnding(readHandle)) line3 = FileReadString(readHandle); // CONFIG line
+
+      Print("=== DEBUG CSV READ (UpdateSlaveCSV) ===");
+      Print("Line1: ", line1);
+      Print("Line2: ", line2);
+      Print("Line3: ", line3);
+      Print("Line3 length: ", StringLen(line3));
 
       // Read all additional lines to preserve them
       string additionalLines[] = {};
@@ -1275,7 +1286,7 @@ void UpdateSlaveCSV()
       // Only write SLAVE if the account is actually SLAVE
       if(currentConfigStatus == "SLAVE")
       {
-         int handle = FileOpen(csvFileName, FILE_CSV|FILE_WRITE|FILE_ANSI|FILE_COMMON, "\n");
+         int handle = FileOpen(csvFileName, FILE_TXT|FILE_WRITE|FILE_ANSI|FILE_COMMON);
          if(handle != INVALID_HANDLE)
          {
             long account = AccountInfoInteger(ACCOUNT_LOGIN);
@@ -1289,14 +1300,14 @@ void UpdateSlaveCSV()
             // Keep the original CONFIG line exactly as it was
             string newLine3 = line3;
 
-            FileWrite(handle, newLine1);
-            FileWrite(handle, newLine2);
-            FileWrite(handle, newLine3);
+            FileWriteString(handle, newLine1 + "\n");
+            FileWriteString(handle, newLine2 + "\n");
+            FileWriteString(handle, newLine3 + "\n");
 
             // Write all additional lines to preserve them
             for(int i = 0; i < additionalCount; i++)
             {
-               FileWrite(handle, additionalLines[i]);
+               FileWriteString(handle, additionalLines[i] + "\n");
             }
 
             FileClose(handle);
@@ -1820,7 +1831,7 @@ void UpdateTypeLineToMatchConfig()
 //+------------------------------------------------------------------+
 void ParseSlaveConfig()
 {
-   int handle = FileOpen(csvFileName, FILE_CSV|FILE_READ|FILE_ANSI|FILE_COMMON, "\n");
+   int handle = FileOpen(csvFileName, FILE_TXT|FILE_READ|FILE_ANSI|FILE_COMMON);
    if(handle == INVALID_HANDLE)
    {
       return; // No file to parse
