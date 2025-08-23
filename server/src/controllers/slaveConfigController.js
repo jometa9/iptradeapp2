@@ -711,28 +711,32 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
       .catch(() => null);
-    
+
     if (!csvManager || !csvManager.csvFiles) {
       console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return res.status(500).json({
         error: 'CSV manager not available',
-        message: 'No CSV files have been scanned yet'
+        message: 'No CSV files have been scanned yet',
       });
     }
 
     // Find all slaves connected to this master
     const connectedSlaves = [];
-    
+
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
       fileData.data.forEach(account => {
-        if (account.account_type === 'slave' && 
-            account.config && 
-            account.config.masterId === masterAccountId) {
+        if (
+          account.account_type === 'slave' &&
+          account.config &&
+          account.config.masterId === masterAccountId
+        ) {
           connectedSlaves.push({
             slaveId: account.account_id,
-            filePath: filePath
+            filePath: filePath,
           });
-          console.log(`🔍 Found slave ${account.account_id} connected to master ${masterAccountId} in ${filePath}`);
+          console.log(
+            `🔍 Found slave ${account.account_id} connected to master ${masterAccountId} in ${filePath}`
+          );
         }
       });
     }
@@ -784,12 +788,12 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
 const findCSVFilesForAccount = async accountId => {
   try {
     console.log(`🔍 Searching for account ${accountId} CSV files using scanned data...`);
-    
+
     // Import csvManager to use scanned CSV files
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
       .catch(() => null);
-    
+
     if (!csvManager || !csvManager.csvFiles) {
       console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return [];
