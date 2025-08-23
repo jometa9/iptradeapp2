@@ -292,7 +292,7 @@ export const getSlaveConfig = async (req, res) => {
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
                   masterId: values[6] !== 'NULL' ? values[6] : null,
-                  masterCsvPath: values[7] !== 'NULL' ? values[7] : null, // Include master CSV path
+                  masterCsvPath: values.length >= 8 && values[7] !== 'NULL' ? values[7] : null, // Include master CSV path if available
                   description: '',
                   lastUpdated: new Date().toISOString(),
                 };

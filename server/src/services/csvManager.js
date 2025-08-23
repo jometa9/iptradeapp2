@@ -947,13 +947,14 @@ class CSVManager extends EventEmitter {
                   name: values[3] || 'Master Account',
                 };
               } else if (currentAccountData.account_type === 'slave') {
-                const lastValue = values[values.length - 1];
+                // Parse slave configuration: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
                 currentAccountData.config = {
                   enabled: values[2] === 'ENABLED',
                   lotMultiplier: parseFloat(values[3]) || 1.0,
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
-                  masterId: lastValue !== 'NULL' ? lastValue : null,
+                  masterId: values[6] !== 'NULL' ? values[6] : null,
+                  masterCsvPath: values[7] !== 'NULL' ? values[7] : null, // Include master CSV path
                 };
                 // Para compatibilidad con getAllActiveAccounts
                 currentAccountData.master_id = currentAccountData.config.masterId;
