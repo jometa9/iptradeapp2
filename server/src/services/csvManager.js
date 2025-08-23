@@ -782,8 +782,6 @@ class CSVManager extends EventEmitter {
             changes,
             timestamp: Date.now(),
           });
-        } else {
-          console.log(`📍 Status update only for master ${accountId} - no ORDER changes`);
         }
       }
 
@@ -825,23 +823,18 @@ class CSVManager extends EventEmitter {
 
   // Refrescar datos de todos los archivos ya cargados (sin buscar nuevos)
   refreshAllFileData() {
-    console.log(`🔄 Refreshing data from ${this.csvFiles.size} existing CSV files...`);
-
     this.csvFiles.forEach((fileData, filePath) => {
       if (existsSync(filePath)) {
         this.csvFiles.set(filePath, {
           lastModified: this.getFileLastModified(filePath),
           data: this.parseCSVFile(filePath),
         });
-        console.log(`📄 Refreshed: ${filePath}`);
       } else {
         // Remover archivo si ya no existe
         this.csvFiles.delete(filePath);
         console.log(`🗑️ Removed non-existent file: ${filePath}`);
       }
     });
-
-    console.log(`✅ Refresh completed. ${this.csvFiles.size} files remain.`);
   }
 
   // Parsear archivo CSV con el nuevo formato de corchetes

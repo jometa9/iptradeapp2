@@ -3,8 +3,53 @@ import { glob } from 'glob';
 
 import csvManager from '../services/csvManager.js';
 
+// Helper function to find CSV file path for a master account
+const findMasterCSVPath = async masterId => {
+  try {
+    console.log(`🔍 Searching for master account ${masterId} CSV path using scanned data...`);
+
+    // Use csvManager that's already imported at the top of this file
+    if (!csvManager || !csvManager.csvFiles) {
+      console.log(`⚠️ csvManager not available or no CSV files scanned`);
+      return null;
+    }
+
+    // Search through scanned CSV files
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      // First check if the account exists in parsed data
+      const accountExists = fileData.data.some(account => account.account_id === masterId);
+
+      if (accountExists) {
+        console.log(`✅ Found master account ${masterId} in scanned data: ${filePath}`);
+        return filePath;
+      }
+
+      // Fallback: check raw file content if parsed data doesn't contain it
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        if (content.includes(`[${masterId}]`)) {
+          console.log(`✅ Found master account ${masterId} in raw content: ${filePath}`);
+          return filePath;
+        }
+      }
+    }
+
+    console.log(`⚠️ Master account ${masterId} not found in any scanned CSV file`);
+    return null;
+  } catch (error) {
+    console.error(`Error finding CSV path for master account ${masterId}:`, error);
+    return null;
+  }
+};
+
 // Generate CSV2 format content for account conversion (WITH SPACES to match bot format)
-const generateCSV2Content = (accountId, accountType, platform, timestamp, slaveConfig = null) => {
+const generateCSV2Content = async (
+  accountId,
+  accountType,
+  platform,
+  timestamp,
+  slaveConfig = null
+) => {
   const upperType = accountType.toUpperCase();
 
   let content = `[TYPE] [${upperType}] [${platform}] [${accountId}]\n`;
@@ -14,13 +59,25 @@ const generateCSV2Content = (accountId, accountType, platform, timestamp, slaveC
     // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE]
     content += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
   } else if (accountType === 'slave') {
-    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID]
+    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
     const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
     const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
     const masterId = slaveConfig?.masterAccountId || 'NULL';
 
-    content += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+    // Get master CSV path if masterId is available
+    let masterCsvPath = 'NULL';
+    if (masterId && masterId !== 'NULL') {
+      try {
+        masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
+        console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
+      } catch (error) {
+        console.error(`Error finding master CSV path for ${masterId}:`, error);
+        masterCsvPath = 'NULL';
+      }
+    }
+
+    content += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
   }
 
   return content;
@@ -285,7 +342,19 @@ export const updateCSVAccountType = async (req, res) => {
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
 
-                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+                  // Get master CSV path if masterId is available
+                  let masterCsvPath = 'NULL';
+                  if (masterId && masterId !== 'NULL') {
+                    try {
+                      masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
+                      console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
+                    } catch (error) {
+                      console.error(`Error finding master CSV path for ${masterId}:`, error);
+                      masterCsvPath = 'NULL';
+                    }
+                  }
+
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
                 }
               } else if (
                 cleanLine.includes('[CONFIG]') &&
@@ -308,7 +377,19 @@ export const updateCSVAccountType = async (req, res) => {
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
 
-                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+                  // Get master CSV path if masterId is available
+                  let masterCsvPath = 'NULL';
+                  if (masterId && masterId !== 'NULL') {
+                    try {
+                      masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
+                      console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
+                    } catch (error) {
+                      console.error(`Error finding master CSV path for ${masterId}:`, error);
+                      masterCsvPath = 'NULL';
+                    }
+                  }
+
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp

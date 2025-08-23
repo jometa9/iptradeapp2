@@ -17,7 +17,7 @@ El bot debe **reescribir completamente** el archivo en cada ping con todas las l
 ```
 [TYPE][SLAVE][MT5][67890]
 [STATUS][ONLINE][1755131092]
-[CONFIG][SLAVE][ENABLED][1.5][NULL][FALSE][12345]
+[CONFIG][SLAVE][ENABLED][1.5][NULL][FALSE][12345][/path/to/master/IPTRADECSV2.csv]
 ```
 ### Ejemplo para una cuenta PENDING (no configurada):
 ```
@@ -48,13 +48,14 @@ El bot debe **reescribir completamente** el archivo en cada ping con todas las l
 - **NOMBRE**: Nombre descriptivo del master
 #### Para SLAVE:
 ```
-[CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID]
+[CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
 ```
 - **ENABLED/DISABLED**: Estado del slave
 - **LOT_MULT**: Multiplicador de lote (ej: 1.5)
 - **FORCE_LOT**: Lote fijo o NULL
 - **REVERSE**: TRUE o FALSE para trading inverso
 - **MASTER_ID**: ID del master al que está conectado
+- **MASTER_CSV_PATH**: Ruta del archivo CSV de la cuenta master
 #### Para PENDING:
 ```
 [CONFIG][PENDING]

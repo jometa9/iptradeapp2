@@ -251,25 +251,31 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
 };
 
 // Get slave configuration
-export const getSlaveConfig = (req, res) => {
+export const getSlaveConfig = async (req, res) => {
   const { slaveAccountId } = req.params;
 
   if (!slaveAccountId) {
     return res.status(400).json({ error: 'Slave account ID is required' });
   }
 
-  // Primero intentar leer la configuración del CSV
+  // Primero intentar leer la configuración del CSV usando datos del scan
   let csvConfig = null;
   try {
-    const csvFiles = [
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-      '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-    ];
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
 
-    for (const filePath of csvFiles) {
-      if (existsSync(filePath)) {
-        const content = readFileSync(filePath, 'utf8');
-        if (content.includes(`[${slaveAccountId}]`)) {
+    if (csvManager && csvManager.csvFiles) {
+      // Buscar en archivos CSV escaneados
+      for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+        // Primero verificar en datos parseados
+        const accountExists = fileData.data.some(account => account.account_id === slaveAccountId);
+
+        if (
+          accountExists ||
+          (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${slaveAccountId}]`))
+        ) {
+          const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n');
 
           for (const line of lines) {
@@ -286,6 +292,7 @@ export const getSlaveConfig = (req, res) => {
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
                   masterId: values[6] !== 'NULL' ? values[6] : null,
+                  masterCsvPath: values[7] !== 'NULL' ? values[7] : null, // Include master CSV path
                   description: '',
                   lastUpdated: new Date().toISOString(),
                 };
@@ -298,6 +305,8 @@ export const getSlaveConfig = (req, res) => {
           break;
         }
       }
+    } else {
+      console.log(`⚠️ csvManager not available for reading slave config ${slaveAccountId}`);
     }
   } catch (error) {
     console.error(`Error reading CSV config for ${slaveAccountId}:`, error);
@@ -443,26 +452,42 @@ export const setSlaveConfig = async (req, res) => {
     // Actualizar también el CSV para sincronizar con el frontend
     console.log(`🔄 CSV update check - slaveAccountId: ${slaveAccountId}`);
     try {
-      // Buscar el archivo CSV correcto para esta cuenta
-      const csvFiles = [
-        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader4/drive_c/users/crossover/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-        '/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv',
-      ];
+      // Buscar el archivo CSV correcto para esta cuenta usando datos del scan
+      const csvManager = await import('../services/csvManager.js')
+        .then(m => m.default)
+        .catch(() => null);
 
       let targetFile = null;
       let foundAccount = false;
 
-      // Buscar en qué archivo está la cuenta
-      for (const filePath of csvFiles) {
-        if (existsSync(filePath)) {
-          const content = readFileSync(filePath, 'utf8');
-          if (content.includes(`[${slaveAccountId}]`)) {
+      if (csvManager && csvManager.csvFiles) {
+        // Buscar en archivos CSV escaneados
+        for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+          // Primero verificar en datos parseados
+          const accountExists = fileData.data.some(
+            account => account.account_id === slaveAccountId
+          );
+
+          if (accountExists) {
             targetFile = filePath;
             foundAccount = true;
-            console.log(`✅ Found account ${slaveAccountId} in file: ${filePath}`);
+            console.log(`✅ Found account ${slaveAccountId} in scanned data: ${filePath}`);
             break;
           }
+
+          // Fallback: verificar contenido crudo del archivo
+          if (existsSync(filePath)) {
+            const content = readFileSync(filePath, 'utf8');
+            if (content.includes(`[${slaveAccountId}]`)) {
+              targetFile = filePath;
+              foundAccount = true;
+              console.log(`✅ Found account ${slaveAccountId} in raw content: ${filePath}`);
+              break;
+            }
+          }
         }
+      } else {
+        console.log(`⚠️ csvManager not available, cannot update CSV for slave ${slaveAccountId}`);
       }
 
       if (targetFile && foundAccount) {
@@ -500,7 +525,18 @@ export const setSlaveConfig = async (req, res) => {
               console.log('🔍 DEBUG: Using original CSV enabled =', enabled);
             }
 
-            const masterCsvPath = slaveConfig?.masterCsvPath || 'NULL';
+            // Get master CSV path if masterId is available
+            let masterCsvPath = 'NULL';
+            if (masterId && masterId !== 'NULL') {
+              try {
+                masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
+                console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
+              } catch (error) {
+                console.error(`Error finding master CSV path for ${masterId}:`, error);
+                masterCsvPath = 'NULL';
+              }
+            }
+
             const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
             console.log(`🔄 Updating CONFIG line from "${cleanLine}" to "${newConfigLine.trim()}"`);
             newContent += newConfigLine;
@@ -732,6 +768,48 @@ const findCSVFilesForAccount = async accountId => {
   } catch (error) {
     console.error(`Error finding CSV files for account ${accountId}:`, error);
     return [];
+  }
+};
+
+// Helper function to find CSV file path for a master account
+const findMasterCSVPath = async masterId => {
+  try {
+    console.log(`🔍 Searching for master account ${masterId} CSV path using scanned data...`);
+
+    // Import csvManager to use scanned CSV files
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+    if (!csvManager || !csvManager.csvFiles) {
+      console.log(`⚠️ csvManager not available or no CSV files scanned`);
+      return null;
+    }
+
+    // Search through scanned CSV files
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      // First check if the account exists in parsed data
+      const accountExists = fileData.data.some(account => account.account_id === masterId);
+
+      if (accountExists) {
+        console.log(`✅ Found master account ${masterId} in scanned data: ${filePath}`);
+        return filePath;
+      }
+
+      // Fallback: check raw file content if parsed data doesn't contain it
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        if (content.includes(`[${masterId}]`)) {
+          console.log(`✅ Found master account ${masterId} in raw content: ${filePath}`);
+          return filePath;
+        }
+      }
+    }
+
+    console.log(`⚠️ Master account ${masterId} not found in any scanned CSV file`);
+    return null;
+  } catch (error) {
+    console.error(`Error finding CSV path for master account ${masterId}:`, error);
+    return null;
   }
 };
 

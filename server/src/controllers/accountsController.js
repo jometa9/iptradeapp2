@@ -747,6 +747,45 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
   }
 };
 
+// Helper function to find CSV file path for a master account
+const findMasterCSVPath = async masterId => {
+  try {
+    console.log(`🔍 Searching for master account ${masterId} CSV path using scanned data...`);
+
+    // Use csvManager that's already imported at the top of this file
+    if (!csvManager || !csvManager.csvFiles) {
+      console.log(`⚠️ csvManager not available or no CSV files scanned`);
+      return null;
+    }
+
+    // Search through scanned CSV files
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      // First check if the account exists in parsed data
+      const accountExists = fileData.data.some(account => account.account_id === masterId);
+
+      if (accountExists) {
+        console.log(`✅ Found master account ${masterId} in scanned data: ${filePath}`);
+        return filePath;
+      }
+
+      // Fallback: check raw file content if parsed data doesn't contain it
+      if (existsSync(filePath)) {
+        const content = readFileSync(filePath, 'utf8');
+        if (content.includes(`[${masterId}]`)) {
+          console.log(`✅ Found master account ${masterId} in raw content: ${filePath}`);
+          return filePath;
+        }
+      }
+    }
+
+    console.log(`⚠️ Master account ${masterId} not found in any scanned CSV file`);
+    return null;
+  } catch (error) {
+    console.error(`Error finding CSV path for master account ${masterId}:`, error);
+    return null;
+  }
+};
+
 // Function to update CSV account to SLAVE using new CSV2 format
 const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = 'NULL') => {
   try {
@@ -775,10 +814,22 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
 
     const currentTimestamp = Math.floor(Date.now() / 1000);
 
+    // Get master CSV path if masterId is available
+    let masterCsvPath = 'NULL';
+    if (masterId && masterId !== 'NULL') {
+      try {
+        masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
+        console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
+      } catch (error) {
+        console.error(`Error finding master CSV path for ${masterId}:`, error);
+        masterCsvPath = 'NULL';
+      }
+    }
+
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
     csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}]\n`;
+    csvContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
 
     // Write the slave account to CSV in new format with Unix line endings
     writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
@@ -975,9 +1026,6 @@ export const getPendingAccounts = async (req, res) => {
     const pendingAccountsArray = allAccounts.pendingAccounts || [];
     const pendingCount = pendingAccountsArray.length;
 
-    console.log(`📱 [getPendingAccounts] Found ${pendingCount} pending accounts`);
-
-    // Convert array to object format for backward compatibility
     const pendingAccounts = {};
     pendingAccountsArray.forEach(account => {
       pendingAccounts[account.account_id] = {
