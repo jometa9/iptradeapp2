@@ -263,13 +263,21 @@ export const updateCSVAccountType = async (req, res) => {
 
               if (
                 cleanLine.includes('[CONFIG]') &&
-                (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
+                (cleanLine.includes(`[${accountId}]`) ||
+                  cleanLine.includes(accountId) ||
+                  cleanLine.includes(`Account ${accountId}`))
               ) {
                 console.log(
                   `✅ Found CONFIG line for account ${accountId}, updating to ${newType}`
                 );
+
+                // Preserve the current ENABLED/DISABLED status
+                const enabledMatch = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
+                const currentStatus = enabledMatch ? enabledMatch[1] : 'DISABLED';
+                console.log(`🔒 Preserving copy trading status: ${currentStatus}`);
+
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -277,15 +285,22 @@ export const updateCSVAccountType = async (req, res) => {
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
 
-                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
                 }
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
               ) {
                 console.log(`✅ Found CONFIG line with PENDING, updating to ${newType}`);
+
+                // For PENDING accounts, default to DISABLED since they're not configured yet
+                const currentStatus = 'DISABLED';
+                console.log(
+                  `🔒 PENDING account - setting copy trading status to: ${currentStatus}`
+                );
+
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -293,7 +308,7 @@ export const updateCSVAccountType = async (req, res) => {
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
 
-                  newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp

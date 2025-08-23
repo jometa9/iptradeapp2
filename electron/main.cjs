@@ -369,8 +369,8 @@ function createWindow() {
   const isMacOS = process.platform === 'darwin';
 
   const windowConfig = {
-    width: 1100,
-    minWidth: 1100,
+    width: 1000,
+    minWidth: 1000,
     height: 800,
     minHeight: 800,
     resizable: true,
