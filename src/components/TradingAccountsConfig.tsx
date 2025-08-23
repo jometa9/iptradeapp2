@@ -705,6 +705,20 @@ export function TradingAccountsConfig() {
     setDeleteConfirmId(null);
   };
 
+  // Helper function for consistent delete button styling
+  const DeleteButton = ({ accountId, onClick, disabled = false }) => (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-9 w-9 p-0 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+      onClick={onClick}
+      title="Delete Account"
+      disabled={disabled}
+    >
+      <Trash className="h-4 w-4 text-red-600" />
+    </Button>
+  );
+
   const disconnectSlaveAccount = async (slaveAccountId: string, masterAccountId: string) => {
     try {
       setIsDisconnecting(slaveAccountId);
@@ -2132,19 +2146,14 @@ export function TradingAccountsConfig() {
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
                                   ) : null}
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                  <DeleteButton
+                                    accountId={masterAccount.id}
                                     onClick={e => {
                                       e.stopPropagation();
                                       handleDeleteAccount(masterAccount.id);
                                     }}
-                                    title="Delete Account"
                                     disabled={isDeletingAccount === masterAccount.id}
-                                  >
-                                    <Trash className="h-4 w-4 text-red-600" />
-                                  </Button>
+                                  />
                                 </div>
                               )}
                             </td>
@@ -2349,7 +2358,7 @@ export function TradingAccountsConfig() {
                                           variant="destructive"
                                           onClick={confirmDeleteAccount}
                                           disabled={isDeletingAccount === accountToUse.id}
-                                          className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                          className="bg-red-50  h-9  border border-red-200 text-red-700 hover:bg-red-100"
                                         >
                                           {isDeletingAccount === accountToUse.id
                                             ? 'Deleting...'
@@ -2360,7 +2369,7 @@ export function TradingAccountsConfig() {
                                           variant="outline"
                                           onClick={cancelDeleteAccount}
                                           disabled={isDeletingAccount === accountToUse.id}
-                                          className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                          className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
                                         >
                                           Cancel
                                         </Button>
@@ -2433,19 +2442,14 @@ export function TradingAccountsConfig() {
                                         >
                                           <Unlink className="h-4 w-4 text-orange-600" />
                                         </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                        <DeleteButton
+                                          accountId={accountToUse.id}
                                           onClick={e => {
                                             e.stopPropagation();
                                             handleDeleteAccount(accountToUse.id);
                                           }}
-                                          title="Delete Account"
                                           disabled={isDeletingAccount === accountToUse.id}
-                                        >
-                                          <Trash className="h-4 w-4 text-red-600" />
-                                        </Button>
+                                        />
                                       </div>
                                     )}
                                   </td>
@@ -2680,7 +2684,7 @@ export function TradingAccountsConfig() {
                                 variant="destructive"
                                 onClick={confirmDeleteAccount}
                                 disabled={isDeletingAccount === orphanSlave.id}
-                                className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                className="bg-red-50 border h-9 border-red-200 text-red-700 hover:bg-red-100"
                               >
                                 {isDeletingAccount === orphanSlave.id ? 'Deleting...' : 'Delete'}
                               </Button>
@@ -2689,7 +2693,7 @@ export function TradingAccountsConfig() {
                                 variant="outline"
                                 onClick={cancelDeleteAccount}
                                 disabled={isDeletingAccount === orphanSlave.id}
-                                className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
                               >
                                 Cancel
                               </Button>
@@ -2709,19 +2713,14 @@ export function TradingAccountsConfig() {
                               >
                                 <Pencil className="h-4 w-4 text-blue-600" />
                               </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                              <DeleteButton
+                                accountId={orphanSlave.id}
                                 onClick={e => {
                                   e.stopPropagation();
                                   handleDeleteAccount(orphanSlave.id);
                                 }}
-                                title="Delete Account"
                                 disabled={isDeletingAccount === orphanSlave.id}
-                              >
-                                <Trash className="h-4 w-4 text-red-600" />
-                              </Button>
+                              />
                             </div>
                           )}
                         </td>
