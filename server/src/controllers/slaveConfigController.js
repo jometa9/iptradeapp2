@@ -878,7 +878,7 @@ const findMasterCSVPath = async masterId => {
 };
 
 // Helper function to update CSV file to disconnect slave
-const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
+export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
   try {
     const { readFileSync, writeFileSync } = await import('fs');
 

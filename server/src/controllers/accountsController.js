@@ -889,43 +889,240 @@ export const deleteMasterAccount = async (req, res) => {
   // Get user-specific accounts
   const userAccounts = getUserAccounts(apiKey);
 
+  console.log(`🔍 DEBUG: userAccounts.masterAccounts:`, Object.keys(userAccounts.masterAccounts));
+  console.log(`🔍 DEBUG: Looking for master account: ${masterAccountId}`);
+  console.log(
+    `🔍 DEBUG: userAccounts.masterAccounts[${masterAccountId}]:`,
+    userAccounts.masterAccounts[masterAccountId]
+  );
+
+  // If master account not found in userAccounts, try to sync from CSV files
   if (!userAccounts.masterAccounts[masterAccountId]) {
-    return res.status(404).json({
-      error: `Master account ${masterAccountId} not found in your accounts`,
-    });
+    console.log(
+      `🔍 Master account ${masterAccountId} not found in userAccounts, syncing from CSV files...`
+    );
+
+    try {
+      const csvManager = await import('../services/csvManager.js')
+        .then(m => m.default)
+        .catch(() => null);
+
+      if (csvManager && csvManager.csvFiles) {
+        let foundInCSV = false;
+
+        for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+          const masterAccount = fileData.data.find(
+            account => account.account_id === masterAccountId && account.account_type === 'master'
+          );
+
+          if (masterAccount) {
+            console.log(`✅ Found master account ${masterAccountId} in CSV file: ${filePath}`);
+
+            // Add to userAccounts
+            if (!userAccounts.masterAccounts) userAccounts.masterAccounts = {};
+            userAccounts.masterAccounts[masterAccountId] = {
+              id: masterAccount.account_id,
+              accountNumber: masterAccount.account_id,
+              platform: masterAccount.platform || 'Unknown',
+              server: masterAccount.server || '',
+              password: masterAccount.password || '',
+              status: masterAccount.status || 'offline',
+              lastUpdated: new Date().toISOString(),
+            };
+
+            // Save updated userAccounts
+            saveUserAccounts(apiKey, userAccounts);
+            foundInCSV = true;
+            console.log(`✅ Synced master account ${masterAccountId} to userAccounts`);
+            break;
+          }
+        }
+
+        if (!foundInCSV) {
+          return res.status(404).json({
+            error: `Master account ${masterAccountId} not found in your accounts or CSV files`,
+          });
+        }
+      } else {
+        return res.status(404).json({
+          error: `Master account ${masterAccountId} not found in your accounts`,
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing from CSV files:', error);
+      return res.status(404).json({
+        error: `Master account ${masterAccountId} not found in your accounts`,
+      });
+    }
   }
 
   // Get platform info before deleting
   const platform = userAccounts.masterAccounts[masterAccountId].platform || 'MT4';
 
-  // Find and disconnect all connected slaves within user's accounts
-  const connectedSlaves = Object.entries(userAccounts.connections)
+  // Find and disconnect all connected slaves (both in user accounts and CSV files)
+  let connectedSlaves = Object.entries(userAccounts.connections || {})
     .filter(([, masterId]) => masterId === masterAccountId)
     .map(([slaveId]) => slaveId);
 
+  // Also sync slave accounts from CSV files if they're not in userAccounts
+  try {
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+
+    if (csvManager && csvManager.csvFiles) {
+      for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+        fileData.data.forEach(account => {
+          if (
+            account.account_type === 'slave' &&
+            account.config &&
+            account.config.masterId === masterAccountId
+          ) {
+            // Add slave to userAccounts if not already there
+            if (!userAccounts.slaveAccounts) userAccounts.slaveAccounts = {};
+            if (!userAccounts.connections) userAccounts.connections = {};
+
+            if (!userAccounts.slaveAccounts[account.account_id]) {
+              userAccounts.slaveAccounts[account.account_id] = {
+                id: account.account_id,
+                accountNumber: account.account_id,
+                platform: account.platform || 'Unknown',
+                server: account.server || '',
+                password: account.password || '',
+                status: account.status || 'offline',
+                config: account.config,
+                lastUpdated: new Date().toISOString(),
+              };
+            }
+
+            if (!userAccounts.connections[account.account_id]) {
+              userAccounts.connections[account.account_id] = masterAccountId;
+            }
+
+            if (!connectedSlaves.includes(account.account_id)) {
+              connectedSlaves.push(account.account_id);
+            }
+
+            console.log(`✅ Synced slave account ${account.account_id} to userAccounts`);
+          }
+        });
+      }
+
+      // Save updated userAccounts
+      saveUserAccounts(apiKey, userAccounts);
+    }
+  } catch (error) {
+    console.error('Error syncing slave accounts from CSV files:', error);
+  }
+
+  // Also check CSV files for slaves connected to this master
+  try {
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+    if (csvManager && csvManager.csvFiles) {
+      for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+        fileData.data.forEach(account => {
+          if (
+            account.account_type === 'slave' &&
+            account.config &&
+            account.config.masterId === masterAccountId &&
+            !connectedSlaves.includes(account.account_id)
+          ) {
+            connectedSlaves.push(account.account_id);
+            console.log(
+              `🔍 Found slave ${account.account_id} connected to master ${masterAccountId} in CSV file`
+            );
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking CSV files for connected slaves:', error);
+  }
+
+  console.log(
+    `🔄 Deleting master account ${masterAccountId} with ${connectedSlaves.length} connected slaves`
+  );
+
+  // STEP 1: Disconnect all slaves in their CSV files first
+  let slavesDisconnected = 0;
+  if (connectedSlaves.length > 0) {
+    console.log(
+      `🔧 Step 1: Disconnecting ${connectedSlaves.length} slaves from master ${masterAccountId}...`
+    );
+
+    // Import the disconnect function from slaveConfigController
+    const { updateCSVFileToDisconnectSlave } = await import('./slaveConfigController.js');
+
+    for (const slaveId of connectedSlaves) {
+      try {
+        // Find CSV files for this slave
+        const csvManager = await import('../services/csvManager.js')
+          .then(m => m.default)
+          .catch(() => null);
+        let slaveDisconnected = false;
+
+        if (csvManager && csvManager.csvFiles) {
+          for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+            // Check if this file contains the slave account
+            const accountExists = fileData.data.some(account => account.account_id === slaveId);
+
+            if (accountExists) {
+              // Disconnect the slave in this CSV file
+              if (await updateCSVFileToDisconnectSlave(filePath, slaveId)) {
+                console.log(
+                  `✅ Disconnected slave ${slaveId} from master ${masterAccountId} in ${filePath}`
+                );
+                slaveDisconnected = true;
+                slavesDisconnected++;
+                break; // Only update one file per slave
+              }
+            }
+          }
+        }
+
+        if (!slaveDisconnected) {
+          console.log(`⚠️ Could not disconnect slave ${slaveId} from CSV files`);
+        }
+      } catch (error) {
+        console.error(`Error disconnecting slave ${slaveId}:`, error);
+      }
+    }
+
+    console.log(
+      `✅ Step 1 completed: ${slavesDisconnected}/${connectedSlaves.length} slaves disconnected from CSV files`
+    );
+  }
+
+  // STEP 2: Remove connections from user accounts
   connectedSlaves.forEach(slaveId => {
     delete userAccounts.connections[slaveId];
+    console.log(`🔗 Removed connection for slave ${slaveId} from user accounts database`);
   });
 
+  // STEP 3: Delete master account from user accounts
   delete userAccounts.masterAccounts[masterAccountId];
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(
-      `Master account deleted: ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...), disconnected slaves: ${connectedSlaves.join(', ')}`
+      `✅ Step 2 & 3 completed: Master account ${masterAccountId} deleted from user accounts, disconnected slaves: ${connectedSlaves.join(', ')}`
     );
 
-    // Write account back to CSV as PENDING
-    console.log(`🔧 Attempting to write account ${masterAccountId} back to CSV as PENDING...`);
+    // STEP 4: Convert master account to PENDING in CSV
+    console.log(`🔧 Step 4: Converting master ${masterAccountId} to PENDING in CSV...`);
     const csvWritten = await writeAccountToCSVAsPending(masterAccountId, platform);
     if (csvWritten) {
-      console.log(`📝 Account ${masterAccountId} written back to CSV as PENDING`);
+      console.log(`📝 Step 4 completed: Account ${masterAccountId} converted to PENDING in CSV`);
     } else {
-      console.log(`❌ Failed to write account ${masterAccountId} back to CSV as PENDING`);
+      console.log(
+        `❌ Step 4 failed: Could not convert account ${masterAccountId} to PENDING in CSV`
+      );
     }
 
     // Emit SSE event to notify frontend of account deletion
     try {
-      const csvManager = await import('../services/csvManager.js'); // Await import
+      const csvManager = await import('../services/csvManager.js');
       csvManager.default.emit('accountDeleted', {
         accountId: masterAccountId,
         accountType: 'master',
@@ -938,9 +1135,11 @@ export const deleteMasterAccount = async (req, res) => {
     }
 
     res.json({
-      message: 'Master account deleted successfully and written back to CSV as PENDING',
+      message: 'Master account deleted successfully with proper slave disconnection',
       masterAccountId,
       disconnectedSlaves: connectedSlaves,
+      slavesDisconnectedInCSV: slavesDisconnected,
+      totalSlaves: connectedSlaves.length,
       csvWritten,
       status: 'deleted',
     });

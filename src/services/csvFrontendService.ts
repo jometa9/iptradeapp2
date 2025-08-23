@@ -204,6 +204,38 @@ class CSVFrontendService extends SimpleEventEmitter {
     }
   }
 
+  // Borrar una master account (desconecta slaves y convierte a pending)
+  public async deleteMasterAccount(masterAccountId: string): Promise<boolean> {
+    try {
+      console.log(
+        `🔄 Deleting master account ${masterAccountId} with proper slave disconnection...`
+      );
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/accounts/master/${masterAccountId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'x-api-key': this.getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`✅ Master account ${masterAccountId} deleted successfully:`, data);
+        // Procesar la respuesta y emitir eventos
+        this.processCSVData(data);
+        return true;
+      }
+
+      console.error(`❌ Failed to delete master account ${masterAccountId}:`, response.status);
+      return false;
+    } catch (error) {
+      console.error('Error deleting master account:', error);
+      return false;
+    }
+  }
+
   // Métodos públicos para el frontend
   public async getCopierStatus(): Promise<CopierStatus> {
     try {

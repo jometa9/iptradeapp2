@@ -589,6 +589,7 @@ export function TradingAccountsConfig() {
   };
 
   const handleDeleteAccount = async (id: string) => {
+    console.log(`🔍 handleDeleteAccount called with id: ${id}`);
     setDeleteConfirmId(id);
   };
 
@@ -613,6 +614,7 @@ export function TradingAccountsConfig() {
   }, []);
 
   const confirmDeleteAccount = async () => {
+    console.log(`🔍 confirmDeleteAccount called with deleteConfirmId: ${deleteConfirmId}`);
     if (!deleteConfirmId) return;
 
     try {
@@ -622,14 +624,38 @@ export function TradingAccountsConfig() {
       // Ocultar la cuenta inmediatamente
       hideAccountTemporarily(deleteConfirmId);
 
-      console.log(`🔄 Converting account ${deleteConfirmId} to pending...`);
-      const success = await csvFrontendService.convertToPending(deleteConfirmId);
+      // Determinar si es una master account o una cuenta normal
+      const accountToDelete = accounts.find(acc => acc.id === deleteConfirmId);
+      const isMasterAccount = accountToDelete?.accountType === 'master';
+
+      console.log(`🔍 Debug delete account:`, {
+        deleteConfirmId,
+        accountToDelete,
+        accountType: accountToDelete?.accountType,
+        isMasterAccount,
+        totalAccounts: accounts.length,
+      });
+
+      let success = false;
+
+      if (isMasterAccount) {
+        // Usar el endpoint correcto para borrar master accounts (desconecta slaves primero)
+        console.log(
+          `🔄 Deleting master account ${deleteConfirmId} with proper slave disconnection...`
+        );
+        success = await csvFrontendService.deleteMasterAccount(deleteConfirmId);
+      } else {
+        // Para otras cuentas, usar el método normal de conversión a pending
+        console.log(`🔄 Converting account ${deleteConfirmId} to pending...`);
+        success = await csvFrontendService.convertToPending(deleteConfirmId);
+      }
 
       if (success) {
-        console.log(`✅ Account ${deleteConfirmId} converted to pending successfully`);
+        const actionText = isMasterAccount ? 'deleted' : 'converted to pending';
+        console.log(`✅ Account ${deleteConfirmId} ${actionText} successfully`);
         toast({
           title: 'Account deleted',
-          description: `Account ${deleteConfirmId} has been removed.`,
+          description: `Account ${deleteConfirmId} has been ${actionText}.`,
           variant: 'default',
         });
         setDeleteConfirmId(null);
@@ -640,7 +666,9 @@ export function TradingAccountsConfig() {
           fetchAccounts();
         }, 100);
       } else {
-        console.log(`❌ Failed to convert account ${deleteConfirmId} to pending`);
+        console.log(
+          `❌ Failed to ${isMasterAccount ? 'delete' : 'convert'} account ${deleteConfirmId}`
+        );
         toast({
           title: 'Error',
           description: `Failed to delete account ${deleteConfirmId}.`,

@@ -137,6 +137,10 @@ export const updateCSVAccountType = async (req, res) => {
       });
     }
 
+    // Import user accounts management functions
+    const { getUserAccounts, saveUserAccounts } = await import('./configManager.js');
+    const userAccounts = getUserAccounts(apiKey);
+
     console.log(`🔄 Updating CSV account ${accountId} to ${newType} using new CSV2 format...`);
 
     // Use csvManager to get scanned CSV files
@@ -465,6 +469,146 @@ export const updateCSVAccountType = async (req, res) => {
         }
       }
 
+      // Update user accounts database to reflect the conversion
+      console.log(
+        `🔄 Updating user accounts database for account ${accountId} conversion to ${newType}...`
+      );
+
+      let accountMoved = false;
+
+      if (newType === 'master') {
+        // Move from pending/slave to master
+        if (userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId]) {
+          // Move from pending to master
+          const pendingAccount = userAccounts.pendingAccounts[accountId];
+          const masterAccount = {
+            id: accountId,
+            name: pendingAccount.name || accountId,
+            description: pendingAccount.description || '',
+            broker: pendingAccount.broker || 'Unknown',
+            platform: pendingAccount.platform || 'MT5',
+            registeredAt: new Date().toISOString(),
+            convertedFrom: 'pending',
+            firstSeen: pendingAccount.firstSeen,
+            lastActivity: pendingAccount.lastActivity || new Date().toISOString(),
+            status: 'active',
+          };
+
+          if (!userAccounts.masterAccounts) userAccounts.masterAccounts = {};
+          userAccounts.masterAccounts[accountId] = masterAccount;
+          delete userAccounts.pendingAccounts[accountId];
+
+          // Remove from slave accounts if it was there
+          if (userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId]) {
+            delete userAccounts.slaveAccounts[accountId];
+            // Remove connection if it exists
+            if (userAccounts.connections && userAccounts.connections[accountId]) {
+              delete userAccounts.connections[accountId];
+            }
+          }
+
+          accountMoved = true;
+          console.log(`✅ Moved account ${accountId} from pending to master in user database`);
+        } else if (userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId]) {
+          // Move from slave to master
+          const slaveAccount = userAccounts.slaveAccounts[accountId];
+          const masterAccount = {
+            id: accountId,
+            name: slaveAccount.name || accountId,
+            description: slaveAccount.description || '',
+            broker: slaveAccount.broker || 'Unknown',
+            platform: slaveAccount.platform || 'MT5',
+            registeredAt: new Date().toISOString(),
+            convertedFrom: 'slave',
+            firstSeen: slaveAccount.firstSeen,
+            lastActivity: slaveAccount.lastActivity || new Date().toISOString(),
+            status: 'active',
+          };
+
+          if (!userAccounts.masterAccounts) userAccounts.masterAccounts = {};
+          userAccounts.masterAccounts[accountId] = masterAccount;
+          delete userAccounts.slaveAccounts[accountId];
+
+          // Remove connection if it exists
+          if (userAccounts.connections && userAccounts.connections[accountId]) {
+            delete userAccounts.connections[accountId];
+          }
+
+          accountMoved = true;
+          console.log(`✅ Moved account ${accountId} from slave to master in user database`);
+        }
+      } else if (newType === 'slave') {
+        // Move from pending/master to slave
+        if (userAccounts.pendingAccounts && userAccounts.pendingAccounts[accountId]) {
+          // Move from pending to slave
+          const pendingAccount = userAccounts.pendingAccounts[accountId];
+          const slaveAccount = {
+            id: accountId,
+            name: pendingAccount.name || accountId,
+            description: pendingAccount.description || '',
+            broker: pendingAccount.broker || 'Unknown',
+            platform: pendingAccount.platform || 'MT5',
+            registeredAt: new Date().toISOString(),
+            convertedFrom: 'pending',
+            firstSeen: pendingAccount.firstSeen,
+            lastActivity: pendingAccount.lastActivity || new Date().toISOString(),
+            status: 'active',
+          };
+
+          if (!userAccounts.slaveAccounts) userAccounts.slaveAccounts = {};
+          userAccounts.slaveAccounts[accountId] = slaveAccount;
+          delete userAccounts.pendingAccounts[accountId];
+
+          // Add connection if masterId is provided
+          if (slaveConfig?.masterAccountId && slaveConfig.masterAccountId !== 'NULL') {
+            if (!userAccounts.connections) userAccounts.connections = {};
+            userAccounts.connections[accountId] = slaveConfig.masterAccountId;
+            console.log(`🔗 Connected slave ${accountId} to master ${slaveConfig.masterAccountId}`);
+          }
+
+          accountMoved = true;
+          console.log(`✅ Moved account ${accountId} from pending to slave in user database`);
+        } else if (userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) {
+          // Move from master to slave
+          const masterAccount = userAccounts.masterAccounts[accountId];
+          const slaveAccount = {
+            id: accountId,
+            name: masterAccount.name || accountId,
+            description: masterAccount.description || '',
+            broker: masterAccount.broker || 'Unknown',
+            platform: masterAccount.platform || 'MT5',
+            registeredAt: new Date().toISOString(),
+            convertedFrom: 'master',
+            firstSeen: masterAccount.firstSeen,
+            lastActivity: masterAccount.lastActivity || new Date().toISOString(),
+            status: 'active',
+          };
+
+          if (!userAccounts.slaveAccounts) userAccounts.slaveAccounts = {};
+          userAccounts.slaveAccounts[accountId] = slaveAccount;
+          delete userAccounts.masterAccounts[accountId];
+
+          // Add connection if masterId is provided
+          if (slaveConfig?.masterAccountId && slaveConfig.masterAccountId !== 'NULL') {
+            if (!userAccounts.connections) userAccounts.connections = {};
+            userAccounts.connections[accountId] = slaveConfig.masterAccountId;
+            console.log(`🔗 Connected slave ${accountId} to master ${slaveConfig.masterAccountId}`);
+          }
+
+          accountMoved = true;
+          console.log(`✅ Moved account ${accountId} from master to slave in user database`);
+        }
+      }
+
+      // Save user accounts if any changes were made
+      if (accountMoved) {
+        if (saveUserAccounts(apiKey, userAccounts)) {
+          console.log(`💾 User accounts database updated successfully for ${accountId}`);
+        } else {
+          console.log(`⚠️ Failed to save user accounts database for ${accountId}`);
+        }
+      }
+
       // Refresh CSV data from existing files (no new search)
       csvManager.refreshAllFileData();
 
@@ -489,6 +633,7 @@ export const updateCSVAccountType = async (req, res) => {
         message: `Successfully updated account ${accountId} to ${newType}${disconnectMessage} and registered in configured accounts system`,
         filesUpdated,
         accountRegistered: true,
+        accountMovedInDatabase: accountMoved,
         slavesDisconnected:
           isConvertingFromMaster && newType === 'slave' ? slavesToDisconnect.length : 0,
       });
