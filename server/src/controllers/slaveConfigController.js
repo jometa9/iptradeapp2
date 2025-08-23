@@ -48,6 +48,7 @@ const getDefaultSlaveConfig = () => ({
 
   // Master connection
   masterId: null,
+  masterCsvPath: null, // Path to master's CSV file for direct reading (Windows only)
 
   // Additional settings
   enabled: true,
@@ -333,6 +334,7 @@ export const setSlaveConfig = async (req, res) => {
     enabled,
     description,
     masterId,
+    masterCsvPath,
   } = req.body;
 
   if (!slaveAccountId) {
@@ -425,6 +427,13 @@ export const setSlaveConfig = async (req, res) => {
     configs[slaveAccountId].masterId = masterId === 'none' || masterId === '' ? null : masterId;
   }
 
+  // Handle masterCsvPath update (for direct reading in Windows)
+  if (masterCsvPath !== undefined) {
+    console.log(`🔄 Setting masterCsvPath=${masterCsvPath} for slave ${slaveAccountId}`);
+    configs[slaveAccountId].masterCsvPath =
+      masterCsvPath === 'none' || masterCsvPath === '' ? null : masterCsvPath;
+  }
+
   configs[slaveAccountId].lastUpdated = new Date().toISOString();
 
   // Save configuration
@@ -491,7 +500,8 @@ export const setSlaveConfig = async (req, res) => {
               console.log('🔍 DEBUG: Using original CSV enabled =', enabled);
             }
 
-            const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}]\n`;
+            const masterCsvPath = slaveConfig?.masterCsvPath || 'NULL';
+            const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
             console.log(`🔄 Updating CONFIG line from "${cleanLine}" to "${newConfigLine.trim()}"`);
             newContent += newConfigLine;
           } else if (cleanLine.includes('[STATUS]')) {
@@ -758,7 +768,7 @@ const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
         // Update the CONFIG line to set masterId to NULL
         const updatedConfigLine = configLine.replace(
           /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
-          '[CONFIG][SLAVE][$1][$2][$3][$4][NULL]'
+          '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL]'
         );
 
         if (updatedConfigLine !== configLine) {

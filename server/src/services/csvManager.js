@@ -1456,12 +1456,12 @@ class CSVManager extends EventEmitter {
         console.log(`⚠️ No CONFIG line found for account ${accountId}, adding one`);
         if (config.type === 'master') {
           updatedLines.push(
-            `[CONFIG][MASTER][${config.enabled ? 'ENABLED' : 'DISABLED'}][${config.name || 'Master Account'}]`
+            `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`
           );
         } else if (config.type === 'slave') {
           const slaveConfig = config.slaveConfig || {};
           updatedLines.push(
-            `[CONFIG][SLAVE][${config.enabled ? 'ENABLED' : 'DISABLED'}][${slaveConfig.lotMultiplier || '1.0'}][${slaveConfig.forceLot || 'NULL'}][${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}][${slaveConfig.maxLotSize || 'NULL'}][${slaveConfig.minLotSize || 'NULL'}][${slaveConfig.masterId || 'NULL'}]`
+            `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.maxLotSize || 'NULL'}] [${slaveConfig.minLotSize || 'NULL'}] [${slaveConfig.masterId || 'NULL'}]`
           );
         }
       }
