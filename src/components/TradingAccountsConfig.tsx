@@ -1667,7 +1667,15 @@ export function TradingAccountsConfig() {
                               <SelectContent className="bg-white border border-gray-200">
                                 {(() => {
                                   const masterAccounts = accounts.filter(
-                                    acc => acc.accountType === 'master'
+                                    acc =>
+                                      acc.accountType === 'master' &&
+                                      // Excluir la cuenta que se está editando si se está convirtiendo de master a slave
+                                      !(
+                                        editingAccount &&
+                                        editingAccount.accountType === 'master' &&
+                                        formState.accountType === 'slave' &&
+                                        acc.id === editingAccount.id
+                                      )
                                   );
                                   if (masterAccounts.length === 0) {
                                     return (
