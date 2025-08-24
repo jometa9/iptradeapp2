@@ -770,7 +770,7 @@ export const TradingAccountsManager: React.FC = () => {
                             ) : (
                               <>
                                 <Unlink className="h-4 w-4 mr-1" />
-                                Disconnect all
+                                Disconnect
                               </>
                             )}
                           </Button>
@@ -808,7 +808,7 @@ export const TradingAccountsManager: React.FC = () => {
                               disabled={isProcessing}
                             >
                               <Unlink className="h-4 w-4 mr-1" />
-                              Disconnect All
+                              Disconnect
                             </Button>
                           )}
                         </>

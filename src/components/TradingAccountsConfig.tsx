@@ -1952,8 +1952,10 @@ export function TradingAccountsConfig() {
           {accounts.length === 0 ? (
             <div className="text-center py-10">
               <div>
-                <p className="text-muted-foreground">No trading accounts configured yet.</p>
-                <p className="text-sm text-muted-foreground mt-2">
+                <p className="text-muted-foreground text-gray-400">
+                  No trading accounts configured yet
+                </p>
+                <p className="text-sm text-muted-foreground mt-2 text-gray-400">
                   Accounts must be added through the pending accounts section first
                 </p>
               </div>
@@ -1963,18 +1965,16 @@ export function TradingAccountsConfig() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="w-8 px-4 py-3 align-middle"></th>
-                    <th className="w-20 px-4 py-3 text-center text-xs uppercase align-middle">
+                    <th className=" px-4 py-3 align-middle"></th>
+                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
                       Status
                     </th>
-                    <th className="w-32 px-4 py-3 text-center text-xs uppercase align-middle">
-                      Copy
-                    </th>
+                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">Copy</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Account</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Platform</th>
                     <th className="px-4 py-3 text-left text-xs uppercase align-middle">Config</th>
-                    <th className="w-32 px-4 py-3 text-center text-xs uppercase align-middle">
+                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
                       Actions
                     </th>
                   </tr>
@@ -1996,7 +1996,7 @@ export function TradingAccountsConfig() {
                               }
                             }}
                           >
-                            <td className="w-8 pl-6 py-2 align-middle">
+                            <td className="pl-6 py-2 align-middle">
                               <div className="flex items-center justify-center h-full w-full">
                                 {hasSlaves ? (
                                   <button
@@ -2021,7 +2021,7 @@ export function TradingAccountsConfig() {
                                 ) : null}
                               </div>
                             </td>
-                            <td className="w-20 py-2 align-middle">
+                            <td className=" py-2 align-middle">
                               <div className="flex items-center justify-center h-full w-full">
                                 <Tooltip tip={getStatusDisplayText(masterAccount.status)}>
                                   <span className="flex items-center justify-center h-5 w-5">
@@ -2030,7 +2030,7 @@ export function TradingAccountsConfig() {
                                 </Tooltip>
                               </div>
                             </td>
-                            <td className="w-32 px-4 py-2 align-middle actions-column">
+                            <td className=" px-4 py-2 align-middle actions-column">
                               <div className="flex items-center justify-center">
                                 <Switch
                                   checked={getMasterEffectiveStatus(masterAccount.accountNumber)}
@@ -2078,7 +2078,7 @@ export function TradingAccountsConfig() {
                                 )}
                               </div>
                             </td>
-                            <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
+                            <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">
                               {deleteConfirmId === masterAccount.id ? (
                                 <div className="flex space-x-2">
                                   <Button
@@ -2126,7 +2126,7 @@ export function TradingAccountsConfig() {
                                         Disconnecting...
                                       </>
                                     ) : (
-                                      <>Disconnect all</>
+                                      <>Disconnect</>
                                     )}
                                   </Button>
                                   <Button
@@ -2220,8 +2220,8 @@ export function TradingAccountsConfig() {
                                   key={accountToUse.id}
                                   className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
                                 >
-                                  <td className="w-8 px-2 py-1.5 align-middle"></td>
-                                  <td className="w-20 px-4 py-1.5 align-middle">
+                                  <td className=" px-2 py-1.5 align-middle"></td>
+                                  <td className=" px-4 py-1.5 align-middle">
                                     <div className="flex items-center justify-center h-full w-full">
                                       <Tooltip tip={getStatusDisplayText(accountToUse.status)}>
                                         <span className="flex items-center justify-center h-5 w-5">
@@ -2230,7 +2230,7 @@ export function TradingAccountsConfig() {
                                       </Tooltip>
                                     </div>
                                   </td>
-                                  <td className="w-32 px-4 py-1.5 align-middle actions-column">
+                                  <td className=" px-4 py-1.5 align-middle actions-column">
                                     <div className="flex items-center justify-center">
                                       <Switch
                                         checked={getSlaveEffectiveStatus(
@@ -2381,7 +2381,7 @@ export function TradingAccountsConfig() {
                                       })()}
                                     </div>
                                   </td>
-                                  <td className="w-32 px-4 py-1.5 whitespace-nowrap align-middle actions-column">
+                                  <td className=" px-4 py-1.5 whitespace-nowrap align-middle actions-column">
                                     {deleteConfirmId === accountToUse.id ? (
                                       <div className="flex space-x-2">
                                         <Button

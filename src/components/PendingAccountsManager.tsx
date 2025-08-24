@@ -698,18 +698,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     </p>
                   </>
                 )}
-                {linkingStatus.isActive &&
-                linkingStatus.step !== 'idle' &&
-                linkingStatus.step !== 'completed' ? (
-                  <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
-                    After linking, check the following:
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-muted-foreground mt-3 text-gray-600">
-                    Can't see your accounts?
-                  </p>
-                )}
-                <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-2 text-gray-400">
+
+                <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-3 text-gray-400">
                   {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' ? (

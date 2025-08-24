@@ -33,7 +33,6 @@ class CSVManager extends EventEmitter {
     // Cargar rutas desde cache si existen (como fallback)
     const cachedPaths = this.loadCSVPathsFromCache();
     if (cachedPaths.length > 0) {
-      console.log(`📋 CSV Manager initialized - loaded ${cachedPaths.length} cached CSV paths`);
       // Cargar archivos desde cache
       cachedPaths.forEach(filePath => {
         if (existsSync(filePath) && !this.csvFiles.has(filePath)) {
@@ -47,7 +46,6 @@ class CSVManager extends EventEmitter {
 
     // Iniciar file watching si hay archivos cargados
     if (this.csvFiles.size > 0) {
-      console.log(`👀 Starting file watching for ${this.csvFiles.size} CSV files`);
       this.startFileWatching();
     }
   }
@@ -131,14 +129,7 @@ class CSVManager extends EventEmitter {
             };
           }
 
-          console.log(
-            `📱 Found CSV2 ${configData.configType.toLowerCase()} account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`
-          );
           return account;
-        } else {
-          console.log(
-            `⏰ Ignoring CSV2 account ${typeData.accountId} - too old (${(timeDiff / 60).toFixed(1)} minutes)`
-          );
         }
       }
 
@@ -152,11 +143,6 @@ class CSVManager extends EventEmitter {
   // Nuevo método para escanear archivos pending simplificados
   async scanPendingCSVFiles() {
     try {
-      // Solo loguear si hay archivos para escanear
-      if (this.csvFiles.size > 0) {
-        console.log('🔍 Scanning for simplified pending CSV files...');
-      }
-
       // Buscar todos los archivos IPTRADECSV2.csv en el sistema
       const patterns = [
         '**/IPTRADECSV2.csv',
@@ -198,7 +184,6 @@ class CSVManager extends EventEmitter {
             const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
 
             if (!isSimplifiedFormat) {
-              console.log(`📄 Skipping ${filePath} - not simplified pending format`);
               continue;
             }
 
@@ -222,13 +207,6 @@ class CSVManager extends EventEmitter {
                   account.timeDiff = timeDiff;
                   account.filePath = filePath;
                   validPendingAccounts.push(account);
-                  console.log(
-                    `📱 Found pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago) - Timestamp: ${account.timestamp}`
-                  );
-                } else {
-                  console.log(
-                    `⏰ Ignoring account ${account.account_id} - too old (${(timeDiff / 60).toFixed(1)} minutes) - Timestamp: ${account.timestamp}`
-                  );
                 }
               }
             }
@@ -238,12 +216,6 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      // Solo loguear cuando hay archivos o cuentas pendientes
-      if (allFiles.length > 0 || validPendingAccounts.length > 0) {
-        console.log(
-          `✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`
-        );
-      }
       return validPendingAccounts;
     } catch (error) {
       console.error('Error scanning pending CSV files:', error);
@@ -268,8 +240,6 @@ class CSVManager extends EventEmitter {
   // Nuevo método para escanear archivos pending con formato simplificado [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
   async scanSimplifiedPendingCSVFiles() {
     try {
-      console.log('🔍 Scanning for simplified pending CSV files with [0] format...');
-
       // Preferir archivos ya observados (válidos). Si no hay, usar búsqueda amplia como fallback
       let allFiles = [];
       if (this.csvFiles.size > 0) {
@@ -321,18 +291,6 @@ class CSVManager extends EventEmitter {
               continue;
             }
 
-            // Log detallado del contenido del archivo
-            console.log(`\n📄 === CSV FILE CONTENT ===`);
-            console.log(`📁 File: ${filePath}`);
-            console.log(`📊 Total lines: ${lines.length}`);
-            console.log(`📋 Raw content:`);
-            console.log(content);
-            console.log(`📋 Processed lines:`);
-            lines.forEach((line, index) => {
-              console.log(`   Line ${index + 1}: "${line}"`);
-            });
-            console.log(`📄 === END CSV CONTENT ===\n`);
-
             if (lines.length < 1) continue; // Sin datos válidos
 
             // Verificar si es el nuevo formato simplificado [N][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
@@ -362,27 +320,11 @@ class CSVManager extends EventEmitter {
             const sanitizeToken = t => (t || '').replace(/[^\x20-\x7E]/g, '').trim();
             values = values.map(sanitizeToken);
 
-            // Log detallado para debugging
-            console.log(`🔍 DEBUG - File: ${filePath}`);
-            console.log(`   📄 First data line: ${firstDataLine}`);
-            console.log(`   🔍 Format: ${isBracketFormat ? 'Brackets' : 'Commas'}`);
-            console.log(`   📋 Values count: ${values.length}`);
-            console.log(`   📋 Values: [${values.join(', ')}]`);
-            const isFirstNumeric = /^\d+$/.test((values[0] || '').trim());
-            console.log(
-              `   🔍 First value ${isBracketFormat ? 'numeric' : 'is "0"'}: ${
-                isBracketFormat ? isFirstNumeric : values[0] === '0'
-              }`
-            );
-            console.log(`   🔍 Has 5+ values: ${values.length >= 5}`);
-
             // Verificar si el primer valor es "0" (indicador de pending)
             if (
               (isBracketFormat && /^\d+$/.test(values[0] || '') && values.length >= 4) ||
               (!isBracketFormat && values[0] === '0' && values.length >= 4)
             ) {
-              console.log(`📄 Processing simplified pending format: ${filePath}`);
-
               // Procesar todas las líneas de datos
               for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
@@ -438,48 +380,17 @@ class CSVManager extends EventEmitter {
                       account.timeDiff = timeDiff;
                       account.filePath = filePath;
                       validPendingAccounts.push(account);
-                      console.log(
-                        `📱 Found pending account ${account.account_id} (${account.platform}) - ${account.current_status} (${timeDiff.toFixed(1)}s ago) - Timestamp: ${account.timestamp}`
-                      );
-                      if (account.current_status === 'offline') {
-                        console.log(
-                          `🔴 Account ${account.account_id} is OFFLINE - absolute time difference: ${absTimeDiff.toFixed(1)}s > 5s threshold`
-                        );
-                      } else {
-                        console.log(
-                          `🟢 Account ${account.account_id} is ONLINE - absolute time difference: ${absTimeDiff.toFixed(1)}s <= 5s threshold`
-                        );
-                      }
-                    } else {
-                      console.log(
-                        `⏰ Ignoring account ${account.account_id} - too old (${(timeDiff / 60).toFixed(1)} minutes) - Timestamp: ${account.timestamp}`
-                      );
                     }
-                  } else if (account.account_id) {
-                    // Log cuando se encuentra una cuenta que no está en estado PENDING
-                    console.log(
-                      `ℹ️ Found non-pending account ${account.account_id} (${account.platform}) - Status: ${account.status} - Skipping (not pending)`
-                    );
                   }
                 }
               }
             } else {
-              // Log cuando no se detecta el formato simplificado
-              console.log(`❌ DEBUG - File: ${filePath} - Not simplified pending format`);
-              console.log(`   📄 Header: ${lines[0]}`);
-              console.log(`   📄 First data line: ${firstDataLine}`);
-              console.log(`   📋 Values: [${values.join(', ')}]`);
-              console.log(`   🔍 Expected: First value "0" and 5+ values`);
-              console.log(`   🔍 Actual: First value "${values[0]}" and ${values.length} values`);
-
               // Si no es el formato simplificado, intentar con el formato anterior
               const headers = lines[0].split(',').map(h => h.trim());
               const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
               const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
 
               if (isSimplifiedFormat) {
-                console.log(`📄 Processing legacy simplified format: ${filePath}`);
-
                 for (let i = 1; i < lines.length; i++) {
                   const values = lines[i].split(',').map(v => v.trim());
                   const account = {};
@@ -501,9 +412,6 @@ class CSVManager extends EventEmitter {
                       account.timeDiff = timeDiff;
                       account.filePath = filePath;
                       validPendingAccounts.push(account);
-                      console.log(
-                        `📱 Found legacy pending account ${account.account_id} (${account.platform}) - ${account.current_status} (${timeDiff.toFixed(1)}s ago)`
-                      );
                     }
                   }
                 }
@@ -515,9 +423,6 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      console.log(
-        `✅ Found ${validPendingAccounts.length} valid pending accounts from ${allFiles.length} CSV files`
-      );
       return validPendingAccounts;
     } catch (error) {
       console.error('Error scanning simplified pending CSV files:', error);
@@ -536,16 +441,9 @@ class CSVManager extends EventEmitter {
         'csv_watching_cache.json'
       );
       const csvFiles = Array.from(this.csvFiles.keys());
-
-      console.log(`🔍 Intentando guardar cache en: ${cachePath}`);
-      console.log(`📁 Archivos CSV a guardar: ${csvFiles.length}`);
-
-      // Crear directorio si no existe
       const cacheDir = join(process.cwd(), 'server', 'server', 'config');
-      console.log(`📁 Directorio cache: ${cacheDir}`);
 
       if (!existsSync(cacheDir)) {
-        console.log(`📁 Creando directorio: ${cacheDir}`);
         require('fs').mkdirSync(cacheDir, { recursive: true });
       }
 
@@ -557,14 +455,10 @@ class CSVManager extends EventEmitter {
         lastScan: new Date().toISOString(),
       };
 
-      console.log(`📝 Escribiendo archivo...`);
       writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
 
-      // Verificar que se escribió
       if (existsSync(cachePath)) {
         const stats = statSync(cachePath);
-        console.log(`✅ Cache guardado exitosamente: ${csvFiles.length} archivos CSV`);
-        console.log(`📏 Tamaño del archivo: ${stats.size} bytes`);
       } else {
         console.log(`❌ El archivo no se creó después de escribir`);
       }
@@ -587,7 +481,6 @@ class CSVManager extends EventEmitter {
 
       if (existsSync(cachePath)) {
         const cacheData = JSON.parse(readFileSync(cachePath, 'utf8'));
-        console.log(`📋 Cache cargado: ${cacheData.csvFiles.length} archivos CSV`);
         return cacheData.csvFiles;
       } else {
         // Si no existe, crear un cache vacío
@@ -605,7 +498,6 @@ class CSVManager extends EventEmitter {
         };
 
         writeFileSync(cachePath, JSON.stringify(emptyCache, null, 2), 'utf8');
-        console.log(`📁 Cache creado: archivo vacío en ${cachePath}`);
         return [];
       }
     } catch (error) {
@@ -668,14 +560,6 @@ class CSVManager extends EventEmitter {
           });
         }
       }
-
-      console.log(`📁 Found ${this.csvFiles.size} CSV files`);
-      console.log('📁 CSV files found:');
-      this.csvFiles.forEach((fileData, filePath) => {
-        console.log(`  - ${filePath}`);
-      });
-
-      // Guardar rutas encontradas en cache
       this.saveCSVPathsToCache();
 
       return Array.from(this.csvFiles.keys());
@@ -687,8 +571,6 @@ class CSVManager extends EventEmitter {
 
   // Iniciar watching de archivos CSV
   startFileWatching() {
-    console.log(`👀 Starting file watching for ${this.csvFiles.size} CSV files...`);
-
     // Limpiar watchers y polling anteriores
     this.watchers.forEach(watcher => {
       if (watcher.close) watcher.close();
@@ -708,8 +590,6 @@ class CSVManager extends EventEmitter {
     this.csvFiles.forEach((fileData, filePath) => {
       lastModifiedTimes.set(filePath, this.getFileLastModified(filePath));
     });
-
-    console.log(`🔄 Using polling method for file watching (macOS + Wine compatibility)`);
 
     // Polling cada 2 segundos para detectar cambios
     this.pollingInterval = setInterval(() => {
@@ -741,8 +621,6 @@ class CSVManager extends EventEmitter {
       });
     }, 2000); // Cada 2 segundos
 
-    console.log(`🎯 Polling configured for ${this.csvFiles.size} files`);
-
     // Heartbeat para confirmar que el polling está activo
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
@@ -771,7 +649,6 @@ class CSVManager extends EventEmitter {
   // Iniciar escaneo periódico para detectar nuevos archivos CSV (deshabilitado)
   startPeriodicScan() {
     // Intentionally disabled; scanning will be triggered explicitly by app events
-    console.log('⏸️ Periodic CSV scan is disabled; using event-driven scans only');
   }
 
   // Método para escanear pending y emitir updates via SSE (solo si hay archivos para escanear)
@@ -805,7 +682,6 @@ class CSVManager extends EventEmitter {
           const timeSinceStr = acc.timeSinceLastPing
             ? `(${acc.timeSinceLastPing.toFixed(1)}s ago)`
             : '(no timestamp)';
-          console.log(`   - ${acc.account_id}: ${acc.status} ${timeSinceStr}`);
         });
         this.lastPendingState = currentState;
       }
@@ -837,7 +713,6 @@ class CSVManager extends EventEmitter {
         const changes = detectOrderChanges(accountId, content);
 
         if (changes.hasChanges) {
-          console.log(`📊 Detected ORDER changes in master ${accountId}:`, changes);
           // Emitir evento específico para cambios en órdenes
           this.emit('orderChanged', {
             accountId,
@@ -895,7 +770,6 @@ class CSVManager extends EventEmitter {
       } else {
         // Remover archivo si ya no existe
         this.csvFiles.delete(filePath);
-        console.log(`🗑️ Removed non-existent file: ${filePath}`);
       }
     });
   }
@@ -993,14 +867,8 @@ class CSVManager extends EventEmitter {
               // Si CONFIG dice MASTER pero TYPE dice PENDING, usar MASTER
               const configType = values[1].toLowerCase();
               if (configType === 'master' && currentAccountData.account_type === 'pending') {
-                console.log(
-                  `🔄 [parseCSVFile] Account ${currentAccountData.account_id}: TYPE says PENDING but CONFIG says MASTER - using MASTER`
-                );
                 currentAccountData.account_type = 'master';
               } else if (configType === 'slave' && currentAccountData.account_type === 'pending') {
-                console.log(
-                  `🔄 [parseCSVFile] Account ${currentAccountData.account_id}: TYPE says PENDING but CONFIG says SLAVE - using SLAVE`
-                );
                 currentAccountData.account_type = 'slave';
               }
 
@@ -1074,9 +942,6 @@ class CSVManager extends EventEmitter {
 
   // Obtener todas las cuentas activas
   getAllActiveAccounts() {
-    console.log('\n🔍 === getAllActiveAccounts START ===');
-    console.log(`📁 Processing ${this.csvFiles.size} CSV files`);
-
     const accounts = {
       masterAccounts: {},
       slaveAccounts: {},
@@ -1098,24 +963,12 @@ class CSVManager extends EventEmitter {
     };
 
     this.csvFiles.forEach((fileData, filePath) => {
-      console.log(`📄 Processing file: ${filePath}`);
-      console.log(`📊 File has ${fileData.data.length} rows`);
-
       fileData.data.forEach((row, index) => {
-        console.log(`📋 Row ${index + 1}:`, {
-          account_id: row.account_id,
-          account_type: row.account_type,
-          platform: row.platform,
-          config: row.config,
-        });
-
         if (row.account_id) {
           const accountId = row.account_id;
           const accountType = row.account_type;
           const platform = row.platform || this.extractPlatformFromPath(filePath);
           const { status, timeSinceLastPing } = calculateStatus(row.timestamp);
-
-          console.log(`🔍 Processing account: ${accountId} (${accountType}) on ${platform}`);
 
           // Incluir cuentas pending
           if (accountType === 'pending') {
@@ -1131,7 +984,6 @@ class CSVManager extends EventEmitter {
                 config: row.config || {},
                 filePath: filePath, // Para debug
               });
-              console.log(`✅ Added pending account: ${accountId}`);
             }
           }
 
@@ -1153,12 +1005,8 @@ class CSVManager extends EventEmitter {
               connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
               totalSlaves: existingTotalSlaves, // Preservar contador
             };
-            console.log(
-              `✅ Added master account: ${accountId} with ${existingTotalSlaves} existing slaves`
-            );
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
-            console.log(`🔗 Slave ${accountId} has masterId: ${masterId}`);
 
             if (masterId && masterId !== 'NULL') {
               // Es un slave conectado - CREAR el master si no existe
@@ -1171,7 +1019,6 @@ class CSVManager extends EventEmitter {
                   connectedSlaves: [],
                   totalSlaves: 0,
                 };
-                console.log(`✅ Created missing master account: ${masterId}`);
               }
 
               accounts.masterAccounts[masterId].connectedSlaves.push({
@@ -1185,7 +1032,6 @@ class CSVManager extends EventEmitter {
               });
 
               accounts.masterAccounts[masterId].totalSlaves++;
-              console.log(`✅ Connected slave ${accountId} to master ${masterId}`);
             } else {
               // Es un slave no conectado
               accounts.unconnectedSlaves.push({
@@ -1196,23 +1042,11 @@ class CSVManager extends EventEmitter {
                 timeSinceLastPing: timeSinceLastPing,
                 config: row.config || {},
               });
-              console.log(`✅ Added unconnected slave: ${accountId}`);
             }
           }
         }
       });
     });
-
-    console.log('📊 Final accounts summary:', {
-      masterAccounts: Object.keys(accounts.masterAccounts),
-      unconnectedSlaves: accounts.unconnectedSlaves.map(s => s.id),
-      pendingAccounts: accounts.pendingAccounts.map(p => p.account_id),
-      connectedSlaves: Object.values(accounts.masterAccounts).map(master => ({
-        masterId: master.id,
-        slaves: master.connectedSlaves.map(s => s.id),
-      })),
-    });
-    console.log('🔍 === getAllActiveAccounts END ===\n');
 
     return accounts;
   }
@@ -1322,7 +1156,7 @@ class CSVManager extends EventEmitter {
         writeFileSync(configPath, JSON.stringify(config, null, 2));
       }
     } catch (error) {
-      console.error('❌ Error initializing global copier status:', error);
+      console.error('Error initializing global copier status:', error);
     }
   }
 
@@ -1336,7 +1170,7 @@ class CSVManager extends EventEmitter {
       }
       return false;
     } catch (error) {
-      console.error('❌ Error reading global copier status:', error);
+      console.error('Error reading global copier status:', error);
       return false;
     }
   }
@@ -1421,7 +1255,7 @@ class CSVManager extends EventEmitter {
       });
 
       if (!targetFile) {
-        console.error(`❌ No CSV file found for account ${accountId}`);
+        console.error(`No CSV file found for account ${accountId}`);
         return false;
       }
 
@@ -1457,7 +1291,6 @@ class CSVManager extends EventEmitter {
 
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
-    console.log(`🔄 writeConfig called for account ${accountId} with config:`, config);
     try {
       // Buscar el archivo CSV correcto para esta cuenta
       let targetFile = null;
