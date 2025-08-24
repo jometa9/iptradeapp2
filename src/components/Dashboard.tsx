@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, Link, LogOut, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Inbox, Link, LogOut, RefreshCw } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
 import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
+import { useHiddenPendingAccounts } from '../hooks/useHiddenPendingAccounts';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import { useOperatingSystem } from '../hooks/useOperatingSystem';
 import { PendingAccountsManager } from './PendingAccountsManager';
@@ -19,6 +20,7 @@ export const Dashboard: React.FC = () => {
   const { openExternalLink } = useExternalLink();
   const { linkPlatforms, isLinking, clearAutoLinkCache } = useLinkPlatforms();
   const operatingSystem = useOperatingSystem();
+  const { isHidden, isBlinking, toggleHidden } = useHiddenPendingAccounts();
 
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
@@ -209,10 +211,21 @@ export const Dashboard: React.FC = () => {
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1 text-blue-800">
                       <Link className="w-4 h-4" />
                     </div>
                   )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`font-bold text-md transition-all duration-50 ease-in-out ${
+                    isHidden ? (isBlinking ? 'text-orange-400' : 'text-gray-400') : 'text-gray-600'
+                  }`}
+                  title={isHidden ? 'Show Pending Accounts' : 'Hide Pending Accounts'}
+                  onClick={toggleHidden}
+                >
+                  <Inbox className="w-4 h-4" />
                 </Button>
                 {/* Removed Connect Trading Accounts button; unified under Link Platforms */}
                 <Button
@@ -243,8 +256,10 @@ export const Dashboard: React.FC = () => {
           {/* Update notification appears here when available */}
           <UpdateCard />
 
-          {/* Pending Accounts - Always visible at top for admin management */}
-          <PendingAccountsManager isLinking={isLinking} linkPlatforms={linkPlatforms} />
+          {/* Pending Accounts - Hidden when isHidden is true */}
+          {!isHidden && (
+            <PendingAccountsManager isLinking={isLinking} linkPlatforms={linkPlatforms} />
+          )}
 
           {/* Main Trading Configuration */}
           <TradingAccountsConfig />

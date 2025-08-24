@@ -1,109 +1,128 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-const HIDDEN_ACCOUNTS_KEY = 'hiddenPendingAccounts';
+import { useAuth } from '../context/AuthContext';
+import { SSEService } from '../services/sseService';
 
-interface HiddenAccountsData {
-  [accountId: string]: {
-    hiddenAt: string;
-    platform: string;
-  };
+interface UseHiddenPendingAccountsReturn {
+  isHidden: boolean;
+  isBlinking: boolean;
+  pendingCount: number;
+  toggleHidden: () => void;
 }
 
-export const useHiddenPendingAccounts = () => {
-  const [hiddenAccounts, setHiddenAccounts] = useState<HiddenAccountsData>({});
+export const useHiddenPendingAccounts = (): UseHiddenPendingAccountsReturn => {
+  const [isHidden, setIsHidden] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pendingAccountsHidden');
+    return saved ? JSON.parse(saved) : false;
+  });
 
-  // Cargar cuentas ocultas desde localStorage al inicializar
-  useEffect(() => {
+  const [isBlinking, setIsBlinking] = useState<boolean>(false);
+  const [pendingCount, setPendingCount] = useState<number>(0);
+  const { secretKey } = useAuth();
+
+  // Get pending count directly from server
+  const fetchPendingCount = async () => {
+    if (!secretKey) return;
+
     try {
-      const stored = localStorage.getItem(HIDDEN_ACCOUNTS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setHiddenAccounts(parsed);
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
+
+      const response = await fetch(`${baseUrl}/api/accounts/pending/cache`, {
+        method: 'GET',
+        headers: {
+          'x-api-key': secretKey,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const accountsArray = Object.values(data.pendingAccounts || {});
+        setPendingCount(accountsArray.length);
       }
     } catch (error) {
       // Silent error handling
     }
-  }, []);
+  };
 
-  // Ocultar una cuenta
-  const hideAccount = useCallback((accountId: string, platform: string) => {
-    setHiddenAccounts(prev => {
-      const updated = {
-        ...prev,
-        [accountId]: {
-          hiddenAt: new Date().toISOString(),
-          platform,
-        },
+  // Save to localStorage when state changes
+  useEffect(() => {
+    localStorage.setItem('pendingAccountsHidden', JSON.stringify(isHidden));
+  }, [isHidden]);
+
+  // Fetch pending count on mount and when secretKey changes
+  useEffect(() => {
+    fetchPendingCount();
+  }, [secretKey]);
+
+  // SSE listener for real-time pending accounts updates
+  useEffect(() => {
+    if (!secretKey) return;
+
+    // Connect to SSE
+    SSEService.connect(secretKey);
+
+    const handleSSEMessage = (data: any) => {
+      // Handle initial data that includes pending accounts
+      if (data.type === 'initial_data' && data.accounts?.pendingAccounts) {
+        const pendingArray = data.accounts.pendingAccounts;
+        setPendingCount(pendingArray.length);
+      }
+
+      // Handle pending accounts updates
+      if (data.type === 'pendingAccountsUpdated') {
+        if (data.accounts && Array.isArray(data.accounts)) {
+          setPendingCount(data.accounts.length);
+        }
+      }
+
+      // Handle account converted events
+      if (data.type === 'accountConverted') {
+        // Refresh pending count when accounts are converted
+        fetchPendingCount();
+      }
+
+      // Handle account deleted events
+      if (data.type === 'accountDeleted') {
+        // Refresh pending count when accounts are deleted
+        fetchPendingCount();
+      }
+    };
+
+    // Add listener
+    const listenerId = SSEService.addListener(handleSSEMessage);
+
+    return () => {
+      SSEService.removeListener(listenerId);
+    };
+  }, [secretKey]);
+
+  // Handle blinking when hidden and there are pending accounts
+  useEffect(() => {
+    if (isHidden && pendingCount > 0) {
+      setIsBlinking(true);
+
+      const interval = setInterval(() => {
+        setIsBlinking(prev => !prev);
+      }, 500); // Blink every 1.5 seconds for smoother transition
+
+      return () => {
+        clearInterval(interval);
+        setIsBlinking(false);
       };
-
-      // Guardar en localStorage
-      try {
-        localStorage.setItem(HIDDEN_ACCOUNTS_KEY, JSON.stringify(updated));
-      } catch (error) {
-        console.error('Error saving hidden accounts to localStorage:', error);
-      }
-
-      return updated;
-    });
-  }, []);
-
-  // Mostrar una cuenta (remover de ocultas)
-  const showAccount = useCallback((accountId: string) => {
-    setHiddenAccounts(prev => {
-      const { [accountId]: removed, ...rest } = prev;
-
-      // Guardar en localStorage
-      try {
-        localStorage.setItem(HIDDEN_ACCOUNTS_KEY, JSON.stringify(rest));
-      } catch (error) {
-        console.error('Error saving hidden accounts to localStorage:', error);
-      }
-
-      return rest;
-    });
-  }, []);
-
-  // Limpiar todas las cuentas ocultas
-  const clearHiddenAccounts = useCallback(() => {
-    setHiddenAccounts({});
-
-    // Limpiar localStorage
-    try {
-      localStorage.removeItem(HIDDEN_ACCOUNTS_KEY);
-    } catch (error) {
-      console.error('Error clearing hidden accounts from localStorage:', error);
+    } else {
+      setIsBlinking(false);
     }
-  }, []);
+  }, [isHidden, pendingCount]);
 
-  // Verificar si una cuenta está oculta
-  const isAccountHidden = useCallback(
-    (accountId: string) => {
-      return accountId in hiddenAccounts;
-    },
-    [hiddenAccounts]
-  );
-
-  // Filtrar cuentas visibles
-  const filterVisibleAccounts = useCallback(
-    (accounts: any[]) => {
-      const filtered = accounts.filter(account => {
-        const isHidden = isAccountHidden(account.account_id);
-
-        return !isHidden;
-      });
-
-
-      return filtered;
-    },
-    [isAccountHidden, hiddenAccounts]
-  );
+  const toggleHidden = () => {
+    setIsHidden(prev => !prev);
+  };
 
   return {
-    hiddenAccounts,
-    hideAccount,
-    showAccount,
-    clearHiddenAccounts,
-    isAccountHidden,
-    filterVisibleAccounts,
+    isHidden,
+    isBlinking,
+    pendingCount,
+    toggleHidden,
   };
 };

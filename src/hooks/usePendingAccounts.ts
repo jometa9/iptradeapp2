@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
 import { SSEService } from '../services/sseService';
-import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
 
 interface PendingAccount {
   account_id: string;
@@ -32,7 +31,6 @@ export const usePendingAccounts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
-  const { hideAccount, filterVisibleAccounts } = useHiddenPendingAccounts();
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
@@ -68,8 +66,8 @@ export const usePendingAccounts = () => {
             ...account,
           }));
 
-          // Filtrar cuentas ocultas antes de establecer el estado
-          const visibleAccounts = filterVisibleAccounts(accountsArray);
+          // Use all accounts (filtering will be handled by components that need it)
+          const visibleAccounts = accountsArray;
 
           // Calcular estadísticas de plataforma
           const platformStats = visibleAccounts.reduce(
@@ -142,12 +140,10 @@ export const usePendingAccounts = () => {
         data.type === 'csv_updated' ||
         data.type === 'accountConverted' // NUEVO: Escuchar eventos de conversión
       ) {
-
         // Si tenemos datos de cuentas en el evento, actualizar directamente
         if (data.accounts && Array.isArray(data.accounts)) {
-
-          // Filtrar cuentas ocultas de los nuevos datos
-          const visibleNewAccounts = filterVisibleAccounts(data.accounts);
+          // Use all accounts (filtering will be handled by components that need it)
+          const visibleNewAccounts = data.accounts;
 
           // Actualizar el estado directamente sin depender del estado anterior
           const platformStats = visibleNewAccounts.reduce(
@@ -198,7 +194,7 @@ export const usePendingAccounts = () => {
         SSEService.removeListener(listenerIdRef.current);
       }
     };
-  }, [secretKey, filterVisibleAccounts]); // Removida dependencia circular de pendingData
+  }, [secretKey]); // Removed circular dependency
 
   // Polling fallback para casos donde SSE no funcione
   useEffect(() => {
@@ -251,8 +247,7 @@ export const usePendingAccounts = () => {
           throw new Error('Account not found');
         }
 
-        // Ocultar la cuenta usando el sistema de persistencia
-        hideAccount(accountId, accountToHide.platform);
+        // Note: Account hiding is now handled by the useHiddenPendingAccounts hook
 
         // Actualizar el estado local inmediatamente
         if (pendingData && pendingData.accounts) {
@@ -303,7 +298,7 @@ export const usePendingAccounts = () => {
         throw error;
       }
     },
-    [secretKey, pendingData, hideAccount]
+    [secretKey, pendingData]
   );
 
   return {
