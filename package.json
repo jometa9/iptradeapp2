@@ -32,7 +32,9 @@
     "test:accounts:cleanup": "node scripts/manage-test-accounts.cjs cleanup",
     "test:accounts:reset": "node scripts/manage-test-accounts.cjs reset",
     "clean:mac": "node scripts/clean-csv-mac.js",
-    "check:csv": "node scripts/check-csv-cache.js"
+    "check:csv": "node scripts/check-csv-cache.js",
+    "reset:permissions": "node scripts/reset-macos-permissions.js",
+    "check:permissions": "node scripts/check-macos-permissions.js"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",
@@ -135,6 +137,8 @@
       "category": "public.app-category.finance",
       "icon": "public/iconShadow025.png",
       "artifactName": "IPTRADE-APP-${arch}.dmg",
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
       "target": [
         {
           "target": "dmg",

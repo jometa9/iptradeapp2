@@ -11,7 +11,6 @@ export const useOperatingSystem = () => {
         try {
           // Use Electron API to get OS
           const platform = await window.electronAPI.getPlatform();
-          console.log('🖥️ Electron platform detected:', platform);
 
           // Map Electron platform to our OS type
           switch (platform) {

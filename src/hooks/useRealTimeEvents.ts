@@ -42,7 +42,6 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
 
       if (response.ok) {
         setIsConnected(true);
-        console.log(`📡 Cliente ${clientIdRef.current} registrado para eventos`);
       }
     } catch (error) {
       console.error('❌ Error registrando cliente:', error);
@@ -63,7 +62,6 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
       });
 
       setIsConnected(false);
-      console.log(`📡 Cliente ${clientIdRef.current} desregistrado`);
     } catch (error) {
       console.error('❌ Error desregistrando cliente:', error);
     }
@@ -81,7 +79,6 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
   // Función para refrescar manualmente
   const refresh = useCallback(() => {
     // Los datos se actualizan automáticamente via SSE
-    console.log('🔄 Refresh solicitado - los datos se actualizan automáticamente via SSE');
   }, []);
 
   // Función para limpiar eventos

@@ -82,7 +82,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   }
 
   private startEventSource() {
-    console.log('🚫 CSVFrontendService: EventSource DISABLED - using unified SSE instead');
     return; // DISABLED - ahora usamos SSEService unificado
 
     const eventSource = new EventSource(
@@ -112,7 +111,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   }
 
   private async processCSVData(data: any) {
-    console.log('📥 Processing CSV data:', data);
 
     // Siempre emitir dataUpdated para mantener todo sincronizado
     this.emit('dataUpdated', data);
@@ -120,7 +118,6 @@ class CSVFrontendService extends SimpleEventEmitter {
     switch (data.type) {
       case 'csv_updated':
         // Archivo CSV actualizado
-        console.log('📄 CSV file updated:', data);
         this.emit('csvUpdated', data);
 
         // Forzar actualización inmediata
@@ -128,20 +125,16 @@ class CSVFrontendService extends SimpleEventEmitter {
         break;
 
       case 'initial_data':
-        console.log('🔰 Initial data received:', data);
         this.emit('initialData', data);
         break;
 
       case 'heartbeat':
         // Solo log si hay cambios importantes
-        if (data.changes) {
-          console.log('💓 Heartbeat with changes:', data.changes);
-        }
+
         this.emit('heartbeat', data);
         break;
 
       case 'accountDeleted':
-        console.log('🗑️ Account deleted:', data);
         this.emit('accountDeleted', data);
 
         // Forzar actualización inmediata
@@ -149,7 +142,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         break;
 
       case 'accountConverted':
-        console.log('🔄 Account converted:', data);
         this.emit('accountConverted', data);
 
         // Forzar actualización inmediata de CSV y estado
@@ -173,7 +165,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         break;
 
       default:
-        console.log('ℹ️ Unhandled event:', data);
         break;
     }
   }
@@ -207,9 +198,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   // Borrar una master account (desconecta slaves y convierte a pending)
   public async deleteMasterAccount(masterAccountId: string): Promise<boolean> {
     try {
-      console.log(
-        `🔄 Deleting master account ${masterAccountId} with proper slave disconnection...`
-      );
       const response = await fetch(
         `http://localhost:${this.serverPort}/api/accounts/master/${masterAccountId}`,
         {
@@ -222,7 +210,6 @@ class CSVFrontendService extends SimpleEventEmitter {
 
       if (response.ok) {
         const data = await response.json();
-        console.log(`✅ Master account ${masterAccountId} deleted successfully:`, data);
         // Procesar la respuesta y emitir eventos
         this.processCSVData(data);
         return true;
@@ -284,7 +271,6 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async updateGlobalStatus(enabled: boolean): Promise<void> {
     try {
-      console.log('🔄 Updating global copier status to:', enabled);
       const response = await fetch(`http://localhost:${this.serverPort}/api/csv/copier/global`, {
         method: 'POST',
         headers: {
@@ -300,7 +286,6 @@ class CSVFrontendService extends SimpleEventEmitter {
       }
 
       const data = await response.json();
-      console.log('✅ Global copier status updated:', data);
 
       // Obtener datos actualizados de copier y accounts
       const [copierStatus, accounts] = await Promise.all([

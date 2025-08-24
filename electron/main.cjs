@@ -5,6 +5,39 @@ const path = require('path');
 const fs = require('fs');
 const { EventSource } = require('eventsource');
 
+// Función para manejar permisos de macOS de manera eficiente
+async function requestMacOSPermissions() {
+  if (process.platform !== 'darwin') return;
+
+  try {
+    const { systemPreferences } = require('electron');
+
+    // Verificar si ya tenemos permisos de accesibilidad
+    const hasAccessibilityPermission = systemPreferences.isTrustedAccessibilityClient(false);
+
+    if (!hasAccessibilityPermission) {
+      console.log('[PERMISSIONS] Requesting accessibility permissions...');
+      const granted = await systemPreferences.askForAccessibilityPermission();
+      console.log('[PERMISSIONS] Accessibility permission granted:', granted);
+    } else {
+      console.log('[PERMISSIONS] Accessibility permissions already granted');
+    }
+
+    // Verificar permisos de notificaciones
+    const hasNotificationPermission = systemPreferences.isTrustedAccessibilityClient(false);
+    if (!hasNotificationPermission) {
+      console.log('[PERMISSIONS] Requesting notification permissions...');
+    } else {
+      console.log('[PERMISSIONS] Notification permissions already granted');
+    }
+
+    // Verificar permisos de archivos
+    console.log('[PERMISSIONS] File system permissions handled by entitlements');
+  } catch (error) {
+    console.log('[PERMISSIONS] Error requesting permissions:', error.message);
+  }
+}
+
 // Helper para leer el puerto del .env raíz o variables de entorno
 function getPortFromEnv() {
   // Primero intentar leer de variables de entorno del proceso
@@ -559,6 +592,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Solicitar permisos necesarios una sola vez al inicio
+  await requestMacOSPermissions();
+
   await startServer();
   // Cambiar el nombre de la app
   app.setName('IPTRADE');

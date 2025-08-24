@@ -49,8 +49,6 @@ export const usePendingAccounts = () => {
         setError(null);
         const endpoint = useCache ? '/api/accounts/pending/cache' : '/api/accounts/pending';
 
-        console.log(`🔄 [usePendingAccounts] Loading pending accounts from: ${endpoint}`);
-
         const response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'GET',
           headers: {
@@ -60,7 +58,6 @@ export const usePendingAccounts = () => {
 
         if (response.ok) {
           const data = await response.json();
-          console.log(`📥 [usePendingAccounts] Received data from server:`, data);
 
           // Convertir el objeto pendingAccounts a array
           const accountsArray = Object.values(data.pendingAccounts || {}).map((account: any) => ({
@@ -71,12 +68,8 @@ export const usePendingAccounts = () => {
             ...account,
           }));
 
-          console.log(`📋 [usePendingAccounts] Converted to array:`, accountsArray);
-          console.log(`📋 [usePendingAccounts] Raw pendingAccounts object:`, data.pendingAccounts);
-
           // Filtrar cuentas ocultas antes de establecer el estado
           const visibleAccounts = filterVisibleAccounts(accountsArray);
-          console.log(`👁️ [usePendingAccounts] After filtering hidden accounts:`, visibleAccounts);
 
           // Calcular estadísticas de plataforma
           const platformStats = visibleAccounts.reduce(
@@ -149,17 +142,12 @@ export const usePendingAccounts = () => {
         data.type === 'csv_updated' ||
         data.type === 'accountConverted' // NUEVO: Escuchar eventos de conversión
       ) {
-        console.log(`📨 [usePendingAccounts] Received ${data.type} event:`, data);
 
         // Si tenemos datos de cuentas en el evento, actualizar directamente
         if (data.accounts && Array.isArray(data.accounts)) {
-          console.log(`📊 [usePendingAccounts] Found ${data.accounts.length} accounts in event`);
 
           // Filtrar cuentas ocultas de los nuevos datos
           const visibleNewAccounts = filterVisibleAccounts(data.accounts);
-          console.log(
-            `👁️ [usePendingAccounts] After filtering: ${visibleNewAccounts.length} visible accounts`
-          );
 
           // Actualizar el estado directamente sin depender del estado anterior
           const platformStats = visibleNewAccounts.reduce(
@@ -193,11 +181,9 @@ export const usePendingAccounts = () => {
             message: `Updated ${visibleNewAccounts.length} pending accounts`,
           };
 
-          console.log(`✅ [usePendingAccounts] Setting new pending data:`, updatedPendingData);
           setPendingData(updatedPendingData);
         } else {
           // Solo hacer reload si no hay datos específicos en el evento
-          console.log(`🔄 [usePendingAccounts] No accounts in event, doing full reload`);
           loadPendingAccounts();
         }
       }

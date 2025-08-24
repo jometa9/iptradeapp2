@@ -9,7 +9,6 @@ import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
 import copierStatusRoutes from './routes/copierStatus.js';
 import csvRoutes from './routes/csvRoutes.js';
-import csvUnifiedRoutes from './routes/csvUnified.js';
 // import ctraderRoutes from './routes/ctrader.js';
 import eventRoutes from './routes/events.js';
 import linkPlatformsRoutes from './routes/linkPlatforms.js';
@@ -50,9 +49,6 @@ export function createServer() {
   app.use('/api', orderRoutes);
   app.use('/api', configRoutes);
   app.use('/api', tradingConfigRoutes);
-
-  // CSV Unified Routes (replacing old routes)
-  app.use('/api/csv', csvUnifiedRoutes);
 
   // Keep these for now for compatibility
   app.use('/api', copierStatusRoutes);

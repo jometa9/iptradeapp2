@@ -14,6 +14,10 @@ const findMasterCSVPath = async masterId => {
       return null;
     }
 
+    // IMPORTANT: Refresh cache before searching to ensure we have the latest data
+    console.log(`🔄 Refreshing CSV cache before searching for master account ${masterId}...`);
+    csvManager.refreshAllFileData();
+
     // Search through scanned CSV files
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
       // First check if the account exists in parsed data
@@ -334,7 +338,14 @@ export const updateCSVAccountType = async (req, res) => {
               const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
               console.log(`🔍 Clean line: "${cleanLine}"`);
 
+              // Update TYPE line if it contains the account
               if (
+                cleanLine.includes('[TYPE]') &&
+                (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
+              ) {
+                console.log(`✅ Found TYPE line for account ${accountId}, updating to ${newType}`);
+                newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
+              } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes(`[${accountId}]`) ||
                   cleanLine.includes(accountId) ||
@@ -372,6 +383,13 @@ export const updateCSVAccountType = async (req, res) => {
 
                   newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
                 }
+              } else if (
+                cleanLine.includes('[TYPE]') &&
+                (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING')) &&
+                (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
+              ) {
+                console.log(`✅ Found TYPE line with PENDING, updating to ${newType}`);
+                newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
@@ -419,9 +437,18 @@ export const updateCSVAccountType = async (req, res) => {
             writeFileSync(filePath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
             console.log(
-              `✏️ Updated CONFIG line for account ${accountId} to ${newType} in ${filePath} (bot will update TYPE)`
+              `✏️ Updated TYPE and CONFIG lines for account ${accountId} to ${newType} in ${filePath}`
             );
             console.log(`📄 New content:\n${newContent}`);
+
+            // IMPORTANT: Immediately refresh cache for this specific file to ensure latest data
+            console.log(`🔄 Refreshing cache for updated file: ${filePath}`);
+            if (csvManager.csvFiles.has(filePath)) {
+              csvManager.csvFiles.set(filePath, {
+                lastModified: csvManager.getFileLastModified(filePath),
+                data: csvManager.parseCSVFile(filePath),
+              });
+            }
           } else {
             console.log(
               `ℹ️ Account ${accountId} not found in this file (expected if account is in different CSV)`

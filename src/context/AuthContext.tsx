@@ -46,12 +46,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
       const baseEndpoint =
-        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
+        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:30/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
 
+      console.log('🔍 AuthContext: Validating license with URL:', url);
+
       const response = await fetch(url);
+      console.log('🔍 AuthContext: Response status:', response.status);
 
       if (!response.ok) {
+        console.log('🔍 AuthContext: Response not ok, status:', response.status);
         if (response.status === 401) {
           return { valid: false, message: 'Invalid API Key' };
         }
@@ -63,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const userData: UserInfo = await response.json();
+      console.log('🔍 AuthContext: User data received:', userData);
 
       // Validate that we have the required fields
       if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
@@ -155,8 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
-
-      console.log('🧹 Cleared all frontend user data');
     } catch (error) {
       console.error('Error clearing localStorage:', error);
     }
@@ -176,7 +179,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (response.ok) {
           const result = await response.json();
-          console.log('🧹 Backend data cleanup completed:', result);
 
           if (result.hasErrors) {
             console.warn('⚠️ Some backend data cleanup had errors:', result.cleared.errors);
@@ -189,8 +191,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Don't prevent logout if backend cleanup fails
       }
     }
-
-    console.log('✅ User logout completed');
   };
 
   // Limpiar error
@@ -201,66 +201,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Verify authentication when starting the app
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('🔍 AuthContext: Starting authentication check...');
       const storedKey = localStorage.getItem(STORAGE_KEY);
+      console.log('🔍 AuthContext: Stored key found:', !!storedKey);
 
       if (storedKey) {
-        // Check if we recently validated this key to avoid unnecessary API calls
-        const lastValidationKey = `${STORAGE_KEY}_last_validation`;
-        const lastValidation = localStorage.getItem(lastValidationKey);
-        const now = Date.now();
-
-        // Only revalidate if it's been more than 12 hours since last validation
-        if (lastValidation && now - parseInt(lastValidation) < 12 * 60 * 60 * 1000) {
-          // Try to get cached user info
-          const cachedUserInfo = localStorage.getItem(`${STORAGE_KEY}_user_info`);
-          if (cachedUserInfo) {
-            try {
-              const userInfo = JSON.parse(cachedUserInfo);
-              setSecretKey(storedKey);
-              setUserInfo(userInfo);
-              setIsAuthenticated(true);
-              setIsLoading(false);
-
-              // Set up timer for next validation in 12 hours
-              const timeUntilNextValidation =
-                12 * 60 * 60 * 1000 - (now - parseInt(lastValidation));
-              if (timeUntilNextValidation > 0) {
-                setTimeout(() => {
-                  validateLicense(storedKey).then(validation => {
-                    if (validation.valid && validation.userInfo) {
-                      setUserInfo(validation.userInfo);
-                      localStorage.setItem(lastValidationKey, Date.now().toString());
-                      localStorage.setItem(
-                        `${STORAGE_KEY}_user_info`,
-                        JSON.stringify(validation.userInfo)
-                      );
-                    } else {
-                      // License expired, logout user
-                      logout().catch(error =>
-                        console.error('Error during automatic logout:', error)
-                      );
-                    }
-                  });
-                }, timeUntilNextValidation);
-              }
-
-              return;
-            } catch (parseError) {
-              console.warn('Failed to parse cached user info:', parseError);
-            }
-          }
-        }
+        // Always validate against server on app startup for security
+        console.log('🔍 Validating stored license on app startup...');
 
         try {
           const validation = await validateLicense(storedKey);
+          console.log('🔍 AuthContext: Validation result:', validation);
 
           if (validation.valid && validation.userInfo) {
+            console.log('🔍 AuthContext: Setting authenticated state');
             setSecretKey(storedKey);
             setUserInfo(validation.userInfo);
             setIsAuthenticated(true);
 
             // Cache the validation timestamp and user info
-            localStorage.setItem(lastValidationKey, now.toString());
+            const now = Date.now();
+            localStorage.setItem(`${STORAGE_KEY}_last_validation`, now.toString());
             localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
 
             // Set up timer for next validation in 12 hours
@@ -269,7 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 validateLicense(storedKey).then(validation => {
                   if (validation.valid && validation.userInfo) {
                     setUserInfo(validation.userInfo);
-                    localStorage.setItem(lastValidationKey, Date.now().toString());
+                    localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
                     localStorage.setItem(
                       `${STORAGE_KEY}_user_info`,
                       JSON.stringify(validation.userInfo)
@@ -285,7 +246,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             // Licencia expirada o inválida
             localStorage.removeItem(STORAGE_KEY);
-            localStorage.removeItem(lastValidationKey);
+            localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
             localStorage.removeItem(`${STORAGE_KEY}_user_info`);
             console.warn('Stored license is no longer valid:', validation.message);
           }
@@ -294,8 +255,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Don't remove the key on network errors, just log and continue
           // localStorage.removeItem(STORAGE_KEY);
         }
+      } else {
+        console.log('🔍 AuthContext: No stored key found, user needs to login');
       }
 
+      console.log('🔍 AuthContext: Setting isLoading to false');
       setIsLoading(false);
     };
 

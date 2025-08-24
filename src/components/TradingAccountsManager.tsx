@@ -786,16 +786,19 @@ export const TradingAccountsManager: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
-                            onClick={() => setConfirmingDeleteId(id)}
-                            disabled={isProcessing}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
+                          {master.totalSlaves === 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                              onClick={() => setConfirmingDeleteId(id)}
+                              disabled={isProcessing}
+                              title="Delete master account"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
                           {master.totalSlaves > 0 && (
                             <Button
                               size="sm"

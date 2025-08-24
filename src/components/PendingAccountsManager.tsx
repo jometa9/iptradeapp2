@@ -32,7 +32,15 @@ interface ConversionForm {
   reverseTrade: boolean;
 }
 
-type LinkingStep = 'idle' | 'starting' | 'finding' | 'syncing' | 'completed' | 'error';
+type LinkingStep =
+  | 'idle'
+  | 'starting'
+  | 'started'
+  | 'finding'
+  | 'scanning'
+  | 'syncing'
+  | 'completed'
+  | 'error';
 
 interface LinkingStatus {
   step: LinkingStep;
@@ -212,7 +220,17 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
           : 'Scanning for link platforms process...',
         isLoading: true,
       },
+      started: {
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : 'Link Platforms process started...',
+        isLoading: true,
+      },
       finding: {
+        message: 'Scanning for MetaTrader installations...',
+        isLoading: true,
+      },
+      scanning: {
         message: 'Scanning for MetaTrader installations...',
         isLoading: true,
       },
@@ -224,7 +242,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       error: { message: 'Error linking accounts. Please try again.', isLoading: false },
     };
 
-    return statusMap[status.step];
+    // Return the status from the map, or a fallback if the step is not recognized
+    return (
+      statusMap[status.step] || {
+        message: status.message || 'Processing...',
+        isLoading: true,
+      }
+    );
   };
 
   // Load master accounts for slave connection

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Permisos básicos para aplicaciones de escritorio -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Acceso al sistema de archivos -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+    <key>com.apple.security.files.desktop.read-write</key>
+    <true/>
+    <key>com.apple.security.files.documents.read-write</key>
+    <true/>
+
+    <!-- Acceso a la red -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Acceso al sistema de notificaciones -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+
+    <!-- Acceso a otros procesos (para el servidor embebido) -->
+    <key>com.apple.security.temporary-exception.apple-events</key>
+    <array>
+        <string>com.apple.systemevents</string>
+    </array>
+
+    <!-- Permisos para el tray y dock -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.apple.coreservices.launchservicesd</string>
+    </array>
+</dict>
+</plist>

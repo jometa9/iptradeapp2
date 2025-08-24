@@ -175,21 +175,9 @@ export function TradingAccountsConfig() {
         if (accountNumber !== slave.id) {
           newSlaveConfigs[accountNumber] = slaveConfig;
         }
-
-        console.log(
-          '🔧 DEBUG: Loaded slave config for:',
-          slave.id,
-          'accountNumber:',
-          slave.accountNumber,
-          'config:',
-          slave.config
-        );
-      } else {
-        console.log('🔧 DEBUG: No config found for slave:', slave.id);
       }
     }
 
-    console.log('🔧 DEBUG: Total slave configs loaded:', Object.keys(newSlaveConfigs));
     setSlaveConfigs(newSlaveConfigs);
   }, [csvAccounts]);
 
@@ -520,12 +508,6 @@ export function TradingAccountsConfig() {
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    // No permitir cambiar el tipo de cuenta cuando se está editando
-    if (name === 'accountType' && editingAccount) {
-      console.log('⚠️ Cannot change account type when editing');
-      return;
-    }
-
     if (name === 'accountType' && value === 'master') {
       setFormState({ ...formState, [name]: value, status: 'synchronized' });
     } else if (name === 'accountType' && value === 'pending') {
@@ -646,19 +628,14 @@ export function TradingAccountsConfig() {
 
       if (isMasterAccount) {
         // Usar el endpoint correcto para borrar master accounts (desconecta slaves primero)
-        console.log(
-          `🔄 Deleting master account ${deleteConfirmId} with proper slave disconnection...`
-        );
         success = await csvFrontendService.deleteMasterAccount(deleteConfirmId);
       } else {
         // Para otras cuentas, usar el método normal de conversión a pending
-        console.log(`🔄 Converting account ${deleteConfirmId} to pending...`);
         success = await csvFrontendService.convertToPending(deleteConfirmId);
       }
 
       if (success) {
         const actionText = isMasterAccount ? 'deleted' : 'converted to pending';
-        console.log(`✅ Account ${deleteConfirmId} ${actionText} successfully`);
         toast({
           title: 'Account deleted',
           description: `Account ${deleteConfirmId} has been ${actionText}.`,
@@ -712,13 +689,13 @@ export function TradingAccountsConfig() {
   };
 
   // Helper function for consistent delete button styling
-  const DeleteButton = ({ accountId, onClick, disabled = false }) => (
+  const DeleteButton = ({ accountId, onClick, disabled = false, title = 'Delete Account' }) => (
     <Button
       variant="outline"
       size="sm"
       className="h-9 w-9 p-0 rounded-lg bg-white border border-red-200 hover:bg-red-50"
       onClick={onClick}
-      title="Delete Account"
+      title={title}
       disabled={disabled}
     >
       <Trash className="h-4 w-4 text-red-600" />
@@ -804,7 +781,6 @@ export function TradingAccountsConfig() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('🚀 handleSubmit called');
     e.preventDefault();
     setIsSubmitting(true);
 
@@ -813,19 +789,12 @@ export function TradingAccountsConfig() {
       let response;
       let payload;
 
-      console.log('🔍 DEBUG: Account type:', formState.accountType);
-      console.log('🔍 DEBUG: Editing account:', editingAccount);
-
       // Si estamos editando una cuenta
       if (editingAccount) {
         const accountId = editingAccount.id;
 
         // Si el tipo de cuenta no cambió, solo actualizar configuración
         if (editingAccount.accountType === formState.accountType) {
-          console.log(
-            `🔄 Updating configuration for ${editingAccount.accountType} account ${accountId}`
-          );
-
           if (editingAccount.accountType === 'slave') {
             // Validar forceLot antes de enviar
             const validatedForceLot =
@@ -1001,7 +970,6 @@ export function TradingAccountsConfig() {
             body: JSON.stringify(payload),
           });
         } else {
-          console.log('🔍 DEBUG: Processing slave account');
           // Slave account
           payload = {
             slaveAccountId: formState.accountNumber,
@@ -1733,18 +1701,6 @@ export function TradingAccountsConfig() {
                       </div>
 
                       {(() => {
-                        console.log('🔍 DEBUG: Form condition check:', {
-                          formStateAccountType: formState.accountType,
-                          editingAccount: editingAccount,
-                          editingAccountType: editingAccount?.accountType,
-                          shouldShowSlaveFields:
-                            formState.accountType === 'slave' &&
-                            (!editingAccount ||
-                              editingAccount.accountType === 'slave' ||
-                              (editingAccount &&
-                                editingAccount.accountType === 'master' &&
-                                formState.accountType === 'slave')),
-                        });
                         return (
                           formState.accountType === 'slave' &&
                           (!editingAccount ||
@@ -2179,20 +2135,35 @@ export function TradingAccountsConfig() {
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleEditAccount(masterAccount);
-                                    }}
-                                    title="Edit Account"
-                                    disabled={isDeletingAccount === masterAccount.id}
-                                  >
-                                    <Pencil className="h-4 w-4 text-blue-600" />
-                                  </Button>
-                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
+                                  {(!masterAccount.totalSlaves ||
+                                    masterAccount.totalSlaves === 0) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handleEditAccount(masterAccount);
+                                      }}
+                                      title="Edit Account"
+                                      disabled={isDeletingAccount === masterAccount.id}
+                                    >
+                                      <Pencil className="h-4 w-4 text-blue-600" />
+                                    </Button>
+                                  )}
+                                  {(!masterAccount.totalSlaves ||
+                                    masterAccount.totalSlaves === 0) && (
+                                    <DeleteButton
+                                      accountId={masterAccount.id}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handleDeleteAccount(masterAccount.id);
+                                      }}
+                                      disabled={isDeletingAccount === masterAccount.id}
+                                      title="Delete Account"
+                                    />
+                                  )}
+                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 && (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -2209,15 +2180,7 @@ export function TradingAccountsConfig() {
                                     >
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
-                                  ) : null}
-                                  <DeleteButton
-                                    accountId={masterAccount.id}
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleDeleteAccount(masterAccount.id);
-                                    }}
-                                    disabled={isDeletingAccount === masterAccount.id}
-                                  />
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -2242,11 +2205,6 @@ export function TradingAccountsConfig() {
                                 config: slaveAccount.config,
                                 masterOnline: slaveAccount.masterOnline || true, // Para slaves conectados, asumir que el master está online
                               };
-
-                              console.log('🔍 DEBUG: Slave account for rendering:', {
-                                original: slaveAccount,
-                                processed: accountToUse,
-                              });
 
                               return (
                                 <tr
@@ -2506,14 +2464,18 @@ export function TradingAccountsConfig() {
                                         >
                                           <Unlink className="h-4 w-4 text-orange-600" />
                                         </Button>
-                                        <DeleteButton
-                                          accountId={accountToUse.id}
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            handleDeleteAccount(accountToUse.id);
-                                          }}
-                                          disabled={isDeletingAccount === accountToUse.id}
-                                        />
+                                        {(!accountToUse.connectedToMaster ||
+                                          accountToUse.connectedToMaster === 'none') && (
+                                          <DeleteButton
+                                            accountId={accountToUse.id}
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              handleDeleteAccount(accountToUse.id);
+                                            }}
+                                            disabled={isDeletingAccount === accountToUse.id}
+                                            title="Delete Account"
+                                          />
+                                        )}
                                       </div>
                                     )}
                                   </td>

@@ -30,25 +30,25 @@ class CSVManager extends EventEmitter {
       mkdirSync(this.csvDirectory, { recursive: true });
     }
 
-    // Cargar rutas desde cache si existen
+    // Cargar rutas desde cache si existen (como fallback)
     const cachedPaths = this.loadCSVPathsFromCache();
     if (cachedPaths.length > 0) {
       console.log(`📋 CSV Manager initialized - loaded ${cachedPaths.length} cached CSV paths`);
       // Cargar archivos desde cache
       cachedPaths.forEach(filePath => {
-        if (existsSync(filePath)) {
+        if (existsSync(filePath) && !this.csvFiles.has(filePath)) {
           this.csvFiles.set(filePath, {
             lastModified: this.getFileLastModified(filePath),
             data: this.parseCSVFile(filePath),
           });
         }
       });
+    }
 
-      // Iniciar file watching inmediatamente si hay archivos cargados
-      if (this.csvFiles.size > 0) {
-        console.log(`👀 Starting file watching for ${this.csvFiles.size} cached CSV files`);
-        this.startFileWatching();
-      }
+    // Iniciar file watching si hay archivos cargados
+    if (this.csvFiles.size > 0) {
+      console.log(`👀 Starting file watching for ${this.csvFiles.size} CSV files`);
+      this.startFileWatching();
     }
   }
 
@@ -1063,6 +1063,9 @@ class CSVManager extends EventEmitter {
 
   // Obtener todas las cuentas activas
   getAllActiveAccounts() {
+    // console.log('\n🔍 === getAllActiveAccounts START ===');
+    // console.log(`📁 Processing ${this.csvFiles.size} CSV files`);
+
     const accounts = {
       masterAccounts: {},
       slaveAccounts: {},
@@ -1122,10 +1125,10 @@ class CSVManager extends EventEmitter {
               totalSlaves: 0,
             };
           } else if (accountType === 'slave') {
-            const masterId = this.getSlaveMaster(accountId);
+            const masterId = row.config?.masterId || row.master_id;
 
-            if (masterId) {
-              // Es un slave conectado
+            if (masterId && masterId !== 'NULL') {
+              // Es un slave conectado - CREAR el master si no existe
               if (!accounts.masterAccounts[masterId]) {
                 accounts.masterAccounts[masterId] = {
                   id: masterId,
@@ -1156,7 +1159,6 @@ class CSVManager extends EventEmitter {
                 platform: platform,
                 status: status,
                 timeSinceLastPing: timeSinceLastPing,
-                // Expose CSV config for UI switches
                 config: row.config || {},
               });
             }
@@ -1194,13 +1196,18 @@ class CSVManager extends EventEmitter {
   getSlaveMaster(slaveId) {
     let masterId = null;
 
-    this.csvFiles.forEach(fileData => {
+    this.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
         if (row.account_id === slaveId && row.account_type === 'slave') {
-          // Buscar masterId en la configuración del slave
-          if (row.config && row.config.masterId) {
+          if (row.config && row.config.masterId && row.config.masterId !== 'NULL') {
             masterId = row.config.masterId;
-            if (masterId === 'NULL') masterId = null;
+          } else if (row.master_id && row.master_id !== 'NULL') {
+            masterId = row.master_id;
+          }
+
+          // Si encontramos un masterId válido, salir del loop
+          if (masterId && masterId !== 'NULL') {
+            return;
           }
         }
       });
@@ -1259,7 +1266,6 @@ class CSVManager extends EventEmitter {
           timestamp: new Date().toISOString(),
         };
         writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2));
-        console.log('📝 Created default global copier status config');
       }
 
       // Leer y validar el archivo
@@ -1267,7 +1273,6 @@ class CSVManager extends EventEmitter {
       if (typeof config.globalStatus !== 'boolean') {
         config.globalStatus = false;
         writeFileSync(configPath, JSON.stringify(config, null, 2));
-        console.log('⚠️ Fixed invalid global copier status config');
       }
     } catch (error) {
       console.error('❌ Error initializing global copier status:', error);
@@ -1291,17 +1296,14 @@ class CSVManager extends EventEmitter {
 
   // Verificar si un master está habilitado
   isMasterEnabled(masterId) {
-    // Buscar en CSV si el master está habilitado
+    // Buscar en el cache de CSV si el master está habilitado
     let enabled = false;
 
-    this.csvFiles.forEach(fileData => {
+    this.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id === masterId && row.action === 'config' && row.data) {
-          try {
-            const config = JSON.parse(row.data);
-            enabled = config.enabled === true;
-          } catch (e) {
-            // Ignore parsing errors
+        if (row.account_id === masterId && row.account_type === 'master') {
+          if (row.config && row.config.enabled === true) {
+            enabled = true;
           }
         }
       });
@@ -1424,9 +1426,6 @@ class CSVManager extends EventEmitter {
 
       // Si no se encuentra en archivos monitoreados, buscar en el sistema de archivos
       if (!targetFile) {
-        console.log(`🔍 Account ${accountId} not found in monitored files, searching system...`);
-
-        // Buscar en ubicaciones comunes de CSV (sin rutas hardcodeadas)
         const searchPaths = [process.env.HOME + '/**/IPTRADECSV2.csv', '**/IPTRADECSV2.csv'];
 
         for (const searchPath of searchPaths) {
@@ -1436,7 +1435,6 @@ class CSVManager extends EventEmitter {
               const content = readFileSync(searchPath, 'utf8');
               if (content.includes(`[${accountId}]`)) {
                 targetFile = searchPath;
-                console.log(`✅ Found CSV file for account ${accountId}: ${targetFile}`);
                 break;
               }
             }
@@ -1470,13 +1468,11 @@ class CSVManager extends EventEmitter {
           );
           if (matches) {
             currentAccountId = matches[4]; // El accountId está en la cuarta posición
-            console.log(`📋 Found TYPE line with accountId: ${currentAccountId}`);
           }
         }
 
         // Si encontramos la cuenta objetivo, buscar la siguiente línea CONFIG
         if (currentAccountId === accountId && line.includes('[CONFIG]')) {
-          console.log(`🔄 Found CONFIG line for account ${accountId}, updating...`);
           // Construir nueva línea CONFIG según el tipo de cuenta
           if (config.type === 'master') {
             configUpdated = true;
@@ -1494,7 +1490,6 @@ class CSVManager extends EventEmitter {
 
       // Si no encontramos línea CONFIG, agregar una al final
       if (!configUpdated) {
-        console.log(`⚠️ No CONFIG line found for account ${accountId}, adding one`);
         if (config.type === 'master') {
           updatedLines.push(
             `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`
@@ -1522,7 +1517,6 @@ class CSVManager extends EventEmitter {
       try {
         writeFileSync(tmpFile, newContent, 'utf8');
         require('fs').renameSync(tmpFile, targetFile);
-        console.log(`✅ File written successfully`);
       } catch (error) {
         console.error(`❌ Error writing file: ${error.message}`);
         if (existsSync(tmpFile)) {
@@ -1599,7 +1593,6 @@ class CSVManager extends EventEmitter {
 
       // 2. Actualizar todos los archivos CSV2 que tenemos cacheados
       let updatedFiles = 0;
-      console.log(`🔍 Updating ${this.csvFiles.size} cached CSV files...`);
 
       // Procesar cada archivo cacheado
       for (const [filePath, fileData] of this.csvFiles.entries()) {
@@ -1714,11 +1707,6 @@ class CSVManager extends EventEmitter {
               }
 
               updatedLines.push(newLine);
-              console.log(
-                `✅ Updated CONFIG line for ${configType} account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-              );
-              console.log(`   Original: ${line}`);
-              console.log(`   Updated:  ${newLine}`);
             } else {
               updatedLines.push(line);
             }
@@ -1763,9 +1751,6 @@ class CSVManager extends EventEmitter {
 
   // Actualizar estado de slave
   updateSlaveStatus(slaveId, enabled, slaveConfig = null) {
-    console.log(`🔄 updateSlaveStatus called for slave ${slaveId} with enabled=${enabled}`);
-    console.log(`🔄 updateSlaveStatus slaveConfig:`, slaveConfig);
-
     const config = {
       type: 'slave',
       enabled,
@@ -1778,9 +1763,7 @@ class CSVManager extends EventEmitter {
       },
     };
 
-    console.log(`📝 Config to write:`, config);
     const result = this.writeConfig(slaveId, config);
-    console.log(`✅ writeConfig result for slave ${slaveId}:`, result);
     return result;
   }
 

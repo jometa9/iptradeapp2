@@ -363,9 +363,7 @@ class Mt5AuthService {
       if (this.accounts[userId]) {
         delete this.accounts[userId];
         this.saveAccounts();
-        console.log(
-          `🗑️ Cleared all MT5 data for user: ${userId ? userId.substring(0, 8) : 'unknown'}...`
-        );
+
         return true;
       }
       return false;
