@@ -111,7 +111,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   }
 
   private async processCSVData(data: any) {
-
     // Siempre emitir dataUpdated para mantener todo sincronizado
     this.emit('dataUpdated', data);
 
@@ -249,6 +248,7 @@ class CSVFrontendService extends SimpleEventEmitter {
 
   public async getAllAccounts(): Promise<AccountsData> {
     try {
+      console.log('🔄 [csvFrontendService] Getting all accounts...');
       // Usar el endpoint correcto que lee las cuentas del sistema
       const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/all`, {
         headers: {
@@ -257,11 +257,26 @@ class CSVFrontendService extends SimpleEventEmitter {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 [csvFrontendService] Raw response:', data);
         // Extraer los datos del formato de respuesta del servidor
-        return data.data || data;
+        const result = data.data || data;
+        console.log('📊 [csvFrontendService] Processed result:', {
+          masterAccountsCount: result?.masterAccounts
+            ? Object.keys(result.masterAccounts).length
+            : 0,
+          unconnectedSlavesCount: result?.unconnectedSlaves ? result.unconnectedSlaves.length : 0,
+          totalPendingCount: result?.totalPendingAccounts || 0,
+        });
+        return result;
+      } else {
+        console.error(
+          '❌ [csvFrontendService] Response not ok:',
+          response.status,
+          response.statusText
+        );
       }
     } catch (error) {
-      console.error('Error getting accounts:', error);
+      console.error('❌ [csvFrontendService] Error getting accounts:', error);
     }
     return {
       masterAccounts: {},

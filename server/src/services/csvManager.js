@@ -95,14 +95,8 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      // Check if this is a pending account in CSV2 format
-      // Use CONFIG as source of truth - if CONFIG says PENDING, it's pending
-      // If CONFIG says MASTER/SLAVE but TYPE says PENDING, use CONFIG
-      const isPending =
-        configData.configType === 'PENDING' ||
-        (typeData.type === 'PENDING' && configData.configType === 'PENDING');
-
-      if (typeData && statusData && configData && isPending) {
+      // Process all account types (PENDING, MASTER, SLAVE)
+      if (typeData && statusData && configData) {
         const accountTime = statusData.timestamp * 1000; // Convert to milliseconds
         const timeDiff = (currentTime - accountTime) / 1000; // Difference in seconds
 
@@ -111,7 +105,7 @@ class CSVManager extends EventEmitter {
           const account = {
             account_id: typeData.accountId,
             platform: typeData.platform,
-            account_type: 'pending',
+            account_type: configData.configType.toLowerCase(), // Use CONFIG as source of truth
             status: timeDiff <= 5 ? 'online' : 'offline',
             current_status: timeDiff <= 5 ? 'online' : 'offline',
             timestamp: statusData.timestamp,
@@ -120,8 +114,25 @@ class CSVManager extends EventEmitter {
             format: 'csv2',
           };
 
+          // Add config details for SLAVE accounts
+          if (configData.configType === 'SLAVE' && configData.details.length >= 6) {
+            account.config = {
+              enabled: configData.details[1] === 'ENABLED',
+              lotMultiplier: parseFloat(configData.details[2]) || 1,
+              forceLot: configData.details[3] === 'NULL' ? null : parseFloat(configData.details[3]),
+              reverseTrading: configData.details[4] === 'TRUE',
+              masterId: configData.details[5] === 'NULL' ? null : configData.details[5],
+              masterCsvPath: configData.details[6] || null,
+            };
+          } else if (configData.configType === 'MASTER') {
+            account.config = {
+              enabled: configData.details[1] === 'ENABLED',
+              name: configData.details[2] || `Account ${typeData.accountId}`,
+            };
+          }
+
           console.log(
-            `📱 Found CSV2 pending account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`
+            `📱 Found CSV2 ${configData.configType.toLowerCase()} account ${account.account_id} (${account.platform}) - ${account.status} (${timeDiff.toFixed(1)}s ago)`
           );
           return account;
         } else {
@@ -1063,8 +1074,8 @@ class CSVManager extends EventEmitter {
 
   // Obtener todas las cuentas activas
   getAllActiveAccounts() {
-    // console.log('\n🔍 === getAllActiveAccounts START ===');
-    // console.log(`📁 Processing ${this.csvFiles.size} CSV files`);
+    console.log('\n🔍 === getAllActiveAccounts START ===');
+    console.log(`📁 Processing ${this.csvFiles.size} CSV files`);
 
     const accounts = {
       masterAccounts: {},
@@ -1087,12 +1098,24 @@ class CSVManager extends EventEmitter {
     };
 
     this.csvFiles.forEach((fileData, filePath) => {
-      fileData.data.forEach(row => {
+      console.log(`📄 Processing file: ${filePath}`);
+      console.log(`📊 File has ${fileData.data.length} rows`);
+
+      fileData.data.forEach((row, index) => {
+        console.log(`📋 Row ${index + 1}:`, {
+          account_id: row.account_id,
+          account_type: row.account_type,
+          platform: row.platform,
+          config: row.config,
+        });
+
         if (row.account_id) {
           const accountId = row.account_id;
           const accountType = row.account_type;
           const platform = row.platform || this.extractPlatformFromPath(filePath);
           const { status, timeSinceLastPing } = calculateStatus(row.timestamp);
+
+          console.log(`🔍 Processing account: ${accountId} (${accountType}) on ${platform}`);
 
           // Incluir cuentas pending
           if (accountType === 'pending') {
@@ -1108,10 +1131,16 @@ class CSVManager extends EventEmitter {
                 config: row.config || {},
                 filePath: filePath, // Para debug
               });
+              console.log(`✅ Added pending account: ${accountId}`);
             }
           }
 
           if (accountType === 'master') {
+            // Preservar slaves conectadas si ya existen
+            const existingMaster = accounts.masterAccounts[accountId];
+            const existingConnectedSlaves = existingMaster ? existingMaster.connectedSlaves : [];
+            const existingTotalSlaves = existingMaster ? existingMaster.totalSlaves : 0;
+
             accounts.masterAccounts[accountId] = {
               id: accountId,
               name: accountId,
@@ -1121,11 +1150,15 @@ class CSVManager extends EventEmitter {
               timeSinceLastPing: timeSinceLastPing,
               // Reflect CSV config for UI switches
               config: row.config || {},
-              connectedSlaves: [],
-              totalSlaves: 0,
+              connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
+              totalSlaves: existingTotalSlaves, // Preservar contador
             };
+            console.log(
+              `✅ Added master account: ${accountId} with ${existingTotalSlaves} existing slaves`
+            );
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
+            console.log(`🔗 Slave ${accountId} has masterId: ${masterId}`);
 
             if (masterId && masterId !== 'NULL') {
               // Es un slave conectado - CREAR el master si no existe
@@ -1138,6 +1171,7 @@ class CSVManager extends EventEmitter {
                   connectedSlaves: [],
                   totalSlaves: 0,
                 };
+                console.log(`✅ Created missing master account: ${masterId}`);
               }
 
               accounts.masterAccounts[masterId].connectedSlaves.push({
@@ -1151,6 +1185,7 @@ class CSVManager extends EventEmitter {
               });
 
               accounts.masterAccounts[masterId].totalSlaves++;
+              console.log(`✅ Connected slave ${accountId} to master ${masterId}`);
             } else {
               // Es un slave no conectado
               accounts.unconnectedSlaves.push({
@@ -1161,11 +1196,23 @@ class CSVManager extends EventEmitter {
                 timeSinceLastPing: timeSinceLastPing,
                 config: row.config || {},
               });
+              console.log(`✅ Added unconnected slave: ${accountId}`);
             }
           }
         }
       });
     });
+
+    console.log('📊 Final accounts summary:', {
+      masterAccounts: Object.keys(accounts.masterAccounts),
+      unconnectedSlaves: accounts.unconnectedSlaves.map(s => s.id),
+      pendingAccounts: accounts.pendingAccounts.map(p => p.account_id),
+      connectedSlaves: Object.values(accounts.masterAccounts).map(master => ({
+        masterId: master.id,
+        slaves: master.connectedSlaves.map(s => s.id),
+      })),
+    });
+    console.log('🔍 === getAllActiveAccounts END ===\n');
 
     return accounts;
   }

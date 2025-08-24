@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, Handshake, HousePlug, Link, PartyPopper, TrafficCone, Unplug } from 'lucide-react';
+import { Cable, HousePlug, Inbox, Link, PartyPopper, TrafficCone, Unplug } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useCSVData } from '../hooks/useCSVData';
@@ -685,7 +685,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   )}
                 {!linkingStatus.isActive && linkingStatus.step === 'idle' && (
                   <>
-                    <Handshake className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                    <Inbox className="h-5 w-5 mx-auto mb-3 text-gray-500" />
                     <p className="text-muted-foreground text-gray-600">No pending accounts</p>
                   </>
                 )}

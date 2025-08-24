@@ -489,11 +489,24 @@ export const getAllAccounts = async (req, res) => {
   }
 
   try {
+    console.log('🔄 [getAllAccounts] Starting...');
     // Force refresh of CSV data to ensure we have the latest information
     csvManager.refreshAllFileData();
 
     // Get accounts from CSV instead of JSON
     const accounts = await csvManager.getAllActiveAccounts();
+
+    console.log('📊 [getAllAccounts] Raw accounts data:', {
+      masterAccountsCount: Object.keys(accounts.masterAccounts || {}).length,
+      unconnectedSlavesCount: accounts.unconnectedSlaves ? accounts.unconnectedSlaves.length : 0,
+      pendingAccountsCount: accounts.pendingAccounts ? accounts.pendingAccounts.length : 0,
+      masterAccounts: Object.keys(accounts.masterAccounts || {}),
+      connectedSlaves: Object.values(accounts.masterAccounts || {}).map(master => ({
+        masterId: master.id,
+        slavesCount: master.connectedSlaves ? master.connectedSlaves.length : 0,
+        slaves: master.connectedSlaves ? master.connectedSlaves.map(s => s.id) : [],
+      })),
+    });
 
     // Calculate statistics
     const totalMasterAccounts = Object.keys(accounts.masterAccounts).length;
@@ -525,7 +538,7 @@ export const getAllAccounts = async (req, res) => {
       );
     const totalAccounts = totalMasterAccounts + totalSlaveAccounts + totalPendingAccounts;
 
-    res.json({
+    const response = {
       masterAccounts: accounts.masterAccounts,
       unconnectedSlaves: accounts.unconnectedSlaves,
       totalMasterAccounts,
@@ -535,7 +548,19 @@ export const getAllAccounts = async (req, res) => {
       offline: offlineAccounts,
       online: onlineAccounts,
       total: totalAccounts,
+    };
+
+    console.log('📊 [getAllAccounts] Final response:', {
+      totalMasterAccounts,
+      totalSlaveAccounts,
+      totalPendingAccounts,
+      totalConnections,
+      offline: offlineAccounts,
+      online: onlineAccounts,
+      total: totalAccounts,
     });
+
+    res.json(response);
   } catch (error) {
     console.error('Error getting all accounts:', error);
     res.status(500).json({

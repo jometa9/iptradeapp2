@@ -35,8 +35,8 @@ export const useCSVData = (): UseCSVDataReturn => {
 
   const loadData = async () => {
     try {
-      setLoading(true);
       setError(null);
+      console.log('🔄 [useCSVData] Loading data...');
 
       // Cargar datos en paralelo
       const [copierData, accountsData] = await Promise.all([
@@ -44,9 +44,22 @@ export const useCSVData = (): UseCSVDataReturn => {
         csvFrontendService.getAllAccounts(),
       ]);
 
+      console.log('📊 [useCSVData] Received data:', {
+        copierData,
+        accountsData,
+        masterAccountsCount: accountsData?.masterAccounts
+          ? Object.keys(accountsData.masterAccounts).length
+          : 0,
+        unconnectedSlavesCount: accountsData?.unconnectedSlaves
+          ? accountsData.unconnectedSlaves.length
+          : 0,
+        totalPendingCount: accountsData?.totalPendingAccounts || 0,
+      });
+
       setCopierStatus(copierData);
       setAccounts(accountsData);
     } catch (err) {
+      console.error('❌ [useCSVData] Error loading data:', err);
       setError(err instanceof Error ? err.message : 'Error loading data');
     } finally {
       setLoading(false);

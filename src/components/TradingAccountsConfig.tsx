@@ -183,7 +183,12 @@ export function TradingAccountsConfig() {
 
   // Convertir datos CSV a formato esperado
   const accounts = React.useMemo(() => {
-    if (!csvAccounts) return [];
+    console.log('🔄 [TradingAccountsConfig] Processing csvAccounts:', csvAccounts);
+
+    if (!csvAccounts) {
+      console.log('❌ [TradingAccountsConfig] No csvAccounts data');
+      return [];
+    }
 
     const allAccounts: TradingAccount[] = [];
 
@@ -192,6 +197,7 @@ export function TradingAccountsConfig() {
 
     // Agregar master accounts y sus slaves conectados
     Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]: [string, any]) => {
+      console.log('📊 [TradingAccountsConfig] Processing master account:', id, master);
       if (shouldShowAccount(id)) {
         allAccounts.push({
           id,
@@ -211,6 +217,7 @@ export function TradingAccountsConfig() {
 
         // También agregar los slaves conectados a la lista principal
         (master.connectedSlaves || []).forEach((slave: any) => {
+          console.log('📊 [TradingAccountsConfig] Processing connected slave:', slave);
           if (shouldShowAccount(slave.id)) {
             allAccounts.push({
               id: slave.id,
@@ -232,6 +239,7 @@ export function TradingAccountsConfig() {
 
     // Agregar unconnected slaves
     (csvAccounts.unconnectedSlaves || []).forEach((slave: any) => {
+      console.log('📊 [TradingAccountsConfig] Processing unconnected slave:', slave);
       if (shouldShowAccount(slave.id)) {
         allAccounts.push({
           id: slave.id,
@@ -248,6 +256,7 @@ export function TradingAccountsConfig() {
       }
     });
 
+    console.log('📊 [TradingAccountsConfig] Final accounts array:', allAccounts);
     return allAccounts;
   }, [csvAccounts, hiddenAccounts]);
 
