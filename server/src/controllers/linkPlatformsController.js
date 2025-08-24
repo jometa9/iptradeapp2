@@ -254,6 +254,22 @@ class LinkPlatformsController {
     this.isLinking = true;
     console.log('📊 Link Platforms state set to TRUE:', this.isLinking);
 
+    // Safety timeout to reset state if process gets stuck
+    const safetyTimeout = setTimeout(() => {
+      if (this.isLinking) {
+        console.log('⚠️ Safety timeout triggered - resetting Link Platforms state');
+        this.isLinking = false;
+        this.emitLinkPlatformsEvent('error', {
+          message: 'Link Platforms process timed out',
+          error: 'Process took too long to complete',
+        });
+        this.emitLinkPlatformsEvent('idle', {
+          message: 'Link Platforms process finished (timeout)',
+          isLinking: false,
+        });
+      }
+    }, 300000); // 300 seconds timeout (reduced from 60)
+
     const result = {
       mql4Folders: [],
       mql5Folders: [],
@@ -284,6 +300,7 @@ class LinkPlatformsController {
         result,
       });
     } catch (error) {
+      console.error('❌ Error in Link Platforms process:', error);
       result.errors.push(`General error: ${error.message}`);
 
       // Emitir evento de error
@@ -293,6 +310,9 @@ class LinkPlatformsController {
         result,
       });
     } finally {
+      // Clear safety timeout
+      clearTimeout(safetyTimeout);
+
       // Always reset linking state
       this.isLinking = false;
       console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
@@ -1358,48 +1378,55 @@ class LinkPlatformsController {
     console.log(`🔍 Executing macOS search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
-    return new Promise(resolve => {
-      exec(
-        command,
-        {
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 30000,
-          shell: '/bin/zsh',
-          env: {
-            ...process.env,
-            PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
-            HOME: homeDir,
-          },
+    try {
+      const result = await execAsync(command, {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000,
+        shell: '/bin/zsh',
+        env: {
+          ...process.env,
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
+          HOME: homeDir,
         },
-        (error, stdout, stderr) => {
-          if (stdout && stdout.trim()) {
-            console.log(`📝 macOS search completed successfully`);
+      });
 
-            const allFolders = stdout
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0);
+      if (result.stdout && result.stdout.trim()) {
+        console.log(`📝 macOS search completed successfully`);
 
-            console.log(`📋 Found ${allFolders.length} MQL folders:`);
-            allFolders.forEach(folder => console.log(`  📂 ${folder}`));
+        const allFolders = result.stdout
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
 
-            const result = {
-              mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
-              mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-            };
+        console.log(`📋 Found ${allFolders.length} MQL folders:`);
+        allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
-            console.log(
-              `📁 Categorized: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
-            );
-            resolve(result);
-            return;
-          }
+        const categorizedResult = {
+          mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
+          mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+        };
 
-          console.log(`🔄 No MQL folders found in macOS, returning empty result`);
-          resolve({ mql4Folders: [], mql5Folders: [] });
-        }
-      );
-    });
+        console.log(
+          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 folders`
+        );
+        return categorizedResult;
+      }
+
+      console.log(`🔄 No MQL folders found in macOS, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [] };
+    } catch (error) {
+      console.error(`❌ Error during macOS MQL search:`, error.message);
+
+      // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
+      if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
+        console.log(`⚠️ Search timeout or permission error, returning empty result`);
+        return { mql4Folders: [], mql5Folders: [] };
+      }
+
+      // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
+      console.log(`⚠️ Unexpected error during search, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [] };
+    }
   }
 
   // Búsqueda específica para Linux
@@ -1411,48 +1438,55 @@ class LinkPlatformsController {
     console.log(`🔍 Executing Linux search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
-    return new Promise(resolve => {
-      exec(
-        command,
-        {
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 30000,
-          shell: '/bin/bash',
-          env: {
-            ...process.env,
-            PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
-            HOME: homeDir,
-          },
+    try {
+      const result = await execAsync(command, {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000,
+        shell: '/bin/bash',
+        env: {
+          ...process.env,
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin',
+          HOME: homeDir,
         },
-        (error, stdout, stderr) => {
-          if (stdout && stdout.trim()) {
-            console.log(`📝 Linux search completed successfully`);
+      });
 
-            const allFolders = stdout
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0);
+      if (result.stdout && result.stdout.trim()) {
+        console.log(`📝 Linux search completed successfully`);
 
-            console.log(`📋 Found ${allFolders.length} MQL folders:`);
-            allFolders.forEach(folder => console.log(`  📂 ${folder}`));
+        const allFolders = result.stdout
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
 
-            const result = {
-              mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
-              mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-            };
+        console.log(`📋 Found ${allFolders.length} MQL folders:`);
+        allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
-            console.log(
-              `📁 Categorized: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
-            );
-            resolve(result);
-            return;
-          }
+        const categorizedResult = {
+          mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
+          mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+        };
 
-          console.log(`🔄 No MQL folders found in Linux, returning empty result`);
-          resolve({ mql4Folders: [], mql5Folders: [] });
-        }
-      );
-    });
+        console.log(
+          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 folders`
+        );
+        return categorizedResult;
+      }
+
+      console.log(`🔄 No MQL folders found in Linux, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [] };
+    } catch (error) {
+      console.error(`❌ Error during Linux MQL search:`, error.message);
+
+      // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
+      if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
+        console.log(`⚠️ Search timeout or permission error, returning empty result`);
+        return { mql4Folders: [], mql5Folders: [] };
+      }
+
+      // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
+      console.log(`⚠️ Unexpected error during search, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [] };
+    }
   }
 
   // Método simple de búsqueda individual (usado solo como fallback)
