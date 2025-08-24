@@ -116,7 +116,7 @@ body {
         #3b82f6
       )
       border-box;
-  background-size: 400% 100%;
+  filter: grayscale(100%);
   animation: gradient-flow 3s ease-in-out infinite;
   color: #374151 !important;
 }
