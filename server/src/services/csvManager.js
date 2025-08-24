@@ -553,13 +553,21 @@ class CSVManager extends EventEmitter {
           });
 
           files.forEach(file => {
-            this.csvFiles.set(file, {
-              lastModified: this.getFileLastModified(file),
-              data: this.parseCSVFile(file),
-            });
+            const normalizedPath = this.normalizePath(file);
+            if (!this.isDuplicatePath(normalizedPath)) {
+              this.csvFiles.set(normalizedPath, {
+                lastModified: this.getFileLastModified(normalizedPath),
+                data: this.parseCSVFile(normalizedPath),
+              });
+            } else {
+              console.log(`⚠️ Skipping duplicate CSV file: ${normalizedPath}`);
+            }
           });
         }
       }
+
+      // Validate and remove duplicates after scanning
+      this.validateAndRemoveDuplicates();
       this.saveCSVPathsToCache();
 
       return Array.from(this.csvFiles.keys());
@@ -577,18 +585,29 @@ class CSVManager extends EventEmitter {
         return false;
       }
 
-      if (this.csvFiles.has(filePath)) {
-        console.log(`ℹ️ CSV file already registered: ${filePath}`);
+      // Normalize the path to avoid duplicates with different formats
+      const normalizedPath = this.normalizePath(filePath);
+
+      // Check for duplicates using normalized path
+      if (this.csvFiles.has(normalizedPath)) {
+        console.log(`ℹ️ CSV file already registered (normalized): ${normalizedPath}`);
         return true;
       }
 
+      // Check for duplicates by comparing with existing paths
+      const isDuplicate = this.isDuplicatePath(normalizedPath);
+      if (isDuplicate) {
+        console.log(`⚠️ Duplicate CSV path detected, skipping: ${normalizedPath}`);
+        return false;
+      }
+
       // Add the file to the map with its data
-      this.csvFiles.set(filePath, {
-        lastModified: this.getFileLastModified(filePath),
-        data: this.parseCSVFile(filePath),
+      this.csvFiles.set(normalizedPath, {
+        lastModified: this.getFileLastModified(normalizedPath),
+        data: this.parseCSVFile(normalizedPath),
       });
 
-      console.log(`✅ Added CSV file for watching: ${filePath}`);
+      console.log(`✅ Added CSV file for watching: ${normalizedPath}`);
 
       // Save updated paths to cache
       this.saveCSVPathsToCache();
@@ -603,6 +622,92 @@ class CSVManager extends EventEmitter {
       console.error(`❌ Error adding CSV file ${filePath}:`, error);
       return false;
     }
+  }
+
+  // Normalize path to avoid duplicates with different formats
+  normalizePath(filePath) {
+    const { resolve } = require('path');
+    return resolve(filePath);
+  }
+
+  // Check if a path is a duplicate of an existing one
+  isDuplicatePath(filePath) {
+    for (const existingPath of this.csvFiles.keys()) {
+      if (this.pathsAreEquivalent(filePath, existingPath)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Check if two paths point to the same file
+  pathsAreEquivalent(path1, path2) {
+    try {
+      const { resolve } = require('path');
+      const resolved1 = resolve(path1);
+      const resolved2 = resolve(path2);
+      return resolved1 === resolved2;
+    } catch (error) {
+      // If path resolution fails, compare as strings
+      return path1 === path2;
+    }
+  }
+
+  // Validate and remove duplicate CSV files
+  validateAndRemoveDuplicates() {
+    const paths = Array.from(this.csvFiles.keys());
+    const duplicates = [];
+    const toRemove = new Set();
+
+    console.log(`🔍 Validating ${paths.length} CSV files for duplicates...`);
+
+    for (let i = 0; i < paths.length; i++) {
+      for (let j = i + 1; j < paths.length; j++) {
+        const path1 = paths[i];
+        const path2 = paths[j];
+
+        if (this.pathsAreEquivalent(path1, path2)) {
+          duplicates.push({ path1, path2 });
+          // Keep the first one, remove the second
+          toRemove.add(path2);
+          console.log(`⚠️ Found duplicate: ${path1} === ${path2}`);
+        }
+      }
+    }
+
+    // Remove duplicates
+    toRemove.forEach(path => {
+      this.csvFiles.delete(path);
+      console.log(`🗑️ Removed duplicate CSV file: ${path}`);
+    });
+
+    if (duplicates.length > 0) {
+      console.log(`✅ Removed ${duplicates.length} duplicate CSV files`);
+    } else {
+      console.log(`✅ No duplicate CSV files found`);
+    }
+
+    return duplicates;
+  }
+
+  // Get summary of registered CSV files
+  getCSVFilesSummary() {
+    const paths = Array.from(this.csvFiles.keys());
+    const summary = {
+      totalFiles: paths.length,
+      mql4Files: paths.filter(path => path.includes('MQL4')),
+      mql5Files: paths.filter(path => path.includes('MQL5')),
+      otherFiles: paths.filter(path => !path.includes('MQL4') && !path.includes('MQL5')),
+      paths: paths,
+    };
+
+    console.log(`📊 CSV Files Summary:`);
+    console.log(`   Total: ${summary.totalFiles}`);
+    console.log(`   MQL4: ${summary.mql4Files.length}`);
+    console.log(`   MQL5: ${summary.mql5Files.length}`);
+    console.log(`   Other: ${summary.otherFiles.length}`);
+
+    return summary;
   }
 
   // Iniciar watching de archivos CSV

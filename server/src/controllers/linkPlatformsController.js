@@ -396,8 +396,12 @@ class LinkPlatformsController {
 
         // Register the new CSV file in csvManager for watching
         try {
-          csvManager.addCSVFile(csvPath);
-          console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
+          const added = csvManager.addCSVFile(csvPath);
+          if (added) {
+            console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
+          } else {
+            console.log(`⚠️ CSV file not registered (may be duplicate): ${csvPath}`);
+          }
         } catch (error) {
           console.error(`❌ Error registering CSV file for watching: ${error.message}`);
         }
@@ -459,6 +463,14 @@ class LinkPlatformsController {
     // Configurar CSV watching
     if (result.csvFiles.length > 0) {
       await this.configureCSVWatching(result.csvFiles);
+    }
+
+    // Log summary of registered CSV files
+    try {
+      const summary = csvManager.getCSVFilesSummary();
+      console.log(`📊 Link Platforms completed with ${summary.totalFiles} CSV files registered`);
+    } catch (error) {
+      console.error(`❌ Error getting CSV summary: ${error.message}`);
     }
 
     // Emitir evento de finalización exitosa (comentado - ahora se emite desde findAndSyncMQLFoldersManual)
