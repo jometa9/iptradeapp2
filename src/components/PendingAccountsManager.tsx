@@ -714,13 +714,15 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' ? (
-                    <li>Wait for the process to finish</li>
+                    <></>
                   ) : (
-                    <li>Click on the "Link Platforms" button</li>
+                    <>
+                      <li>Link your platforms to detect them</li>
+                      <li>1. Click Link Platforms</li>
+                      <li>2. Add the bots to a MetaTrader chart</li>
+                      <li>3. Click Link Platforms again</li>
+                    </>
                   )}
-                  <li>Open or refresh all your MetaTrader platforms</li>
-                  <li>In MetaTrader, add IPTRADE Expert Advisor to the chart</li>
-                  <li>Wait for the EA to connect to the app and it will appear here</li>
                 </ul>
                 {/* boton que ejecute lo mismo que link platforms */}
                 <Button
@@ -743,14 +745,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   {isLinking ? 'Linking...' : 'Link Platforms'}
                 </Button>
 
-                <p className="text-[9px] mt-2">
+                <p className="text-[10px] mt-2 italic">
                   <a
-                    href="https://iptradecopier.com/docs"
+                    href="https://iptradecopier.com/#guide"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-gray-700"
+                    className="text-gray-600 hover:text-gray-800"
                   >
-                    Click here for help
+                    Need help? View guide
                   </a>
                 </p>
               </div>
