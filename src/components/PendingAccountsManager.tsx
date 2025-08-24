@@ -734,7 +734,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   disabled={isLinking}
                   className={`bg-white mt-3 mb-1 h-9 pl-3 rounded-lg shadow-lg text-blue-700  ${
                     isLinking
-                      ? 'link-platforms-linking  cursor-not-allowed '
+                      ? 'border-gray-200  cursor-not-allowed text-gray-700'
                       : 'border-blue-200 cursor-pointer'
                   }  hover:shadow-lg transition-all duration-300`}
                 >
