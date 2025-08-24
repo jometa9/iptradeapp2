@@ -98,7 +98,7 @@ router.get('/validate-subscription', async (req, res) => {
     } else {
       console.log('❌ Validation failed:', validation.error);
       console.log('🔍 === VALIDATE-SUBSCRIPTION ROUTE END (FAILED) ===');
-      return res.status(401).json({ error: validation.error || 'Invalid API Key' });
+      return res.status(401).json({ error: validation.error || 'Invalid license key' });
     }
   } catch (error) {
     console.error('💥 Validation error:', error);

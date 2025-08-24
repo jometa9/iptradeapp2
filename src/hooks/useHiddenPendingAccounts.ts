@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { SSEService } from '../services/sseService';
 
 interface UseHiddenPendingAccountsReturn {
   isHidden: boolean;
@@ -38,7 +37,8 @@ export const useHiddenPendingAccounts = (): UseHiddenPendingAccountsReturn => {
       if (response.ok) {
         const data = await response.json();
         const accountsArray = Object.values(data.pendingAccounts || {});
-        setPendingCount(accountsArray.length);
+        const count = accountsArray.length;
+        setPendingCount(count);
       }
     } catch (error) {
       // Silent error handling
@@ -55,48 +55,6 @@ export const useHiddenPendingAccounts = (): UseHiddenPendingAccountsReturn => {
     fetchPendingCount();
   }, [secretKey]);
 
-  // SSE listener for real-time pending accounts updates
-  useEffect(() => {
-    if (!secretKey) return;
-
-    // Connect to SSE
-    SSEService.connect(secretKey);
-
-    const handleSSEMessage = (data: any) => {
-      // Handle initial data that includes pending accounts
-      if (data.type === 'initial_data' && data.accounts?.pendingAccounts) {
-        const pendingArray = data.accounts.pendingAccounts;
-        setPendingCount(pendingArray.length);
-      }
-
-      // Handle pending accounts updates
-      if (data.type === 'pendingAccountsUpdated') {
-        if (data.accounts && Array.isArray(data.accounts)) {
-          setPendingCount(data.accounts.length);
-        }
-      }
-
-      // Handle account converted events
-      if (data.type === 'accountConverted') {
-        // Refresh pending count when accounts are converted
-        fetchPendingCount();
-      }
-
-      // Handle account deleted events
-      if (data.type === 'accountDeleted') {
-        // Refresh pending count when accounts are deleted
-        fetchPendingCount();
-      }
-    };
-
-    // Add listener
-    const listenerId = SSEService.addListener(handleSSEMessage);
-
-    return () => {
-      SSEService.removeListener(listenerId);
-    };
-  }, [secretKey]);
-
   // Handle blinking when hidden and there are pending accounts
   useEffect(() => {
     if (isHidden && pendingCount > 0) {
@@ -104,7 +62,7 @@ export const useHiddenPendingAccounts = (): UseHiddenPendingAccountsReturn => {
 
       const interval = setInterval(() => {
         setIsBlinking(prev => !prev);
-      }, 500); // Blink every 1.5 seconds for smoother transition
+      }, 500); // Toggle every 500ms
 
       return () => {
         clearInterval(interval);
@@ -114,6 +72,19 @@ export const useHiddenPendingAccounts = (): UseHiddenPendingAccountsReturn => {
       setIsBlinking(false);
     }
   }, [isHidden, pendingCount]);
+
+  // Periodically fetch pending count when hidden
+  useEffect(() => {
+    if (isHidden) {
+      const interval = setInterval(() => {
+        fetchPendingCount();
+      }, 2000); // Check every 2 seconds when hidden
+
+      return () => {
+        clearInterval(interval);
+      };
+    }
+  }, [isHidden]);
 
   const toggleHidden = () => {
     setIsHidden(prev => !prev);

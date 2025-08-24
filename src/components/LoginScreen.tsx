@@ -34,13 +34,13 @@ export const LoginScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
           <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
           <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE</CardTitle>
+            <CardTitle className="text-2xl font-bold text-gray-900">Welcome to IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
-              Insert your license to access the application
+              Enter your license key to log in
             </CardDescription>
           </div>
         </CardHeader>
@@ -51,11 +51,11 @@ export const LoginScreen: React.FC = () => {
               <Input
                 id="apikey"
                 type="password"
-                placeholder="Insert your license"
+                placeholder="Insert your license here"
                 value={apiKey}
                 onChange={handleInputChange}
                 disabled={isLoading}
-                className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white"
+                className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white "
               />
             </div>
 
@@ -68,7 +68,7 @@ export const LoginScreen: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white "
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white border border-blue-200"
               disabled={isLoading || !apiKey.trim()}
             >
               {isLoading ? (
@@ -77,11 +77,11 @@ export const LoginScreen: React.FC = () => {
                   Validating license...
                 </>
               ) : (
-                'Access'
+                'Connect'
               )}
             </Button>
           </form>
-          <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600">
+          <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600 transition-colors duration-100">
             <a
               href="https://iptradecopier.com/dashboard"
               target="_blank"
@@ -91,7 +91,7 @@ export const LoginScreen: React.FC = () => {
                 openExternalLink('https://iptradecopier.com/dashboard');
               }}
             >
-              Manage your subscription here
+              Find my license key
             </a>
           </CardDescription>
         </CardContent>

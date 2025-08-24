@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!response.ok) {
         console.log('🔍 AuthContext: Response not ok, status:', response.status);
         if (response.status === 401) {
-          return { valid: false, message: 'Invalid API Key' };
+          return { valid: false, message: 'Invalid license key' };
         }
         if (response.status === 404) {
           return { valid: false, message: 'User not found' };
@@ -115,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         return true;
       } else {
-        setError(validation.message || 'Invalid API Key or inactive subscription');
+        setError(validation.message || 'Invalid license or inactive subscription');
         return false;
       }
     } catch (error) {
