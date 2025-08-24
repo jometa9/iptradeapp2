@@ -717,10 +717,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     <>Please wait...</>
                   ) : (
                     <div>
-                      <li>Link your platforms to detect them</li>
-                      <li>1. Click Link Platforms</li>
-                      <li>2. Add the bots to a MetaTrader chart</li>
-                      <li>3. Click Link Platforms again</li>
+                      <li>Link your platforms to detect them:</li>
+                      <li>1. Execute Link Platforms process</li>
+                      <li>2. Add the IPTRADE EA to a MetaTrader chart</li>
+                      <li>3. Wait for the accounts to appear here</li>
                     </div>
                   )}
                 </ul>

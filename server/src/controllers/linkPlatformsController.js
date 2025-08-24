@@ -371,20 +371,36 @@ class LinkPlatformsController {
         }
       }
 
-      // Ensure Files folder exists (but don't create CSV automatically)
+      // Ensure Files folder exists
       if (!fs.existsSync(filesPath)) {
         fs.mkdirSync(filesPath, { recursive: true });
         result.created++;
         console.log(`📁 Created ${type}/Files folder: ${filesPath}`);
       }
 
-      // Only detect existing CSV files, don't create them
+      // Create CSV file if it doesn't exist and add to watching
       const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
       if (fs.existsSync(csvPath)) {
         result.csvFiles.push(csvPath);
         console.log(`📄 Found existing CSV file: ${csvPath}`);
       } else {
-        console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
+        // Create empty CSV file with basic structure
+        const emptyCSVContent = `[TYPE][PENDING][${type === 'MQL4' ? 'MT4' : 'MT5'}][0]
+[STATUS][OFFLINE][0]
+[CONFIG][PENDING]`;
+
+        fs.writeFileSync(csvPath, emptyCSVContent, 'utf8');
+        result.csvFiles.push(csvPath);
+        result.filesCreated++;
+        console.log(`📄 Created empty CSV file: ${csvPath}`);
+
+        // Register the new CSV file in csvManager for watching
+        try {
+          csvManager.addCSVFile(csvPath);
+          console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
+        } catch (error) {
+          console.error(`❌ Error registering CSV file for watching: ${error.message}`);
+        }
       }
     } catch (error) {
       result.errors.push(`Error processing ${type} folder ${folder}: ${error.message}`);

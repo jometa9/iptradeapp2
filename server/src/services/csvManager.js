@@ -569,6 +569,42 @@ class CSVManager extends EventEmitter {
     }
   }
 
+  // Add a single CSV file to the manager for watching
+  addCSVFile(filePath) {
+    try {
+      if (!existsSync(filePath)) {
+        console.error(`❌ CSV file does not exist: ${filePath}`);
+        return false;
+      }
+
+      if (this.csvFiles.has(filePath)) {
+        console.log(`ℹ️ CSV file already registered: ${filePath}`);
+        return true;
+      }
+
+      // Add the file to the map with its data
+      this.csvFiles.set(filePath, {
+        lastModified: this.getFileLastModified(filePath),
+        data: this.parseCSVFile(filePath),
+      });
+
+      console.log(`✅ Added CSV file for watching: ${filePath}`);
+
+      // Save updated paths to cache
+      this.saveCSVPathsToCache();
+
+      // Start file watching if not already active
+      if (!this.pollingInterval) {
+        this.startFileWatching();
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`❌ Error adding CSV file ${filePath}:`, error);
+      return false;
+    }
+  }
+
   // Iniciar watching de archivos CSV
   startFileWatching() {
     // Limpiar watchers y polling anteriores
