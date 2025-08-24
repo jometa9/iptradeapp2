@@ -40,7 +40,7 @@ export const LoginScreen: React.FC = () => {
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
-              Insert your API Key to access the application
+              Insert your license to access the application
             </CardDescription>
           </div>
         </CardHeader>
@@ -51,7 +51,7 @@ export const LoginScreen: React.FC = () => {
               <Input
                 id="apikey"
                 type="password"
-                placeholder="Insert your API Key"
+                placeholder="Insert your license"
                 value={apiKey}
                 onChange={handleInputChange}
                 disabled={isLoading}
@@ -74,7 +74,7 @@ export const LoginScreen: React.FC = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Validating API Key...
+                  Validating license...
                 </>
               ) : (
                 'Access'
@@ -83,12 +83,12 @@ export const LoginScreen: React.FC = () => {
           </form>
           <CardDescription className="text-gray-400 text-sm text-center hover:text-gray-600">
             <a
-              href="https://iptradecopier.com/pricing"
+              href="https://iptradecopier.com/dashboard"
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => {
                 e.preventDefault();
-                openExternalLink('https://iptradecopier.com/pricing');
+                openExternalLink('https://iptradecopier.com/dashboard');
               }}
             >
               Manage your subscription here

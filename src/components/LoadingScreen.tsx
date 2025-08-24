@@ -11,7 +11,7 @@ export const LoadingScreen: React.FC = () => {
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
-              Validating your API Key...
+              Validating your license...
             </CardDescription>
           </div>
         </CardHeader>

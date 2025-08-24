@@ -688,7 +688,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' && (
                     <>
-                      <TrafficCone className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                      <TrafficCone className="h-5 w-5 mx-auto mb-2 text-gray-500" />
                       <p className="text-muted-foreground text-gray-600 link-platforms-gradient-text">
                         {getLinkingStatusDisplay(linkingStatus).message}
                       </p>
@@ -696,7 +696,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   )}
                 {!linkingStatus.isActive && linkingStatus.step === 'idle' && (
                   <>
-                    <Inbox className="h-5 w-5 mx-auto mb-3 text-gray-500" />
+                    <Inbox className="h-5 w-5 mx-auto mb-2 text-gray-500" />
                     <p className="text-muted-foreground text-gray-600">No pending accounts</p>
                   </>
                 )}
@@ -710,18 +710,18 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   </>
                 )}
 
-                <ul className="list-disc list-inside text-[10px] text-muted-foreground mt-3 text-gray-400">
+                <ul className="list-disc list-inside text-[10px] text-muted-foreground  text-gray-400 mb-3 mt-2">
                   {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' ? (
-                    <></>
+                    <>Please wait...</>
                   ) : (
-                    <>
+                    <div>
                       <li>Link your platforms to detect them</li>
                       <li>1. Click Link Platforms</li>
                       <li>2. Add the bots to a MetaTrader chart</li>
                       <li>3. Click Link Platforms again</li>
-                    </>
+                    </div>
                   )}
                 </ul>
                 {/* boton que ejecute lo mismo que link platforms */}
@@ -735,10 +735,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     }
                   }}
                   disabled={isLinking}
-                  className={`bg-white mt-3 mb-1 h-9 pl-3 rounded-lg shadow-lg text-blue-700  ${
+                  className={`bg-white mb-1 h-9 pl-3 rounded-full border shadow-lg text-blue-700  hover:bg-blue-50 ${
                     isLinking
                       ? 'border-gray-200  cursor-not-allowed text-gray-700'
-                      : 'border-blue-200 cursor-pointer'
+                      : 'border-blue-200 cursor-pointer link-platforms-shine'
                   }  hover:shadow-lg transition-all duration-300`}
                 >
                   <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
