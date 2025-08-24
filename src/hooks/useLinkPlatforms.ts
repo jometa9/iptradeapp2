@@ -214,6 +214,11 @@ export const useLinkPlatforms = () => {
     };
   }, [isLinking, secretKey, setIsLinkingWithLog, clearHiddenAccounts]);
 
+  // Función para limpiar el cache de auto-link
+  const clearAutoLinkCache = () => {
+    localStorage.removeItem('iptrade_auto_link_executed');
+  };
+
   return {
     linkPlatforms,
     isLinking,
@@ -221,5 +226,6 @@ export const useLinkPlatforms = () => {
     error,
     clearError: () => setError(null),
     clearResult: () => setLastResult(null),
+    clearAutoLinkCache,
   };
 };

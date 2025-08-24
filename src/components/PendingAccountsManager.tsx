@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Cable, HousePlug, Inbox, Link, PartyPopper, TrafficCone, Unplug } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useCSVData } from '../hooks/useCSVData';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import { usePendingAccounts } from '../hooks/usePendingAccounts';
@@ -236,7 +237,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       },
       syncing: { message: 'Syncing trading platforms...', isLoading: true },
       completed: {
-        message: 'Success! Platforms linked successfully',
+        message: getAutoLinkSkippedByCache() ? '' : 'Success! Platforms linked successfully',
         isLoading: false,
       },
       error: { message: 'Error linking accounts. Please try again.', isLoading: false },
@@ -371,21 +372,31 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       linkingStatus.step !== 'completed' &&
       linkingStatus.step !== 'error'
     ) {
-      console.log('✅ Fallback: Link Platforms completed via isLinking state');
-      setLinkingStatus({
-        step: 'completed',
-        message: 'Success! Platforms linked successfully',
-        isActive: true,
-      });
-
-      // Hide the status after 3 seconds
-      setTimeout(() => {
+      // Verificar si se omitió por cache para no mostrar mensaje de éxito
+      if (getAutoLinkSkippedByCache()) {
+        console.log('💾 Auto-link was skipped by cache - not showing success message');
         setLinkingStatus({
           step: 'idle',
           message: '',
           isActive: false,
         });
-      }, 3000);
+      } else {
+        console.log('✅ Fallback: Link Platforms completed via isLinking state');
+        setLinkingStatus({
+          step: 'completed',
+          message: 'Success! Platforms linked successfully',
+          isActive: true,
+        });
+
+        // Hide the status after 3 seconds
+        setTimeout(() => {
+          setLinkingStatus({
+            step: 'idle',
+            message: '',
+            isActive: false,
+          });
+        }, 3000);
+      }
     }
   }, [isLinking, linkingStatus.step, linkingStatus.isActive]);
 

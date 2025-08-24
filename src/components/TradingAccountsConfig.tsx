@@ -2172,7 +2172,7 @@ export function TradingAccountsConfig() {
                                       title="Delete Account"
                                     />
                                   )}
-                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 && (
+                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -2189,7 +2189,7 @@ export function TradingAccountsConfig() {
                                     >
                                       <Unlink className="h-4 w-4 text-orange-600" />
                                     </Button>
-                                  )}
+                                  ) : null}
                                 </div>
                               )}
                             </td>

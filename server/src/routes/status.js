@@ -1,4 +1,7 @@
 import express from 'express';
+import fs from 'fs';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
 
 import { loadAccountsConfig, saveAccountsConfig } from '../controllers/configManager.js';
 import { getStatus } from '../controllers/statusController.js';
@@ -6,7 +9,19 @@ import { subscriptionCache, validateSubscription } from '../middleware/subscript
 import CtraderAuthServiceInstance from '../services/ctraderAuth.js';
 import Mt5AuthServiceInstance from '../services/mt5Auth.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const AUTO_LINK_CACHE_FILE = join(__dirname, '../../config/auto_link_cache.json');
+
+console.log('📁 Status routes loaded, cache file path:', AUTO_LINK_CACHE_FILE);
+
 const router = express.Router();
+
+// Endpoint de prueba simple
+router.get('/test', (req, res) => {
+  console.log('🧪 Test endpoint called');
+  res.json({ message: 'Status routes are working', timestamp: new Date().toISOString() });
+});
 
 /**
  * @swagger
@@ -248,6 +263,55 @@ router.post('/clear-user-data', async (req, res) => {
       details: error.message,
     });
   }
+});
+
+/**
+ * @swagger
+ * /clear-auto-link-cache:
+ *   post:
+ *     summary: Clear auto-link cache to allow auto-link process to run again
+ *     tags: [Status]
+ *     responses:
+ *       200:
+ *         description: Auto-link cache cleared successfully
+ *       500:
+ *         description: Error clearing auto-link cache
+ */
+router.post('/clear-auto-link-cache', async (req, res) => {
+  console.log('🧹 Clear auto-link cache endpoint called');
+  console.log('📡 Request method:', req.method);
+  console.log('📡 Request URL:', req.url);
+  console.log('📡 Request headers:', req.headers);
+
+  try {
+    console.log('🔍 Checking if cache file exists:', AUTO_LINK_CACHE_FILE);
+    if (fs.existsSync(AUTO_LINK_CACHE_FILE)) {
+      fs.unlinkSync(AUTO_LINK_CACHE_FILE);
+      console.log('🗑️ Auto-link cache cleared');
+    } else {
+      console.log('ℹ️ Cache file does not exist');
+    }
+
+    return res.status(200).json({
+      message: 'Auto-link cache cleared successfully',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('❌ Error clearing auto-link cache:', error);
+    return res.status(500).json({
+      error: 'Failed to clear auto-link cache',
+      details: error.message,
+    });
+  }
+});
+
+// Endpoint GET para testing
+router.get('/clear-auto-link-cache', async (req, res) => {
+  console.log('🧹 Clear auto-link cache GET endpoint called (testing)');
+  return res.status(200).json({
+    message: 'Auto-link cache clear endpoint is working',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export default router;

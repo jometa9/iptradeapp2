@@ -17,7 +17,7 @@ import { Button } from './ui/button';
 export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
-  const { linkPlatforms, isLinking } = useLinkPlatforms();
+  const { linkPlatforms, isLinking, clearAutoLinkCache } = useLinkPlatforms();
   const operatingSystem = useOperatingSystem();
 
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
@@ -117,6 +117,45 @@ export const Dashboard: React.FC = () => {
       // Silent processing
     } catch (error) {
       // Silent error handling
+    }
+  };
+
+  const handleResetAutoLinkCache = async () => {
+    try {
+      console.log('🔄 Starting auto-link cache clear process...');
+
+      // Limpiar cache del servidor
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const url = `http://localhost:${serverPort}/api/clear-auto-link-cache`;
+      console.log('🌐 Making request to:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-api-key': secretKey || 'test-key',
+        },
+      });
+
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response ok:', response.ok);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📦 Response data:', result);
+
+        // También limpiar cache del frontend
+        clearAutoLinkCache();
+        console.log(
+          '✅ Auto-link cache cleared (server + frontend). Next app start will trigger auto-link process.'
+        );
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to clear server auto-link cache');
+        console.error('❌ Response status:', response.status);
+        console.error('❌ Response text:', errorText);
+      }
+    } catch (error) {
+      console.error('❌ Error clearing auto-link cache:', error);
     }
   };
 

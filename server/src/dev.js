@@ -1,11 +1,15 @@
 import dotenv from 'dotenv';
-import { existsSync } from 'fs';
+import fs, { existsSync } from 'fs';
 import { join } from 'path';
+import { fileURLToPath } from 'url';
 
 import { checkAccountActivity } from './controllers/accountsController.js';
 import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 // Load environment variables from root .env only
 // Try to load from current directory first, then from parent directory
@@ -29,6 +33,62 @@ if (existsSync(rootEnvPath)) {
 
 const { app } = createServer();
 const DEV_PORT = process.env.PORT || 30;
+
+// Cache para controlar el auto-link
+const AUTO_LINK_CACHE_FILE = join(__dirname, '../config/auto_link_cache.json');
+
+// Endpoint simple para limpiar cache
+app.post('/api/clear-auto-link-cache', (req, res) => {
+  try {
+    if (fs.existsSync(AUTO_LINK_CACHE_FILE)) {
+      fs.unlinkSync(AUTO_LINK_CACHE_FILE);
+      console.log('🗑️ Auto-link cache cleared via endpoint');
+    }
+    res.json({ message: 'Cache cleared successfully' });
+  } catch (error) {
+    console.error('❌ Error clearing cache:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
+  }
+});
+
+// Función para verificar si ya se ejecutó el auto-link
+const hasAutoLinkExecuted = () => {
+  try {
+    if (fs.existsSync(AUTO_LINK_CACHE_FILE)) {
+      const cache = JSON.parse(fs.readFileSync(AUTO_LINK_CACHE_FILE, 'utf8'));
+      const now = new Date();
+      const cacheTime = new Date(cache.timestamp);
+
+      // Cache válido por 24 horas
+      const hoursDiff = (now - cacheTime) / (1000 * 60 * 60);
+      return hoursDiff < 24;
+    }
+  } catch (error) {
+    console.log('⚠️ Error reading auto-link cache:', error.message);
+  }
+  return false;
+};
+
+// Función para marcar el auto-link como ejecutado
+const markAutoLinkExecuted = () => {
+  try {
+    // Crear directorio si no existe
+    const configDir = join(__dirname, '../config');
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    const cache = {
+      timestamp: new Date().toISOString(),
+      executed: true,
+    };
+
+    fs.writeFileSync(AUTO_LINK_CACHE_FILE, JSON.stringify(cache, null, 2));
+    console.log('💾 Auto-link cache saved');
+  } catch (error) {
+    console.log('⚠️ Error saving auto-link cache:', error.message);
+  }
+};
 
 // Debug: Let's see what environment variables are loaded
 console.log('🔧 DEV MODE Environment variables:');
@@ -65,9 +125,15 @@ async function startDevServer() {
           checkAccountActivity();
         }, 1000);
 
-        // Auto-run Link Platforms on server start
+        // Auto-run Link Platforms on server start (with cache)
         (async () => {
           try {
+            // Verificar si ya se ejecutó el auto-link recientemente
+            if (hasAutoLinkExecuted()) {
+              console.log('💾 Auto-link cache found - skipping auto-start');
+              return;
+            }
+
             console.log('🧩 Auto-running Link Platforms on server start...');
             console.log(
               '📊 Link Platforms state before auto-start:',
@@ -86,6 +152,9 @@ async function startDevServer() {
               '📊 Link Platforms state after auto-start:',
               linkPlatformsController.isLinking
             );
+
+            // Marcar como ejecutado en el cache
+            markAutoLinkExecuted();
 
             // CSV watching is now integrated into the main process, no need for separate call
             console.log('✅ Auto-start: Link Platforms completed with integrated CSV watching');
