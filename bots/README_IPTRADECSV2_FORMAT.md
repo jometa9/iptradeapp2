@@ -1,8 +1,9 @@
 # Formato IPTRADECSV2.csv para Bots IPTRADE
 ##  Ubicacin del Archivo
-Cada bot escribe en su propio archivo `IPTRADECSV2.csv` en la carpeta Files de MetaTrader:
+Cada bot escribe en su propio archivo `IPTRADECSV2.csv` en la carpeta Files de su plataforma:
 - **MT4**: `MQL4/Files/IPTRADECSV2.csv`
 - **MT5**: `MQL5/Files/IPTRADECSV2.csv`
+- **cTrader**: `cTrader/Files/IPTRADECSV2.csv`
 ##  Formato del Archivo
 El bot debe **reescribir completamente** el archivo en cada ping con todas las lneas necesarias:
 ### Ejemplo para una cuenta MASTER:

@@ -9,6 +9,7 @@ import {
   getPlanDisplayName,
   isUnlimitedPlan,
 } from '../lib/subscriptionUtils';
+import { getPlatformDisplayName } from '../lib/utils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -365,16 +366,17 @@ export const TradingAccountsManager: React.FC = () => {
   };
 
   const getPlatformBadgeColor = (platform: string) => {
-    switch (platform) {
+    switch (platform?.toUpperCase()) {
       case 'MT4':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'MT5':
         return 'bg-green-100 text-green-800 border-green-200';
-      case 'cTrader':
+      case 'CTRADER':
+      case 'CT':
         return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'TradingView':
+      case 'TRADINGVIEW':
         return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'NinjaTrader':
+      case 'NINJATRADER':
         return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -634,7 +636,7 @@ export const TradingAccountsManager: React.FC = () => {
                           {accounts &&
                             Object.entries(accounts.masterAccounts).map(([id, master]) => (
                               <SelectItem key={id} value={id}>
-                                {master.name || id} ({master.platform})
+                                {master.name || id} ({getPlatformDisplayName(master.platform)})
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -712,7 +714,7 @@ export const TradingAccountsManager: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-blue-900">{master.name || id}</h3>
                       <Badge className={getPlatformBadgeColor(master.platform)}>
-                        {master.platform || 'N/A'}
+                        {getPlatformDisplayName(master.platform) || 'N/A'}
                       </Badge>
                       <Badge
                         variant="outline"
@@ -851,7 +853,7 @@ export const TradingAccountsManager: React.FC = () => {
                                 {slave.name || slave.id}
                               </Badge>
                               <Badge className={`text-xs ${getPlatformBadgeColor(slave.platform)}`}>
-                                {slave.platform}
+                                {getPlatformDisplayName(slave.platform)}
                               </Badge>
                             </div>
                             <div className="flex items-center gap-2">
@@ -930,7 +932,7 @@ export const TradingAccountsManager: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900">{slave.name || slave.id}</h3>
                       <Badge className={getPlatformBadgeColor(slave.platform)}>
-                        {slave.platform || 'N/A'}
+                        {getPlatformDisplayName(slave.platform) || 'N/A'}
                       </Badge>
                       <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
                         Not connected

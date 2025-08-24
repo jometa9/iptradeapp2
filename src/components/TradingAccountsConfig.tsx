@@ -32,6 +32,7 @@ import {
   getPlanDisplayName,
   shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
+import { getPlatformDisplayName } from '../lib/utils';
 import csvFrontendService from '../services/csvFrontendService';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -285,21 +286,6 @@ export function TradingAccountsConfig() {
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
   const canCustomizeLotSizesValue = userInfo ? canCustomizeLotSizes(userInfo) : false;
-
-  // Platform mapping function
-  const getPlatformDisplayName = (platform: string): string => {
-    const platformMap: Record<string, string> = {
-      MT4: 'MetaTrader 4',
-      MT5: 'MetaTrader 5',
-      cTrader: 'cTrader',
-      TradingView: 'TradingView',
-      NinjaTrader: 'NinjaTrader',
-      Other: 'Other Platform',
-      mt4: 'MetaTrader 4',
-      mt5: 'MetaTrader 5',
-    };
-    return platformMap[platform] || platform || 'Unknown';
-  };
 
   const [formState, setFormState] = useState({
     accountNumber: '',

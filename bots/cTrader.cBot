@@ -1,0 +1,159 @@
+using System;
+using System.IO;
+using cAlgo.API;
+using cAlgo.API.Indicators;
+using cAlgo.API.Internals;
+
+namespace cAlgo.Robots
+{
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    public class IPTRADECSV2 : Robot
+    {
+        private string csvFilePath;
+        private Timer csvTimer;
+        private const int CSV_UPDATE_INTERVAL = 5000; // 5 seconds
+
+                protected override void OnStart()
+        {
+            // Initialize CSV file path - try different possible locations
+            csvFilePath = GetCsvFilePath();
+
+            // Ensure directory exists
+            Directory.CreateDirectory(Path.GetDirectoryName(csvFilePath));
+
+            // Start CSV update timer
+            csvTimer = Timer.StartTimer(TimeSpan.FromMilliseconds(CSV_UPDATE_INTERVAL), OnCsvUpdate);
+
+            Print($"IPTRADE CSV Bot started for cTrader. CSV path: {csvFilePath}");
+        }
+
+        private string GetCsvFilePath()
+        {
+            // Try different possible cTrader file locations
+            var possiblePaths = new[]
+            {
+                // Standard cTrader path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "cTrader", "Files", "IPTRADECSV2.csv"),
+                // cAlgo path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "cAlgo", "cAlgo", "Files", "IPTRADECSV2.csv"),
+                // AppData Roaming cAlgo path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "cAlgo", "cAlgo", "Files", "IPTRADECSV2.csv"),
+                // AppData Local cAlgo path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "cAlgo", "cAlgo", "Files", "IPTRADECSV2.csv"),
+                // Spotware path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Spotware", "cTrader", "Files", "IPTRADECSV2.csv"),
+                // AppData Roaming Spotware path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Spotware", "cTrader", "Files", "IPTRADECSV2.csv"),
+                // AppData Local Spotware path
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Spotware", "cTrader", "Files", "IPTRADECSV2.csv")
+            };
+
+            // Return the first path that has a writable directory
+            foreach (var path in possiblePaths)
+            {
+                var directory = Path.GetDirectoryName(path);
+                if (Directory.Exists(directory) || CanCreateDirectory(directory))
+                {
+                    return path;
+                }
+            }
+
+            // Default fallback
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "cTrader", "Files", "IPTRADECSV2.csv");
+        }
+
+        private bool CanCreateDirectory(string directoryPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(directoryPath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        protected override void OnStop()
+        {
+            csvTimer?.Stop();
+            Print("IPTRADE CSV Bot stopped");
+        }
+
+        private void OnCsvUpdate()
+        {
+            try
+            {
+                UpdateCsvFile();
+            }
+            catch (Exception ex)
+            {
+                Print($"Error updating CSV: {ex.Message}");
+            }
+        }
+
+        private void UpdateCsvFile()
+        {
+            var lines = new System.Collections.Generic.List<string>();
+
+            // Get account information
+            var accountId = Account.Number.ToString();
+            var accountType = "PENDING"; // Default to PENDING, will be updated by server
+            var platform = "CTRADER";
+
+            // TYPE line
+            lines.Add($"[TYPE][{accountType}][{platform}][{accountId}]");
+
+            // STATUS line
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var status = "ONLINE";
+            lines.Add($"[STATUS][{status}][{timestamp}]");
+
+            // CONFIG line - try to read existing config or use default
+            var configLine = ReadExistingConfig();
+            if (string.IsNullOrEmpty(configLine))
+            {
+                configLine = "[CONFIG][PENDING]";
+            }
+            lines.Add(configLine);
+
+            // TICKET lines - only for MASTER accounts with open positions
+            if (accountType == "MASTER")
+            {
+                foreach (var position in Positions)
+                {
+                    var ticketLine = $"[TICKET][{position.Id}][{position.SymbolName}][{position.TradeType}][{position.Volume}][{position.EntryPrice}][{position.StopLoss ?? 0}][{position.TakeProfit ?? 0}][{position.EntryTime.ToUnixTimeSeconds()}]";
+                    lines.Add(ticketLine);
+                }
+            }
+
+            // Write CSV file
+            File.WriteAllLines(csvFilePath, lines);
+        }
+
+        private string ReadExistingConfig()
+        {
+            try
+            {
+                if (File.Exists(csvFilePath))
+                {
+                    var lines = File.ReadAllLines(csvFilePath);
+                    foreach (var line in lines)
+                    {
+                        if (line.StartsWith("[CONFIG]"))
+                        {
+                            return line;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Print($"Error reading existing config: {ex.Message}");
+            }
+
+            return null;
+        }
+    }
+}

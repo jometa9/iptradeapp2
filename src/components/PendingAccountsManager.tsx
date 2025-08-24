@@ -12,6 +12,7 @@ import {
   getAccountLimitMessage,
   getSubscriptionLimits,
 } from '../lib/subscriptionUtils';
+import { getPlatformDisplayName } from '../lib/utils';
 import { SSEService } from '../services/sseService';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -100,24 +101,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     reverseTrade: false,
   });
 
-  // Función para mapear códigos de plataforma a nombres amigables
-  const getPlatformDisplayName = (platformCode: string): string => {
-    const platformMap: Record<string, string> = {
-      MT4: 'MetaTrader 4',
-      MT5: 'MetaTrader 5',
-      CT: 'cTrader',
-      NT: 'NinjaTrader',
-      CTRADER: 'cTrader',
-      TRADINGVIEW: 'TradingView',
-    };
-
-    return platformMap[platformCode?.toUpperCase()] || platformCode || 'Unknown';
-  };
-
   const scanningMessages = [
-    'Searching for new MetaTrader platforms...',
+    'Searching for new platforms...',
     'Your pending accounts are being processed...',
-    'Checking Expert Advisor installation...',
+    'Checking bot installation...',
     'Linking new platforms...',
     'Verifying new platform connections...',
     'Scanning for new trading terminals...',
@@ -142,9 +129,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     localStorage.setItem('pendingAccountsCollapsed', JSON.stringify(isCollapsed));
   }, [isCollapsed]);
 
-  // Effect for rotating messages when in starting step
+  // Effect for rotating messages when link platform process is active
   useEffect(() => {
-    if (linkingStatus.step === 'starting' && linkingStatus.isActive) {
+    if (
+      linkingStatus.isActive &&
+      linkingStatus.step !== 'idle' &&
+      linkingStatus.step !== 'completed' &&
+      linkingStatus.step !== 'error'
+    ) {
       setIsRotating(true);
       setCurrentMessageIndex(0);
 
@@ -228,14 +220,23 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         isLoading: true,
       },
       finding: {
-        message: 'Scanning for MetaTrader installations...',
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : 'Scanning for installations...',
         isLoading: true,
       },
       scanning: {
-        message: 'Scanning for MetaTrader installations...',
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : 'Scanning for installations...',
         isLoading: true,
       },
-      syncing: { message: 'Syncing trading platforms...', isLoading: true },
+      syncing: {
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : 'Syncing trading platforms...',
+        isLoading: true,
+      },
       completed: {
         message: getAutoLinkSkippedByCache() ? '' : 'Success! Platforms linked successfully',
         isLoading: false,
@@ -246,7 +247,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     // Return the status from the map, or a fallback if the step is not recognized
     return (
       statusMap[status.step] || {
-        message: status.message || 'Processing...',
+        message: isRotating
+          ? scanningMessages[currentMessageIndex]
+          : status.message || 'Processing...',
         isLoading: true,
       }
     );
@@ -719,7 +722,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     <div>
                       <li>Link your platforms to detect them:</li>
                       <li>1. Execute Link Platforms process</li>
-                      <li>2. Add the IPTRADE EA to a MetaTrader chart</li>
+                      <li>2. Add the IPTRADE Bot to the chart</li>
                       <li>3. Wait for the accounts to appear here</li>
                     </div>
                   )}

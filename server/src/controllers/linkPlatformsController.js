@@ -1151,6 +1151,7 @@ class LinkPlatformsController {
     const result = {
       mql4Folders: [],
       mql5Folders: [],
+      ctraderFolders: [],
       created: 0,
       synced: 0,
       errors: [],
@@ -1159,19 +1160,23 @@ class LinkPlatformsController {
     };
 
     try {
-      // Buscar MQL4 y MQL5 en UNA SOLA PASADA para máxima eficiencia
-      console.log('🚀 Starting unified search for MQL4 and MQL5 folders...');
-      const { mql4Folders, mql5Folders } = await this.findBothMQLFolders();
+      // Buscar MQL4, MQL5 y cTrader en UNA SOLA PASADA para máxima eficiencia
+      console.log('🚀 Starting unified search for MQL4, MQL5 and cTrader folders...');
+      const { mql4Folders, mql5Folders, ctraderFolders } = await this.findBothMQLFolders();
       console.log(
-        `✅ Unified search completed: ${mql4Folders.length} MQL4 + ${mql5Folders.length} MQL5 folders`
+        `✅ Unified search completed: ${mql4Folders.length} MQL4 + ${mql5Folders.length} MQL5 + ${ctraderFolders.length} cTrader folders`
       );
 
       // Solo agregar carpetas al resultado
       result.mql4Folders = mql4Folders;
       result.mql5Folders = mql5Folders;
+      result.ctraderFolders = ctraderFolders;
 
       // Emitir evento de inicio de sincronización
-      if (!searchOnly && (mql4Folders.length > 0 || mql5Folders.length > 0)) {
+      if (
+        !searchOnly &&
+        (mql4Folders.length > 0 || mql5Folders.length > 0 || ctraderFolders.length > 0)
+      ) {
         csvManager.emit('linkPlatformsEvent', {
           type: 'syncing',
           message: 'Syncing Expert Advisors to platforms...',
@@ -1269,6 +1274,66 @@ class LinkPlatformsController {
           }
         }
       }
+
+      // Procesar carpetas cTrader solo si no es búsqueda únicamente
+      if (!searchOnly) {
+        for (const folder of ctraderFolders) {
+          try {
+            // Determine the correct structure based on the folder name
+            const folderName = path.basename(folder).toUpperCase();
+            let expertsPath, filesPath;
+
+            if (folderName === 'CALGO') {
+              // cAlgo structure: cAlgo/cAlgo/Robots and cAlgo/cAlgo/Files
+              expertsPath = path.join(folder, 'cAlgo', 'Robots');
+              filesPath = path.join(folder, 'cAlgo', 'Files');
+            } else if (folderName === 'SPOTWARE') {
+              // Spotware structure: Spotware/cTrader/Robots and Spotware/cTrader/Files
+              expertsPath = path.join(folder, 'cTrader', 'Robots');
+              filesPath = path.join(folder, 'cTrader', 'Files');
+            } else {
+              // Default cTrader structure: cTrader/Experts and cTrader/Files
+              expertsPath = path.join(folder, 'Experts');
+              filesPath = path.join(folder, 'Files');
+            }
+
+            const botPath = path.join(this.botsPath, 'cTrader.cBot');
+
+            if (!fs.existsSync(expertsPath)) {
+              fs.mkdirSync(expertsPath, { recursive: true });
+              result.created++;
+              console.log(`📁 Created cTrader Robots folder: ${expertsPath}`);
+            }
+
+            const targetBotPath = path.join(expertsPath, 'cTrader.cBot');
+            if (fs.existsSync(botPath)) {
+              if (!fs.existsSync(targetBotPath) || this.areFilesDifferent(botPath, targetBotPath)) {
+                fs.copyFileSync(botPath, targetBotPath);
+                result.synced++;
+                console.log(`📋 Synced cTrader bot to: ${targetBotPath}`);
+              }
+            }
+
+            // Ensure Files folder and CSV exist
+            if (!fs.existsSync(filesPath)) {
+              fs.mkdirSync(filesPath, { recursive: true });
+              result.created++;
+              console.log(`📁 Created cTrader Files folder: ${filesPath}`);
+            }
+
+            // Only detect existing CSV files, don't create them
+            const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
+            if (fs.existsSync(csvPath)) {
+              result.csvFiles.push(csvPath);
+              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            } else {
+              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
+            }
+          } catch (error) {
+            result.errors.push(`Error processing cTrader folder ${folder}: ${error.message}`);
+          }
+        }
+      }
     } catch (error) {
       result.errors.push(`Error scanning drive ${drivePath}: ${error.message}`);
     }
@@ -1302,14 +1367,15 @@ class LinkPlatformsController {
 
       const allMQL4Folders = [];
       const allMQL5Folders = [];
+      const allCtraderFolders = [];
 
       // Buscar en cada drive de forma paralela para mayor velocidad
       const searchPromises = drives.map(async drive => {
         try {
           console.log(`🔍 Searching in drive: ${drive}`);
 
-          // Comando para buscar ambas carpetas MQL4 y MQL5 en un solo comando
-          const command = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\MQL[45]$"`;
+          // Comando para buscar carpetas MQL4, MQL5 y cTrader en un solo comando
+          const command = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\MQL[45]$\\|\\\\cAlgo$\\|\\\\Spotware$"`;
 
           const { stdout } = await execAsync(command, {
             maxBuffer: 10 * 1024 * 1024,
@@ -1325,18 +1391,24 @@ class LinkPlatformsController {
 
             const mql4 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL4'));
             const mql5 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL5'));
-
-            console.log(
-              `📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 folders`
+            const ctrader = folders.filter(
+              folder =>
+                folder.toUpperCase().endsWith('\\CTRADER') ||
+                folder.toUpperCase().endsWith('\\CALGO') ||
+                folder.toUpperCase().endsWith('\\SPOTWARE')
             );
 
-            return { mql4, mql5 };
+            console.log(
+              `📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 + ${ctrader.length} cTrader folders`
+            );
+
+            return { mql4, mql5, ctrader };
           }
 
-          return { mql4: [], mql5: [] };
+          return { mql4: [], mql5: [], ctrader: [] };
         } catch (error) {
           console.warn(`⚠️ Error searching drive ${drive}: ${error.message}`);
-          return { mql4: [], mql5: [] };
+          return { mql4: [], mql5: [], ctrader: [] };
         }
       });
 
@@ -1347,25 +1419,29 @@ class LinkPlatformsController {
       results.forEach(result => {
         allMQL4Folders.push(...result.mql4);
         allMQL5Folders.push(...result.mql5);
+        allCtraderFolders.push(...result.ctrader);
       });
 
       // Remover duplicados
       const uniqueMQL4 = [...new Set(allMQL4Folders)];
       const uniqueMQL5 = [...new Set(allMQL5Folders)];
+      const uniqueCtrader = [...new Set(allCtraderFolders)];
 
       console.log(
-        `✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 folders`
+        `✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 + ${uniqueCtrader.length} cTrader folders`
       );
       uniqueMQL4.forEach(folder => console.log(`  📂 MQL4: ${folder}`));
       uniqueMQL5.forEach(folder => console.log(`  📂 MQL5: ${folder}`));
+      uniqueCtrader.forEach(folder => console.log(`  📂 cTrader: ${folder}`));
 
       return {
         mql4Folders: uniqueMQL4,
         mql5Folders: uniqueMQL5,
+        ctraderFolders: uniqueCtrader,
       };
     } catch (error) {
       console.error(`❌ Error in Windows MQL search: ${error.message}`);
-      return { mql4Folders: [], mql5Folders: [] };
+      return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
 
@@ -1373,8 +1449,8 @@ class LinkPlatformsController {
   async findBothMQLFoldersMacOS() {
     const homeDir = os.homedir();
 
-    // Comando optimizado para macOS
-    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
+    // Comando optimizado para macOS - incluye cTrader
+    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" -o -name "cTrader" \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing macOS search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
@@ -1398,34 +1474,35 @@ class LinkPlatformsController {
           .map(line => line.trim())
           .filter(line => line.length > 0);
 
-        console.log(`📋 Found ${allFolders.length} MQL folders:`);
+        console.log(`📋 Found ${allFolders.length} platform folders:`);
         allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+          ctraderFolders: allFolders.filter(folder => folder.endsWith('/cTrader')),
         };
 
         console.log(
-          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 folders`
+          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 + ${categorizedResult.ctraderFolders.length} cTrader folders`
         );
         return categorizedResult;
       }
 
-      console.log(`🔄 No MQL folders found in macOS, returning empty result`);
-      return { mql4Folders: [], mql5Folders: [] };
+      console.log(`🔄 No platform folders found in macOS, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     } catch (error) {
-      console.error(`❌ Error during macOS MQL search:`, error.message);
+      console.error(`❌ Error during macOS platform search:`, error.message);
 
       // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
       if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
         console.log(`⚠️ Search timeout or permission error, returning empty result`);
-        return { mql4Folders: [], mql5Folders: [] };
+        return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
       }
 
       // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
       console.log(`⚠️ Unexpected error during search, returning empty result`);
-      return { mql4Folders: [], mql5Folders: [] };
+      return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
 
@@ -1433,8 +1510,8 @@ class LinkPlatformsController {
   async findBothMQLFoldersLinux() {
     const homeDir = os.homedir();
 
-    // Comando optimizado para Linux
-    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" \\) -type d 2>/dev/null`;
+    // Comando optimizado para Linux - incluye cTrader
+    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" -o -name "cTrader" \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing Linux search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
@@ -1458,34 +1535,35 @@ class LinkPlatformsController {
           .map(line => line.trim())
           .filter(line => line.length > 0);
 
-        console.log(`📋 Found ${allFolders.length} MQL folders:`);
+        console.log(`📋 Found ${allFolders.length} platform folders:`);
         allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
+          ctraderFolders: allFolders.filter(folder => folder.endsWith('/cTrader')),
         };
 
         console.log(
-          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 folders`
+          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 + ${categorizedResult.ctraderFolders.length} cTrader folders`
         );
         return categorizedResult;
       }
 
-      console.log(`🔄 No MQL folders found in Linux, returning empty result`);
-      return { mql4Folders: [], mql5Folders: [] };
+      console.log(`🔄 No platform folders found in Linux, returning empty result`);
+      return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     } catch (error) {
       console.error(`❌ Error during Linux MQL search:`, error.message);
 
       // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
       if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
         console.log(`⚠️ Search timeout or permission error, returning empty result`);
-        return { mql4Folders: [], mql5Folders: [] };
+        return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
       }
 
       // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
       console.log(`⚠️ Unexpected error during search, returning empty result`);
-      return { mql4Folders: [], mql5Folders: [] };
+      return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
 
