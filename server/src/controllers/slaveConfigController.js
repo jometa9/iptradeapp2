@@ -508,22 +508,11 @@ export const setSlaveConfig = async (req, res) => {
             const reverseTrade = slaveConfig?.reverseTrading ? 'TRUE' : 'FALSE';
             const masterId = slaveConfig?.masterId || 'NULL';
 
-            // Mantener el estado original del CSV si no se especifica 'enabled'
-            let enabled;
-            console.log('🔍 DEBUG: req.body.enabled =', req.body.enabled);
-            console.log('🔍 DEBUG: slaveConfig?.enabled =', slaveConfig?.enabled);
+            // SIEMPRE preservar el estado original del CSV al editar
+            const originalEnabled = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
+            const enabled = originalEnabled ? originalEnabled[1] : 'ENABLED';
+            console.log('🔒 Preserving original CSV enabled status =', enabled);
             console.log('🔍 DEBUG: Original CSV line =', cleanLine);
-
-            if (req.body.enabled !== undefined) {
-              // Si se especifica explícitamente, usar ese valor
-              enabled = slaveConfig?.enabled ? 'ENABLED' : 'DISABLED';
-              console.log('🔍 DEBUG: Using JSON config enabled =', enabled);
-            } else {
-              // Si no se especifica, mantener el estado original del CSV
-              const originalEnabled = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
-              enabled = originalEnabled ? originalEnabled[1] : 'DISABLED';
-              console.log('🔍 DEBUG: Using original CSV enabled =', enabled);
-            }
 
             // Get master CSV path if masterId is available
             let masterCsvPath = 'NULL';

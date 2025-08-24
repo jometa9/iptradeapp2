@@ -855,10 +855,28 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
       }
     }
 
+    // Preserve the current ENABLED/DISABLED status from the existing CSV
+    let currentStatus = 'ENABLED'; // Default to ENABLED instead of DISABLED
+    if (existsSync(csvFilePath)) {
+      const content = readFileSync(csvFilePath, 'utf8');
+      const lines = content.split('\n');
+
+      for (const line of lines) {
+        if (line.includes('[CONFIG]') && line.includes(`[${accountId}]`)) {
+          const enabledMatch = line.match(/\[(ENABLED|DISABLED)\]/);
+          if (enabledMatch) {
+            currentStatus = enabledMatch[1];
+            console.log(`🔒 Preserving current copy trading status: ${currentStatus}`);
+            break;
+          }
+        }
+      }
+    }
+
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
     csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [SLAVE] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
+    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
 
     // Write the slave account to CSV in new format with Unix line endings
     writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');

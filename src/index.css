@@ -154,26 +154,7 @@ body {
 .pending-accounts-blur-bg {
   position: relative;
   background: rgb(255, 255, 255);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   transition: all 0.3s ease;
-}
-
-.pending-accounts-blur-bg::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(
-    circle at center,
-    rgb(247, 250, 255) 0%,
-    rgb(251, 253, 255) 30%,
-    transparent 100%
-  );
-  pointer-events: none;
-  z-index: -1;
 }
 
 ul,

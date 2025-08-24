@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import { basename, join } from 'path';
 
@@ -27,7 +27,7 @@ class CSVManager extends EventEmitter {
 
     // Crear directorio si no existe
     if (!existsSync(this.csvDirectory)) {
-      require('fs').mkdirSync(this.csvDirectory, { recursive: true });
+      mkdirSync(this.csvDirectory, { recursive: true });
     }
 
     // Cargar rutas desde cache si existen
@@ -517,8 +517,26 @@ class CSVManager extends EventEmitter {
   // Guardar rutas encontradas en cache
   saveCSVPathsToCache() {
     try {
-      const cachePath = join(process.cwd(), 'server', 'config', 'csv_watching_cache.json');
+      const cachePath = join(
+        process.cwd(),
+        'server',
+        'server',
+        'config',
+        'csv_watching_cache.json'
+      );
       const csvFiles = Array.from(this.csvFiles.keys());
+
+      console.log(`🔍 Intentando guardar cache en: ${cachePath}`);
+      console.log(`📁 Archivos CSV a guardar: ${csvFiles.length}`);
+
+      // Crear directorio si no existe
+      const cacheDir = join(process.cwd(), 'server', 'server', 'config');
+      console.log(`📁 Directorio cache: ${cacheDir}`);
+
+      if (!existsSync(cacheDir)) {
+        console.log(`📁 Creando directorio: ${cacheDir}`);
+        require('fs').mkdirSync(cacheDir, { recursive: true });
+      }
 
       const cacheData = {
         csvFiles: csvFiles,
@@ -528,25 +546,59 @@ class CSVManager extends EventEmitter {
         lastScan: new Date().toISOString(),
       };
 
+      console.log(`📝 Escribiendo archivo...`);
       writeFileSync(cachePath, JSON.stringify(cacheData, null, 2), 'utf8');
-      console.log(`💾 Saved ${csvFiles.length} CSV paths to cache: ${cachePath}`);
+
+      // Verificar que se escribió
+      if (existsSync(cachePath)) {
+        const stats = statSync(cachePath);
+        console.log(`✅ Cache guardado exitosamente: ${csvFiles.length} archivos CSV`);
+        console.log(`📏 Tamaño del archivo: ${stats.size} bytes`);
+      } else {
+        console.log(`❌ El archivo no se creó después de escribir`);
+      }
     } catch (error) {
-      console.error('Error saving CSV paths to cache:', error);
+      console.error('❌ Error guardando cache:', error.message);
+      console.error('❌ Stack trace:', error.stack);
     }
   }
 
   // Cargar rutas desde cache
   loadCSVPathsFromCache() {
     try {
-      const cachePath = join(process.cwd(), 'server', 'config', 'csv_watching_cache.json');
+      const cachePath = join(
+        process.cwd(),
+        'server',
+        'server',
+        'config',
+        'csv_watching_cache.json'
+      );
 
       if (existsSync(cachePath)) {
         const cacheData = JSON.parse(readFileSync(cachePath, 'utf8'));
-        console.log(`📋 Loaded ${cacheData.csvFiles.length} CSV paths from cache`);
+        console.log(`📋 Cache cargado: ${cacheData.csvFiles.length} archivos CSV`);
         return cacheData.csvFiles;
+      } else {
+        // Si no existe, crear un cache vacío
+        const cacheDir = join(process.cwd(), 'server', 'server', 'config');
+        if (!existsSync(cacheDir)) {
+          mkdirSync(cacheDir, { recursive: true });
+        }
+
+        const emptyCache = {
+          csvFiles: [],
+          timestamp: new Date().toISOString(),
+          version: '1.0',
+          totalFiles: 0,
+          lastScan: new Date().toISOString(),
+        };
+
+        writeFileSync(cachePath, JSON.stringify(emptyCache, null, 2), 'utf8');
+        console.log(`📁 Cache creado: archivo vacío en ${cachePath}`);
+        return [];
       }
     } catch (error) {
-      console.error('Error loading CSV paths from cache:', error);
+      console.error('❌ Error cargando cache:', error.message);
     }
     return [];
   }

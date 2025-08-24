@@ -57,13 +57,28 @@ const generateCSV2Content = async (
 
   if (accountType === 'master') {
     // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE]
-    content += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+    // Mantener el estado actual si existe, o usar ENABLED por defecto
+    const currentStatus =
+      slaveConfig?.enabled !== undefined
+        ? slaveConfig.enabled
+          ? 'ENABLED'
+          : 'DISABLED'
+        : 'ENABLED';
+    content += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
   } else if (accountType === 'slave') {
     // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
     const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
     const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
     const masterId = slaveConfig?.masterAccountId || 'NULL';
+
+    // Mantener el estado actual si existe, o usar ENABLED por defecto
+    const currentStatus =
+      slaveConfig?.enabled !== undefined
+        ? slaveConfig.enabled
+          ? 'ENABLED'
+          : 'DISABLED'
+        : 'ENABLED';
 
     // Get master CSV path if masterId is available
     let masterCsvPath = 'NULL';
@@ -77,7 +92,7 @@ const generateCSV2Content = async (
       }
     }
 
-    content += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
+    content += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
   }
 
   return content;
@@ -408,7 +423,9 @@ export const updateCSVAccountType = async (req, res) => {
             );
             console.log(`📄 New content:\n${newContent}`);
           } else {
-            console.log(`❌ Account ${accountId} not found in this file`);
+            console.log(
+              `ℹ️ Account ${accountId} not found in this file (expected if account is in different CSV)`
+            );
           }
         }
       } catch (error) {
@@ -851,8 +868,18 @@ export const connectPlatforms = async (req, res) => {
     const previousCount = csvManager.csvFiles.size;
     console.log(`📊 Current CSV files: ${previousCount}`);
 
+    // Primero obtener las cuentas cacheadas
+    const cachedAccounts = csvManager.getAllActiveAccounts();
+    console.log(`📋 Found ${cachedAccounts.pendingAccounts?.length || 0} cached pending accounts`);
+
     // Usar archivos ya cargados (no hacer búsqueda completa)
     const files = Array.from(csvManager.csvFiles.keys());
+
+    // Guardar explícitamente el cache de CSV si hay archivos
+    if (csvManager.csvFiles.size > 0) {
+      csvManager.saveCSVPathsToCache();
+      console.log(`💾 Guardando cache con ${csvManager.csvFiles.size} archivos CSV`);
+    }
 
     const newCount = csvManager.csvFiles.size;
     const foundFiles = newCount - previousCount;
@@ -903,6 +930,10 @@ export const connectPlatforms = async (req, res) => {
     if (registeredCount > 0) {
       saveUserAccounts(apiKey, userAccounts);
       console.log(`💾 Saved ${registeredCount} new pending accounts`);
+
+      // Asegurar que se guarde el cache de CSV después de registrar nuevas cuentas
+      csvManager.saveCSVPathsToCache();
+      console.log(`💾 Updated CSV paths cache with ${csvManager.csvFiles.size} files`);
     }
 
     // Obtener estadísticas actualizadas
@@ -928,10 +959,16 @@ export const connectPlatforms = async (req, res) => {
       }
     });
 
-    // Respuesta con estadísticas mejoradas
+    // Respuesta con estadísticas mejoradas y cuentas cacheadas
     const response = {
       success: true,
       message: `Platform scan completed. Found ${newCount} CSV files (${foundFiles} new)`,
+      cachedAccounts: {
+        pendingAccounts: cachedAccounts.pendingAccounts || [],
+        masterAccounts: cachedAccounts.masterAccounts || {},
+        slaveAccounts: cachedAccounts.slaveAccounts || {},
+        unconnectedSlaves: cachedAccounts.unconnectedSlaves || [],
+      },
       statistics: {
         csvFiles: {
           total: newCount,
@@ -941,6 +978,7 @@ export const connectPlatforms = async (req, res) => {
         accounts: {
           totalDetected: allAccounts.length,
           newlyRegistered: registeredCount,
+          cachedPending: cachedAccounts.pendingAccounts?.length || 0,
         },
         platforms: platformStats,
       },

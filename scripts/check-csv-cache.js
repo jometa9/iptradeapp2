@@ -166,7 +166,7 @@ function main() {
   logHeader('🔍 CHECK CSV CACHE - Verificador de Rutas Cacheadas CSV');
 
   // Path to cache file
-  const cachePath = join(__dirname, '..', 'server', 'config', 'csv_watching_cache.json');
+  const cachePath = join(__dirname, '..', 'server', 'server', 'config', 'csv_watching_cache.json');
 
   if (!existsSync(cachePath)) {
     logError('No se encontró el archivo de cache de CSV');

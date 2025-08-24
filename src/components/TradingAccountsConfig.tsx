@@ -520,6 +520,12 @@ export function TradingAccountsConfig() {
   };
 
   const handleSelectChange = (name: string, value: string) => {
+    // No permitir cambiar el tipo de cuenta cuando se está editando
+    if (name === 'accountType' && editingAccount) {
+      console.log('⚠️ Cannot change account type when editing');
+      return;
+    }
+
     if (name === 'accountType' && value === 'master') {
       setFormState({ ...formState, [name]: value, status: 'synchronized' });
     } else if (name === 'accountType' && value === 'pending') {
@@ -810,115 +816,173 @@ export function TradingAccountsConfig() {
       console.log('🔍 DEBUG: Account type:', formState.accountType);
       console.log('🔍 DEBUG: Editing account:', editingAccount);
 
-      // Si estamos editando una cuenta y cambiando su tipo, usar los endpoints CSV
+      // Si estamos editando una cuenta
       if (editingAccount) {
         const accountId = editingAccount.id;
-        console.log(
-          `🔄 Editing account ${accountId} from ${editingAccount.accountType} to ${formState.accountType}`
-        );
 
-        // Si la cuenta actual es master o slave y queremos convertirla a pending
-        if (editingAccount.accountType !== 'pending' && formState.accountType === 'pending') {
-          // Convertir a pending usando el endpoint convert-to-pending
-          response = await fetch(
-            `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
-            {
+        // Si el tipo de cuenta no cambió, solo actualizar configuración
+        if (editingAccount.accountType === formState.accountType) {
+          console.log(
+            `🔄 Updating configuration for ${editingAccount.accountType} account ${accountId}`
+          );
+
+          if (editingAccount.accountType === 'slave') {
+            // Validar forceLot antes de enviar
+            const validatedForceLot =
+              formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null;
+
+            // Actualizar configuración de cuenta slave
+            const slavePayload = {
+              slaveAccountId: accountId,
+              lotMultiplier: formState.lotCoefficient,
+              forceLot: validatedForceLot,
+              reverseTrading: formState.reverseTrade,
+              masterId: formState.connectedToMaster === 'none' ? null : formState.connectedToMaster,
+            };
+
+            response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'x-api-key': secretKey || '',
               },
-            }
-          );
-
-          console.log('📡 Convert to pending response status:', response.status);
-        } else if (formState.accountType === 'master') {
-          // Convertir a master - primero convertir a pending, luego a master
-          if (editingAccount.accountType !== 'pending') {
-            // Primero convertir a pending
-            const pendingResponse = await fetch(
-              `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': secretKey || '',
-                },
-              }
-            );
-
-            if (!pendingResponse.ok) {
-              throw new Error('Failed to convert account to pending first');
-            }
-
-            console.log('📡 Converted to pending first, now converting to master');
-          }
-
-          // Ahora convertir a master
-          const masterPayload = {
-            newType: 'master',
-          };
-
-          response = await fetch(
-            `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': secretKey || '',
-              },
-              body: JSON.stringify(masterPayload),
-            }
-          );
-
-          console.log('📡 Master conversion response status:', response.status);
-        } else if (formState.accountType === 'slave') {
-          // Convertir a slave - primero convertir a pending, luego a slave
-          if (editingAccount.accountType !== 'pending') {
-            // Primero convertir a pending
-            const pendingResponse = await fetch(
-              `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': secretKey || '',
-                },
-              }
-            );
-
-            if (!pendingResponse.ok) {
-              throw new Error('Failed to convert account to pending first');
-            }
-
-            console.log('📡 Converted to pending first, now converting to slave');
-          }
-
-          // Ahora convertir a slave
-          const slavePayload = {
-            newType: 'slave',
-            slaveConfig: {
-              masterAccountId:
-                formState.connectedToMaster !== 'none' ? formState.connectedToMaster : null,
-              lotCoefficient: formState.lotCoefficient,
-              forceLot: formState.forceLot > 0 ? formState.forceLot : null,
-              reverseTrade: formState.reverseTrade,
-            },
-          };
-
-          response = await fetch(
-            `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': secretKey || '',
-              },
               body: JSON.stringify(slavePayload),
-            }
+            });
+
+            console.log('📡 Slave config update response status:', response.status);
+          } else if (editingAccount.accountType === 'master') {
+            // Actualizar configuración de cuenta master
+            const masterPayload = {
+              name: formState.accountNumber,
+              description: '',
+              broker: '',
+              platform: formState.platform.toUpperCase(),
+              status: formState.status,
+            };
+
+            response = await fetch(
+              `http://localhost:${serverPort}/api/accounts/master/${accountId}`,
+              {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+                body: JSON.stringify(masterPayload),
+              }
+            );
+
+            console.log('📡 Master config update response status:', response.status);
+          }
+        } else {
+          // Si el tipo de cuenta cambió, usar los endpoints de conversión
+          console.log(
+            `🔄 Converting account ${accountId} from ${editingAccount.accountType} to ${formState.accountType}`
           );
 
-          console.log('📡 Slave conversion response status:', response.status);
+          // Si la cuenta actual es master o slave y queremos convertirla a pending
+          if (editingAccount.accountType !== 'pending' && formState.accountType === 'pending') {
+            // Convertir a pending usando el endpoint convert-to-pending
+            response = await fetch(
+              `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+              }
+            );
+
+            console.log('📡 Convert to pending response status:', response.status);
+          } else if (formState.accountType === 'master') {
+            // Convertir a master - primero convertir a pending, luego a master
+            if (editingAccount.accountType !== 'pending') {
+              // Primero convertir a pending
+              const pendingResponse = await fetch(
+                `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': secretKey || '',
+                  },
+                }
+              );
+
+              if (!pendingResponse.ok) {
+                throw new Error('Failed to convert account to pending first');
+              }
+
+              console.log('📡 Converted to pending first, now converting to master');
+            }
+
+            // Ahora convertir a master
+            const masterPayload = {
+              newType: 'master',
+            };
+
+            response = await fetch(
+              `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
+              {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+                body: JSON.stringify(masterPayload),
+              }
+            );
+
+            console.log('📡 Master conversion response status:', response.status);
+          } else if (formState.accountType === 'slave') {
+            // Convertir a slave - primero convertir a pending, luego a slave
+            if (editingAccount.accountType !== 'pending') {
+              // Primero convertir a pending
+              const pendingResponse = await fetch(
+                `http://localhost:${serverPort}/api/csv/convert-to-pending/${accountId}`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': secretKey || '',
+                  },
+                }
+              );
+
+              if (!pendingResponse.ok) {
+                throw new Error('Failed to convert account to pending first');
+              }
+
+              console.log('📡 Converted to pending first, now converting to slave');
+            }
+
+            // Ahora convertir a slave
+            const slavePayload = {
+              newType: 'slave',
+              slaveConfig: {
+                masterAccountId:
+                  formState.connectedToMaster !== 'none' ? formState.connectedToMaster : null,
+                lotCoefficient: formState.lotCoefficient,
+                forceLot: formState.forceLot > 0 ? formState.forceLot : null,
+                reverseTrade: formState.reverseTrade,
+              },
+            };
+
+            response = await fetch(
+              `http://localhost:${serverPort}/api/csv/pending/${accountId}/update-type`,
+              {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+                body: JSON.stringify(slavePayload),
+              }
+            );
+
+            console.log('📡 Slave conversion response status:', response.status);
+          }
         }
       } else {
         // Crear nueva cuenta - usar la lógica existente

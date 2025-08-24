@@ -608,6 +608,14 @@ class LinkPlatformsController {
         // Configurar file watching
         csvManager.startFileWatching();
 
+        // Guardar el cache después de encontrar los archivos CSV
+        if (csvManager.csvFiles.size > 0) {
+          csvManager.saveCSVPathsToCache();
+          console.log(
+            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
+          );
+        }
+
         console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
       } catch (error) {
         console.error(`❌ Error during system-wide CSV search for existing files:`, error);
@@ -667,6 +675,14 @@ class LinkPlatformsController {
 
         // Configurar file watching
         csvManager.startFileWatching();
+
+        // Guardar el cache después de encontrar los archivos CSV
+        if (csvManager.csvFiles.size > 0) {
+          csvManager.saveCSVPathsToCache();
+          console.log(
+            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
+          );
+        }
 
         console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
       } catch (error) {
