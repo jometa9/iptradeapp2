@@ -6,7 +6,6 @@ import {
   resetAllToOn,
   setGlobalStatus,
   setMasterStatus,
-  getAllStatuses,
 } from '../controllers/copierStatusController.js';
 import {
   connectPlatforms,
@@ -104,19 +103,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de pending accounts (sin forzar escaneo adicional)
       const handlePendingUpdate = payload => {
         try {
-          console.log(
-            `🔥 [SSE BACKEND] handlePendingUpdate called with ${payload.accounts?.length || 0} accounts`
-          );
-
           const accounts = payload.accounts || [];
-
-          // Log cada cuenta para debugging
-          accounts.forEach(acc => {
-            console.log(
-              `   📱 [SSE] Account ${acc.account_id}: status=${acc.status}, current_status=${acc.current_status || acc.status}`
-            );
-          });
-
           const summary = {
             totalAccounts: accounts.length,
             onlineAccounts: accounts.filter(a => (a.current_status || a.status) === 'online')
@@ -133,13 +120,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
             }, {}),
           };
 
-          console.log(
-            `🚀 [SSE BACKEND] Sending pendingAccountsUpdate to ${activeSSEConnections} connections`
-          );
-          console.log(
-            `   📊 Summary: ${summary.onlineAccounts} online, ${summary.offlineAccounts} offline`
-          );
-
           sendUpdate({
             type: 'pendingAccountsUpdate',
             timestamp: payload.timestamp || new Date().toISOString(),
@@ -147,8 +127,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
             summary,
             platforms: Object.keys(summary.platformStats),
           });
-
-          console.log(`✅ [SSE BACKEND] pendingAccountsUpdate event sent successfully`);
         } catch (e) {
           console.error('❌ [SSE BACKEND] Error handling pending accounts update:', e);
         }
@@ -532,7 +510,7 @@ const getCopierStatus = async (req, res) => {
   try {
     const csvManager = (await import('../services/csvManager.js')).default;
     const copierStatus = csvManager.getCopierStatus();
-    
+
     res.json({
       success: true,
       data: copierStatus,
