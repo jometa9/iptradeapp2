@@ -672,14 +672,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   )}
               </CardTitle>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="h-8 px-2 text-[12px] text-gray-400"
-            >
-              {isCollapsed ? <>Show</> : <>Hide</>}
-            </Button>
           </div>
         </CardHeader>
         {!isCollapsed && (
