@@ -169,7 +169,11 @@ export const setGlobalStatus = async (req, res) => {
     console.log(`✅ Global copier status changed to: ${status} (${filesUpdated} files updated)`);
 
     // Forzar un escaneo y emisión de actualizaciones
-    await csvManager.scanAndEmitPendingUpdates();
+    try {
+      await csvManager.scanAndEmitPendingUpdates();
+    } catch (error) {
+      console.log('⚠️ scanAndEmitPendingUpdates not available, skipping...');
+    }
 
     res.json({
       message: `Global copier status set to ${status}`,

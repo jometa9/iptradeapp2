@@ -4,6 +4,7 @@ import { CheckCircle, ExternalLink, Link, Users, Wifi, WifiOff } from 'lucide-re
 
 import { useAuth } from '../context/AuthContext';
 import { useExternalLink } from '../hooks/useExternalLink';
+import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -57,6 +58,7 @@ interface MasterAccount {
 export const CtraderManager: React.FC = () => {
   const { userInfo, isAuthenticated, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
+  const { data: unifiedData, refresh } = useUnifiedAccountData();
   const [status, setStatus] = useState<CtraderStatus>({
     authenticated: false,
     connected: false,
@@ -78,7 +80,12 @@ export const CtraderManager: React.FC = () => {
     description: '',
     masterAccountId: '',
   });
-  const [masterAccounts, setMasterAccounts] = useState<MasterAccount[]>([]);
+
+  // Extract master accounts from unified data
+  const masterAccounts = React.useMemo(() => {
+    if (!unifiedData?.configuredAccounts?.masterAccounts) return [];
+    return Object.values(unifiedData.configuredAccounts.masterAccounts) as MasterAccount[];
+  }, [unifiedData]);
 
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
@@ -113,31 +120,16 @@ export const CtraderManager: React.FC = () => {
     }
   }, [baseUrl, userId]);
 
-  const loadMasterAccounts = useCallback(async () => {
-    try {
-      const response = await fetch(`${baseUrl}/accounts/all`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const masters = Object.values(data.masterAccounts || {}) as MasterAccount[];
-        setMasterAccounts(masters);
-      }
-    } catch (error) {
-      // Silent error handling
-    }
-  }, [baseUrl, secretKey]);
+  // Master accounts are loaded automatically by the unified hook
+  // No need for manual loading
 
   useEffect(() => {
     if (userId && isAuthenticated && secretKey) {
       loadStatus();
-      loadMasterAccounts();
     } else {
       setLoading(false);
     }
-  }, [userId, isAuthenticated, secretKey, loadStatus, loadMasterAccounts]);
+  }, [userId, isAuthenticated, secretKey, loadStatus]);
 
   const initiateAuth = async () => {
     if (!userId) {
@@ -382,7 +374,7 @@ export const CtraderManager: React.FC = () => {
           });
           setShowMasterDialog(false);
           setMasterForm({ accountId: '', name: '', description: '' });
-          loadMasterAccounts();
+          refresh();
         }
       }
     } catch (error) {

@@ -1,46 +1,41 @@
-import { readdirSync, readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 
-console.log('🔍 Checking CSV files in the directory...');
-
-const baseDir = 'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files';
-
-try {
-  if (!existsSync(baseDir)) {
-    console.log('❌ Directory not found:', baseDir);
-    process.exit(1);
-  }
-
-  const files = readdirSync(baseDir);
-  const csvFiles = files.filter(file => file.includes('IPTRADECSV2'));
+function checkCSVFiles() {
+  console.log('🔍 Checking CSV files...');
   
-  console.log(`📁 Found ${csvFiles.length} IPTRADECSV2 files:`);
+  const csvFiles = [
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2.csv',
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2MT4.csv',
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2MT5.csv'
+  ];
   
-  csvFiles.forEach(fileName => {
-    const filePath = join(baseDir, fileName);
-    console.log(`\n📄 ${fileName}:`);
-    
-    try {
-      const content = readFileSync(filePath, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      console.log(`   📊 Lines: ${lines.length}`);
-      lines.forEach((line, index) => {
-        console.log(`      ${index + 1}: ${line}`);
-      });
-      
-      // Extract account info
-      const typeMatch = content.match(/\[TYPE\]\s*\[PENDING\]\s*\[(MT[45])\]\s*\[(\d+)\]/);
-      if (typeMatch) {
-        const [, platform, accountId] = typeMatch;
-        console.log(`   👤 Account: ${accountId} (${platform})`);
+  csvFiles.forEach(filePath => {
+    console.log(`\n📁 ${filePath}:`);
+    if (existsSync(filePath)) {
+      console.log('   ✅ File exists');
+      try {
+        const content = readFileSync(filePath, 'utf8');
+        console.log(`   📄 Content (${content.length} chars):`);
+        console.log(`   "${content}"`);
+        
+        // Buscar líneas que contengan 250062001
+        const lines = content.split('\n');
+        const relevantLines = lines.filter(line => line.includes('250062001'));
+        
+        if (relevantLines.length > 0) {
+          console.log('   🎯 Lines with 250062001:');
+          relevantLines.forEach(line => {
+            console.log(`      "${line}"`);
+          });
+        }
+        
+      } catch (error) {
+        console.log(`   ❌ Error reading: ${error.message}`);
       }
-      
-    } catch (error) {
-      console.log(`   ❌ Error reading: ${error.message}`);
+    } else {
+      console.log('   ❌ File not found');
     }
   });
-  
-} catch (error) {
-  console.error('❌ Error:', error.message);
 }
+
+checkCSVFiles();

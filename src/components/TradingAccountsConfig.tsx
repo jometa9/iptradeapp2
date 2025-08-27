@@ -264,26 +264,22 @@ export function TradingAccountsConfig() {
     return allAccounts;
   }, [csvAccounts, hiddenAccounts]);
 
-  // Connectivity stats (simulado desde datos CSV)
+  // Connectivity stats from unified data
   const connectivityStats = React.useMemo(() => {
-    if (!csvAccounts) return null;
+    if (!unifiedData?.serverStats) return null;
 
-    // Usar los datos que vienen de la API
-    const totalMasters = csvAccounts.totalMasterAccounts || 0;
-    const totalSlaves = csvAccounts.totalSlaveAccounts || 0;
-    const totalPending = csvAccounts.totalPendingAccounts || 0;
-    const totalOffline = csvAccounts.offline || 0;
-    const total = csvAccounts.total || 0;
-
+    // Usar los datos del serverStats del endpoint unificado
+    const serverStats = unifiedData.serverStats;
+    
     return {
-      total,
-      online: total - totalOffline,
-      pending: totalPending,
-      offline: totalOffline,
-      slaves: { total: totalSlaves },
-      masters: { total: totalMasters },
+      total: serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts + serverStats.totalPendingAccounts,
+      online: serverStats.onlinePendingAccounts,
+      pending: serverStats.totalPendingAccounts,
+      offline: serverStats.offlinePendingAccounts,
+      slaves: { total: serverStats.totalSlaveAccounts },
+      masters: { total: serverStats.totalMasterAccounts },
     };
-  }, [csvAccounts]);
+  }, [unifiedData?.serverStats]);
 
   // Derived values for subscription limits
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;

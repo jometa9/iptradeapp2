@@ -2165,6 +2165,12 @@ export const getUnifiedAccountData = async (req, res) => {
         }
         
         cleanMasterAccounts[masterId] = allAccounts.masterAccounts[masterId];
+        
+        // Debug: Log the config for this master account
+        const masterConfig = allAccounts.masterAccounts[masterId]?.config;
+        if (masterConfig) {
+          console.log(`🔍 [UNIFIED] Master ${masterId} config:`, masterConfig);
+        }
       } else {
         console.log(`⚠️ [UNIFIED] Skipping invalid master account ID: ${masterId}`);
       }
@@ -2183,7 +2189,14 @@ export const getUnifiedAccountData = async (req, res) => {
       
       // Skip if this account is already in pending accounts
       if (pendingAccountIds.has(slave.id)) {
-        console.log(`⚠️ [UNIFIED] Skipping unconnected slave that is already pending: ${slave.id}`);
+        // Only log once per session to avoid spam
+        if (!this._loggedPendingSlaveSkips) {
+          this._loggedPendingSlaveSkips = new Set();
+        }
+        if (!this._loggedPendingSlaveSkips.has(slave.id)) {
+          console.log(`⚠️ [UNIFIED] Skipping unconnected slave that is already pending: ${slave.id}`);
+          this._loggedPendingSlaveSkips.add(slave.id);
+        }
         return;
       }
       

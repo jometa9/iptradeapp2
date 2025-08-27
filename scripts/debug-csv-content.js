@@ -1,71 +1,52 @@
 import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
 
-const CSV_FILE = 'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2.csv';
-
-console.log('🔍 Debugging CSV file content changes...');
-
-const readCSVContent = () => {
-  try {
-    if (!existsSync(CSV_FILE)) {
-      console.log('❌ CSV file does not exist');
-      return null;
-    }
-
-    const content = readFileSync(CSV_FILE, 'utf8');
-    const lines = content.split('\n').filter(line => line.trim());
-    
-    console.log(`📄 CSV Content (${lines.length} lines):`);
-    lines.forEach((line, index) => {
-      console.log(`   ${index + 1}: ${line}`);
-    });
-
-    // Extract account info
-    const typeMatch = content.match(/\[TYPE\]\s*\[PENDING\]\s*\[(MT[45])\]\s*\[(\d+)\]/);
-    if (typeMatch) {
-      const [, platform, accountId] = typeMatch;
-      console.log(`👤 Found Account: ${accountId} (${platform})`);
-    }
-
-    const statusMatch = content.match(/\[STATUS\]\s*\[(ONLINE|OFFLINE)\]\s*\[(\d+)\]/);
-    if (statusMatch) {
-      const [, status, timestamp] = statusMatch;
-      console.log(`📡 Status: ${status} (${timestamp})`);
-    }
-
-    return { content, lines };
-  } catch (error) {
-    console.log(`❌ Error reading CSV: ${error.message}`);
-    return null;
-  }
-};
-
-const monitorChanges = () => {
-  let lastContent = '';
-  let changeCount = 0;
-
-  console.log('🔄 Monitoring CSV file for changes...');
-  console.log('Press Ctrl+C to stop\n');
-
-  const checkForChanges = () => {
-    const result = readCSVContent();
-    if (result) {
-      const { content } = result;
-      
-      if (content !== lastContent) {
-        changeCount++;
-        console.log(`\n🔄 CHANGE #${changeCount} detected at ${new Date().toLocaleTimeString()}`);
-        console.log('=' .repeat(60));
-        
-        lastContent = content;
-      }
-    }
-  };
-
-  // Check immediately
-  checkForChanges();
+function debugCSVContent() {
+  console.log('🔍 Debugging CSV content vs endpoint response...');
   
-  // Check every 2 seconds
-  setInterval(checkForChanges, 2000);
-};
+  // Archivos CSV que sabemos que existen
+  const csvFiles = [
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2.csv',
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2MT4.csv',
+    'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files\\IPTRADECSV2MT5.csv'
+  ];
+  
+  console.log('\n📄 CSV Files Content:');
+  console.log('=====================================');
+  
+  csvFiles.forEach(filePath => {
+    if (existsSync(filePath)) {
+      console.log(`\n📁 ${filePath}:`);
+      try {
+        const content = readFileSync(filePath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        lines.forEach((line, index) => {
+          console.log(`   Line ${index + 1}: ${line}`);
+        });
+        
+        // Buscar específicamente líneas CONFIG para el account 250062001
+        const configLines = lines.filter(line => 
+          line.includes('[CONFIG]') && line.includes('250062001')
+        );
+        
+        if (configLines.length > 0) {
+          console.log(`\n   🎯 CONFIG lines for 250062001:`);
+          configLines.forEach(line => {
+            console.log(`      ${line}`);
+          });
+        }
+        
+      } catch (error) {
+        console.log(`   ❌ Error reading file: ${error.message}`);
+      }
+    } else {
+      console.log(`\n📁 ${filePath}: File not found`);
+    }
+  });
+  
+  console.log('\n=====================================');
+  console.log('✅ CSV content analysis complete');
+}
 
-monitorChanges();
+debugCSVContent();

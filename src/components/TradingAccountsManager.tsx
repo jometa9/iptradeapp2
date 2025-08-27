@@ -10,6 +10,7 @@ import {
   isUnlimitedPlan,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
+import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -68,8 +69,7 @@ const PLATFORMS = [
 
 export const TradingAccountsManager: React.FC = () => {
   const { userInfo, secretKey, isAuthenticated } = useAuth();
-  const [accounts, setAccounts] = useState<AccountsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: unifiedData, loading, error, refresh } = useUnifiedAccountData();
   const [showMasterDialog, setShowMasterDialog] = useState(false);
   const [showSlaveDialog, setShowSlaveDialog] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
@@ -95,8 +95,16 @@ export const TradingAccountsManager: React.FC = () => {
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
+  // Extract data from unified response
+  const accounts = unifiedData?.configuredAccounts || { masterAccounts: {}, unconnectedSlaves: [] };
+  const serverStats = unifiedData?.serverStats || {
+    totalMasterAccounts: 0,
+    totalSlaveAccounts: 0,
+    totalUnconnectedSlaves: 0,
+  };
+
   // Calculate total accounts for limit checking
-  const totalAccounts = accounts ? accounts.totalMasterAccounts + accounts.totalSlaveAccounts : 0;
+  const totalAccounts = serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts;
 
   // Check if user can create more accounts
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
@@ -108,37 +116,8 @@ export const TradingAccountsManager: React.FC = () => {
     return currentAccounts >= 8; // Show when 8+ accounts
   };
 
-  useEffect(() => {
-    if (isAuthenticated && secretKey) {
-      loadAccounts();
-    }
-  }, [isAuthenticated, secretKey]);
-
-  const loadAccounts = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${baseUrl}/accounts/all`, {
-        headers: {
-          'x-api-key': secretKey || '',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAccounts(data);
-      } else {
-        throw new Error('Failed to load accounts');
-      }
-    } catch (error) {
-      console.error('Error loading accounts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load trading accounts',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Data is loaded automatically by the unified hook
+  // No need for manual loading
 
   const registerMasterAccount = async () => {
     try {
@@ -158,7 +137,7 @@ export const TradingAccountsManager: React.FC = () => {
         });
         setShowMasterDialog(false);
         setMasterForm({ masterAccountId: '', name: '', description: '', broker: '', platform: '' });
-        loadAccounts();
+        refresh();
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to register master account');
@@ -203,7 +182,7 @@ export const TradingAccountsManager: React.FC = () => {
         });
 
         // Reload accounts to show the new slave account
-        await loadAccounts();
+        await refresh();
 
         // If the slave was connected to a master, show a success message
         if (slaveForm.masterAccountId && slaveForm.masterAccountId !== 'none') {
@@ -242,7 +221,7 @@ export const TradingAccountsManager: React.FC = () => {
           description: 'Master account deleted successfully',
         });
         setConfirmingDeleteId(null);
-        loadAccounts();
+        refresh();
       } else {
         throw new Error('Failed to delete master account');
       }
@@ -274,7 +253,7 @@ export const TradingAccountsManager: React.FC = () => {
           description: 'Slave account deleted successfully',
         });
         setConfirmingDeleteId(null);
-        loadAccounts();
+        refresh();
       } else {
         throw new Error('Failed to delete slave account');
       }
@@ -306,7 +285,7 @@ export const TradingAccountsManager: React.FC = () => {
           description: 'Slave account disconnected successfully',
         });
         setConfirmingDisconnectId(null);
-        loadAccounts();
+        refresh();
       } else {
         throw new Error('Failed to disconnect slave account');
       }
@@ -346,7 +325,7 @@ export const TradingAccountsManager: React.FC = () => {
         description: `All ${slaveIds.length} slave accounts disconnected successfully`,
       });
       setConfirmingDisconnectAllId(null);
-      loadAccounts();
+      refresh();
     } catch (error) {
       console.error('Error disconnecting all slaves:', error);
       toast({
@@ -671,32 +650,32 @@ export const TradingAccountsManager: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
-                {accounts?.totalMasterAccounts || 0}
-              </div>
-              <div className="text-sm text-blue-700">Master Accounts</div>
-            </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {accounts?.totalSlaveAccounts || 0}
-              </div>
-              <div className="text-sm text-green-700">Slave Accounts</div>
-            </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {accounts?.totalConnections || 0}
-              </div>
-              <div className="text-sm text-purple-700">Active Connections</div>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-gray-600">
-                {accounts?.unconnectedSlaves.length || 0}
-              </div>
-              <div className="text-sm text-gray-700">Unconnected Slaves</div>
-            </div>
-          </div>
+                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+             <div className="bg-blue-50 p-4 rounded-lg">
+               <div className="text-2xl font-bold text-blue-600">
+                 {serverStats.totalMasterAccounts || 0}
+               </div>
+               <div className="text-sm text-blue-700">Master Accounts</div>
+             </div>
+             <div className="bg-green-50 p-4 rounded-lg">
+               <div className="text-2xl font-bold text-green-600">
+                 {serverStats.totalSlaveAccounts || 0}
+               </div>
+               <div className="text-sm text-green-700">Slave Accounts</div>
+             </div>
+             <div className="bg-purple-50 p-4 rounded-lg">
+               <div className="text-2xl font-bold text-purple-600">
+                 {serverStats.totalUnconnectedSlaves || 0}
+               </div>
+               <div className="text-sm text-purple-700">Unconnected Slaves</div>
+             </div>
+             <div className="bg-gray-50 p-4 rounded-lg">
+               <div className="text-2xl font-bold text-gray-600">
+                 {serverStats.totalCSVFiles || 0}
+               </div>
+               <div className="text-sm text-gray-700">CSV Files</div>
+             </div>
+           </div>
         </CardContent>
       </Card>
 

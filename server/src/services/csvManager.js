@@ -116,7 +116,7 @@ class CSVManager extends EventEmitter {
           const account = {
             account_id: typeData.accountId,
             platform: typeData.platform,
-            account_type: configData.configType.toLowerCase(), // Use CONFIG as source of truth
+            account_type: typeData.type.toLowerCase(), // Use TYPE as source of truth
             status: timeDiff <= 5 ? 'online' : 'offline',
             current_status: timeDiff <= 5 ? 'online' : 'offline',
             timestamp: statusData.timestamp,
@@ -125,20 +125,20 @@ class CSVManager extends EventEmitter {
             format: 'csv2',
           };
 
-          // Add config details for SLAVE accounts
-          if (configData.configType === 'SLAVE' && configData.details.length >= 6) {
+          // Add config details based on account type (TYPE line is source of truth)
+          if (typeData.type === 'SLAVE' && configData.details.length >= 6) {
             account.config = {
-              enabled: configData.details[1] === 'ENABLED',
-              lotMultiplier: parseFloat(configData.details[2]) || 1,
-              forceLot: configData.details[3] === 'NULL' ? null : parseFloat(configData.details[3]),
-              reverseTrading: configData.details[4] === 'TRUE',
-              masterId: configData.details[5] === 'NULL' ? null : configData.details[5],
-              masterCsvPath: configData.details[6] || null,
+              enabled: configData.details[0] === 'ENABLED',
+              lotMultiplier: parseFloat(configData.details[1]) || 1,
+              forceLot: configData.details[2] === 'NULL' ? null : parseFloat(configData.details[2]),
+              reverseTrading: configData.details[3] === 'TRUE',
+              masterId: configData.details[4] === 'NULL' ? null : configData.details[4],
+              masterCsvPath: configData.details[5] || null,
             };
-          } else if (configData.configType === 'MASTER') {
+          } else if (typeData.type === 'MASTER') {
             account.config = {
-              enabled: configData.details[1] === 'ENABLED',
-              name: configData.details[2] || `Account ${typeData.accountId}`,
+              enabled: configData.details[0] === 'ENABLED',
+              name: configData.details[1] || `Account ${typeData.accountId}`,
             };
           }
 
@@ -1005,9 +1005,17 @@ class CSVManager extends EventEmitter {
               }
 
               if (currentAccountData.account_type === 'master') {
+                const enabled = values[2] === 'ENABLED';
+                const name = values[3] || 'Master Account';
+                
+                console.log(`🔍 [parseCSVFile] Parsing MASTER config for ${currentAccountData.account_id}:`);
+                console.log(`   values[2] = "${values[2]}"`);
+                console.log(`   enabled = values[2] === 'ENABLED' = ${enabled}`);
+                console.log(`   name = "${name}"`);
+                
                 currentAccountData.config = {
-                  enabled: values[2] === 'ENABLED',
-                  name: values[3] || 'Master Account',
+                  enabled: enabled,
+                  name: name,
                 };
               } else if (currentAccountData.account_type === 'slave') {
                 // Parse slave configuration: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
@@ -1184,14 +1192,17 @@ class CSVManager extends EventEmitter {
                 if (currentAccountData.account_type === 'master') {
                   currentAccountData.config = {
                     masterId: currentAccountId,
-                    enabled: configType === 'master',
-                    // Otros campos de configuración se pueden agregar aquí
+                    enabled: values[2] === 'ENABLED',
+                    name: values[3] || `Account ${currentAccountId}`,
                   };
                 } else if (currentAccountData.account_type === 'slave') {
                   currentAccountData.config = {
-                    masterId: values[2] || 'NULL',
-                    enabled: configType === 'slave',
-                    // Otros campos de configuración se pueden agregar aquí
+                    enabled: values[2] === 'ENABLED',
+                    lotMultiplier: parseFloat(values[3]) || 1.0,
+                    forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
+                    reverseTrading: values[5] === 'TRUE',
+                    masterId: values[6] !== 'NULL' ? values[6] : null,
+                    masterCsvPath: values[7] !== 'NULL' ? values[7] : null,
                   };
                 }
               }
@@ -1300,6 +1311,9 @@ class CSVManager extends EventEmitter {
               connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
               totalSlaves: existingTotalSlaves, // Preservar contador
             };
+            
+            // Debug: Log the config for this master account
+            console.log(`🔍 [getAllActiveAccounts] Master ${accountId} config:`, row.config);
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
 
@@ -1422,6 +1436,30 @@ class CSVManager extends EventEmitter {
     );
 
     return platformIndex !== -1 ? pathParts[platformIndex] : 'Unknown';
+  }
+
+  // Función para escanear y emitir actualizaciones de pending accounts
+  async scanAndEmitPendingUpdates() {
+    try {
+      console.log('🔄 [csvManager] Scanning for pending account updates...');
+      
+      // Refrescar todos los archivos CSV
+      await this.refreshAllFileData();
+      
+      // Obtener todas las cuentas activas
+      const allAccounts = await this.getAllActiveAccounts();
+      
+      // Emitir evento con las cuentas pending actualizadas
+      this.emit('pendingAccountsUpdated', {
+        pendingAccounts: allAccounts.pendingAccounts || [],
+        timestamp: new Date().toISOString(),
+        totalAccounts: allAccounts.pendingAccounts?.length || 0
+      });
+      
+      console.log(`✅ [csvManager] Emitted pending accounts update: ${allAccounts.pendingAccounts?.length || 0} accounts`);
+    } catch (error) {
+      console.error('❌ [csvManager] Error scanning pending updates:', error);
+    }
   }
 
   // Obtener estado del copier (optimized version that accepts pre-loaded accounts)
@@ -1777,6 +1815,8 @@ class CSVManager extends EventEmitter {
   // Actualizar estado global del copier
   async updateGlobalStatus(enabled) {
     try {
+      console.log(`🔄 [csvManager] Updating global copier status to: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+      
       // 1. Actualizar el archivo de configuración global
       const configPath = join(process.cwd(), 'config', 'copier_status.json');
       const config = {
@@ -1792,6 +1832,7 @@ class CSVManager extends EventEmitter {
 
       // Guardar la configuración global
       writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.log(`✅ [csvManager] Global config updated: ${configPath}`);
 
       // 2. Actualizar todos los archivos CSV2 que tenemos cacheados
       let updatedFiles = 0;
@@ -1802,33 +1843,42 @@ class CSVManager extends EventEmitter {
           if (existsSync(filePath)) {
             let fileModified = false;
             const content = readFileSync(filePath, 'utf8');
+            const lines = content.split('\n');
+            const newLines = [];
 
             // Buscar y reemplazar directamente ENABLED/DISABLED en líneas CONFIG
             const newStatus = enabled ? 'ENABLED' : 'DISABLED';
             const oldStatus = enabled ? 'DISABLED' : 'ENABLED';
 
-            // Reemplazar ENABLED por DISABLED o viceversa en líneas CONFIG
-            let updatedContent = content;
-
-            // Buscar líneas CONFIG que contengan el estado opuesto y reemplazarlo
-            const configLineRegex = new RegExp(`(\\[CONFIG\\].*?\\[)(${oldStatus})(\\].*)`, 'g');
-            if (configLineRegex.test(content)) {
-              updatedContent = content.replace(configLineRegex, `$1${newStatus}$3`);
-              fileModified = true;
+            for (const line of lines) {
+              let updatedLine = line;
+              
+              // Buscar líneas CONFIG que contengan el estado opuesto y reemplazarlo
+              if (line.includes('[CONFIG]') && line.includes(oldStatus)) {
+                updatedLine = line.replace(new RegExp(`\\[${oldStatus}\\]`, 'g'), `[${newStatus}]`);
+                fileModified = true;
+                console.log(`   📝 [csvManager] Updated CONFIG line in ${basename(filePath)}: ${oldStatus} → ${newStatus}`);
+              }
+              
+              newLines.push(updatedLine);
             }
 
             if (fileModified) {
+              const updatedContent = newLines.join('\n');
               writeFileSync(filePath, updatedContent, 'utf8');
               updatedFiles++;
 
               // Refrescar datos en memoria
               this.refreshFileData(filePath);
+              console.log(`   ✅ [csvManager] File updated: ${basename(filePath)}`);
             }
           }
         } catch (error) {
-          console.error(`Error processing file ${filePath}:`, error);
+          console.error(`❌ [csvManager] Error processing file ${filePath}:`, error);
         }
       }
+
+      console.log(`✅ [csvManager] Global status update complete: ${updatedFiles} files updated`);
 
       // Emitir evento de actualización
       this.emit('globalStatusChanged', {
@@ -1842,7 +1892,7 @@ class CSVManager extends EventEmitter {
 
       return updatedFiles;
     } catch (error) {
-      console.error('Error updating global copier status:', error);
+      console.error('❌ [csvManager] Error updating global copier status:', error);
       throw error;
     }
   }

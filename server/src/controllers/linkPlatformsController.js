@@ -643,10 +643,10 @@ class LinkPlatformsController {
       console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`);
 
       try {
-        // Comando PowerShell para buscar archivos IPTRADECSV2.csv en todo el sistema
+        // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
         const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
     Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
-    Where-Object { $_.Name -eq 'IPTRADECSV2.csv' } |
+    Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
     Select-Object -ExpandProperty FullName
 }`;
         console.log(`🔍 Executing PowerShell command for CSV search...`);
@@ -710,8 +710,8 @@ class LinkPlatformsController {
       console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
 
       try {
-        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
         console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
@@ -778,8 +778,8 @@ class LinkPlatformsController {
       console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
 
       try {
-        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
         console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
@@ -852,10 +852,10 @@ class LinkPlatformsController {
       console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell...`);
 
       try {
-        // Comando PowerShell para buscar archivos IPTRADECSV2.csv en todo el sistema
+        // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
         const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
     Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
-    Where-Object { $_.Name -eq 'IPTRADECSV2.csv' } |
+    Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
     Select-Object -ExpandProperty FullName
 }`;
         console.log(`🔍 Executing PowerShell command for CSV search...`);
@@ -981,9 +981,9 @@ class LinkPlatformsController {
       console.log(`🍎 macOS detected - performing system-wide CSV search...`);
 
       try {
-        // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
         // Comando para buscar archivos CSV en todo el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2.csv" -type f 2>/dev/null`;
+        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
         console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
