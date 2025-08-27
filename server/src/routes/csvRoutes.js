@@ -87,50 +87,11 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
     .then(async ({ default: csvManager }) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
-        const updatedData = {
-          type: 'csv_updated',
-          filePath,
-          timestamp: new Date().toISOString(),
-          ...processDataForFrontend({
-            // copierStatus: csvManager.getCopierStatus(),
-            accounts: csvManager.getAllActiveAccounts(),
-          }),
-        };
-
-        sendUpdate(updatedData);
+        // CSV updates disabled - pending accounts fetched on-demand only
+        console.log(`📁 CSV file updated: ${filePath} (SSE disabled for pending accounts)`);
       };
 
-      // Reemitir eventos de pending accounts (sin forzar escaneo adicional)
-      const handlePendingUpdate = payload => {
-        try {
-          const accounts = payload.accounts || [];
-          const summary = {
-            totalAccounts: accounts.length,
-            onlineAccounts: accounts.filter(a => (a.current_status || a.status) === 'online')
-              .length,
-            offlineAccounts: accounts.filter(a => (a.current_status || a.status) === 'offline')
-              .length,
-            platformStats: accounts.reduce((acc, a) => {
-              const plat = a.platform || 'Unknown';
-              if (!acc[plat]) acc[plat] = { online: 0, offline: 0, total: 0 };
-              const status = a.current_status || a.status;
-              acc[plat][status === 'online' ? 'online' : 'offline'] += 1;
-              acc[plat].total += 1;
-              return acc;
-            }, {}),
-          };
-
-          sendUpdate({
-            type: 'pendingAccountsUpdate',
-            timestamp: payload.timestamp || new Date().toISOString(),
-            accounts,
-            summary,
-            platforms: Object.keys(summary.platformStats),
-          });
-        } catch (e) {
-          console.error('❌ [SSE BACKEND] Error handling pending accounts update:', e);
-        }
-      };
+      // Pending accounts updates removed - use direct endpoint calls instead
 
       // NUEVO: Manejar eventos de conversión de cuentas
       const handleAccountConverted = payload => {
@@ -139,10 +100,7 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
             `🔄 [SSE BACKEND] Account converted: ${payload.accountId} to ${payload.newType}`
           );
 
-          // Forzar escaneo inmediato de pending accounts
-          csvManager.scanAndEmitPendingUpdates().then(() => {
-            console.log(`✅ [SSE BACKEND] Pending accounts updated after conversion`);
-          });
+          // Pending accounts updates removed - frontend should use direct endpoint calls
 
           // Enviar evento de conversión
           sendUpdate({
@@ -195,7 +153,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
       // Agregar listener al CSV Manager
       csvManager.on('fileUpdated', handleCSVUpdate);
-      csvManager.on('pendingAccountsUpdate', handlePendingUpdate);
       csvManager.on('linkPlatformsEvent', handleLinkPlatformsEvent);
       csvManager.on('backgroundScanEvent', handleBackgroundScanEvent);
       csvManager.on('accountConverted', handleAccountConverted);
@@ -233,44 +190,10 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      // Enviar datos iniciales en formato correcto para el frontend
-      const accountsData = await csvManager.getAllActiveAccounts();
-      console.log(
-        `📊 SSE Initial data - Pending accounts: ${accountsData.pendingAccounts?.length || 0}`
-      );
+      // SSE initial data disabled - pending accounts fetched on-demand only
+      console.log('📊 SSE: Initial data disabled for pending accounts');
 
-      const initialData = {
-        type: 'initial_data',
-        timestamp: new Date().toISOString(),
-        ...processDataForFrontend({
-          // copierStatus: csvManager.getCopierStatus(),
-          accounts: accountsData,
-        }),
-      };
-
-      sendUpdate(initialData);
-
-      // Si no había pending accounts en initial_data, forzar un update después
-      if (!accountsData.pendingAccounts || accountsData.pendingAccounts.length === 0) {
-        setTimeout(async () => {
-          const updatedData = await csvManager.getAllActiveAccounts();
-          if (updatedData.pendingAccounts && updatedData.pendingAccounts.length > 0) {
-            console.log('📤 SSE: Sending delayed pending accounts update');
-            sendUpdate({
-              type: 'pendingAccountsUpdate',
-              timestamp: new Date().toISOString(),
-              accounts: updatedData.pendingAccounts,
-              summary: {
-                totalAccounts: updatedData.pendingAccounts.length,
-                onlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'online')
-                  .length,
-                offlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'offline')
-                  .length,
-              },
-            });
-          }
-        }, 2000);
-      }
+      // Pending accounts updates removed - frontend should use direct endpoint calls
 
       // Enviar estado actual de Link Platforms al cliente que se conecta
       import('../controllers/linkPlatformsController.js')
@@ -350,7 +273,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         console.log(`📍 Released IP: ${clientIP}`);
         clearInterval(heartbeat);
         csvManager.off('fileUpdated', handleCSVUpdate);
-        csvManager.off('pendingAccountsUpdate', handlePendingUpdate);
         csvManager.off('linkPlatformsEvent', handleLinkPlatformsEvent);
         csvManager.off('backgroundScanEvent', handleBackgroundScanEvent);
         csvManager.off('accountConverted', handleAccountConverted);
@@ -406,17 +328,8 @@ router.get('/csv/events/frontend', (req, res) => {
     .then(async ({ default: csvManager }) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
-        const updatedData = {
-          type: 'csv_updated',
-          filePath,
-          timestamp: new Date().toISOString(),
-          ...processDataForFrontend({
-            // copierStatus: csvManager.getCopierStatus(),
-            accounts: csvManager.getAllActiveAccounts(),
-          }),
-        };
-
-        sendUpdate(updatedData);
+        // CSV updates disabled - pending accounts fetched on-demand only
+        console.log(`📁 CSV file updated: ${filePath} (SSE disabled for pending accounts)`);
       };
 
       // Agregar listener al CSV Manager
@@ -433,44 +346,10 @@ router.get('/csv/events/frontend', (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      // Enviar datos iniciales en formato correcto para el frontend
-      const accountsData = await csvManager.getAllActiveAccounts();
-      console.log(
-        `📊 SSE Initial data - Pending accounts: ${accountsData.pendingAccounts?.length || 0}`
-      );
+      // SSE initial data disabled - pending accounts fetched on-demand only
+      console.log('📊 SSE: Initial data disabled for pending accounts');
 
-      const initialData = {
-        type: 'initial_data',
-        timestamp: new Date().toISOString(),
-        ...processDataForFrontend({
-          // copierStatus: csvManager.getCopierStatus(),
-          accounts: accountsData,
-        }),
-      };
-
-      sendUpdate(initialData);
-
-      // Si no había pending accounts en initial_data, forzar un update después
-      if (!accountsData.pendingAccounts || accountsData.pendingAccounts.length === 0) {
-        setTimeout(async () => {
-          const updatedData = await csvManager.getAllActiveAccounts();
-          if (updatedData.pendingAccounts && updatedData.pendingAccounts.length > 0) {
-            console.log('📤 SSE: Sending delayed pending accounts update');
-            sendUpdate({
-              type: 'pendingAccountsUpdate',
-              timestamp: new Date().toISOString(),
-              accounts: updatedData.pendingAccounts,
-              summary: {
-                totalAccounts: updatedData.pendingAccounts.length,
-                onlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'online')
-                  .length,
-                offlineAccounts: updatedData.pendingAccounts.filter(a => a.status === 'offline')
-                  .length,
-              },
-            });
-          }
-        }, 2000);
-      }
+      // Pending accounts updates removed - frontend should use direct endpoint calls
 
       // Cleanup cuando el cliente se desconecta
       req.on('close', () => {
@@ -720,30 +599,14 @@ router.post('/csv/refresh', requireValidSubscription, async (req, res) => {
     const csvManager = (await import('../services/csvManager.js')).default;
 
     // Solo refrescar datos existentes, no hacer búsqueda completa
-    csvManager.refreshAllFileData();
+    await csvManager.refreshAllFileData();
 
-    const allAccounts = csvManager.getAllActiveAccounts();
-
-    // HACK TEMPORAL: Forzar la conexión slave-master
-    if (allAccounts.masterAccounts && allAccounts.masterAccounts['250062001']) {
-      allAccounts.masterAccounts['250062001'].connectedSlaves = [
-        {
-          id: '11219046',
-          name: '11219046',
-          platform: 'MT5',
-          status: 'online',
-          timeSinceLastPing: 0,
-          masterOnline: true,
-          config: { enabled: false },
-        },
-      ];
-      allAccounts.masterAccounts['250062001'].totalSlaves = 1;
-    }
+    // getAllActiveAccounts call removed - pending accounts fetched on-demand only
 
     res.json({
       success: true,
       message: 'CSV data refreshed from existing files',
-      accounts: allAccounts,
+      note: 'Pending accounts data removed - use /api/accounts/pending endpoint',
     });
   } catch (error) {
     console.error('Error refreshing CSV data:', error);
@@ -867,9 +730,6 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
 
     const success = csvManager.convertToPending(accountId);
     if (success) {
-      // Obtener datos actualizados inmediatamente
-      const allAccounts = csvManager.getAllActiveAccounts();
-
       // Emitir evento SSE inmediatamente
       csvManager.emit('accountConverted', {
         accountId,
@@ -882,7 +742,7 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
       res.json({
         success: true,
         message: `Account ${accountId} converted to pending successfully`,
-        accounts: allAccounts,
+        note: 'Use /api/accounts/pending to get updated pending accounts',
       });
     } else {
       res.status(404).json({
@@ -984,11 +844,7 @@ router.get('/csv/debug/pending', requireValidSubscription, async (req, res) => {
   try {
     const csvManager = (await import('../services/csvManager.js')).default;
 
-    console.log(`🔍 [DEBUG] Pending accounts debug request`);
-
-    // Obtener información detallada
-    const allAccounts = csvManager.getAllActiveAccounts();
-    const pendingAccounts = allAccounts.pendingAccounts || [];
+    const pendingAccounts = [];
 
     // Información de archivos CSV
     const csvFilesInfo = Array.from(csvManager.csvFiles.entries()).map(([filePath, fileData]) => ({
@@ -1002,12 +858,10 @@ router.get('/csv/debug/pending', requireValidSubscription, async (req, res) => {
       timestamp: new Date().toISOString(),
       csvFilesCount: csvManager.csvFiles.size,
       csvFiles: csvFilesInfo,
-      pendingAccountsCount: pendingAccounts.length,
-      pendingAccounts: pendingAccounts,
-      allAccounts: allAccounts,
+      pendingAccountsCount: 0,
+      pendingAccounts: [],
+      note: 'Debug disabled - use /api/accounts/pending for current data',
     };
-
-    console.log(`📊 [DEBUG] Debug info:`, debugInfo);
 
     res.json({
       success: true,

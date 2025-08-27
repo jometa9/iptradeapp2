@@ -117,13 +117,8 @@ async function startDevServer() {
         console.log(`🔗 Available at: http://localhost:${DEV_PORT}`);
         console.log(`🔗 Health check: http://localhost:${DEV_PORT}/api/status`);
 
-        // Start periodic account activity monitoring
-        console.log(
-          '🔍 Starting account activity monitoring (5-second timeout, checking every 1 second)...'
-        );
-        setInterval(() => {
-          checkAccountActivity();
-        }, 1000);
+        // Account activity monitoring disabled - pending accounts fetched on-demand only
+        console.log('🔍 Account activity monitoring disabled - pending accounts fetched on-demand only');
 
         // Auto-run Link Platforms on server start (with cache)
         (async () => {

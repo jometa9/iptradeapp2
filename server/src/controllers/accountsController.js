@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readFile, writeFile, readdirSync } from 'fs';
 import { join } from 'path';
 
 import csvManager from '../services/csvManager.js';
@@ -72,7 +72,7 @@ const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
 const PENDING_DELETION_TIMEOUT = 3600000; // 1 hour in milliseconds
 
 // Check and update account status based on activity
-const checkAccountActivity = () => {
+const checkAccountActivity = async () => {
   try {
     // Get all accounts from CSV files
     const allAccounts = csvManager.getAllActiveAccounts();
@@ -81,50 +81,93 @@ const checkAccountActivity = () => {
 
     // Process all accounts (pending, master, and slave)
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-      let fileContent = readFileSync(filePath, 'utf8');
-      let fileModified = false;
+      try {
+        // Use async file reading to avoid EBUSY errors
+        const fileContent = await new Promise((resolve, reject) => {
+          readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+              if (err.code === 'EBUSY' || err.code === 'EACCES') {
+                console.log(`📁 File ${filePath} is busy, skipping...`);
+                resolve(null); // Skip this file
+              } else {
+                reject(err);
+              }
+            } else {
+              resolve(data);
+            }
+          });
+        });
 
-      fileData.data.forEach(account => {
-        const accountId = account.account_id;
-        const accountType = account.account_type;
-        const lastActivity = new Date(account.timestamp);
-        const timeSinceActivity = now - lastActivity;
-        const currentStatus = account.current_status || account.status;
-
-        // Check if account should be marked as offline
-        if (timeSinceActivity > ACTIVITY_TIMEOUT && currentStatus !== 'offline') {
-          console.log(
-            `📴 ${accountType} account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
-          );
-
-          // Update status in CSV file
-          const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
-          fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-          fileModified = true;
-          hasChanges = true;
+        if (!fileContent) {
+          continue; // Skip this file if it was busy
         }
-        // Check if account should be marked as online
-        else if (timeSinceActivity <= ACTIVITY_TIMEOUT && currentStatus === 'offline') {
-          console.log(`📡 ${accountType} account ${accountId} back online`);
 
-          // Update status in CSV file
-          const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
-          fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-          fileModified = true;
-          hasChanges = true;
+        let fileModified = false;
+
+        fileData.data.forEach(account => {
+          const accountId = account.account_id;
+          const accountType = account.account_type;
+          const lastActivity = new Date(account.timestamp);
+          const timeSinceActivity = now - lastActivity;
+          const currentStatus = account.current_status || account.status;
+
+          // Check if account should be marked as offline
+          if (timeSinceActivity > ACTIVITY_TIMEOUT && currentStatus !== 'offline') {
+            console.log(
+              `📴 ${accountType} account ${accountId} marked as offline (${Math.round(timeSinceActivity / 1000)}s inactive)`
+            );
+
+            // Update status in CSV file
+            const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
+            fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+            fileModified = true;
+            hasChanges = true;
+          }
+          // Check if account should be marked as online
+          else if (timeSinceActivity <= ACTIVITY_TIMEOUT && currentStatus === 'offline') {
+            console.log(`📡 ${accountType} account ${accountId} back online`);
+
+            // Update status in CSV file
+            const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
+            fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+            fileModified = true;
+            hasChanges = true;
+          }
+        });
+
+        // Save changes to file if modified
+        if (fileModified) {
+          try {
+            await new Promise((resolve, reject) => {
+              writeFile(filePath, fileContent, 'utf8', (err) => {
+                if (err) {
+                  if (err.code === 'EBUSY' || err.code === 'EACCES') {
+                    console.log(`📁 File ${filePath} is busy, cannot write changes`);
+                    resolve(); // Continue without error
+                  } else {
+                    reject(err);
+                  }
+                } else {
+                  console.log(`💾 Updated status in file: ${filePath}`);
+                  resolve();
+                }
+              });
+            });
+          } catch (error) {
+            console.error(`Error writing to file ${filePath}:`, error);
+          }
         }
-      });
-
-      // Save changes to file if modified
-      if (fileModified) {
-        writeFileSync(filePath, fileContent, 'utf8');
-        console.log(`💾 Updated status in file: ${filePath}`);
+      } catch (error) {
+        console.error(`Error processing file ${filePath}:`, error);
+        continue; // Skip this file and continue with others
       }
     }
 
     // Refresh CSV data if changes were made
     if (hasChanges) {
-      csvManager.refreshAllFileData();
+      csvManager.refreshAllFileData().catch(error => {
+        console.error('Error refreshing CSV data:', error);
+      });
 
       // Emit event to notify frontend of account changes
       csvManager.emit('csvUpdated', {
@@ -490,7 +533,7 @@ export const getAllAccounts = async (req, res) => {
 
   try {
     // Force refresh of CSV data to ensure we have the latest information
-    csvManager.refreshAllFileData();
+    await csvManager.refreshAllFileData();
 
     // Get accounts from CSV instead of JSON
     const accounts = await csvManager.getAllActiveAccounts();
@@ -1255,24 +1298,86 @@ export const getSupportedPlatforms = (req, res) => {
 
 // ===== PENDING ACCOUNTS MANAGEMENT =====
 
-// Get all pending accounts
+// Get all pending accounts - Simple and direct
 export const getPendingAccounts = async (req, res) => {
   try {
-    const apiKey = req.apiKey; // Set by requireValidSubscription middleware
+    const apiKey = req.apiKey;
     if (!apiKey) {
-      return res
-        .status(401)
-        .json({ error: 'API Key required - use requireValidSubscription middleware' });
+      return res.status(401).json({ 
+        error: 'API Key required - use requireValidSubscription middleware' 
+      });
     }
 
-    // Forzar actualización de datos antes de obtener pending accounts
-    await csvManager.refreshAllFileData();
-
-    // Get pending accounts from CSV instead of JSON
-    const allAccounts = await csvManager.getAllActiveAccounts();
-    const pendingAccountsArray = allAccounts.pendingAccounts || [];
-    const pendingCount = pendingAccountsArray.length;
-
+    // Get pending accounts from ALL IPTRADECSV2*.csv files in the system
+    console.log(`🔍 [ENDPOINT] Searching for ALL IPTRADECSV2*.csv files...`);
+    
+    const allPendingAccounts = [];
+    const baseDir = 'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files';
+    
+    console.log(`📁 [ENDPOINT] Base directory: ${baseDir}`);
+    
+    try {
+      // Read all files in the directory
+      console.log(`📁 [ENDPOINT] Reading directory...`);
+      const files = readdirSync(baseDir);
+      console.log(`📁 [ENDPOINT] All files in directory (${files.length}):`);
+      files.forEach(file => console.log(`   📄 ${file}`));
+      
+      console.log(`📁 [ENDPOINT] Filtering CSV files...`);
+      const csvFiles = files.filter(file => 
+        file.includes('IPTRADECSV2') && file.endsWith('.csv')
+      );
+      
+      console.log(`📁 [ENDPOINT] Found ${csvFiles.length} IPTRADECSV2*.csv files:`);
+      csvFiles.forEach(file => console.log(`   📄 ${file}`));
+      
+      // Process each CSV file
+      for (const fileName of csvFiles) {
+        const filePath = join(baseDir, fileName);
+        try {
+          const content = readFileSync(filePath, 'utf8');
+          const lines = content.split('\n').filter(line => line.trim());
+          
+          if (lines.length > 0) {
+            // Extract account info from first line
+            const typeMatch = content.match(/\[TYPE\]\s*\[PENDING\]\s*\[(MT[45])\]\s*\[(\d+)\]/);
+            if (typeMatch) {
+              const [, platform, accountId] = typeMatch;
+              
+              // Extract status from second line
+              const statusMatch = content.match(/\[STATUS\]\s*\[(ONLINE|OFFLINE)\]\s*\[(\d+)\]/);
+              const status = statusMatch ? statusMatch[1].toLowerCase() : 'unknown';
+              const timestamp = statusMatch ? statusMatch[2] : Date.now().toString();
+              
+              const account = {
+                account_id: accountId,
+                platform: platform,
+                account_type: 'pending',
+                status: status,
+                timestamp: timestamp,
+                filePath: filePath
+              };
+              
+              allPendingAccounts.push(account);
+              console.log(`✅ [ENDPOINT] Found account: ${accountId} (${platform}) - ${status} - File: ${fileName}`);
+            }
+          }
+        } catch (error) {
+          console.log(`❌ [ENDPOINT] Error reading ${fileName}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      console.log(`❌ [ENDPOINT] Error accessing directory: ${error.message}`);
+    }
+    
+    console.log(`📋 [ENDPOINT] Total pending accounts found: ${allPendingAccounts.length}`);
+    allPendingAccounts.forEach((acc, index) => {
+      console.log(`   [ENDPOINT] ${index + 1}. ${acc.account_id} (${acc.platform}) - ${acc.status} - File: ${acc.filePath}`);
+    });
+    
+    const pendingAccountsArray = allPendingAccounts;
+    
+    // Convert to simple object format
     const pendingAccounts = {};
     pendingAccountsArray.forEach(account => {
       pendingAccounts[account.account_id] = {
@@ -1280,19 +1385,19 @@ export const getPendingAccounts = async (req, res) => {
         name: `Account ${account.account_id}`,
         platform: account.platform,
         status: account.status,
-        current_status: account.current_status || account.status, // Agregar current_status para compatibilidad
+        current_status: account.status,
         timestamp: account.timestamp,
         config: account.config,
+        filePath: account.filePath // For debugging
       };
     });
 
     res.json({
       pendingAccounts,
-      totalPending: pendingCount,
-      message:
-        pendingCount > 0
-          ? `Found ${pendingCount} account(s) awaiting configuration`
-          : 'No pending accounts found',
+      totalPending: pendingAccountsArray.length,
+      message: pendingAccountsArray.length > 0 
+        ? `Found ${pendingAccountsArray.length} account(s) awaiting configuration`
+        : 'No pending accounts found'
     });
   } catch (error) {
     console.error('Error getting pending accounts:', error);
@@ -1300,65 +1405,16 @@ export const getPendingAccounts = async (req, res) => {
   }
 };
 
-// Get pending accounts from cache (for immediate loading on app start)
+// DISABLED: Cache endpoint removed - use /api/accounts/pending instead
 export const getPendingAccountsFromCache = async (req, res) => {
-  try {
-    const apiKey = req.apiKey; // Set by requireValidSubscription middleware
-    if (!apiKey) {
-      return res
-        .status(401)
-        .json({ error: 'API Key required - use requireValidSubscription middleware' });
-    }
-
-    // Forzar carga desde cache si no hay archivos cargados
-    if (csvManager.csvFiles.size === 0) {
-      console.log('📋 No CSV files loaded, attempting to load from cache...');
-      const cachedPaths = csvManager.loadCSVPathsFromCache();
-      if (cachedPaths.length > 0) {
-        cachedPaths.forEach(filePath => {
-          if (existsSync(filePath)) {
-            csvManager.csvFiles.set(filePath, {
-              lastModified: csvManager.getFileLastModified(filePath),
-              data: csvManager.parseCSVFile(filePath),
-            });
-          }
-        });
-        console.log(`📋 Loaded ${csvManager.csvFiles.size} CSV files from cache`);
-      }
-    }
-
-    // Get pending accounts from CSV
-    const allAccounts = await csvManager.getAllActiveAccounts();
-    const pendingAccountsArray = allAccounts.pendingAccounts || [];
-    const pendingCount = pendingAccountsArray.length;
-
-    // Convert array to object format for backward compatibility
-    const pendingAccounts = {};
-    pendingAccountsArray.forEach(account => {
-      pendingAccounts[account.account_id] = {
-        id: account.account_id,
-        name: `Account ${account.account_id}`,
-        platform: account.platform,
-        status: account.status,
-        current_status: account.current_status || account.status, // Agregar current_status para compatibilidad
-        timestamp: account.timestamp,
-        config: account.config,
-      };
-    });
-
-    res.json({
-      pendingAccounts,
-      totalPending: pendingCount,
-      message:
-        pendingCount > 0
-          ? `Found ${pendingCount} account(s) awaiting configuration (from cache)`
-          : 'No pending accounts found',
-      fromCache: csvManager.csvFiles.size > 0,
-    });
-  } catch (error) {
-    console.error('Error getting pending accounts from cache:', error);
-    res.status(500).json({ error: 'Failed to get pending accounts from cache' });
-  }
+  res.json({
+    success: false,
+    error: 'Cache endpoint disabled - use /api/accounts/pending instead',
+    totalPending: 0,
+    pendingAccounts: {},
+    message: 'Cache endpoint disabled - use direct endpoint only',
+    fromCache: false
+  });
 };
 
 // Convert pending account to master

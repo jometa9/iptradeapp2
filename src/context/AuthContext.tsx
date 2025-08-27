@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -39,9 +39,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Add debounce mechanism to prevent multiple simultaneous validations
+  const validationInProgress = useRef<boolean>(false);
+  const validationPromise = useRef<Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> | null>(null);
 
   // Validar licencia contra API externa
   const validateLicense = async (
+    apiKey: string
+  ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
+    // If validation is already in progress, wait for it
+    if (validationInProgress.current && validationPromise.current) {
+      console.log('⏳ Validation already in progress, waiting for result...');
+      return await validationPromise.current;
+    }
+
+    // Start new validation
+    validationInProgress.current = true;
+    validationPromise.current = performValidation(apiKey);
+
+    try {
+      const result = await validationPromise.current;
+      return result;
+    } finally {
+      validationInProgress.current = false;
+      validationPromise.current = null;
+    }
+  };
+
+  // Internal function that performs the actual validation
+  const performValidation = async (
     apiKey: string
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {

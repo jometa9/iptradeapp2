@@ -8,6 +8,9 @@ const VALID_SUBSCRIPTION_STATUSES = ['active', 'trialing', 'admin_assigned'];
 export const subscriptionCache = new Map();
 const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 
+// Add a map to track ongoing validation promises to prevent duplicate requests
+export const ongoingValidations = new Map();
+
 // Map API plan names to internal plan names
 const mapPlanName = (apiPlanName, subscriptionType) => {
   // Check if the user is an admin, give them IPTRADE Managed VPS regardless of plan
@@ -64,6 +67,27 @@ const PLAN_LIMITS = {
 
 // Validate subscription against external license API
 export const validateSubscription = async apiKey => {
+  // Check if there's already an ongoing validation for this API key
+  if (ongoingValidations.has(apiKey)) {
+    console.log('⏳ Validation already in progress for API key, waiting for result...');
+    return await ongoingValidations.get(apiKey);
+  }
+
+  // Create a new validation promise
+  const validationPromise = performValidation(apiKey);
+  ongoingValidations.set(apiKey, validationPromise);
+
+  try {
+    const result = await validationPromise;
+    return result;
+  } finally {
+    // Clean up the ongoing validation promise
+    ongoingValidations.delete(apiKey);
+  }
+};
+
+// Internal function that performs the actual validation
+const performValidation = async apiKey => {
   console.log('🔍 === SUBSCRIPTION VALIDATION START ===');
   console.log('📝 API Key received:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
   console.log('🌍 Environment variables:');
@@ -163,7 +187,7 @@ export const validateSubscription = async apiKey => {
       return { valid: false, error: 'Validation failed' };
     }
   } catch (error) {
-    console.error('💥 Error validating subscription with external API:', error.message);
+    console.error('💥 Error during subscription validation:', error.message);
     console.error('💥 Error stack:', error.stack);
     console.error('💥 Error details:', error);
 
@@ -254,13 +278,33 @@ export const requireValidSubscription = async (req, res, next) => {
     const now = Date.now();
 
     if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
+      // Use cached validation - no logging to reduce spam
       req.user = cachedValidation.userData;
       req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
       req.apiKey = apiKey;
-
       return next();
     }
 
+    // Check if there's an ongoing validation
+    if (ongoingValidations.has(apiKey)) {
+      console.log('⏳ Waiting for ongoing validation to complete...');
+      const validation = await ongoingValidations.get(apiKey);
+      
+      if (validation.valid) {
+        req.user = validation.userData;
+        req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
+        req.apiKey = apiKey;
+        return next();
+      } else {
+        return res.status(401).json({
+          error: validation.error,
+          details: validation,
+        });
+      }
+    }
+
+    // Perform new validation
+    console.log('🔄 Performing new subscription validation...');
     const validation = await validateSubscription(apiKey);
 
     if (!validation.valid) {
@@ -455,4 +499,5 @@ export default {
   allowPendingConversions,
   enforceLotSizeRestrictions,
   subscriptionCache,
+  ongoingValidations,
 };

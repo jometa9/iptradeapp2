@@ -26,4 +26,24 @@ acciones de todo tipo a cuentas pending vinculadas
 que siempre que inicie la app lo haga con los csv cacheados
 
 
-2025.08.23 23:30:52.364	IPTRADE_MT4 BTCUSD,M1: Line3: [CONFIG] [SLAVE] [ENABLED] [1.17] [NULL] [FALSE] [11219046] [/Users/joaquinmetayer/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/IPTRADECSV2.csv]
+
+
+
+COMANDO DE WINDOWS QUE SI FUNCIONA.
+
+PARA BUSCAR LOS ARCHIVOS CSV
+
+Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
+    Where-Object { $_.Name -eq 'IPTRADECSV2.csv' } |
+    Select-Object -ExpandProperty FullName
+}
+
+PARA BUSCAR LAS CARPETAS MQL5 Y MQL4
+
+Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
+    Where-Object { $_.Name -in @('MQL4','MQL5') } |
+    Select-Object -ExpandProperty FullName
+}
+

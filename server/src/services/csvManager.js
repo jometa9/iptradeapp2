@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, readFile } from 'fs';
 import { glob } from 'glob';
-import { basename, join } from 'path';
+import { basename, join, resolve } from 'path';
 
 import { validateBeforeWrite } from './csvValidator2.js';
 import { detectOrderChanges } from './orderChangeDetector.js';
@@ -48,6 +48,19 @@ class CSVManager extends EventEmitter {
     if (this.csvFiles.size > 0) {
       this.startFileWatching();
     }
+  }
+
+  // Función para limpiar el cache y archivos cargados (usada cuando se activa Link Accounts)
+  clearCacheAndFiles() {
+    console.log('🧹 Clearing CSV cache and loaded files...');
+    
+    // Limpiar archivos cargados
+    this.csvFiles.clear();
+    
+    // Detener todos los watchers
+    this.stopFileWatching();
+    
+    console.log('✅ CSV cache and files cleared');
   }
 
   // Parse new CSV2 format: [TYPE][PENDING][MT4][12345] or [TYPE] [PENDING] [MT4] [12345]
@@ -626,7 +639,6 @@ class CSVManager extends EventEmitter {
 
   // Normalize path to avoid duplicates with different formats
   normalizePath(filePath) {
-    const { resolve } = require('path');
     return resolve(filePath);
   }
 
@@ -643,7 +655,6 @@ class CSVManager extends EventEmitter {
   // Check if two paths point to the same file
   pathsAreEquivalent(path1, path2) {
     try {
-      const { resolve } = require('path');
       const resolved1 = resolve(path1);
       const resolved2 = resolve(path2);
       return resolved1 === resolved2;
@@ -710,81 +721,41 @@ class CSVManager extends EventEmitter {
     return summary;
   }
 
-  // Iniciar watching de archivos CSV
-  startFileWatching() {
-    // Limpiar watchers y polling anteriores
+  // Detener watching de archivos CSV
+  stopFileWatching() {
+    console.log('🛑 Stopping file watching...');
+    
+    // Limpiar watchers
     this.watchers.forEach(watcher => {
       if (watcher.close) watcher.close();
     });
     this.watchers.clear();
 
+    // Limpiar intervals
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
 
     if (this.pendingEvaluationInterval) {
       clearInterval(this.pendingEvaluationInterval);
+      this.pendingEvaluationInterval = null;
     }
 
-    // Almacenar últimas modificaciones para detectar cambios
-    const lastModifiedTimes = new Map();
-    this.csvFiles.forEach((fileData, filePath) => {
-      lastModifiedTimes.set(filePath, this.getFileLastModified(filePath));
-    });
-
-    // Polling cada 2 segundos para detectar cambios
-    this.pollingInterval = setInterval(() => {
-      let hasChanges = false;
-      this.csvFiles.forEach((fileData, filePath) => {
-        try {
-          const currentModified = this.getFileLastModified(filePath);
-          const lastModified = lastModifiedTimes.get(filePath);
-
-          if (currentModified > lastModified) {
-            hasChanges = true;
-            const fileName = basename(filePath);
-
-            lastModifiedTimes.set(filePath, currentModified);
-            this.lastFileChange = Date.now(); // Registrar el último cambio
-
-            // Procesar el cambio
-            this.refreshFileData(filePath);
-
-            // Emitir evento para el frontend
-            this.emit('fileUpdated', filePath, this.csvFiles.get(filePath)?.data);
-
-            // Forzar reevaluación de cuentas pendientes
-            this.scanAndEmitPendingUpdates();
-          }
-        } catch (error) {
-          console.error(`❌ Error checking file ${filePath}:`, error.message);
-        }
-      });
-    }, 2000); // Cada 2 segundos
-
-    // Heartbeat para confirmar que el polling está activo
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
 
-    this.heartbeatInterval = setInterval(() => {
-      this.csvFiles.forEach((fileData, filePath) => {});
-    }, 30000); // Cada 30 segundos
+    console.log('✅ File watching stopped');
+  }
 
-    // Timer para re-evaluar cuentas pendientes cada 5 segundos (solo si no hay cambios recientes)
-    if (this.pendingEvaluationInterval) {
-      clearInterval(this.pendingEvaluationInterval);
-    }
-
-    this.pendingEvaluationInterval = setInterval(() => {
-      // Solo re-evaluar si no ha habido cambios recientes
-      const now = Date.now();
-      const lastChange = this.lastFileChange || 0;
-      if (now - lastChange > 3000) {
-        // Solo si no ha habido cambios en los últimos 3 segundos
-        this.scanAndEmitPendingUpdates();
-      }
-    }, 5000); // Cada 5 segundos
+  // File watching deshabilitado - pending accounts solo se consultan desde frontend
+  startFileWatching() {
+    console.log('📋 File watching disabled - pending accounts will be fetched on-demand from frontend');
+    
+    // Limpiar watchers y polling anteriores si existen
+    this.stopFileWatching();
   }
 
   // Iniciar escaneo periódico para detectar nuevos archivos CSV (deshabilitado)
@@ -792,54 +763,13 @@ class CSVManager extends EventEmitter {
     // Intentionally disabled; scanning will be triggered explicitly by app events
   }
 
-  // Método para escanear pending y emitir updates via SSE (solo si hay archivos para escanear)
-  async scanAndEmitPendingUpdates() {
-    try {
-      // Solo escanear si hay archivos CSV disponibles
-      if (this.csvFiles.size === 0) {
-        // Sin archivos CSV, emitir estado vacío sin escanear
-        this.emit('pendingAccountsUpdate', {
-          accounts: [],
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
-
-      // Usar getAllActiveAccounts que ya parsea correctamente el nuevo formato
-      const allAccounts = await this.getAllActiveAccounts();
-      const pendingAccounts = allAccounts.pendingAccounts || [];
-
-      // Solo mostrar logs si hay cambios significativos o es la primera vez
-      const currentState = JSON.stringify(
-        pendingAccounts.map(acc => ({
-          id: acc.account_id,
-          status: acc.status,
-          time: acc.timeSinceLastPing,
-        }))
-      );
-
-      if (!this.lastPendingState || this.lastPendingState !== currentState) {
-        pendingAccounts.forEach(acc => {
-          const timeSinceStr = acc.timeSinceLastPing
-            ? `(${acc.timeSinceLastPing.toFixed(1)}s ago)`
-            : '(no timestamp)';
-        });
-        this.lastPendingState = currentState;
-      }
-
-      this.emit('pendingAccountsUpdate', {
-        accounts: pendingAccounts,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error('Error scanning pending accounts for SSE:', error);
-    }
-  }
+  // Método eliminado - pending accounts solo se consultan desde frontend
 
   // Refrescar datos de un archivo específico
-  refreshFileData(filePath) {
+  async refreshFileData(filePath) {
     try {
-      const newData = this.parseCSVFile(filePath);
+      // Usar la versión asíncrona que maneja archivos bloqueados
+      const newData = await this.parseCSVFileAsync(filePath);
       const lastModified = this.getFileLastModified(filePath);
 
       // Obtener el accountId del archivo
@@ -850,17 +780,26 @@ class CSVManager extends EventEmitter {
 
       // Si es una cuenta master, detectar cambios en órdenes
       if (accountId && newData.length > 0 && newData[0].account_type === 'master') {
-        const content = readFileSync(filePath, 'utf8');
-        const changes = detectOrderChanges(accountId, content);
-
-        if (changes.hasChanges) {
-          // Emitir evento específico para cambios en órdenes
-          this.emit('orderChanged', {
-            accountId,
-            filePath,
-            changes,
-            timestamp: Date.now(),
+        try {
+          const content = await new Promise((resolve, reject) => {
+            readFile(filePath, 'utf8', (err, data) => {
+              if (err) reject(err);
+              else resolve(data);
+            });
           });
+          const changes = detectOrderChanges(accountId, content);
+
+          if (changes.hasChanges) {
+            // Emitir evento específico para cambios en órdenes
+            this.emit('orderChanged', {
+              accountId,
+              filePath,
+              changes,
+              timestamp: Date.now(),
+            });
+          }
+        } catch (error) {
+          console.log(`📁 Skipping order change detection for ${filePath} (file busy)`);
         }
       }
 
@@ -872,22 +811,13 @@ class CSVManager extends EventEmitter {
       // Emitir evento general
       this.emit('csvFileChanged', { filePath, data: newData });
 
-      // Si es un archivo pending, emitir evento específico
-      this.checkAndEmitPendingUpdate(filePath);
+      // Pending updates eliminados - solo consultas desde frontend
     } catch (error) {
       console.error(`Error refreshing file ${filePath}:`, error);
     }
   }
 
-  // Verificar si el archivo es pending y emitir update
-  async checkAndEmitPendingUpdate(filePath) {
-    try {
-      // Simplificar: ante cualquier cambio de archivo observado, escanear y emitir
-      await this.scanAndEmitPendingUpdates();
-    } catch (error) {
-      console.error('Error checking pending update:', error);
-    }
-  }
+  // Método eliminado - pending accounts solo se consultan desde frontend
 
   // Obtener timestamp de última modificación
   getFileLastModified(filePath) {
@@ -901,26 +831,39 @@ class CSVManager extends EventEmitter {
   }
 
   // Refrescar datos de todos los archivos ya cargados (sin buscar nuevos)
-  refreshAllFileData() {
+  async refreshAllFileData() {
+    const promises = [];
+    
     this.csvFiles.forEach((fileData, filePath) => {
       if (existsSync(filePath)) {
-        this.csvFiles.set(filePath, {
-          lastModified: this.getFileLastModified(filePath),
-          data: this.parseCSVFile(filePath),
-        });
+        promises.push(
+          this.parseCSVFileAsync(filePath).then(newData => {
+            this.csvFiles.set(filePath, {
+              lastModified: this.getFileLastModified(filePath),
+              data: newData,
+            });
+          }).catch(error => {
+            console.error(`Error refreshing file ${filePath}:`, error);
+            // Mantener datos anteriores si hay error
+          })
+        );
       } else {
         // Remover archivo si ya no existe
         this.csvFiles.delete(filePath);
       }
     });
+    
+    await Promise.allSettled(promises);
   }
 
-  // Parsear archivo CSV con el nuevo formato de corchetes
+  // Parsear archivo CSV con el nuevo formato de corchetes (versión síncrona para compatibilidad)
   parseCSVFile(filePath) {
     try {
       if (!existsSync(filePath)) {
         return [];
       }
+
+
 
       // Leer como buffer para detectar encoding
       const buffer = readFileSync(filePath);
@@ -1081,7 +1024,155 @@ class CSVManager extends EventEmitter {
     return data;
   }
 
-  // Obtener todas las cuentas activas
+  // Parsear archivo CSV de forma asíncrona con manejo de archivos bloqueados
+  async parseCSVFileAsync(filePath, maxRetries = 3, retryDelay = 1000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (!existsSync(filePath)) {
+          return [];
+        }
+
+        // Usar readFile asíncrono para evitar bloqueos
+        const buffer = await new Promise((resolve, reject) => {
+          readFile(filePath, (err, data) => {
+            if (err) {
+              if (err.code === 'EBUSY' || err.code === 'EACCES') {
+                // Archivo bloqueado, intentar de nuevo
+                reject(err);
+              } else {
+                reject(err);
+              }
+            } else {
+              resolve(data);
+            }
+          });
+        });
+
+        let content;
+
+        // Detectar UTF-16 LE BOM (FF FE)
+        if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+          content = buffer.toString('utf16le');
+        } else {
+          content = buffer.toString('utf8');
+        }
+
+        const lines = content
+          .trim()
+          .split('\n')
+          .filter(line => line.trim());
+
+        if (lines.length === 0) return [];
+
+        // Detectar formato
+        const firstLine = lines[0];
+        const hasBrackets = firstLine.includes('[') && firstLine.includes(']');
+
+        // Si es el formato antiguo con headers, usar el parser antiguo
+        if (!hasBrackets && firstLine.includes(',')) {
+          return this.parseOldCSVFormat(lines);
+        }
+
+        // Nuevo formato con corchetes - múltiples cuentas en un archivo
+        const accounts = new Map();
+        let currentAccountId = null;
+        let currentAccountData = null;
+
+        for (const line of lines) {
+          // Extraer valores entre corchetes
+          const matches = line.match(/\[([^\]]*)\]/g);
+          if (!matches || matches.length < 2) continue;
+
+          const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+          const lineType = values[0];
+
+          switch (lineType) {
+            case 'TYPE':
+              // Nueva cuenta
+              currentAccountId = values[3]; // [TYPE][MASTER][MT4][12345]
+              currentAccountData = {
+                account_id: currentAccountId,
+                account_type: values[1].toLowerCase(), // master, slave, pending
+                platform: values[2],
+                status: 'offline', // Se actualizará con STATUS line
+                timestamp: null,
+                config: {},
+                tickets: [],
+              };
+              accounts.set(currentAccountId, currentAccountData);
+              break;
+
+            case 'STATUS':
+              // Actualizar status
+              if (currentAccountData) {
+                currentAccountData.status = values[1].toLowerCase(); // online/offline
+                currentAccountData.timestamp = values[2];
+
+                // Para cuentas pending, calcular si realmente está online basado en timestamp
+                if (currentAccountData.account_type === 'pending') {
+                  const now = Date.now() / 1000;
+                  const pingTime = parseInt(values[2]) || 0;
+                  const timeDiff = now - pingTime;
+
+                  const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos
+
+                  if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
+                    currentAccountData.status = 'offline';
+                  }
+                }
+              }
+              break;
+
+            case 'CONFIG':
+              // Parsear configuración según tipo de cuenta
+              if (currentAccountData) {
+                const configType = values[1].toLowerCase();
+                if (configType === 'master' && currentAccountData.account_type === 'pending') {
+                  currentAccountData.account_type = 'master';
+                } else if (configType === 'slave' && currentAccountData.account_type === 'pending') {
+                  currentAccountData.account_type = 'slave';
+                }
+
+                if (currentAccountData.account_type === 'master') {
+                  currentAccountData.config = {
+                    masterId: currentAccountId,
+                    enabled: configType === 'master',
+                    // Otros campos de configuración se pueden agregar aquí
+                  };
+                } else if (currentAccountData.account_type === 'slave') {
+                  currentAccountData.config = {
+                    masterId: values[2] || 'NULL',
+                    enabled: configType === 'slave',
+                    // Otros campos de configuración se pueden agregar aquí
+                  };
+                }
+              }
+              break;
+          }
+        }
+
+        return Array.from(accounts.values());
+
+      } catch (error) {
+        if (error.code === 'EBUSY' || error.code === 'EACCES') {
+          console.log(`📁 File ${filePath} is busy (attempt ${attempt}/${maxRetries}), retrying in ${retryDelay}ms...`);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            continue;
+          } else {
+            console.warn(`⚠️ Failed to read ${filePath} after ${maxRetries} attempts, skipping...`);
+            return [];
+          }
+        } else {
+          console.error(`Error parsing CSV file ${filePath}:`, error);
+          return [];
+        }
+      }
+    }
+  }
+
+  // Obtener todas las cuentas activas - FORZAR REFRESH DE TODOS LOS ARCHIVOS
   getAllActiveAccounts() {
     const accounts = {
       masterAccounts: {},
@@ -1104,6 +1195,12 @@ class CSVManager extends EventEmitter {
     };
 
     this.csvFiles.forEach((fileData, filePath) => {
+        // Re-parsear el archivo para obtener datos actualizados
+        const freshData = this.parseCSVFile(filePath);
+        fileData.data = freshData;
+    });
+
+    this.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach((row, index) => {
         if (row.account_id) {
           const accountId = row.account_id;
@@ -1113,19 +1210,18 @@ class CSVManager extends EventEmitter {
 
           // Incluir cuentas pending
           if (accountType === 'pending') {
-            // Solo incluir si no ha pasado más de 1 hora (3600 segundos)
-            if (!timeSinceLastPing || timeSinceLastPing <= 3600) {
-              accounts.pendingAccounts.push({
-                account_id: accountId,
-                platform: platform,
-                status: status,
-                current_status: status, // Agregar current_status para compatibilidad con frontend
-                timestamp: row.timestamp,
-                timeSinceLastPing: timeSinceLastPing,
-                config: row.config || {},
-                filePath: filePath, // Para debug
-              });
-            }
+            // Incluir todas las cuentas pending que estén en el archivo CSV
+            // El filtrado por tiempo se hace en el frontend si es necesario
+            accounts.pendingAccounts.push({
+              account_id: accountId,
+              platform: platform,
+              status: status,
+              current_status: status, // Agregar current_status para compatibilidad con frontend
+              timestamp: row.timestamp,
+              timeSinceLastPing: timeSinceLastPing,
+              config: row.config || {},
+              filePath: filePath, // Para debug
+            });
           }
 
           if (accountType === 'master') {
@@ -1658,7 +1754,6 @@ class CSVManager extends EventEmitter {
 
       // Forzar actualización de datos
       await this.refreshAllFileData();
-      await this.scanAndEmitPendingUpdates();
 
       return updatedFiles;
     } catch (error) {

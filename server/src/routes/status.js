@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 import { loadAccountsConfig, saveAccountsConfig } from '../controllers/configManager.js';
 import { getStatus } from '../controllers/statusController.js';
-import { subscriptionCache, validateSubscription } from '../middleware/subscriptionAuth.js';
+import { subscriptionCache, validateSubscription, ongoingValidations } from '../middleware/subscriptionAuth.js';
 import CtraderAuthServiceInstance from '../services/ctraderAuth.js';
 import Mt5AuthServiceInstance from '../services/mt5Auth.js';
 
@@ -125,36 +125,59 @@ router.get('/validate-subscription', async (req, res) => {
  *       200:
  *         description: Cache cleared successfully
  */
-router.post('/clear-subscription-cache', (req, res) => {
+router.post('/clear-subscription-cache', async (req, res) => {
   const { apiKey } = req.query;
-
-  if (apiKey) {
-    // Clear specific API key's cache
-    if (subscriptionCache.has(apiKey)) {
+  
+  try {
+    if (apiKey) {
+      // Clear specific API key cache
       subscriptionCache.delete(apiKey);
-      console.log(
-        `🧹 Cleared subscription cache for key: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...`
-      );
-      return res.status(200).json({
-        message: 'Cache cleared for specific API key',
-        cleared: true,
-      });
+      console.log(`🗑️ Cleared cache for API key: ${apiKey.substring(0, 8)}...`);
+      res.json({ message: 'Cache cleared for specific API key' });
     } else {
-      return res.status(404).json({
-        message: 'No cache found for the specified API key',
-        cleared: false,
-      });
+      // Clear all cache
+      const cacheSize = subscriptionCache.size;
+      subscriptionCache.clear();
+      console.log(`🗑️ Cleared entire subscription cache (${cacheSize} entries)`);
+      res.json({ message: `Cleared entire cache (${cacheSize} entries)` });
     }
-  } else {
-    // Clear all cache
-    const cacheSize = subscriptionCache.size;
-    subscriptionCache.clear();
-    console.log(`🧹 Cleared entire subscription cache (${cacheSize} entries)`);
-    return res.status(200).json({
-      message: `Cleared entire subscription cache (${cacheSize} entries)`,
-      cleared: true,
-      entriesCleared: cacheSize,
+  } catch (error) {
+    console.error('Error clearing subscription cache:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
+  }
+});
+
+/**
+ * @swagger
+ * /subscription-cache-status:
+ *   get:
+ *     summary: Get subscription cache status
+ *     tags: [Status]
+ *     responses:
+ *       200:
+ *         description: Cache status information
+ */
+router.get('/subscription-cache-status', async (req, res) => {
+  try {
+    const cacheEntries = Array.from(subscriptionCache.entries()).map(([key, value]) => ({
+      apiKey: key.substring(0, 8) + '...',
+      timestamp: value.timestamp,
+      age: Date.now() - value.timestamp,
+      userData: {
+        userId: value.userData.userId,
+        email: value.userData.email,
+        subscriptionType: value.userData.subscriptionType
+      }
+    }));
+
+    res.json({
+      cacheSize: subscriptionCache.size,
+      entries: cacheEntries,
+      ongoingValidations: ongoingValidations.size
     });
+  } catch (error) {
+    console.error('Error getting cache status:', error);
+    res.status(500).json({ error: 'Failed to get cache status' });
   }
 });
 

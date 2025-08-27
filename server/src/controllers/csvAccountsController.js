@@ -16,7 +16,7 @@ const findMasterCSVPath = async masterId => {
 
     // IMPORTANT: Refresh cache before searching to ensure we have the latest data
     console.log(`🔄 Refreshing CSV cache before searching for master account ${masterId}...`);
-    csvManager.refreshAllFileData();
+    await csvManager.refreshAllFileData();
 
     // Search through scanned CSV files
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
@@ -654,7 +654,7 @@ export const updateCSVAccountType = async (req, res) => {
       }
 
       // Refresh CSV data from existing files (no new search)
-      csvManager.refreshAllFileData();
+      await csvManager.refreshAllFileData();
 
       // Emit SSE event to notify frontend of account conversion
       csvManager.emit('accountConverted', {
@@ -1034,7 +1034,7 @@ export const scanPlatformAccounts = async (req, res) => {
     const previousCount = csvManager.csvFiles.size;
 
     // Refresh data from existing files (no new search)
-    csvManager.refreshAllFileData();
+    await csvManager.refreshAllFileData();
 
     const newCount = csvManager.csvFiles.size;
     const allAccounts = csvManager.getAllActiveAccounts();

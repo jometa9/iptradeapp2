@@ -286,6 +286,10 @@ class LinkPlatformsController {
     this.emitLinkPlatformsEvent('started', { message: 'Link Platforms process started' });
 
     try {
+      // PASO 0: Limpiar cache del CSV Manager para ignorar cache cuando se activa Link Accounts
+      console.log('🧹 Step 0: Clearing CSV cache to ignore cache when Link Accounts is activated...');
+      csvManager.clearCacheAndFiles();
+
       // PASO 1: Configurar CSV watching para archivos existentes PRIMERO
       console.log('🔧 Step 1: Configuring CSV watching for existing files...');
       await this.configureCSVWatchingForExistingFilesInternal();
@@ -398,14 +402,38 @@ class LinkPlatformsController {
         console.log(`📁 Created ${type}/Files folder: ${filesPath}`);
       }
 
-      // Create CSV file if it doesn't exist and add to watching
-      const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-      if (fs.existsSync(csvPath)) {
-        result.csvFiles.push(csvPath);
-        console.log(`📄 Found existing CSV file: ${csvPath}`);
+      // Look for existing CSV files with IPTRADECSV2 pattern
+      const csvFiles = fs.readdirSync(filesPath).filter(file => 
+        file.includes('IPTRADECSV2') && file.endsWith('.csv')
+      );
+      
+      if (csvFiles.length > 0) {
+        // Found existing CSV files
+        csvFiles.forEach(csvFile => {
+          const csvPath = path.join(filesPath, csvFile);
+          result.csvFiles.push(csvPath);
+          console.log(`📄 Found existing CSV file: ${csvPath}`);
+          
+          // Register the CSV file in csvManager for watching
+          try {
+            const added = csvManager.addCSVFile(csvPath);
+            if (added) {
+              console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
+            } else {
+              console.log(`⚠️ CSV file not registered (may be duplicate): ${csvPath}`);
+            }
+          } catch (error) {
+            console.error(`❌ Error registering CSV file for watching: ${error.message}`);
+          }
+        });
       } else {
+        // Create new CSV file with platform-specific name
+        const platformSuffix = type === 'MQL4' ? 'MT4' : 'MT5';
+        const csvFileName = `IPTRADECSV2${platformSuffix}.csv`;
+        const csvPath = path.join(filesPath, csvFileName);
+        
         // Create empty CSV file with basic structure
-        const emptyCSVContent = `[TYPE][PENDING][${type === 'MQL4' ? 'MT4' : 'MT5'}][0]
+        const emptyCSVContent = `[TYPE][PENDING][${platformSuffix}][0]
 [STATUS][OFFLINE][0]
 [CONFIG][PENDING]`;
 
@@ -610,8 +638,75 @@ class LinkPlatformsController {
   async configureCSVWatchingForExistingFilesInternal() {
     console.log('🔧 Configuring CSV watching for existing files in the system...');
 
-    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
-    if (this.operatingSystem === 'macos') {
+    // En Windows, usar el comando PowerShell específico para buscar archivos CSV
+    if (this.operatingSystem === 'windows') {
+      console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`);
+
+      try {
+        // Comando PowerShell para buscar archivos IPTRADECSV2.csv en todo el sistema
+        const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
+    Where-Object { $_.Name -eq 'IPTRADECSV2.csv' } |
+    Select-Object -ExpandProperty FullName
+}`;
+        console.log(`🔍 Executing PowerShell command for CSV search...`);
+
+        // Usar exec asíncrono para manejar timeouts y errores
+        let stdout = '';
+        try {
+          const result = await execAsync(findCommand, {
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 30000,
+            shell: 'powershell.exe',
+          });
+          stdout = result.stdout;
+        } catch (error) {
+          // PowerShell puede retornar error por timeout pero aún encontrar archivos
+          // Usamos el stdout aunque haya error
+          if (error.stdout) {
+            stdout = error.stdout;
+            console.log(
+              `⚠️ PowerShell command returned error code but found files, using results anyway`
+            );
+          }
+        }
+
+        const allCsvFiles = stdout
+          .trim()
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
+        allCsvFiles.forEach(file => console.log(`   - ${file}`));
+
+        // Configurar watching para todos los archivos encontrados
+        allCsvFiles.forEach(csvPath => {
+          if (fs.existsSync(csvPath)) {
+            csvManager.csvFiles.set(csvPath, {
+              lastModified: csvManager.getFileLastModified(csvPath),
+              data: csvManager.parseCSVFile(csvPath),
+            });
+            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
+          }
+        });
+
+        // Configurar file watching
+        csvManager.startFileWatching();
+
+        // Guardar el cache después de encontrar los archivos CSV
+        if (csvManager.csvFiles.size > 0) {
+          csvManager.saveCSVPathsToCache();
+          console.log(
+            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
+          );
+        }
+
+        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
+      } catch (error) {
+        console.error(`❌ Error during Windows system-wide CSV search for existing files:`, error);
+      }
+    } else if (this.operatingSystem === 'macos') {
       console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
 
       try {
@@ -670,7 +765,7 @@ class LinkPlatformsController {
       }
     } else {
       // Para otros sistemas operativos, usar la lógica original
-      console.log('🔧 Using original CSV watching logic for non-macOS systems');
+      console.log('🔧 Using original CSV watching logic for non-macOS/Windows systems');
     }
   }
 
@@ -752,8 +847,137 @@ class LinkPlatformsController {
   async configureCSVWatching(csvPaths) {
     console.log(`🔧 Configuring CSV watching for ${csvPaths.length} specific paths...`);
 
-    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
-    if (this.operatingSystem === 'macos') {
+    // En Windows, usar el comando PowerShell específico para buscar archivos CSV
+    if (this.operatingSystem === 'windows') {
+      console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell...`);
+
+      try {
+        // Comando PowerShell para buscar archivos IPTRADECSV2.csv en todo el sistema
+        const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
+    Where-Object { $_.Name -eq 'IPTRADECSV2.csv' } |
+    Select-Object -ExpandProperty FullName
+}`;
+        console.log(`🔍 Executing PowerShell command for CSV search...`);
+
+        // Usar exec asíncrono para manejar timeouts y errores
+        let stdout = '';
+        try {
+          const result = await execAsync(findCommand, {
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 30000,
+            shell: 'powershell.exe',
+          });
+          stdout = result.stdout;
+        } catch (error) {
+          // PowerShell puede retornar error por timeout pero aún encontrar archivos
+          // Usamos el stdout aunque haya error
+          if (error.stdout) {
+            stdout = error.stdout;
+            console.log(
+              `⚠️ PowerShell command returned error code but found files, using results anyway`
+            );
+          }
+        }
+
+        const allCsvFiles = stdout
+          .trim()
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
+        allCsvFiles.forEach(file => console.log(`   - ${file}`));
+
+        // Filtrar solo archivos CSV con formato válido
+        const validCsvFiles = [];
+
+        for (const csvPath of allCsvFiles) {
+          if (fs.existsSync(csvPath)) {
+            try {
+              // Leer el archivo como buffer primero para detectar encoding
+              const buffer = fs.readFileSync(csvPath);
+              let content;
+
+              // Detectar UTF-16 LE BOM (FF FE)
+              if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+                content = buffer.toString('utf16le');
+              } else {
+                content = buffer.toString('utf8');
+              }
+
+              const lines = content.split('\n').filter(line => line.trim());
+
+              if (lines.length > 0) {
+                const firstLine = lines[0];
+
+                // Log para debugging
+                console.log(`🔍 Checking file: ${csvPath}`);
+                console.log(`   Raw first line bytes: ${Buffer.from(firstLine).toString('hex')}`);
+                console.log(`   Raw first line: "${firstLine}"`);
+
+                // Buscar patrones válidos en cualquier parte de la línea
+                // Esto manejará archivos con BOM u otros caracteres al inicio
+                const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
+                const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
+
+                const hasValidFormat = hasBracketFormat || hasCommaFormat;
+
+                console.log(`   Has bracket format: ${hasBracketFormat}`);
+                console.log(`   Has comma format: ${hasCommaFormat}`);
+                console.log(`   Valid format: ${hasValidFormat}`);
+
+                if (hasValidFormat) {
+                  validCsvFiles.push(csvPath);
+
+                  // Log detallado del contenido del archivo CSV válido
+                  console.log(`\n📄 === VALID CSV FILE FOUND ===`);
+                  console.log(`📁 File: ${csvPath}`);
+                  console.log(`📊 Total lines: ${lines.length}`);
+                  console.log(`📋 Raw content:`);
+                  console.log(content);
+                  console.log(`📋 Processed lines:`);
+                  lines.forEach((line, index) => {
+                    console.log(`   Line ${index + 1}: "${line}"`);
+                  });
+                  console.log(`📄 === END CSV CONTENT ===\n`);
+                } else {
+                  console.log(`❌ Skipping invalid format: ${csvPath}`);
+                }
+              }
+            } catch (error) {
+              console.log(`❌ Error reading CSV file ${csvPath}: ${error.message}`);
+            }
+          }
+        }
+
+        console.log(
+          `✅ Found ${validCsvFiles.length} valid CSV files out of ${allCsvFiles.length} total files`
+        );
+
+        // Configurar watching para archivos válidos
+        validCsvFiles.forEach(csvPath => {
+          csvManager.csvFiles.set(csvPath, {
+            lastModified: csvManager.getFileLastModified(csvPath),
+            data: csvManager.parseCSVFile(csvPath),
+          });
+          console.log(`📍 Added valid CSV to watch list: ${csvPath}`);
+        });
+      } catch (error) {
+        console.error(`❌ Error during Windows system-wide CSV search:`, error);
+
+        // Fallback: usar las rutas originales
+        csvPaths.forEach(csvPath => {
+          if (fs.existsSync(csvPath)) {
+            csvManager.csvFiles.set(csvPath, {
+              lastModified: csvManager.getFileLastModified(csvPath),
+              data: csvManager.parseCSVFile(csvPath),
+            });
+            console.log(`📍 Added fallback CSV to watch list: ${csvPath}`);
+          }
+        });
+      }
+    } else if (this.operatingSystem === 'macos') {
       console.log(`🍎 macOS detected - performing system-wide CSV search...`);
 
       try {
@@ -814,7 +1038,7 @@ class LinkPlatformsController {
 
                 // Buscar patrones válidos en cualquier parte de la línea
                 // Esto manejará archivos con BOM u otros caracteres al inicio
-                const hasBracketFormat = /\[[0-9]+\].*\[[0-9]+\].*\[.*\].*\[.*\]/.test(firstLine);
+                const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
                 const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
 
                 const hasValidFormat = hasBracketFormat || hasCommaFormat;
@@ -1215,12 +1439,18 @@ class LinkPlatformsController {
             }
 
             // Only detect existing CSV files, don't create them
-            const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-            if (fs.existsSync(csvPath)) {
-              result.csvFiles.push(csvPath);
-              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            const csvFiles = fs.readdirSync(filesPath).filter(file => 
+              file.includes('IPTRADECSV2') && file.endsWith('.csv')
+            );
+            
+            if (csvFiles.length > 0) {
+              csvFiles.forEach(csvFile => {
+                const csvPath = path.join(filesPath, csvFile);
+                result.csvFiles.push(csvPath);
+                console.log(`📄 Found existing CSV file: ${csvPath}`);
+              });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
+              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL4 folder ${folder}: ${error.message}`);
@@ -1262,12 +1492,18 @@ class LinkPlatformsController {
             }
 
             // Only detect existing CSV files, don't create them
-            const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-            if (fs.existsSync(csvPath)) {
-              result.csvFiles.push(csvPath);
-              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            const csvFiles = fs.readdirSync(filesPath).filter(file => 
+              file.includes('IPTRADECSV2') && file.endsWith('.csv')
+            );
+            
+            if (csvFiles.length > 0) {
+              csvFiles.forEach(csvFile => {
+                const csvPath = path.join(filesPath, csvFile);
+                result.csvFiles.push(csvPath);
+                console.log(`📄 Found existing CSV file: ${csvPath}`);
+              });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
+              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL5 folder ${folder}: ${error.message}`);
@@ -1322,12 +1558,18 @@ class LinkPlatformsController {
             }
 
             // Only detect existing CSV files, don't create them
-            const csvPath = path.join(filesPath, 'IPTRADECSV2.csv');
-            if (fs.existsSync(csvPath)) {
-              result.csvFiles.push(csvPath);
-              console.log(`📄 Found existing CSV file: ${csvPath}`);
+            const csvFiles = fs.readdirSync(filesPath).filter(file => 
+              file.includes('IPTRADECSV2') && file.endsWith('.csv')
+            );
+            
+            if (csvFiles.length > 0) {
+              csvFiles.forEach(csvFile => {
+                const csvPath = path.join(filesPath, csvFile);
+                result.csvFiles.push(csvPath);
+                console.log(`📄 Found existing CSV file: ${csvPath}`);
+              });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${csvPath}`);
+              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing cTrader folder ${folder}: ${error.message}`);
@@ -1358,73 +1600,93 @@ class LinkPlatformsController {
     }
   }
 
-  // Búsqueda específica para Windows - busca en TODOS los discos
+  // Búsqueda específica para Windows - usa el comando PowerShell específico
   async findBothMQLFoldersWindows() {
     try {
-      // Obtener todos los drives disponibles
-      const drives = await this.getWindowsDrives();
-      console.log(`🔍 Searching for MQL folders in Windows drives: ${drives.join(', ')}`);
+      console.log(`🪟 Windows detected - using PowerShell command for MQL folder search...`);
 
-      const allMQL4Folders = [];
-      const allMQL5Folders = [];
-      const allCtraderFolders = [];
+      // Comando PowerShell específico para buscar carpetas MQL4 y MQL5
+      const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
+    Where-Object { $_.Name -in @('MQL4','MQL5') } |
+    Select-Object -ExpandProperty FullName
+}`;
+      console.log(`🔍 Executing PowerShell command for MQL folder search...`);
 
-      // Buscar en cada drive de forma paralela para mayor velocidad
-      const searchPromises = drives.map(async drive => {
-        try {
-          console.log(`🔍 Searching in drive: ${drive}`);
-
-          // Comando para buscar carpetas MQL4, MQL5 y cTrader en un solo comando
-          const command = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\MQL[45]$\\|\\\\cAlgo$\\|\\\\Spotware$"`;
-
-          const { stdout } = await execAsync(command, {
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 30000,
-            shell: 'cmd.exe',
-          });
-
-          if (stdout && stdout.trim()) {
-            const folders = stdout
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0);
-
-            const mql4 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL4'));
-            const mql5 = folders.filter(folder => folder.toUpperCase().endsWith('\\MQL5'));
-            const ctrader = folders.filter(
-              folder =>
-                folder.toUpperCase().endsWith('\\CTRADER') ||
-                folder.toUpperCase().endsWith('\\CALGO') ||
-                folder.toUpperCase().endsWith('\\SPOTWARE')
-            );
-
-            console.log(
-              `📂 Drive ${drive}: Found ${mql4.length} MQL4 + ${mql5.length} MQL5 + ${ctrader.length} cTrader folders`
-            );
-
-            return { mql4, mql5, ctrader };
-          }
-
-          return { mql4: [], mql5: [], ctrader: [] };
-        } catch (error) {
-          console.warn(`⚠️ Error searching drive ${drive}: ${error.message}`);
-          return { mql4: [], mql5: [], ctrader: [] };
+      // Usar exec asíncrono para manejar timeouts y errores
+      let stdout = '';
+      try {
+        const result = await execAsync(command, {
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 30000,
+          shell: 'powershell.exe',
+        });
+        stdout = result.stdout;
+      } catch (error) {
+        // PowerShell puede retornar error por timeout pero aún encontrar carpetas
+        // Usamos el stdout aunque haya error
+        if (error.stdout) {
+          stdout = error.stdout;
+          console.log(
+            `⚠️ PowerShell command returned error code but found folders, using results anyway`
+          );
         }
-      });
+      }
 
-      // Esperar que todas las búsquedas terminen
-      const results = await Promise.all(searchPromises);
+      const allFolders = stdout
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
 
-      // Combinar todos los resultados
-      results.forEach(result => {
-        allMQL4Folders.push(...result.mql4);
-        allMQL5Folders.push(...result.mql5);
-        allCtraderFolders.push(...result.ctrader);
-      });
+      console.log(`📁 Found ${allFolders.length} MQL folders in system:`);
+      allFolders.forEach(folder => console.log(`   - ${folder}`));
+
+      // Separar MQL4 y MQL5
+      const mql4Folders = allFolders.filter(folder => folder.endsWith('\\MQL4') || folder.endsWith('/MQL4'));
+      const mql5Folders = allFolders.filter(folder => folder.endsWith('\\MQL5') || folder.endsWith('/MQL5'));
+
+      // Para cTrader, mantener la búsqueda original ya que no está en el comando específico
+      const allCtraderFolders = [];
+      try {
+        const drives = await this.getWindowsDrives();
+        const ctraderSearchPromises = drives.map(async drive => {
+          try {
+            const ctraderCommand = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\cAlgo$\\|\\\\Spotware$"`;
+            const { stdout: ctraderStdout } = await execAsync(ctraderCommand, {
+              maxBuffer: 10 * 1024 * 1024,
+              timeout: 30000,
+              shell: 'cmd.exe',
+            });
+
+            if (ctraderStdout && ctraderStdout.trim()) {
+              const ctraderFolders = ctraderStdout
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .filter(folder =>
+                  folder.toUpperCase().endsWith('\\CTRADER') ||
+                  folder.toUpperCase().endsWith('\\CALGO') ||
+                  folder.toUpperCase().endsWith('\\SPOTWARE')
+                );
+              return ctraderFolders;
+            }
+            return [];
+          } catch (error) {
+            console.warn(`⚠️ Error searching cTrader folders in drive ${drive}: ${error.message}`);
+            return [];
+          }
+        });
+
+        const ctraderResults = await Promise.all(ctraderSearchPromises);
+        ctraderResults.forEach(folders => allCtraderFolders.push(...folders));
+      } catch (error) {
+        console.warn(`⚠️ Error during cTrader folder search: ${error.message}`);
+      }
 
       // Remover duplicados
-      const uniqueMQL4 = [...new Set(allMQL4Folders)];
-      const uniqueMQL5 = [...new Set(allMQL5Folders)];
+      const uniqueMQL4 = [...new Set(mql4Folders)];
+      const uniqueMQL5 = [...new Set(mql5Folders)];
       const uniqueCtrader = [...new Set(allCtraderFolders)];
 
       console.log(

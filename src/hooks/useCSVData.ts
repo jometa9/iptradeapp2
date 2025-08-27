@@ -156,7 +156,7 @@ export const useCSVData = (): UseCSVDataReturn => {
 
     const pollingInterval = setInterval(() => {
       loadData();
-    }, 1000); // Cada 1 segundo
+    }, 5000); // Cada 5 segundos en lugar de 1 segundo
 
     return () => {
       clearInterval(pollingInterval);
