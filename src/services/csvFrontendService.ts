@@ -22,7 +22,7 @@ class SimpleEventEmitter {
   }
 }
 
-// CSVData interface moved to useCSVData hook
+// CSVData interface moved to useUnifiedAccountData hook
 
 interface CopierStatus {
   globalStatus: boolean;
@@ -222,30 +222,46 @@ class CSVFrontendService extends SimpleEventEmitter {
     }
   }
 
-  // Métodos públicos para el frontend
-  public async getCopierStatus(): Promise<CopierStatus> {
+  // REMOVED: getCopierStatus() - Use getUnifiedAccountData() instead
+  // Copier status is now included in the unified endpoint response
+
+  // NEW: Unified endpoint that gets all data in one call
+  public async getUnifiedAccountData(): Promise<any> {
     try {
-      const response = await fetch(`http://localhost:${this.serverPort}/api/csv/copier/status`, {
+      console.log('🔄 [csvFrontendService] Getting unified account data...');
+      const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/unified`, {
         headers: {
           'x-api-key': this.getApiKey(),
         },
       });
+      
       if (response.ok) {
-        const data = await response.json();
-        // Extraer los datos del formato de respuesta del servidor
-        return data.data || data;
+        const result = await response.json();
+        console.log('📊 [csvFrontendService] Unified response:', {
+          success: result.success,
+          processingTime: result.processingTimeMs,
+          csvFilesAccessed: result.csvFilesAccessed,
+          pendingCount: result.data?.pendingAccounts?.length || 0,
+          masterCount: Object.keys(result.data?.configuredAccounts?.masterAccounts || {}).length,
+          slaveCount: Object.keys(result.data?.configuredAccounts?.slaveAccounts || {}).length,
+        });
+        return result;
+      } else {
+        console.error(
+          '❌ [csvFrontendService] Unified endpoint response not ok:',
+          response.status,
+          response.statusText
+        );
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('Error getting copier status:', error);
+      console.error('❌ [csvFrontendService] Error getting unified account data:', error);
+      throw error;
     }
-    return {
-      globalStatus: false,
-      globalStatusText: 'OFF',
-      masterAccounts: {},
-      totalMasterAccounts: 0,
-    };
   }
 
+  // REMOVED: getAllAccounts() - Use getUnifiedAccountData() instead
+  // Account data is now included in the unified endpoint response
   public async getAllAccounts(): Promise<AccountsData> {
     try {
       console.log('🔄 [csvFrontendService] Getting all accounts...');
@@ -302,20 +318,17 @@ class CSVFrontendService extends SimpleEventEmitter {
 
       const data = await response.json();
 
-      // Obtener datos actualizados de copier y accounts
-      const [copierStatus, accounts] = await Promise.all([
-        this.getCopierStatus(),
-        this.getAllAccounts(),
-      ]);
-
+      // Obtener datos actualizados usando el endpoint unificado
+      const unifiedData = await this.getUnifiedAccountData();
+      
       // Emitir eventos con los datos actualizados
-      this.emit('csvUpdated', { copierStatus, accounts });
-      this.emit('dataUpdated', { copierStatus, accounts });
+      this.emit('csvUpdated', unifiedData);
+      this.emit('dataUpdated', unifiedData);
 
       // Notificar a todos los componentes
       window.dispatchEvent(
         new CustomEvent('csvDataUpdated', {
-          detail: { copierStatus, accounts },
+          detail: unifiedData,
         })
       );
     } catch (error) {
@@ -383,20 +396,17 @@ class CSVFrontendService extends SimpleEventEmitter {
         throw new Error(errorData.error || 'Failed to update account status');
       }
 
-      // Obtener datos actualizados de copier y accounts
-      const [copierStatus, accounts] = await Promise.all([
-        this.getCopierStatus(),
-        this.getAllAccounts(),
-      ]);
-
+      // Obtener datos actualizados usando el endpoint unificado
+      const unifiedData = await this.getUnifiedAccountData();
+      
       // Emitir eventos con los datos actualizados
-      this.emit('csvUpdated', { copierStatus, accounts });
-      this.emit('dataUpdated', { copierStatus, accounts });
+      this.emit('csvUpdated', unifiedData);
+      this.emit('dataUpdated', unifiedData);
 
       // Notificar a todos los componentes
       window.dispatchEvent(
         new CustomEvent('csvDataUpdated', {
-          detail: { copierStatus, accounts },
+          detail: unifiedData,
         })
       );
     } catch (error) {
@@ -491,20 +501,17 @@ class CSVFrontendService extends SimpleEventEmitter {
         // Procesar la respuesta del servidor
         this.processCSVData(data);
 
-        // Obtener datos actualizados de copier y accounts
-        const [copierStatus, accounts] = await Promise.all([
-          this.getCopierStatus(),
-          this.getAllAccounts(),
-        ]);
-
+        // Obtener datos actualizados usando el endpoint unificado
+        const unifiedData = await this.getUnifiedAccountData();
+        
         // Emitir eventos con los datos actualizados
-        this.emit('csvUpdated', { copierStatus, accounts });
-        this.emit('dataUpdated', { copierStatus, accounts });
+        this.emit('csvUpdated', unifiedData);
+        this.emit('dataUpdated', unifiedData);
 
         // Notificar a todos los componentes
         window.dispatchEvent(
           new CustomEvent('csvDataUpdated', {
-            detail: { copierStatus, accounts },
+            detail: unifiedData,
           })
         );
       }

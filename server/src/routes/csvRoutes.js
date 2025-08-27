@@ -378,22 +378,25 @@ router.get('/csv/accounts/all', requireValidSubscription, getAllAccounts);
  * @swagger
  * /csv/copier/status:
  *   get:
- *     summary: Get copier status from CSV
+ *     summary: DEPRECATED - Use /api/accounts/unified instead
  *     tags: [CSV]
  *     responses:
  *       200:
- *         description: Copier status from CSV
+ *         description: Copier status from CSV (DEPRECATED)
  */
-// Get copier status from CSV
+// DEPRECATED: Get copier status from CSV - Use /api/accounts/unified instead
 const getCopierStatus = async (req, res) => {
   try {
+    console.log('⚠️ [DEPRECATED] /api/csv/copier/status called - use /api/accounts/unified instead');
     const csvManager = (await import('../services/csvManager.js')).default;
-    const copierStatus = csvManager.getCopierStatus();
+    const copierStatus = await csvManager.getCopierStatus();
 
     res.json({
       success: true,
       data: copierStatus,
       timestamp: new Date().toISOString(),
+      deprecated: true,
+      message: 'Use /api/accounts/unified instead for better performance',
     });
   } catch (error) {
     console.error('Error getting copier status from CSV:', error);

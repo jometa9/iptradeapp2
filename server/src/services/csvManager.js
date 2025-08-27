@@ -156,11 +156,11 @@ class CSVManager extends EventEmitter {
   // Nuevo método para escanear archivos pending simplificados
   async scanPendingCSVFiles() {
     try {
-      // Buscar todos los archivos IPTRADECSV2.csv en el sistema
+      // Buscar todos los archivos CSV que contengan IPTRADECSV2 en el nombre
       const patterns = [
-        '**/IPTRADECSV2.csv',
-        '**/csv_data/**/IPTRADECSV2.csv',
-        '**/accounts/**/IPTRADECSV2.csv',
+        '**/*IPTRADECSV2*.csv',
+        '**/csv_data/**/*IPTRADECSV2*.csv',
+        '**/accounts/**/*IPTRADECSV2*.csv',
       ];
 
       const allFiles = [];
@@ -259,10 +259,10 @@ class CSVManager extends EventEmitter {
         allFiles = Array.from(this.csvFiles.keys());
       } else {
         const patterns = [
-          '**/IPTRADECSV2.csv',
-          '**/csv_data/**/IPTRADECSV2.csv',
-          '**/accounts/**/IPTRADECSV2.csv',
-          process.env.HOME + '/**/IPTRADECSV2.csv',
+          '**/*IPTRADECSV2*.csv',
+          '**/csv_data/**/*IPTRADECSV2*.csv',
+          '**/accounts/**/*IPTRADECSV2*.csv',
+          process.env.HOME + '/**/*IPTRADECSV2*.csv',
         ];
         for (const pattern of patterns) {
           try {
@@ -519,7 +519,7 @@ class CSVManager extends EventEmitter {
     return [];
   }
 
-  // Escanear todos los archivos IPTRADECSV2.csv en el sistema (método original)
+  // Escanear todos los archivos CSV que contengan IPTRADECSV2 en el nombre (método original)
   async scanCSVFiles() {
     try {
       // Cargar configuración de ubicaciones
@@ -527,9 +527,9 @@ class CSVManager extends EventEmitter {
       let config = {
         csvLocations: [],
         searchPatterns: [
-          '**/IPTRADECSV2.csv',
-          '**/csv_data/**/IPTRADECSV2.csv',
-          '**/accounts/**/IPTRADECSV2.csv',
+          '**/*IPTRADECSV2*.csv',
+          '**/csv_data/**/*IPTRADECSV2*.csv',
+          '**/accounts/**/*IPTRADECSV2*.csv',
         ],
         autoScan: true,
         // scanInterval removed - file watching handled by SSE in real-time
@@ -559,7 +559,7 @@ class CSVManager extends EventEmitter {
       // También buscar en ubicaciones específicas
       for (const location of config.csvLocations) {
         if (existsSync(location)) {
-          const locationPattern = join(location, '**/IPTRADECSV2.csv');
+          const locationPattern = join(location, '**/*IPTRADECSV2*.csv');
           const files = await glob(locationPattern, {
             ignore: ['node_modules/**', '.git/**'],
             absolute: true,
@@ -587,6 +587,54 @@ class CSVManager extends EventEmitter {
     } catch (error) {
       console.error('Error scanning CSV files:', error);
       return [];
+    }
+  }
+
+  // Add a single CSV file to the manager for watching (async version)
+  async addCSVFileAsync(filePath) {
+    try {
+      if (!existsSync(filePath)) {
+        console.error(`❌ CSV file does not exist: ${filePath}`);
+        return false;
+      }
+
+      // Normalize the path to avoid duplicates with different formats
+      const normalizedPath = this.normalizePath(filePath);
+
+      // Check for duplicates using normalized path
+      if (this.csvFiles.has(normalizedPath)) {
+        console.log(`ℹ️ CSV file already registered (normalized): ${normalizedPath}`);
+        return true;
+      }
+
+      // Check for duplicates by comparing with existing paths
+      const isDuplicate = this.isDuplicatePath(normalizedPath);
+      if (isDuplicate) {
+        console.log(`⚠️ Duplicate CSV path detected, skipping: ${normalizedPath}`);
+        return false;
+      }
+
+      // Add the file to the map with its data (using async parsing)
+      const csvData = await this.parseCSVFileAsync(normalizedPath);
+      this.csvFiles.set(normalizedPath, {
+        lastModified: this.getFileLastModified(normalizedPath),
+        data: csvData,
+      });
+
+      console.log(`✅ Added CSV file for watching: ${normalizedPath}`);
+
+      // Save updated paths to cache
+      this.saveCSVPathsToCache();
+
+      // Start file watching if not already active
+      if (!this.pollingInterval) {
+        this.startFileWatching();
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`❌ Error adding CSV file ${filePath}:`, error);
+      return false;
     }
   }
 
@@ -1173,7 +1221,7 @@ class CSVManager extends EventEmitter {
   }
 
   // Obtener todas las cuentas activas - FORZAR REFRESH DE TODOS LOS ARCHIVOS
-  getAllActiveAccounts() {
+  async getAllActiveAccounts() {
     const accounts = {
       masterAccounts: {},
       slaveAccounts: {},
@@ -1194,11 +1242,21 @@ class CSVManager extends EventEmitter {
       return { status, timeSinceLastPing };
     };
 
+    // Re-parsear archivos de forma asíncrona para evitar errores EBUSY
+    const refreshPromises = [];
     this.csvFiles.forEach((fileData, filePath) => {
-        // Re-parsear el archivo para obtener datos actualizados
-        const freshData = this.parseCSVFile(filePath);
-        fileData.data = freshData;
+      refreshPromises.push(
+        this.parseCSVFileAsync(filePath).then(freshData => {
+          fileData.data = freshData;
+        }).catch(error => {
+          console.log(`⚠️ Skipping file ${filePath} due to lock: ${error.message}`);
+          // Mantener datos anteriores si hay error de bloqueo
+        })
+      );
     });
+    
+    // Esperar a que todos los archivos se procesen
+    await Promise.allSettled(refreshPromises);
 
     this.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach((row, index) => {
@@ -1245,7 +1303,16 @@ class CSVManager extends EventEmitter {
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
 
-            if (masterId && masterId !== 'NULL') {
+            // Validar que el masterId sea un ID válido (no un valor de configuración)
+            const isValidMasterId = masterId && 
+              masterId !== 'NULL' && 
+              masterId !== 'ENABLED' && 
+              masterId !== 'DISABLED' && 
+              masterId !== 'ON' && 
+              masterId !== 'OFF' &&
+              !isNaN(parseInt(masterId)); // Debe ser un número
+
+            if (isValidMasterId) {
               // Es un slave conectado - CREAR el master si no existe
               if (!accounts.masterAccounts[masterId]) {
                 accounts.masterAccounts[masterId] = {
@@ -1294,15 +1361,28 @@ class CSVManager extends EventEmitter {
 
     this.csvFiles.forEach(fileData => {
       fileData.data.forEach(row => {
-        if (row.account_type === 'slave' && row.master_id === masterId) {
-          slaves.push({
-            id: row.account_id,
-            name: row.account_id,
-            platform: row.platform || 'Unknown',
-            status: row.status || 'offline',
-            masterOnline: true,
-            config: row.config || {},
-          });
+        if (row.account_type === 'slave') {
+          const rowMasterId = row.config?.masterId || row.master_id;
+          
+          // Validar que el masterId sea un ID válido (no un valor de configuración)
+          const isValidMasterId = rowMasterId && 
+            rowMasterId !== 'NULL' && 
+            rowMasterId !== 'ENABLED' && 
+            rowMasterId !== 'DISABLED' && 
+            rowMasterId !== 'ON' && 
+            rowMasterId !== 'OFF' &&
+            !isNaN(parseInt(rowMasterId)); // Debe ser un número
+
+          if (isValidMasterId && rowMasterId === masterId) {
+            slaves.push({
+              id: row.account_id,
+              name: row.account_id,
+              platform: row.platform || 'Unknown',
+              status: row.status || 'offline',
+              masterOnline: true,
+              config: row.config || {},
+            });
+          }
         }
       });
     });
@@ -1344,12 +1424,11 @@ class CSVManager extends EventEmitter {
     return platformIndex !== -1 ? pathParts[platformIndex] : 'Unknown';
   }
 
-  // Obtener estado del copier
-  getCopierStatus() {
-    const accounts = this.getAllActiveAccounts();
+  // Obtener estado del copier (optimized version that accepts pre-loaded accounts)
+  getCopierStatusFromAccounts(accounts) {
     const masterAccounts = {};
 
-    Object.keys(accounts.masterAccounts).forEach(masterId => {
+    Object.keys(accounts.masterAccounts || {}).forEach(masterId => {
       const master = accounts.masterAccounts[masterId];
       masterAccounts[masterId] = {
         masterStatus: this.isMasterEnabled(masterId),
@@ -1362,8 +1441,14 @@ class CSVManager extends EventEmitter {
       globalStatus: this.isGlobalCopierEnabled(),
       globalStatusText: this.isGlobalCopierEnabled() ? 'ON' : 'OFF',
       masterAccounts,
-      totalMasterAccounts: Object.keys(accounts.masterAccounts).length,
+      totalMasterAccounts: Object.keys(accounts.masterAccounts || {}).length,
     };
+  }
+
+  // Obtener estado del copier (legacy method for backward compatibility)
+  async getCopierStatus() {
+    const accounts = await this.getAllActiveAccounts();
+    return this.getCopierStatusFromAccounts(accounts);
   }
 
   // Inicializar el estado global del copier
@@ -1543,7 +1628,7 @@ class CSVManager extends EventEmitter {
 
       // Si no se encuentra en archivos monitoreados, buscar en el sistema de archivos
       if (!targetFile) {
-        const searchPaths = [process.env.HOME + '/**/IPTRADECSV2.csv', '**/IPTRADECSV2.csv'];
+        const searchPaths = [process.env.HOME + '/**/*IPTRADECSV2*.csv', '**/*IPTRADECSV2*.csv'];
 
         for (const searchPath of searchPaths) {
           try {

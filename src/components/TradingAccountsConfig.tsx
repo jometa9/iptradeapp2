@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useCSVData } from '../hooks/useCSVData';
+import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import {
   canCreateMoreAccounts,
   canCustomizeLotSizes,
@@ -61,9 +61,9 @@ interface TradingAccount {
   masterOnline?: boolean;
 }
 
-// MasterAccountStatus interface moved to useCSVData hook
+// MasterAccountStatus interface moved to useUnifiedAccountData hook
 
-// CopierStatus interface moved to useCSVData hook
+// CopierStatus interface moved to useUnifiedAccountData hook
 
 interface SlaveConfig {
   config: {
@@ -115,14 +115,17 @@ export function TradingAccountsConfig() {
 
   // Usar el hook unificado SSE
   const {
-    copierStatus,
-    accounts: csvAccounts,
+    data: unifiedData,
     loading: isLoading,
     error,
     updateMasterStatus,
     updateSlaveConfig,
     refresh: refreshCSVData,
-  } = useCSVData();
+  } = useUnifiedAccountDataContext();
+
+  // Extract data from unified response
+  const copierStatus = unifiedData?.copierStatus;
+  const csvAccounts = unifiedData?.configuredAccounts;
 
   // Escuchar eventos de conversión de cuentas
   useEffect(() => {

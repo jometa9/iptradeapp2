@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
-import { useCSVData } from './useCSVData';
-import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
+import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
+// Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 import { useLinkPlatforms } from './useLinkPlatforms';
 
 const AUTO_LINK_CACHE_KEY = 'iptrade_auto_link_executed';
@@ -11,8 +11,9 @@ let autoLinkSkippedByCache = false;
 
 export const useAutoLinkPlatforms = () => {
   const { linkPlatforms } = useLinkPlatforms();
-  const { accounts } = useCSVData();
-  const { clearHiddenAccounts } = useHiddenPendingAccounts();
+  const { data: unifiedData } = useUnifiedAccountDataContext();
+  const accounts = unifiedData?.configuredAccounts;
+  // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
   const hasExecutedOnStartup = useRef(false);
 
   useEffect(() => {

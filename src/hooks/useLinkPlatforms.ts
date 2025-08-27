@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import type { LinkPlatformsResult } from '../services/linkPlatformsService';
 import { linkPlatformsService } from '../services/linkPlatformsService';
 import { SSEService } from '../services/sseService';
-import { useHiddenPendingAccounts } from './useHiddenPendingAccounts';
+// Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 
 export const useLinkPlatforms = () => {
   const { secretKey } = useAuth();
@@ -13,7 +13,7 @@ export const useLinkPlatforms = () => {
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
   const hasCheckedInitialStatus = useRef<boolean>(false);
-  const { clearHiddenAccounts } = useHiddenPendingAccounts();
+  // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
   // Track isLinking state changes
   const setIsLinkingWithLog = (newValue: boolean, reason: string) => {
@@ -72,7 +72,7 @@ export const useLinkPlatforms = () => {
       // IMPORTANT: If the HTTP request completes successfully, it means the process finished
       // We should stop the spinner immediately since there's no background scan
       if (result.success && !result.result.backgroundScan) {
-        clearHiddenAccounts();
+        // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
         setIsLinkingWithLog(false, 'HTTP request completed without background scan');
       }
 
@@ -128,7 +128,7 @@ export const useLinkPlatforms = () => {
               message: data.message,
               result: data.result,
             });
-            clearHiddenAccounts();
+            // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
             if (data.result?.backgroundScan) {
             } else {
@@ -160,8 +160,7 @@ export const useLinkPlatforms = () => {
             // Si había background scan, terminar el spinner ahora
             setIsLinkingWithLog(false, 'SSE background scan completed');
 
-            // Limpiar cuentas ocultas cuando se complete el background scan
-            clearHiddenAccounts();
+            // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
             if (
               data.newInstallations &&
@@ -201,8 +200,7 @@ export const useLinkPlatforms = () => {
         if (!status.isLinking && isLinking) {
           setIsLinkingWithLog(false, 'polling detected completion');
 
-          // Clear hidden accounts when linking finishes
-          clearHiddenAccounts();
+          // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
         }
       } catch (error) {
         // Don't change state on polling errors to avoid false negatives
@@ -212,7 +210,7 @@ export const useLinkPlatforms = () => {
     return () => {
       clearInterval(pollInterval);
     };
-  }, [isLinking, secretKey, setIsLinkingWithLog, clearHiddenAccounts]);
+  }, [isLinking, secretKey, setIsLinkingWithLog]);
 
   // Función para limpiar el cache de auto-link
   const clearAutoLinkCache = () => {

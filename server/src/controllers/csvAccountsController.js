@@ -896,7 +896,7 @@ export const connectPlatforms = async (req, res) => {
     console.log(`📊 Current CSV files: ${previousCount}`);
 
     // Primero obtener las cuentas cacheadas
-    const cachedAccounts = csvManager.getAllActiveAccounts();
+    const cachedAccounts = await csvManager.getAllActiveAccounts();
     console.log(`📋 Found ${cachedAccounts.pendingAccounts?.length || 0} cached pending accounts`);
 
     // Usar archivos ya cargados (no hacer búsqueda completa)
@@ -964,7 +964,7 @@ export const connectPlatforms = async (req, res) => {
     }
 
     // Obtener estadísticas actualizadas
-    const allAccounts = csvManager.getAllActiveAccounts();
+    const allAccounts = await csvManager.getAllActiveAccounts();
     const platformStats = {};
 
     // Contar cuentas detectadas en CSV por plataforma
@@ -1037,7 +1037,7 @@ export const scanPlatformAccounts = async (req, res) => {
     await csvManager.refreshAllFileData();
 
     const newCount = csvManager.csvFiles.size;
-    const allAccounts = csvManager.getAllActiveAccounts();
+    const allAccounts = await csvManager.getAllActiveAccounts();
 
     res.json({
       success: true,

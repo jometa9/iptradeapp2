@@ -18,6 +18,7 @@ import {
   getPendingAccountsFromCache,
   getSlaveAccount,
   getSupportedPlatforms,
+  getUnifiedAccountData,
   pingAccount,
   registerMasterAccount,
   registerSlaveAccount,
@@ -586,6 +587,47 @@ router.delete('/pending/:accountId', requireValidSubscription, deletePendingAcco
  *         description: Account activity statistics
  */
 router.get('/stats', requireValidSubscription, getAccountActivityStats);
+
+// Unified endpoint that returns all account data in one call
+/**
+ * @swagger
+ * /accounts/unified:
+ *   get:
+ *     summary: Get all account data (pending, configured, copier status, server stats) in one call
+ *     tags: [Accounts]
+ *     responses:
+ *       200:
+ *         description: Unified account data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     pendingAccounts:
+ *                       type: array
+ *                       description: Pending accounts with timestamp validation
+ *                     configuredAccounts:
+ *                       type: object
+ *                       description: Master and slave accounts
+ *                     copierStatus:
+ *                       type: object
+ *                       description: Global copier status and configuration
+ *                     serverStats:
+ *                       type: object
+ *                       description: Server statistics and counts
+ *                 timestamp:
+ *                   type: string
+ *                 processingTimeMs:
+ *                   type: number
+ *                 csvFilesAccessed:
+ *                   type: number
+ */
+router.get('/unified', requireValidSubscription, getUnifiedAccountData);
 
 // Get connectivity statistics (real synchronization status)
 /**

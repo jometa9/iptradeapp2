@@ -11,20 +11,16 @@ try {
     process.exit(1);
   }
 
-  console.log(`📁 [ENDPOINT] Searching for ALL IPTRADECSV2*.csv files...`);
-  
   const allPendingAccounts = [];
   
   // Read all files in the directory
   const files = readdirSync(baseDir);
-  console.log(`📁 [ENDPOINT] All files in directory (${files.length}):`);
   files.forEach(file => console.log(`   📄 ${file}`));
   
   const csvFiles = files.filter(file => 
     file.includes('IPTRADECSV2') && file.endsWith('.csv')
   );
   
-  console.log(`📁 [ENDPOINT] Found ${csvFiles.length} IPTRADECSV2*.csv files:`);
   csvFiles.forEach(file => console.log(`   📄 ${file}`));
   
   // Process each CSV file
@@ -55,19 +51,12 @@ try {
           };
           
           allPendingAccounts.push(account);
-          console.log(`✅ [ENDPOINT] Found account: ${accountId} (${platform}) - ${status} - File: ${fileName}`);
         }
       }
     } catch (error) {
       console.log(`❌ [ENDPOINT] Error reading ${fileName}: ${error.message}`);
     }
   }
-  
-  console.log(`📋 [ENDPOINT] Total pending accounts found: ${allPendingAccounts.length}`);
-  allPendingAccounts.forEach((acc, index) => {
-    console.log(`   [ENDPOINT] ${index + 1}. ${acc.account_id} (${acc.platform}) - ${acc.status} - File: ${acc.filePath}`);
-  });
-  
 } catch (error) {
   console.log(`❌ [ENDPOINT] Error accessing directory: ${error.message}`);
 }

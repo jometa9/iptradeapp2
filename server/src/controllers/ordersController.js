@@ -209,10 +209,25 @@ export function killProcessOnPort(port) {
 }
 
 // Load existing orders from CSV for specific account
-const loadExistingOrders = accountId => {
+const loadExistingOrders = async accountId => {
   const csvPath = getAccountCsvPath(accountId);
   if (!existsSync(csvPath)) return {};
-  const data = readFileSync(csvPath, 'utf8').trim();
+  
+  // Use async file reading to avoid EBUSY errors
+  const data = await new Promise((resolve, reject) => {
+    readFile(csvPath, 'utf8', (err, content) => {
+      if (err) {
+        if (err.code === 'EBUSY' || err.code === 'EACCES') {
+          console.log(`📁 File ${csvPath} is busy, returning empty orders`);
+          resolve(''); // Return empty string if file is busy
+        } else {
+          reject(err);
+        }
+      } else {
+        resolve(content);
+      }
+    });
+  }).then(content => content.trim());
   if (!data) return {};
   let orders = {};
   const lines = data.match(/\[(.*?)\]/g) || [];

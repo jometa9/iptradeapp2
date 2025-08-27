@@ -95,11 +95,11 @@ router.put('/copier/master', requireValidSubscription, setMasterStatus);
  * @swagger
  * /copier/status:
  *   get:
- *     summary: Get all copier statuses
+ *     summary: DEPRECATED - Use /api/accounts/unified instead
  *     tags: [Copier]
  *     responses:
  *       200:
- *         description: All copier statuses
+ *         description: All copier statuses (DEPRECATED)
  */
 router.get('/copier/status', requireValidSubscription, getAllStatuses);
 

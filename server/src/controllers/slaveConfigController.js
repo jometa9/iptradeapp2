@@ -869,10 +869,29 @@ const findMasterCSVPath = async masterId => {
 // Helper function to update CSV file to disconnect slave
 export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
   try {
-    const { readFileSync, writeFileSync } = await import('fs');
+    const { readFile, writeFileSync } = await import('fs');
 
-    // Read the CSV file
-    const csvContent = readFileSync(csvFilePath, 'utf8');
+    // Read the CSV file asynchronously to avoid EBUSY errors
+    const csvContent = await new Promise((resolve, reject) => {
+      readFile(csvFilePath, 'utf8', (err, data) => {
+        if (err) {
+          if (err.code === 'EBUSY' || err.code === 'EACCES') {
+            console.log(`📁 File ${csvFilePath} is busy, retrying...`);
+            // Retry after a short delay
+            setTimeout(() => {
+              readFile(csvFilePath, 'utf8', (err2, data2) => {
+                if (err2) reject(err2);
+                else resolve(data2);
+              });
+            }, 1000);
+          } else {
+            reject(err);
+          }
+        } else {
+          resolve(data);
+        }
+      });
+    });
     // console.log(`📄 Original CSV content for ${slaveAccountId}:`, csvContent);
 
     const lines = csvContent.split('\n');

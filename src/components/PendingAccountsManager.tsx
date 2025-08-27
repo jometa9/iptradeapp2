@@ -4,9 +4,8 @@ import { Cable, HousePlug, Inbox, Link, PartyPopper, TrafficCone, Unplug } from 
 
 import { useAuth } from '../context/AuthContext';
 import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
-import { useCSVData } from '../hooks/useCSVData';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
-import { usePendingAccounts } from '../hooks/usePendingAccounts';
+import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
@@ -156,12 +155,17 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   // Debug initial state removed
 
   // Usar el hook para pending accounts
+  // Use unified hook for all account data
   const {
-    pendingData: originalPendingData,
+    data: unifiedData,
     loading: loadingPending,
     error: pendingError,
-    refresh: refreshPending,
-  } = usePendingAccounts();
+    refresh: refreshData,
+  } = useUnifiedAccountDataContext();
+
+  // Extract data from unified response
+  const originalPendingData = unifiedData?.pendingData || null;
+  const csvAccounts = unifiedData?.configuredAccounts || null;
 
   // Estado local optimizado para evitar parpadeos
   const [pendingData, setPendingData] = useState(originalPendingData);
@@ -170,9 +174,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   useEffect(() => {
     setPendingData(originalPendingData);
   }, [originalPendingData]);
-
-  // Usar el hook CSV solo para master accounts
-  const { accounts: csvAccounts, refresh: refreshCSVData } = useCSVData();
 
   const masterAccounts = React.useMemo(() => {
     if (!csvAccounts?.masterAccounts) return [];
@@ -260,18 +261,18 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     try {
       setIsRefreshingMasters(true);
       // Force a refresh of the CSV data to get the latest master accounts
-      await refreshCSVData();
-      await refreshPending();
+      await refreshData();
+      await refreshData();
     } catch (error) {
       // Silent error handling
     } finally {
       setIsRefreshingMasters(false);
     }
-  }, [refreshCSVData, refreshPending]);
+  }, [refreshData, refreshData]);
 
   // loadAccountStats not used - using CSV data instead
 
-  // Real-time events handled by SSE in useCSVData hook
+  // Real-time events handled by SSE in useUnifiedAccountData hook
 
   // Mostrar errores de pending accounts
   useEffect(() => {

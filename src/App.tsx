@@ -4,6 +4,7 @@ import { Dashboard } from './components/Dashboard';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { UnifiedAccountDataProvider } from './context/UnifiedAccountDataContext';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -21,7 +22,11 @@ const AppContent: React.FC = () => {
   }
 
   console.log('🔍 App: Showing Dashboard');
-  return <Dashboard />;
+  return (
+    <UnifiedAccountDataProvider>
+      <Dashboard />
+    </UnifiedAccountDataProvider>
+  );
 };
 
 function App() {

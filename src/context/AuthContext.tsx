@@ -173,7 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Clear any other app data that might be stored
       localStorage.removeItem('secretKey'); // Used by csvFrontendService
-      localStorage.removeItem('hiddenPendingAccounts'); // Used by useHiddenPendingAccounts
+      localStorage.removeItem('hiddenPendingAccounts'); // Cleanup old data
 
       // Clear all localStorage keys that might contain user data
       const keysToRemove = [];

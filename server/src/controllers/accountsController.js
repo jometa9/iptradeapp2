@@ -75,7 +75,7 @@ const PENDING_DELETION_TIMEOUT = 3600000; // 1 hour in milliseconds
 const checkAccountActivity = async () => {
   try {
     // Get all accounts from CSV files
-    const allAccounts = csvManager.getAllActiveAccounts();
+    const allAccounts = await csvManager.getAllActiveAccounts();
     let hasChanges = false;
     const now = new Date();
 
@@ -902,7 +902,21 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
     // Preserve the current ENABLED/DISABLED status from the existing CSV
     let currentStatus = 'ENABLED'; // Default to ENABLED instead of DISABLED
     if (existsSync(csvFilePath)) {
-      const content = readFileSync(csvFilePath, 'utf8');
+      const content = await new Promise((resolve, reject) => {
+    readFile(csvFilePath, 'utf8', (err, data) => {
+      if (err) {
+        if (err.code === 'EBUSY' || err.code === 'EACCES') {
+          console.log(`📁 File ${csvFilePath} is busy, skipping...`);
+          resolve(null);
+        } else {
+          reject(err);
+        }
+      } else {
+        resolve(data);
+      }
+    });
+  });
+  if (!content) return res.status(500).json({ error: 'File is busy, try again later' });
       const lines = content.split('\n');
 
       for (const line of lines) {
@@ -1298,7 +1312,7 @@ export const getSupportedPlatforms = (req, res) => {
 
 // ===== PENDING ACCOUNTS MANAGEMENT =====
 
-// Get all pending accounts - Simple and direct
+// Get all pending accounts - Using cached CSV routes
 export const getPendingAccounts = async (req, res) => {
   try {
     const apiKey = req.apiKey;
@@ -1308,72 +1322,52 @@ export const getPendingAccounts = async (req, res) => {
       });
     }
 
-    // Get pending accounts from ALL IPTRADECSV2*.csv files in the system
-    console.log(`🔍 [ENDPOINT] Searching for ALL IPTRADECSV2*.csv files...`);
     
     const allPendingAccounts = [];
-    const baseDir = 'C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\Common\\Files';
-    
-    console.log(`📁 [ENDPOINT] Base directory: ${baseDir}`);
     
     try {
-      // Read all files in the directory
-      console.log(`📁 [ENDPOINT] Reading directory...`);
-      const files = readdirSync(baseDir);
-      console.log(`📁 [ENDPOINT] All files in directory (${files.length}):`);
-      files.forEach(file => console.log(`   📄 ${file}`));
+      // Get all active accounts from csvManager (which uses cached routes)
+      const cachedAccounts = await csvManager.getAllActiveAccounts();
       
-      console.log(`📁 [ENDPOINT] Filtering CSV files...`);
-      const csvFiles = files.filter(file => 
-        file.includes('IPTRADECSV2') && file.endsWith('.csv')
-      );
-      
-      console.log(`📁 [ENDPOINT] Found ${csvFiles.length} IPTRADECSV2*.csv files:`);
-      csvFiles.forEach(file => console.log(`   📄 ${file}`));
-      
-      // Process each CSV file
-      for (const fileName of csvFiles) {
-        const filePath = join(baseDir, fileName);
-        try {
-          const content = readFileSync(filePath, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
-          
-          if (lines.length > 0) {
-            // Extract account info from first line
-            const typeMatch = content.match(/\[TYPE\]\s*\[PENDING\]\s*\[(MT[45])\]\s*\[(\d+)\]/);
-            if (typeMatch) {
-              const [, platform, accountId] = typeMatch;
-              
-              // Extract status from second line
-              const statusMatch = content.match(/\[STATUS\]\s*\[(ONLINE|OFFLINE)\]\s*\[(\d+)\]/);
-              const status = statusMatch ? statusMatch[1].toLowerCase() : 'unknown';
-              const timestamp = statusMatch ? statusMatch[2] : Date.now().toString();
-              
-              const account = {
-                account_id: accountId,
-                platform: platform,
-                account_type: 'pending',
-                status: status,
-                timestamp: timestamp,
-                filePath: filePath
-              };
-              
-              allPendingAccounts.push(account);
-              console.log(`✅ [ENDPOINT] Found account: ${accountId} (${platform}) - ${status} - File: ${fileName}`);
-            }
-          }
-        } catch (error) {
-          console.log(`❌ [ENDPOINT] Error reading ${fileName}: ${error.message}`);
+      // Process each cached pending account
+      for (const account of (cachedAccounts.pendingAccounts || [])) {
+        const accountId = account.account_id;
+        const platform = account.platform;
+        const timestamp = account.timestamp;
+        const filePath = account.filePath;
+        
+        // TIMESTAMP VALIDATION LOGIC
+        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+        const accountTimestamp = parseInt(timestamp);
+        const timeDifference = currentTime - accountTimestamp;
+        
+        // RULE 1: If more than 1 hour (3600 seconds) has passed, DON'T return the account
+        if (timeDifference > 3600) {
+          console.log(`❌ [ENDPOINT] Account ${accountId} REJECTED: More than 1 hour old (${Math.floor(timeDifference / 3600)} hours)`);
+          continue; // Skip this account
         }
+        
+        // RULE 2: If more than 3 seconds have passed, mark as "offline"
+        let finalStatus = account.status;
+        if (timeDifference > 3) {
+          finalStatus = 'offline';
+        }
+        
+        const pendingAccount = {
+          account_id: accountId,
+          platform: platform,
+          account_type: 'pending',
+          status: finalStatus,
+          timestamp: timestamp,
+          filePath: filePath
+        };
+        
+        allPendingAccounts.push(pendingAccount);
       }
     } catch (error) {
-      console.log(`❌ [ENDPOINT] Error accessing directory: ${error.message}`);
+      console.log(`❌ [ENDPOINT] Error processing cached accounts: ${error.message}`);
     }
     
-    console.log(`📋 [ENDPOINT] Total pending accounts found: ${allPendingAccounts.length}`);
-    allPendingAccounts.forEach((acc, index) => {
-      console.log(`   [ENDPOINT] ${index + 1}. ${acc.account_id} (${acc.platform}) - ${acc.status} - File: ${acc.filePath}`);
-    });
     
     const pendingAccountsArray = allPendingAccounts;
     
@@ -2101,5 +2095,201 @@ export const getConnectivityStats = (req, res) => {
   } catch (error) {
     console.error('Error getting connectivity stats:', error);
     res.status(500).json({ error: 'Failed to get connectivity statistics' });
+  }
+};
+
+// Unified endpoint that returns all account data in one call
+export const getUnifiedAccountData = async (req, res) => {
+  try {
+    console.log('🔄 [UNIFIED] Getting all account data in single call...');
+    
+    const startTime = Date.now();
+    
+    // SINGLE CSV READ: Get all data from csvManager in one call (reads all CSV files once)
+    const allAccounts = await csvManager.getAllActiveAccounts();
+    
+    // Process all data from the single CSV read
+    const currentTime = Math.floor(Date.now() / 1000);
+    
+    // Process pending accounts with timestamp validation
+    const allPendingAccounts = [];
+    const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
+    
+    for (const account of (allAccounts.pendingAccounts || [])) {
+      const accountTimestamp = parseInt(account.timestamp);
+      const timeDifference = currentTime - accountTimestamp;
+      
+      // RULE 1: If more than 1 hour (3600 seconds) has passed, DON'T return the account
+      if (timeDifference > 3600) {
+        continue; // Skip this account
+      }
+      
+      // RULE 2: Determine online/offline status based on 3-second threshold
+      let finalStatus = 'online';
+      if (timeDifference > 3) {
+        finalStatus = 'offline';
+      }
+      
+      const pendingAccount = {
+        account_id: account.account_id,
+        platform: account.platform,
+        status: finalStatus,
+        current_status: finalStatus,
+        timestamp: accountTimestamp,
+        timeDifference: timeDifference,
+        filePath: account.filePath,
+        lastActivity: new Date(accountTimestamp * 1000).toISOString(),
+      };
+      
+      allPendingAccounts.push(pendingAccount);
+      pendingAccountIds.add(account.account_id);
+    }
+    
+    // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
+    const cleanMasterAccounts = {};
+    Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
+      // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
+      const isValidMasterId = masterId && 
+        masterId !== 'ENABLED' && 
+        masterId !== 'DISABLED' && 
+        masterId !== 'ON' && 
+        masterId !== 'OFF' &&
+        masterId !== 'NULL' &&
+        !isNaN(parseInt(masterId)); // Must be a number
+        
+      if (isValidMasterId) {
+        // Skip if this master account is already in pending accounts
+        if (pendingAccountIds.has(masterId)) {
+          console.log(`⚠️ [UNIFIED] Skipping master account that is already pending: ${masterId}`);
+          return;
+        }
+        
+        cleanMasterAccounts[masterId] = allAccounts.masterAccounts[masterId];
+      } else {
+        console.log(`⚠️ [UNIFIED] Skipping invalid master account ID: ${masterId}`);
+      }
+    });
+    
+    // Clean unconnected slaves - remove duplicates and invalid configurations
+    const cleanUnconnectedSlaves = [];
+    const seenSlaveIds = new Set();
+    
+    (allAccounts.unconnectedSlaves || []).forEach(slave => {
+      // Skip if we've already seen this slave ID
+      if (seenSlaveIds.has(slave.id)) {
+        console.log(`⚠️ [UNIFIED] Skipping duplicate unconnected slave: ${slave.id}`);
+        return;
+      }
+      
+      // Skip if this account is already in pending accounts
+      if (pendingAccountIds.has(slave.id)) {
+        console.log(`⚠️ [UNIFIED] Skipping unconnected slave that is already pending: ${slave.id}`);
+        return;
+      }
+      
+      // Validate slave configuration
+      const masterId = slave.config?.masterId;
+      
+      // Check if masterId is invalid
+      const isInvalidMasterId = masterId && 
+        (masterId === 'ENABLED' || 
+         masterId === 'DISABLED' || 
+         masterId === 'ON' || 
+         masterId === 'OFF' || 
+         masterId === 'NULL' ||
+         isNaN(parseInt(masterId)));
+      
+      if (isInvalidMasterId) {
+        console.log(`⚠️ [UNIFIED] Skipping unconnected slave with invalid masterId: ${slave.id} (masterId: ${masterId})`);
+        return; // Skip this slave
+      }
+      
+      // Clean the slave config if it has invalid masterId (shouldn't happen now, but just in case)
+      if (masterId && (masterId === 'ENABLED' || masterId === 'DISABLED' || masterId === 'ON' || masterId === 'OFF' || masterId === 'NULL')) {
+        console.log(`🔧 [UNIFIED] Cleaning invalid masterId for slave ${slave.id}: ${masterId} -> null`);
+        slave.config.masterId = null;
+      }
+      
+      cleanUnconnectedSlaves.push(slave);
+      seenSlaveIds.add(slave.id);
+    });
+    
+    // Clean slave accounts - remove duplicates with pending accounts
+    const cleanSlaveAccounts = {};
+    Object.keys(allAccounts.slaveAccounts || {}).forEach(slaveId => {
+      // Skip if this slave account is already in pending accounts
+      if (pendingAccountIds.has(slaveId)) {
+        console.log(`⚠️ [UNIFIED] Skipping slave account that is already pending: ${slaveId}`);
+        return;
+      }
+      
+      cleanSlaveAccounts[slaveId] = allAccounts.slaveAccounts[slaveId];
+    });
+    
+    // Get copier status from the cleaned data
+    const copierStatus = csvManager.getCopierStatusFromAccounts({
+      ...allAccounts,
+      masterAccounts: cleanMasterAccounts,
+      slaveAccounts: cleanSlaveAccounts
+    });
+    
+    // Calculate server statistics from the cleaned data
+    const serverStats = {
+      totalCSVFiles: csvManager.csvFiles.size,
+      totalPendingAccounts: allPendingAccounts.length,
+      onlinePendingAccounts: allPendingAccounts.filter(acc => acc.status === 'online').length,
+      offlinePendingAccounts: allPendingAccounts.filter(acc => acc.status === 'offline').length,
+      totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
+      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length,
+      totalUnconnectedSlaves: cleanUnconnectedSlaves.length,
+    };
+    
+    const processingTime = Date.now() - startTime;
+    
+    console.log(`✅ [UNIFIED] Retrieved all account data in ${processingTime}ms`);
+    console.log(`📊 [UNIFIED] Stats: ${serverStats.totalPendingAccounts} pending, ${serverStats.totalMasterAccounts} masters, ${serverStats.totalSlaveAccounts} slaves`);
+    console.log(`📁 [UNIFIED] CSV files read: ${csvManager.csvFiles.size} (single read operation)`);
+    
+    // Return unified response
+    res.json({
+      success: true,
+      data: {
+        // Pending accounts with validation applied
+        pendingAccounts: allPendingAccounts,
+        
+        // Configured accounts (masters and slaves) - ensure proper structure
+        configuredAccounts: {
+          masterAccounts: cleanMasterAccounts,
+          slaveAccounts: cleanSlaveAccounts,
+          unconnectedSlaves: cleanUnconnectedSlaves,
+        },
+        
+        // Copier status and configuration
+        copierStatus: {
+          globalStatus: copierStatus.globalStatus || false,
+          globalStatusText: copierStatus.globalStatusText || 'OFF',
+          masterAccounts: copierStatus.masterAccounts || {},
+          totalMasterAccounts: copierStatus.totalMasterAccounts || 0,
+        },
+        
+        // Server statistics
+        serverStats: serverStats,
+      },
+      
+      // Metadata
+      timestamp: new Date().toISOString(),
+      processingTimeMs: processingTime,
+      csvFilesAccessed: csvManager.csvFiles.size,
+      singleReadOperation: true, // Indicates this was a single CSV read operation
+    });
+    
+  } catch (error) {
+    console.error('❌ [UNIFIED] Error getting unified account data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to get unified account data',
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
   }
 };

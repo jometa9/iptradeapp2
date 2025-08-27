@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
 import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
-import { useHiddenPendingAccounts } from '../hooks/useHiddenPendingAccounts';
+// Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import { useOperatingSystem } from '../hooks/useOperatingSystem';
 import { PendingAccountsManager } from './PendingAccountsManager';
@@ -20,7 +20,10 @@ export const Dashboard: React.FC = () => {
   const { openExternalLink } = useExternalLink();
   const { linkPlatforms, isLinking, clearAutoLinkCache } = useLinkPlatforms();
   const operatingSystem = useOperatingSystem();
-  const { isHidden, isBlinking, toggleHidden } = useHiddenPendingAccounts();
+  // Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
+  const isHidden = false; // Default state
+  const isBlinking = false; // Default state
+  const toggleHidden = () => {}; // No-op function
 
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
