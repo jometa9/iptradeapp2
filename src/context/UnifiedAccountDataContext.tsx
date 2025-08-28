@@ -10,17 +10,48 @@ const UnifiedAccountDataContext = createContext<ReturnType<typeof useUnifiedAcco
 export const UnifiedAccountDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { secretKey } = useAuth();
   const unifiedData = useUnifiedAccountData();
+  const [isHidden, setIsHidden] = useState(() => {
+    const saved = localStorage.getItem('pendingAccountsHidden');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isBlinking, setIsBlinking] = useState(false);
+  
+  // Effect para manejar el parpadeo cuando hay cuentas pending
+  useEffect(() => {
+    if (!unifiedData.data?.pendingAccounts?.length) {
+      setIsBlinking(false);
+      return;
+    }
 
-  // Log to track provider instances
-  console.log('🔧 [UnifiedAccountDataProvider] Provider rendered, secretKey:', !!secretKey);
+    const blinkInterval = setInterval(() => {
+      setIsBlinking(prev => !prev);
+    }, 500); // Parpadeo cada 500ms
 
-  // Only provide data if authenticated
+    return () => clearInterval(blinkInterval);
+  }, [unifiedData.data?.pendingAccounts?.length]);
+
+  const toggleHidden = () => {
+    setIsHidden(prev => {
+      const newValue = !prev;
+      localStorage.setItem('pendingAccountsHidden', JSON.stringify(newValue));
+      return newValue;
+    });
+  };
+
+  // Add visibility state to context value
+  const contextValue = {
+    ...unifiedData,
+    isHidden,
+    isBlinking,
+    toggleHidden
+  };
+
   if (!secretKey) {
     return <>{children}</>;
   }
 
   return (
-    <UnifiedAccountDataContext.Provider value={unifiedData}>
+    <UnifiedAccountDataContext.Provider value={contextValue}>
       {children}
     </UnifiedAccountDataContext.Provider>
   );

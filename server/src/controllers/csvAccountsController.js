@@ -68,7 +68,7 @@ const generateCSV2Content = async (
           ? 'ENABLED'
           : 'DISABLED'
         : 'ENABLED';
-    content += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
+    content += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
   } else if (accountType === 'slave') {
     // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -361,7 +361,7 @@ export const updateCSVAccountType = async (req, res) => {
                 console.log(`🔒 Preserving copy trading status: ${currentStatus}`);
 
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -403,7 +403,7 @@ export const updateCSVAccountType = async (req, res) => {
                 );
 
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [Account ${accountId}]\n`;
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -434,7 +434,9 @@ export const updateCSVAccountType = async (req, res) => {
               }
             }
 
-            writeFileSync(filePath, newContent.replace(/\r\n/g, '\n'), 'utf8');
+            // Ensure we're writing to .csv not .cssv
+            const correctPath = filePath.replace(/\.cssv$/, '.csv');
+            writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
             console.log(
               `✏️ Updated TYPE and CONFIG lines for account ${accountId} to ${newType} in ${filePath}`
@@ -503,7 +505,9 @@ export const updateCSVAccountType = async (req, res) => {
               }
 
               if (slaveFound) {
-                writeFileSync(filePath, newContent.replace(/\r\n/g, '\n'), 'utf8');
+                // Ensure we're writing to .csv not .cssv
+            const correctPath = filePath.replace(/\.cssv$/, '.csv');
+            writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
                 console.log(`✏️ Updated slave ${slaveId} to disconnect from master ${accountId}`);
               }
             }
@@ -794,7 +798,9 @@ export const deletePendingFromCSV = async (req, res) => {
 
           if (modified) {
             // Escribir el archivo actualizado
-            writeFileSync(filePath, filteredLines.join('\n'));
+            // Ensure we're writing to .csv not .cssv
+            const correctPath = filePath.replace(/\.cssv$/, '.csv');
+            writeFileSync(correctPath, filteredLines.join('\n'));
             deletedFromFiles++;
             console.log(`✅ Updated file: ${filePath}`);
           }

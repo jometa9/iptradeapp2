@@ -658,7 +658,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     variant="secondary"
                     className="bg-blue-50 text-blue-800 border border-blue-300 mt-0.5"
                   >
-                    Converting {showConvertingBadge.size}...
+                    Converting...
                   </Badge>
                 )}
                 {linkingStatus.isActive &&

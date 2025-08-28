@@ -13,7 +13,7 @@ class CSVManager extends EventEmitter {
     this.watchers = new Map(); // File watchers
     this.scanTimer = null; // Timer para escaneo periódico (deshabilitado por defecto)
     this.debounceTimers = new Map(); // Debounce por archivo para eventos de watch
-    this.debounceTimeoutMs = 400; // Ventana de debounce para agrupar cambios de archivo
+    this.debounceTimeoutMs = 1000; // Ventana de debounce para agrupar cambios de archivo (1 segundo)
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.heartbeatInterval = null; // Para el heartbeat de los watchers
     this.pollingInterval = null; // Para el polling de archivos

@@ -286,10 +286,6 @@ class LinkPlatformsController {
     this.emitLinkPlatformsEvent('started', { message: 'Link Platforms process started' });
 
     try {
-      // PASO 0: Limpiar cache del CSV Manager para ignorar cache cuando se activa Link Accounts
-      console.log('🧹 Step 0: Clearing CSV cache to ignore cache when Link Accounts is activated...');
-      csvManager.clearCacheAndFiles();
-
       // PASO 1: Configurar CSV watching para archivos existentes PRIMERO
       console.log('🔧 Step 1: Configuring CSV watching for existing files...');
       await this.configureCSVWatchingForExistingFilesInternal();
@@ -638,6 +634,10 @@ class LinkPlatformsController {
   async configureCSVWatchingForExistingFilesInternal() {
     console.log('🔧 Configuring CSV watching for existing files in the system...');
 
+    // Guardar los archivos existentes antes de buscar nuevos
+    const existingFiles = new Map(csvManager.csvFiles);
+    console.log(`📊 Current CSV files in cache: ${existingFiles.size}`);
+
     // En Windows, usar el comando PowerShell específico para buscar archivos CSV
     if (this.operatingSystem === 'windows') {
       console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`);
@@ -677,19 +677,26 @@ class LinkPlatformsController {
           .map(line => line.trim())
           .filter(line => line.length > 0);
 
-        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
+        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
         allCsvFiles.forEach(file => console.log(`   - ${file}`));
 
         // Configurar watching para todos los archivos encontrados
-        allCsvFiles.forEach(csvPath => {
+        for (const csvPath of allCsvFiles) {
           if (fs.existsSync(csvPath)) {
-            csvManager.csvFiles.set(csvPath, {
-              lastModified: csvManager.getFileLastModified(csvPath),
-              data: csvManager.parseCSVFile(csvPath),
-            });
-            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
+            // Si el archivo ya existe en el caché, mantener sus datos
+            if (existingFiles.has(csvPath)) {
+              csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
+              console.log(`📍 Preserved existing CSV in watch list: ${csvPath}`);
+            } else {
+              // Si es un archivo nuevo, agregarlo al caché
+              csvManager.csvFiles.set(csvPath, {
+                lastModified: csvManager.getFileLastModified(csvPath),
+                data: csvManager.parseCSVFile(csvPath),
+              });
+              console.log(`📍 Added new CSV to watch list: ${csvPath}`);
+            }
           }
-        });
+        }
 
         // Configurar file watching
         csvManager.startFileWatching();
@@ -698,13 +705,18 @@ class LinkPlatformsController {
         if (csvManager.csvFiles.size > 0) {
           csvManager.saveCSVPathsToCache();
           console.log(
-            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
+            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV (${existingFiles.size} existentes + ${csvManager.csvFiles.size - existingFiles.size} nuevos)`
           );
         }
 
-        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
+        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
       } catch (error) {
         console.error(`❌ Error during Windows system-wide CSV search for existing files:`, error);
+        // En caso de error, restaurar los archivos existentes
+        existingFiles.forEach((value, key) => {
+          csvManager.csvFiles.set(key, value);
+        });
+        console.log(`🔄 Restored ${existingFiles.size} existing files after error`);
       }
     } else if (this.operatingSystem === 'macos') {
       console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
@@ -734,19 +746,26 @@ class LinkPlatformsController {
           .split('\n')
           .filter(line => line.trim());
 
-        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
+        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
         allCsvFiles.forEach(file => console.log(`   - ${file}`));
 
         // Configurar watching para todos los archivos encontrados
-        allCsvFiles.forEach(csvPath => {
+        for (const csvPath of allCsvFiles) {
           if (fs.existsSync(csvPath)) {
-            csvManager.csvFiles.set(csvPath, {
-              lastModified: csvManager.getFileLastModified(csvPath),
-              data: csvManager.parseCSVFile(csvPath),
-            });
-            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
+            // Si el archivo ya existe en el caché, mantener sus datos
+            if (existingFiles.has(csvPath)) {
+              csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
+              console.log(`📍 Preserved existing CSV in watch list: ${csvPath}`);
+            } else {
+              // Si es un archivo nuevo, agregarlo al caché
+              csvManager.csvFiles.set(csvPath, {
+                lastModified: csvManager.getFileLastModified(csvPath),
+                data: csvManager.parseCSVFile(csvPath),
+              });
+              console.log(`📍 Added new CSV to watch list: ${csvPath}`);
+            }
           }
-        });
+        }
 
         // Configurar file watching
         csvManager.startFileWatching();
@@ -755,13 +774,18 @@ class LinkPlatformsController {
         if (csvManager.csvFiles.size > 0) {
           csvManager.saveCSVPathsToCache();
           console.log(
-            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
+            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV (${existingFiles.size} existentes + ${csvManager.csvFiles.size - existingFiles.size} nuevos)`
           );
         }
 
-        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
+        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
       } catch (error) {
         console.error(`❌ Error during system-wide CSV search for existing files:`, error);
+        // En caso de error, restaurar los archivos existentes
+        existingFiles.forEach((value, key) => {
+          csvManager.csvFiles.set(key, value);
+        });
+        console.log(`🔄 Restored ${existingFiles.size} existing files after error`);
       }
     } else {
       // Para otros sistemas operativos, usar la lógica original

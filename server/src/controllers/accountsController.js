@@ -766,7 +766,9 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
     csvContent += `[CONFIG] [PENDING]\n`;
 
     // Write the pending account to CSV in new format with Unix line endings
-    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
+    // Ensure we're writing to .csv not .cssv
+    const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
+    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Wrote account ${accountId} back to CSV as PENDING using new CSV2 format:`);
     console.log(csvContent);
     return true;
@@ -807,10 +809,12 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
     // Generate new CSV2 format content for master account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
     csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [MASTER] [DISABLED] [Account ${accountId}]\n`;
+    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}]\n`;
 
     // Write the master account to CSV in new format
-    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
+    // Ensure we're writing to .csv not .cssv
+    const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
+    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Updated CSV account ${accountId} to MASTER using new CSV2 format:`);
     console.log(csvContent);
     return true;
@@ -937,7 +941,9 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
     csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
 
     // Write the slave account to CSV in new format with Unix line endings
-    writeFileSync(csvFilePath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
+    // Ensure we're writing to .csv not .cssv
+    const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
+    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
     console.log(`📝 Updated CSV account ${accountId} to SLAVE using new CSV2 format:`);
     console.log(csvContent);
     return true;
@@ -2101,8 +2107,6 @@ export const getConnectivityStats = (req, res) => {
 // Unified endpoint that returns all account data in one call
 export const getUnifiedAccountData = async (req, res) => {
   try {
-    console.log('🔄 [UNIFIED] Getting all account data in single call...');
-    
     const startTime = Date.now();
     
     // SINGLE CSV READ: Get all data from csvManager in one call (reads all CSV files once)
@@ -2160,19 +2164,13 @@ export const getUnifiedAccountData = async (req, res) => {
       if (isValidMasterId) {
         // Skip if this master account is already in pending accounts
         if (pendingAccountIds.has(masterId)) {
-          console.log(`⚠️ [UNIFIED] Skipping master account that is already pending: ${masterId}`);
           return;
         }
         
         cleanMasterAccounts[masterId] = allAccounts.masterAccounts[masterId];
         
-        // Debug: Log the config for this master account
         const masterConfig = allAccounts.masterAccounts[masterId]?.config;
-        if (masterConfig) {
-          console.log(`🔍 [UNIFIED] Master ${masterId} config:`, masterConfig);
-        }
-      } else {
-        console.log(`⚠️ [UNIFIED] Skipping invalid master account ID: ${masterId}`);
+      
       }
     });
     
@@ -2183,7 +2181,6 @@ export const getUnifiedAccountData = async (req, res) => {
     (allAccounts.unconnectedSlaves || []).forEach(slave => {
       // Skip if we've already seen this slave ID
       if (seenSlaveIds.has(slave.id)) {
-        console.log(`⚠️ [UNIFIED] Skipping duplicate unconnected slave: ${slave.id}`);
         return;
       }
       
@@ -2194,7 +2191,6 @@ export const getUnifiedAccountData = async (req, res) => {
           this._loggedPendingSlaveSkips = new Set();
         }
         if (!this._loggedPendingSlaveSkips.has(slave.id)) {
-          console.log(`⚠️ [UNIFIED] Skipping unconnected slave that is already pending: ${slave.id}`);
           this._loggedPendingSlaveSkips.add(slave.id);
         }
         return;
@@ -2213,13 +2209,11 @@ export const getUnifiedAccountData = async (req, res) => {
          isNaN(parseInt(masterId)));
       
       if (isInvalidMasterId) {
-        console.log(`⚠️ [UNIFIED] Skipping unconnected slave with invalid masterId: ${slave.id} (masterId: ${masterId})`);
         return; // Skip this slave
       }
       
       // Clean the slave config if it has invalid masterId (shouldn't happen now, but just in case)
       if (masterId && (masterId === 'ENABLED' || masterId === 'DISABLED' || masterId === 'ON' || masterId === 'OFF' || masterId === 'NULL')) {
-        console.log(`🔧 [UNIFIED] Cleaning invalid masterId for slave ${slave.id}: ${masterId} -> null`);
         slave.config.masterId = null;
       }
       
@@ -2232,7 +2226,6 @@ export const getUnifiedAccountData = async (req, res) => {
     Object.keys(allAccounts.slaveAccounts || {}).forEach(slaveId => {
       // Skip if this slave account is already in pending accounts
       if (pendingAccountIds.has(slaveId)) {
-        console.log(`⚠️ [UNIFIED] Skipping slave account that is already pending: ${slaveId}`);
         return;
       }
       
@@ -2259,11 +2252,6 @@ export const getUnifiedAccountData = async (req, res) => {
     
     const processingTime = Date.now() - startTime;
     
-    console.log(`✅ [UNIFIED] Retrieved all account data in ${processingTime}ms`);
-    console.log(`📊 [UNIFIED] Stats: ${serverStats.totalPendingAccounts} pending, ${serverStats.totalMasterAccounts} masters, ${serverStats.totalSlaveAccounts} slaves`);
-    console.log(`📁 [UNIFIED] CSV files read: ${csvManager.csvFiles.size} (single read operation)`);
-    
-    // Return unified response
     res.json({
       success: true,
       data: {

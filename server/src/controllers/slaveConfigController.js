@@ -952,7 +952,9 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
     if (updated) {
       // Write the updated content back to the file
       const updatedContent = lines.join('\n');
-      writeFileSync(csvFilePath, updatedContent, 'utf8');
+      // Ensure we're writing to .csv not .cssv
+      const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
+      writeFileSync(correctPath, updatedContent, 'utf8');
       // console.log(`✅ Successfully updated CSV file ${csvFilePath}`);
       return true;
     } else {
