@@ -143,7 +143,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error(errorData.error || 'Failed to register master account');
       }
     } catch (error) {
-      console.error('Error registering master account:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error registering master account',
@@ -196,7 +195,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error(errorData.error || 'Failed to register slave account');
       }
     } catch (error) {
-      console.error('Error registering slave account:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error registering slave account',
@@ -226,7 +224,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error('Failed to delete master account');
       }
     } catch (error) {
-      console.error('Error deleting master account:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete master account',
@@ -258,7 +255,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error('Failed to delete slave account');
       }
     } catch (error) {
-      console.error('Error deleting slave account:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete slave account',
@@ -290,7 +286,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error('Failed to disconnect slave account');
       }
     } catch (error) {
-      console.error('Error disconnecting slave account:', error);
       toast({
         title: 'Error',
         description: 'Failed to disconnect slave account',
@@ -327,7 +322,6 @@ export const TradingAccountsManager: React.FC = () => {
       setConfirmingDisconnectAllId(null);
       refresh();
     } catch (error) {
-      console.error('Error disconnecting all slaves:', error);
       toast({
         title: 'Error',
         description: 'Failed to disconnect all slave accounts',

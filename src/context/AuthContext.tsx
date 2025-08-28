@@ -50,7 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     // If validation is already in progress, wait for it
     if (validationInProgress.current && validationPromise.current) {
-      console.log('⏳ Validation already in progress, waiting for result...');
       return await validationPromise.current;
     }
 
@@ -76,13 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:30/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
 
-      console.log('🔍 AuthContext: Validating license with URL:', url);
-
       const response = await fetch(url);
-      console.log('🔍 AuthContext: Response status:', response.status);
 
       if (!response.ok) {
-        console.log('🔍 AuthContext: Response not ok, status:', response.status);
         if (response.status === 401) {
           return { valid: false, message: 'Invalid license key' };
         }
@@ -94,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const userData: UserInfo = await response.json();
-      console.log('🔍 AuthContext: User data received:', userData);
 
       // Validate that we have the required fields
       if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
@@ -108,8 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { valid: true, userInfo: userData };
     } catch (error) {
-      console.error('💥 License validation error:', error);
-      console.error('💥 Error details:', error);
 
       // Solo error de conexión real - no mock data
       const errorMessage =
@@ -146,7 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
     } catch (error) {
-      console.error('Login error:', error);
       setError('Unexpected error during login');
       return false;
     } finally {
@@ -188,7 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.error('Error clearing localStorage:', error);
+      // Silent error handling
     }
 
     // Clear backend data if we have an API key
@@ -208,13 +199,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const result = await response.json();
 
           if (result.hasErrors) {
-            console.warn('⚠️ Some backend data cleanup had errors:', result.cleared.errors);
+            // Silent error handling
           }
         } else {
-          console.error('❌ Failed to clear backend data:', response.status);
+          // Silent error handling
         }
       } catch (error) {
-        console.error('❌ Error calling backend cleanup:', error);
+        // Silent error handling
         // Don't prevent logout if backend cleanup fails
       }
     }
@@ -228,20 +219,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Verify authentication when starting the app
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('🔍 AuthContext: Starting authentication check...');
       const storedKey = localStorage.getItem(STORAGE_KEY);
-      console.log('🔍 AuthContext: Stored key found:', !!storedKey);
 
       if (storedKey) {
         // Always validate against server on app startup for security
-        console.log('🔍 Validating stored license on app startup...');
 
         try {
           const validation = await validateLicense(storedKey);
-          console.log('🔍 AuthContext: Validation result:', validation);
 
           if (validation.valid && validation.userInfo) {
-            console.log('🔍 AuthContext: Setting authenticated state');
             setSecretKey(storedKey);
             setUserInfo(validation.userInfo);
             setIsAuthenticated(true);
@@ -264,7 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     );
                   } else {
                     // License expired, logout user
-                    logout().catch(error => console.error('Error during automatic logout:', error));
+                    logout().catch(error => {
+                      // Silent error handling
+                    });
                   }
                 });
               },
@@ -275,18 +263,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.removeItem(STORAGE_KEY);
             localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
             localStorage.removeItem(`${STORAGE_KEY}_user_info`);
-            console.warn('Stored license is no longer valid:', validation.message);
           }
         } catch (error) {
-          console.warn('Could not validate stored license:', error);
           // Don't remove the key on network errors, just log and continue
           // localStorage.removeItem(STORAGE_KEY);
         }
       } else {
-        console.log('🔍 AuthContext: No stored key found, user needs to login');
+        // No stored key found, user needs to login
       }
 
-      console.log('🔍 AuthContext: Setting isLoading to false');
+      setIsLoading(false);
       setIsLoading(false);
     };
 

@@ -93,12 +93,11 @@ class CSVFrontendService extends SimpleEventEmitter {
         const data = JSON.parse(event.data);
         this.processCSVData(data);
       } catch (error) {
-        console.error('Error parsing SSE data:', error);
+        // Silent error handling
       }
     };
 
     eventSource.onerror = error => {
-      console.error('EventSource error:', error);
       // Reintentar conexión después de un delay
       setTimeout(() => {
         if (this.eventSource) {
@@ -189,7 +188,6 @@ class CSVFrontendService extends SimpleEventEmitter {
       }
       return false;
     } catch (error) {
-      console.error('Error converting account to pending:', error);
       return false;
     }
   }
@@ -214,10 +212,8 @@ class CSVFrontendService extends SimpleEventEmitter {
         return true;
       }
 
-      console.error(`❌ Failed to delete master account ${masterAccountId}:`, response.status);
       return false;
     } catch (error) {
-      console.error('Error deleting master account:', error);
       return false;
     }
   }
@@ -244,14 +240,11 @@ class CSVFrontendService extends SimpleEventEmitter {
 
       // Si es 404, significa que no está registrada como slave en la DB
       if (response.status === 404) {
-        console.log(`⚠️ Slave account ${slaveAccountId} not found in user database (404)`);
         return false; // Permitir que el frontend use convertToPending como fallback
       }
 
-      console.error(`❌ Failed to delete slave account ${slaveAccountId}:`, response.status);
       return false;
     } catch (error) {
-      console.error('Error deleting slave account:', error);
       return false;
     }
   }
@@ -262,7 +255,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   // NEW: Unified endpoint that gets all data in one call
   public async getUnifiedAccountData(): Promise<any> {
     try {
-      console.log('🔄 [csvFrontendService] Getting unified account data...');
       const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/unified`, {
         headers: {
           'x-api-key': this.getApiKey(),
@@ -271,25 +263,11 @@ class CSVFrontendService extends SimpleEventEmitter {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 [csvFrontendService] Unified response:', {
-          success: result.success,
-          processingTime: result.processingTimeMs,
-          csvFilesAccessed: result.csvFilesAccessed,
-          pendingCount: result.data?.pendingAccounts?.length || 0,
-          masterCount: Object.keys(result.data?.configuredAccounts?.masterAccounts || {}).length,
-          slaveCount: Object.keys(result.data?.configuredAccounts?.slaveAccounts || {}).length,
-        });
         return result;
       } else {
-        console.error(
-          '❌ [csvFrontendService] Unified endpoint response not ok:',
-          response.status,
-          response.statusText
-        );
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
-      console.error('❌ [csvFrontendService] Error getting unified account data:', error);
       throw error;
     }
   }
@@ -298,7 +276,6 @@ class CSVFrontendService extends SimpleEventEmitter {
   // Account data is now included in the unified endpoint response
   public async getAllAccounts(): Promise<AccountsData> {
     try {
-      console.log('🔄 [csvFrontendService] Getting all accounts...');
       // Usar el endpoint correcto que lee las cuentas del sistema
       const response = await fetch(`http://localhost:${this.serverPort}/api/accounts/all`, {
         headers: {
@@ -307,26 +284,14 @@ class CSVFrontendService extends SimpleEventEmitter {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 [csvFrontendService] Raw response:', data);
         // Extraer los datos del formato de respuesta del servidor
         const result = data.data || data;
-        console.log('📊 [csvFrontendService] Processed result:', {
-          masterAccountsCount: result?.masterAccounts
-            ? Object.keys(result.masterAccounts).length
-            : 0,
-          unconnectedSlavesCount: result?.unconnectedSlaves ? result.unconnectedSlaves.length : 0,
-          totalPendingCount: result?.totalPendingAccounts || 0,
-        });
         return result;
       } else {
-        console.error(
-          '❌ [csvFrontendService] Response not ok:',
-          response.status,
-          response.statusText
-        );
+        // Silent error handling
       }
     } catch (error) {
-      console.error('❌ [csvFrontendService] Error getting accounts:', error);
+      // Silent error handling
     }
     return {
       masterAccounts: {},
@@ -366,7 +331,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         })
       );
     } catch (error) {
-      console.error('❌ Error updating global status:', error);
       throw error;
     }
   }
@@ -386,7 +350,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         throw new Error('Failed to update master status');
       }
     } catch (error) {
-      console.error('Error updating master status:', error);
       throw error;
     }
   }
@@ -406,7 +369,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         throw new Error('Failed to update slave config');
       }
     } catch (error) {
-      console.error('Error updating slave config:', error);
       throw error;
     }
   }
@@ -444,7 +406,6 @@ class CSVFrontendService extends SimpleEventEmitter {
         })
       );
     } catch (error) {
-      console.error('Error updating account status:', error);
       throw error;
     }
   }
@@ -459,7 +420,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         },
       });
     } catch (error) {
-      console.error('Error emergency shutdown:', error);
+      // Silent error handling
     }
   }
 
@@ -473,7 +434,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         },
       });
     } catch (error) {
-      console.error('Error reset all to on:', error);
+      // Silent error handling
     }
   }
 
@@ -489,7 +450,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         return await response.json();
       }
     } catch (error) {
-      console.error('Error getting global stats:', error);
+      // Silent error handling
     }
 
     return {
@@ -515,7 +476,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         this.processCSVData(data);
       }
     } catch (error) {
-      console.error('Error scanning CSV files:', error);
+      // Silent error handling
     }
   }
 
@@ -550,7 +511,7 @@ class CSVFrontendService extends SimpleEventEmitter {
         );
       }
     } catch (error) {
-      console.error('Error refreshing CSV data:', error);
+      // Silent error handling
     }
   }
 

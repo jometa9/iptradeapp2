@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 
 import {
   AlertCircle,
@@ -76,7 +76,9 @@ interface SlaveConfig {
   };
 }
 
-export function TradingAccountsConfig() {
+
+
+const TradingAccountsConfigComponent = () => {
   const { toast: toastUtil } = useToast();
   const { userInfo, secretKey } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -147,23 +149,16 @@ export function TradingAccountsConfig() {
 
     const newSlaveConfigs: Record<string, SlaveConfig> = {};
 
-    console.log('🔧 DEBUG: Processing csvAccounts:', csvAccounts);
-
     // Obtener configuraciones para todas las cuentas slave desde los datos CSV
     const connectedSlaves = Object.values(csvAccounts.masterAccounts || {}).flatMap(
       master => master.connectedSlaves || []
     );
     const unconnectedSlaves = csvAccounts.unconnectedSlaves || [];
 
-    console.log('🔧 DEBUG: Connected slaves found:', connectedSlaves);
-    console.log('🔧 DEBUG: Unconnected slaves found:', unconnectedSlaves);
-
     const slaveAccounts = [...connectedSlaves, ...unconnectedSlaves];
-    console.log('🔧 DEBUG: Total slave accounts to process:', slaveAccounts);
 
     // Usar la configuración que ya viene en los datos CSV
     for (const slave of slaveAccounts) {
-      console.log('🔧 DEBUG: Processing slave:', slave);
       if (slave.config) {
         // Usar tanto el ID como el accountNumber como claves para asegurar compatibilidad
         const slaveConfig = {
@@ -185,12 +180,9 @@ export function TradingAccountsConfig() {
     setSlaveConfigs(newSlaveConfigs);
   }, [csvAccounts]);
 
-  // Convertir datos CSV a formato esperado
+  // Convertir datos CSV a formato esperado con optimización
   const accounts = React.useMemo(() => {
-    console.log('🔄 [TradingAccountsConfig] Processing csvAccounts:', csvAccounts);
-
     if (!csvAccounts) {
-      console.log('❌ [TradingAccountsConfig] No csvAccounts data');
       return [];
     }
 
@@ -201,7 +193,6 @@ export function TradingAccountsConfig() {
 
     // Agregar master accounts y sus slaves conectados
     Object.entries(csvAccounts.masterAccounts || {}).forEach(([id, master]: [string, any]) => {
-      console.log('📊 [TradingAccountsConfig] Processing master account:', id, master);
       if (shouldShowAccount(id)) {
         allAccounts.push({
           id,
@@ -221,7 +212,6 @@ export function TradingAccountsConfig() {
 
         // También agregar los slaves conectados a la lista principal
         (master.connectedSlaves || []).forEach((slave: any) => {
-          console.log('📊 [TradingAccountsConfig] Processing connected slave:', slave);
           if (shouldShowAccount(slave.id)) {
             allAccounts.push({
               id: slave.id,
@@ -243,7 +233,6 @@ export function TradingAccountsConfig() {
 
     // Agregar unconnected slaves
     (csvAccounts.unconnectedSlaves || []).forEach((slave: any) => {
-      console.log('📊 [TradingAccountsConfig] Processing unconnected slave:', slave);
       if (shouldShowAccount(slave.id)) {
         allAccounts.push({
           id: slave.id,
@@ -260,9 +249,20 @@ export function TradingAccountsConfig() {
       }
     });
 
-    console.log('📊 [TradingAccountsConfig] Final accounts array:', allAccounts);
     return allAccounts;
   }, [csvAccounts, hiddenAccounts]);
+
+  // Memoize the accounts data with a hash to prevent unnecessary re-renders
+  const accountsHash = React.useMemo(() => {
+    return JSON.stringify(accounts.map(acc => ({
+      id: acc.id,
+      status: acc.status,
+      accountType: acc.accountType,
+      platform: acc.platform,
+      totalSlaves: acc.totalSlaves,
+      masterOnline: acc.masterOnline
+    })));
+  }, [accounts]);
 
   // Connectivity stats from unified data
   const connectivityStats = React.useMemo(() => {
@@ -273,9 +273,9 @@ export function TradingAccountsConfig() {
     
     return {
       total: serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts + serverStats.totalPendingAccounts,
-      online: serverStats.onlinePendingAccounts,
+      online: serverStats.totalOnlineAccounts,
       pending: serverStats.totalPendingAccounts,
-      offline: serverStats.offlinePendingAccounts,
+      offline: serverStats.totalOfflineAccounts,
       slaves: { total: serverStats.totalSlaveAccounts },
       masters: { total: serverStats.totalMasterAccounts },
     };
@@ -530,9 +530,6 @@ export function TradingAccountsConfig() {
 
       // Buscar la configuración tanto por accountNumber como por id
       const slaveConfig = slaveConfigs[accountNumber] || slaveConfigs[account.id];
-      console.log('🔍 DEBUG: Editing slave account:', accountNumber, 'ID:', account.id);
-      console.log('🔍 DEBUG: Available slave configs keys:', Object.keys(slaveConfigs));
-      console.log('🔍 DEBUG: Found slave config:', slaveConfig);
 
       if (slaveConfig?.config) {
         // Actualizar el formulario con la configuración específica del slave
@@ -542,13 +539,9 @@ export function TradingAccountsConfig() {
           forceLot: slaveConfig.config.forceLot || 0,
           reverseTrade: slaveConfig.config.reverseTrading || false,
         };
-        console.log('🔍 DEBUG: Updated form data with slave config:', formData);
-      } else {
-        console.log('🔍 DEBUG: No slave config found for account:', accountNumber);
       }
     }
 
-    console.log('🔍 DEBUG: Final form data before setting state:', formData);
     setFormState(formData);
 
     setTimeout(() => {
@@ -557,7 +550,6 @@ export function TradingAccountsConfig() {
   };
 
   const handleDeleteAccount = async (id: string) => {
-    console.log(`🔍 handleDeleteAccount called with id: ${id}`);
     setDeleteConfirmId(id);
   };
 
@@ -582,7 +574,6 @@ export function TradingAccountsConfig() {
   }, []);
 
   const confirmDeleteAccount = async () => {
-    console.log(`🔍 confirmDeleteAccount called with deleteConfirmId: ${deleteConfirmId}`);
     if (!deleteConfirmId) return;
 
     try {
@@ -597,15 +588,6 @@ export function TradingAccountsConfig() {
       const isMasterAccount = accountToDelete?.accountType === 'master';
       const isSlaveAccount = accountToDelete?.accountType === 'slave';
 
-      console.log(`🔍 Debug delete account:`, {
-        deleteConfirmId,
-        accountToDelete,
-        accountType: accountToDelete?.accountType,
-        isMasterAccount,
-        isSlaveAccount,
-        totalAccounts: accounts.length,
-      });
-
       let success = false;
 
       if (isMasterAccount) {
@@ -617,7 +599,6 @@ export function TradingAccountsConfig() {
         
         // Si falla (devuelve false), usar convertToPending como fallback
         if (!success) {
-          console.log(`⚠️ Slave endpoint failed for ${deleteConfirmId}, trying convertToPending as fallback`);
           success = await csvFrontendService.convertToPending(deleteConfirmId);
         }
       } else {
@@ -640,9 +621,7 @@ export function TradingAccountsConfig() {
           fetchAccounts();
         }, 100);
       } else {
-        console.log(
-          `❌ Failed to ${isMasterAccount ? 'delete' : 'convert'} account ${deleteConfirmId}`
-        );
+
         toast({
           title: 'Error',
           description: `Failed to delete account ${deleteConfirmId}.`,
@@ -656,7 +635,7 @@ export function TradingAccountsConfig() {
         });
       }
     } catch (error) {
-      console.error('Error deleting account:', error);
+
       toast({
         title: 'Error',
         description: 'An error occurred while deleting the account.',
@@ -809,7 +788,7 @@ export function TradingAccountsConfig() {
               body: JSON.stringify(slavePayload),
             });
 
-            console.log('📡 Slave config update response status:', response.status);
+
           } else if (editingAccount.accountType === 'master') {
             // Actualizar configuración de cuenta master
             const masterPayload = {
@@ -832,13 +811,10 @@ export function TradingAccountsConfig() {
               }
             );
 
-            console.log('📡 Master config update response status:', response.status);
+
           }
         } else {
           // Si el tipo de cuenta cambió, usar los endpoints de conversión
-          console.log(
-            `🔄 Converting account ${accountId} from ${editingAccount.accountType} to ${formState.accountType}`
-          );
 
           // Si la cuenta actual es master o slave y queremos convertirla a pending
           if (editingAccount.accountType !== 'pending' && formState.accountType === 'pending') {
@@ -854,7 +830,7 @@ export function TradingAccountsConfig() {
               }
             );
 
-            console.log('📡 Convert to pending response status:', response.status);
+
           } else if (formState.accountType === 'master') {
             // Convertir a master - primero convertir a pending, luego a master
             if (editingAccount.accountType !== 'pending') {
@@ -874,7 +850,7 @@ export function TradingAccountsConfig() {
                 throw new Error('Failed to convert account to pending first');
               }
 
-              console.log('📡 Converted to pending first, now converting to master');
+
             }
 
             // Ahora convertir a master
@@ -894,7 +870,7 @@ export function TradingAccountsConfig() {
               }
             );
 
-            console.log('📡 Master conversion response status:', response.status);
+
           } else if (formState.accountType === 'slave') {
             // Convertir a slave - primero convertir a pending, luego a slave
             if (editingAccount.accountType !== 'pending') {
@@ -914,7 +890,7 @@ export function TradingAccountsConfig() {
                 throw new Error('Failed to convert account to pending first');
               }
 
-              console.log('📡 Converted to pending first, now converting to slave');
+
             }
 
             // Ahora convertir a slave
@@ -941,7 +917,7 @@ export function TradingAccountsConfig() {
               }
             );
 
-            console.log('📡 Slave conversion response status:', response.status);
+
           }
         }
       } else {
@@ -1194,8 +1170,8 @@ export function TradingAccountsConfig() {
     const mastersCount = stats.totalMasterAccounts;
     const slavesCount = stats.totalSlaveAccounts;
     const pendingCount = stats.totalPendingAccounts;
-    const onlineCount = stats.onlinePendingAccounts;
-    const offlineCount = stats.offlinePendingAccounts;
+    const onlineCount = stats.totalOnlineAccounts;
+    const offlineCount = stats.totalOfflineAccounts;
     const relevantTotal = mastersCount + slavesCount + pendingCount;
 
     if (relevantTotal === 0) {
@@ -1553,17 +1529,7 @@ export function TradingAccountsConfig() {
               {/* Online */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-emerald-200 shadow-sm">
                 <div className="text-2xl font-bold text-emerald-700">
-                  {(() => {
-                    const stats = unifiedData?.serverStats;
-                    if (!stats) return 0;
-                    
-                    // Contar masters online
-                    const mastersOnline = Object.values(unifiedData?.configuredAccounts?.masterAccounts || {})
-                      .filter(master => master.status === 'online').length;
-                    
-                    // Sumar masters online + pending online
-                    return mastersOnline + (stats.onlinePendingAccounts || 0);
-                  })()}
+                  {unifiedData?.serverStats?.totalOnlineAccounts || 0}
                 </div>
                 <div className="text-xs text-emerald-700 text-center">Online</div>
               </div>
@@ -1571,17 +1537,7 @@ export function TradingAccountsConfig() {
               {/* Offline */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
                 <div className="text-2xl font-bold text-red-700">
-                  {(() => {
-                    const stats = unifiedData?.serverStats;
-                    if (!stats) return 0;
-                    
-                    // Contar masters offline
-                    const mastersOffline = Object.values(unifiedData?.configuredAccounts?.masterAccounts || {})
-                      .filter(master => master.status === 'offline').length;
-                    
-                    // Sumar masters offline + pending offline
-                    return mastersOffline + (stats.offlinePendingAccounts || 0);
-                  })()}
+                  {unifiedData?.serverStats?.totalOfflineAccounts || 0}
                 </div>
                 <div className="text-xs text-red-700 text-center">Offline</div>
               </div>
@@ -1965,6 +1921,9 @@ export function TradingAccountsConfig() {
               </div>
             </div>
           ) : (
+            (() => {
+          
+              return (
             <div className="mt-4 border rounded-xl border-gray-200 shadow-sm relative overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-muted/50">
@@ -2257,12 +2216,7 @@ export function TradingAccountsConfig() {
                                       {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
                                       {(() => {
                                         const config = accountToUse.config;
-                                        console.log(
-                                          '🔍 Slave config for',
-                                          accountToUse.id,
-                                          ':',
-                                          config
-                                        );
+
                                         const labels = [];
 
                                         if (config) {
@@ -2500,12 +2454,7 @@ export function TradingAccountsConfig() {
                                 config = slaveConfig?.config;
                               }
 
-                              console.log(
-                                '🔍 DEBUG: Config for',
-                                orphanSlave.accountNumber,
-                                ':',
-                                config
-                              );
+
                               const labels = [];
 
                               if (config) {
@@ -2689,9 +2638,14 @@ export function TradingAccountsConfig() {
                 </tbody>
               </table>
             </div>
+              );
+            })()
           )}
         </CardContent>
       </Card>
     </div>
   );
-}
+};
+
+// Export memoized component to prevent unnecessary re-renders
+export const TradingAccountsConfig = memo(TradingAccountsConfigComponent);

@@ -44,7 +44,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
         setIsConnected(true);
       }
     } catch (error) {
-      console.error('❌ Error registrando cliente:', error);
+      // Silent error handling
     }
   }, [baseUrl]);
 
@@ -63,7 +63,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
 
       setIsConnected(false);
     } catch (error) {
-      console.error('❌ Error desregistrando cliente:', error);
+      // Silent error handling
     }
   }, [baseUrl]);
 

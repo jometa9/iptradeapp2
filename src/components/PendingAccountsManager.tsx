@@ -281,14 +281,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   useEffect(() => {
     if (!secretKey) return;
 
-    console.log('🔗 PendingAccountsManager: Setting up SSE listener for Link Platforms...');
-
     const handleSSEMessage = (data: any) => {
-      console.log('📨 PendingAccountsManager SSE message received:', data);
-
       // Listen for Link Platforms events
       if (data.type === 'linkPlatformsEvent') {
-        console.log('🔗 Link Platforms event received:', data.eventType);
         setLinkingStatus({
           step: data.eventType,
           message: data.message || '',
@@ -305,7 +300,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
           command.includes('find') &&
           (command.includes('MQL4') || command.includes('MQL5'))
         ) {
-          console.log('🔍 MetaTrader scan command detected');
           setLinkingStatus({
             step: 'finding',
             message: 'Scanning for MetaTrader installations...',
@@ -319,7 +313,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         data.type === 'syncProgress' ||
         (typeof data.message === 'string' && data.message.includes('Synced'))
       ) {
-        console.log('⚙️ Sync operation detected');
         setLinkingStatus({
           step: 'syncing',
           message: 'Syncing Expert Advisors to platforms...',
@@ -329,9 +322,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
       // NUEVO: Escuchar eventos de conversión de vuelta a pending
       if (data.type === 'accountConverted' && data.newType === 'pending') {
-        console.log(
-          `🔄 Account ${data.accountId} converted back to pending, removing from convertingAccounts`
-        );
         setConvertingAccounts(prev => {
           const newSet = new Set(prev);
           newSet.delete(data.accountId);
@@ -344,17 +334,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     const listenerId = SSEService.addListener(handleSSEMessage);
 
     return () => {
-      console.log('🔌 PendingAccountsManager: Removing SSE listener');
       SSEService.removeListener(listenerId);
     };
   }, [secretKey]);
 
   // Also watch for isLinking changes (fallback in case SSE events are missed)
   useEffect(() => {
-    console.log('🔗 isLinking state changed:', isLinking, 'Current step:', linkingStatus.step);
-
     if (isLinking && linkingStatus.step === 'idle') {
-      console.log('🚀 Fallback: Link Platforms started via isLinking state');
       setLinkingStatus({
         step: 'starting',
         message: 'Starting link platforms process...',
@@ -370,14 +356,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     ) {
       // Verificar si se omitió por cache para no mostrar mensaje de éxito
       if (getAutoLinkSkippedByCache()) {
-        console.log('💾 Auto-link was skipped by cache - not showing success message');
         setLinkingStatus({
           step: 'idle',
           message: '',
           isActive: false,
         });
       } else {
-        console.log('✅ Fallback: Link Platforms completed via isLinking state');
         setLinkingStatus({
           step: 'completed',
           message: 'Success! Platforms linked successfully',
@@ -401,15 +385,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     account: { account_id: string; platform?: string | null },
     type: 'master' | 'slave'
   ) => {
-    console.log('🔍 openConversionForm called:', { account, type });
-
     if (type === 'master') {
       // For master, just show confirmation and hide slave form if open
       setExpandedAccountId(null);
       setConfirmingMasterId(account.account_id);
     } else {
       // For slave, show form directly and hide master confirmation if open
-      console.log('🔄 Setting up slave conversion form for account:', account.account_id);
       setConfirmingMasterId(null);
       setExpandedAccountId(account.account_id);
 
@@ -426,7 +407,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         forceLot: 0,
         reverseTrade: false,
       });
-      console.log('✅ Conversion form set:', conversionForm);
     }
   };
 
@@ -473,7 +453,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
     try {
       // Actualizar el CSV de pending a master
-      console.log(`📝 Updating CSV account ${accountId} from pending to master...`);
       const csvUpdateResponse = await fetch(`${baseUrl}/api/csv/pending/${accountId}/update-type`, {
         method: 'PUT',
         headers: {
@@ -490,8 +469,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         throw new Error(error.message || 'Failed to update CSV account type');
       }
 
-      console.log('✅ CSV updated successfully');
-
       // Cerrar el modal
       setConfirmingMasterId(null);
 
@@ -504,7 +481,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       // Refrescar la lista de master accounts
       await loadMasterAccounts();
     } catch (error) {
-      console.error('Error converting account to master:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error converting account to master',
@@ -517,11 +493,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
   // Convert pending account (slave only - master uses convertToMaster)
   const convertAccount = async () => {
-    console.log('🚀 convertAccount called, expandedAccountId:', expandedAccountId);
-    console.log('🔧 Current conversionForm:', conversionForm);
-
     if (!expandedAccountId) {
-      console.log('❌ No expandedAccountId, returning early');
       return;
     }
 
@@ -532,15 +504,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
     try {
       // Actualizar el CSV de pending a slave con configuraciones
-      console.log(
-        `📝 Updating CSV account ${expandedAccountId} from pending to slave with configs...`
-      );
-      console.log('🔧 Slave configurations:', {
-        masterAccountId: conversionForm.masterAccountId,
-        lotCoefficient: conversionForm.lotCoefficient,
-        forceLot: conversionForm.forceLot,
-        reverseTrade: conversionForm.reverseTrade,
-      });
 
       // Validate configurations before sending
       const slaveConfig = {
@@ -550,8 +513,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         forceLot: conversionForm.forceLot > 0 ? conversionForm.forceLot : null,
         reverseTrade: conversionForm.reverseTrade,
       };
-
-      console.log('📤 Sending slave config to server:', slaveConfig);
 
       const csvUpdateResponse = await fetch(
         `${baseUrl}/api/csv/pending/${expandedAccountId}/update-type`,
@@ -573,7 +534,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         throw new Error(error.message || 'Failed to update CSV account type');
       }
 
-      console.log('✅ CSV updated successfully');
+
 
       // Si hay un masterAccountId, también podríamos necesitar registrar la conexión
       // Por ahora solo actualizamos el CSV
@@ -606,7 +567,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       // Cerrar el formulario
       setExpandedAccountId(null);
     } catch (error) {
-      console.error('Error converting account:', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Error converting account',
@@ -719,7 +679,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     try {
                       await linkPlatforms();
                     } catch (error) {
-                      console.error('Error en linkPlatforms:', error);
+                      // Silent error handling
                     }
                   }}
                   disabled={isLinking}

@@ -4,6 +4,25 @@ import { useAuth } from '../context/AuthContext';
 import csvFrontendService from '../services/csvFrontendService';
 import { SSEService } from '../services/sseService';
 
+// Utility function for deep comparison
+const deepEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  
+  const keysA = Object.keys(a as Record<string, unknown>);
+  const keysB = Object.keys(b as Record<string, unknown>);
+  
+  if (keysA.length !== keysB.length) return false;
+  
+  for (const key of keysA) {
+    if (!keysB.includes(key)) return false;
+    if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) return false;
+  }
+  
+  return true;
+};
+
 // Unified interfaces
 interface PendingAccount {
   account_id: string;
@@ -17,23 +36,23 @@ interface PendingAccount {
 }
 
 interface ConfiguredAccounts {
-  masterAccounts: Record<string, any>;
-  slaveAccounts: Record<string, any>;
-  unconnectedSlaves: Array<any>;
+  masterAccounts: Record<string, unknown>;
+  slaveAccounts: Record<string, unknown>;
+  unconnectedSlaves: Array<unknown>;
 }
 
 interface CopierStatus {
   globalStatus: boolean;
   globalStatusText: string;
-  masterAccounts: Record<string, any>;
+  masterAccounts: Record<string, unknown>;
   totalMasterAccounts: number;
 }
 
 interface ServerStats {
   totalCSVFiles: number;
   totalPendingAccounts: number;
-  onlinePendingAccounts: number;
-  offlinePendingAccounts: number;
+  totalOnlineAccounts: number;
+  totalOfflineAccounts: number;
   totalMasterAccounts: number;
   totalSlaveAccounts: number;
   totalUnconnectedSlaves: number;
@@ -82,9 +101,9 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
+  const lastDataRef = useRef<UnifiedAccountData | null>(null);
   
   // Log to track hook instances
-  console.log('🔧 [useUnifiedAccountData] Hook instance created/updated');
 
   // Configure API key in service
   useEffect(() => {
@@ -93,24 +112,24 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     }
   }, [secretKey]);
 
-  const processUnifiedData = useCallback((rawData: any): UnifiedAccountData => {
-    const pendingAccounts = rawData.data?.pendingAccounts || [];
-    const configuredAccounts = rawData.data?.configuredAccounts || {
+  const processUnifiedData = useCallback((rawData: { data?: any }): UnifiedAccountData => {
+    const pendingAccounts = (rawData.data as any)?.pendingAccounts || [];
+    const configuredAccounts = (rawData.data as any)?.configuredAccounts || {
       masterAccounts: {},
       slaveAccounts: {},
       unconnectedSlaves: [],
     };
-    const copierStatus = rawData.data?.copierStatus || {
+    const copierStatus = (rawData.data as any)?.copierStatus || {
       globalStatus: false,
       globalStatusText: 'OFF',
       masterAccounts: {},
       totalMasterAccounts: 0,
     };
-    const serverStats = rawData.data?.serverStats || {
+    const serverStats = (rawData.data as any)?.serverStats || {
       totalCSVFiles: 0,
       totalPendingAccounts: 0,
-      onlinePendingAccounts: 0,
-      offlinePendingAccounts: 0,
+      totalOnlineAccounts: 0,
+      totalOfflineAccounts: 0,
       totalMasterAccounts: 0,
       totalSlaveAccounts: 0,
       totalUnconnectedSlaves: 0,
@@ -163,26 +182,28 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
 
     try {
       setError(null);
-      console.log('🔄 [useUnifiedAccountData] Loading unified data...');
       
       const startTime = Date.now();
       const rawData = await csvFrontendService.getUnifiedAccountData();
       const processingTime = Date.now() - startTime;
       
-      console.log(`✅ [useUnifiedAccountData] Data loaded in ${processingTime}ms`);
-      console.log(`📊 [useUnifiedAccountData] Server processing: ${rawData.processingTimeMs}ms`);
-      
       const processedData = processUnifiedData(rawData);
-      setData(processedData);
+      
+      // Only update state if data has actually changed
+      if (!deepEqual(processedData, lastDataRef.current)) {
+        setData(processedData);
+        lastDataRef.current = processedData;
+      } else {
+        // Data unchanged, skipping update
+      }
       
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('❌ [useUnifiedAccountData] Error loading data:', err);
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [secretKey]); // Removed processUnifiedData dependency
+  }, [secretKey, processUnifiedData]);
 
   // SSE listener for real-time updates
   useEffect(() => {
@@ -191,7 +212,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     // Connect to SSE
     SSEService.connect(secretKey);
 
-    const handleSSEMessage = (eventData: any) => {
+    const handleSSEMessage = (eventData: { type: string }) => {
       // Handle various SSE events that should trigger data refresh
       if (
         eventData.type === 'initial_data' ||
@@ -201,7 +222,6 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
         eventData.type === 'accountDeleted' ||
         eventData.type === 'pendingAccountsUpdate'
       ) {
-        console.log(`🔄 [useUnifiedAccountData] SSE event received: ${eventData.type}`);
         // Refresh data when important events occur
         loadUnifiedData();
       }
@@ -301,40 +321,36 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
   }, [loadUnifiedData]);
 
   const deletePendingAccount = useCallback(async (accountId: string) => {
-    try {
-      // Update local state immediately for better UX
-      if (data && data.pendingAccounts) {
-        const updatedPendingAccounts = data.pendingAccounts.filter(
-          account => account.account_id !== accountId
-        );
-        
-        const updatedData = {
-          ...data,
-          pendingAccounts: updatedPendingAccounts,
-          pendingData: {
-            ...data.pendingData,
-            accounts: updatedPendingAccounts,
-            summary: {
-              ...data.pendingData.summary,
-              totalAccounts: updatedPendingAccounts.length,
-              onlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'online').length,
-              offlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'offline').length,
-            },
+    // Update local state immediately for better UX
+    if (data && data.pendingAccounts) {
+      const updatedPendingAccounts = data.pendingAccounts.filter(
+        account => account.account_id !== accountId
+      );
+      
+      const updatedData = {
+        ...data,
+        pendingAccounts: updatedPendingAccounts,
+        pendingData: {
+          ...data.pendingData,
+          accounts: updatedPendingAccounts,
+          summary: {
+            ...data.pendingData.summary,
+            totalAccounts: updatedPendingAccounts.length,
+            onlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'online').length,
+            offlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'offline').length,
           },
-        };
-        
-        setData(updatedData);
-      }
-
-      return {
-        success: true,
-        message: 'Pending account hidden from view',
-        accountId,
-        status: 'hidden',
+        },
       };
-    } catch (error) {
-      throw error;
+      
+      setData(updatedData);
     }
+
+    return {
+      success: true,
+      message: 'Pending account hidden from view',
+      accountId,
+      status: 'hidden',
+    };
   }, [data]);
 
   const convertToPending = useCallback(async (accountId: string) => {

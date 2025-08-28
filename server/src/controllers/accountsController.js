@@ -2416,27 +2416,29 @@ export const getUnifiedAccountData = async (req, res) => {
       totalPendingAccounts: allPendingAccounts.length,
       
       // Count online accounts (all types)
-      onlinePendingAccounts: (
+      totalOnlineAccounts: (
         // Pending accounts online
         allPendingAccounts.filter(acc => acc.status === 'online').length +
         // Master accounts online
         Object.values(cleanMasterAccounts).filter(acc => acc.status === 'online').length +
-        // Slave accounts online
-        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'online').length
+        // Slave accounts online (both connected and unconnected)
+        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'online').length +
+        cleanUnconnectedSlaves.filter(acc => acc.status === 'online').length
       ),
       
       // Count offline accounts (all types)
-      offlinePendingAccounts: (
+      totalOfflineAccounts: (
         // Pending accounts offline
         allPendingAccounts.filter(acc => acc.status === 'offline').length +
         // Master accounts offline
         Object.values(cleanMasterAccounts).filter(acc => acc.status === 'offline').length +
-        // Slave accounts offline
-        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'offline').length
+        // Slave accounts offline (both connected and unconnected)
+        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'offline').length +
+        cleanUnconnectedSlaves.filter(acc => acc.status === 'offline').length
       ),
       
       totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
-      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length,
+      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length + cleanUnconnectedSlaves.length,
       totalUnconnectedSlaves: cleanUnconnectedSlaves.length,
     };
     

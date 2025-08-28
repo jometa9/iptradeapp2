@@ -126,12 +126,9 @@ export const Dashboard: React.FC = () => {
 
   const handleResetAutoLinkCache = async () => {
     try {
-      console.log('🔄 Starting auto-link cache clear process...');
-
       // Limpiar cache del servidor
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
       const url = `http://localhost:${serverPort}/api/clear-auto-link-cache`;
-      console.log('🌐 Making request to:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -140,26 +137,14 @@ export const Dashboard: React.FC = () => {
         },
       });
 
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
-
       if (response.ok) {
         const result = await response.json();
-        console.log('📦 Response data:', result);
 
         // También limpiar cache del frontend
         clearAutoLinkCache();
-        console.log(
-          '✅ Auto-link cache cleared (server + frontend). Next app start will trigger auto-link process.'
-        );
-      } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to clear server auto-link cache');
-        console.error('❌ Response status:', response.status);
-        console.error('❌ Response text:', errorText);
       }
     } catch (error) {
-      console.error('❌ Error clearing auto-link cache:', error);
+      // Silent error handling
     }
   };
 

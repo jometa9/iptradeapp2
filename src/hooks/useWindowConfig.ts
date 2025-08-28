@@ -13,7 +13,6 @@ export const useWindowConfig = () => {
           const config = await window.electronAPI.getWindowConfig();
           setWindowConfig(config);
         } catch (error) {
-          console.error('Error getting window config:', error);
           // Fallback configuration
           setWindowConfig({
             platform: 'unknown',

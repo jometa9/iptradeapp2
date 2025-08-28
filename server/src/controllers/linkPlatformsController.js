@@ -22,6 +22,8 @@ class LinkPlatformsController {
     this.operatingSystem = this.detectOperatingSystem();
     this.lastLinkPlatformsResult = null; // Store last result for new clients
     this.lastLinkPlatformsTimestamp = null; // Store timestamp of last operation
+    // Flag para controlar si cTrader está habilitado (por defecto deshabilitado)
+    this.cTraderEnabled = false;
   }
 
   // Detectar el sistema operativo
@@ -40,6 +42,17 @@ class LinkPlatformsController {
         console.warn(`⚠️ Unknown platform: ${platform}, defaulting to linux`);
         return 'linux';
     }
+  }
+
+  // Método para habilitar/deshabilitar cTrader
+  setCTraderEnabled(enabled) {
+    this.cTraderEnabled = enabled;
+    console.log(`🔧 cTrader support ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  // Método para obtener el estado de cTrader
+  isCTraderEnabled() {
+    return this.cTraderEnabled;
   }
 
   async linkPlatforms(req, res) {
@@ -381,14 +394,12 @@ class LinkPlatformsController {
         console.log(`📁 Created ${type}/Experts folder: ${expertPath}`);
       }
 
-      // Copy bot only if it doesn't exist or is different
+      // Always copy bot to ensure latest version
       const targetBotPath = path.join(expertPath, botFileName);
       if (fs.existsSync(botPath)) {
-        if (!fs.existsSync(targetBotPath) || this.areFilesDifferent(botPath, targetBotPath)) {
-          fs.copyFileSync(botPath, targetBotPath);
-          result.synced++;
-          console.log(`📋 Synced ${type} bot to: ${targetBotPath}`);
-        }
+        fs.copyFileSync(botPath, targetBotPath);
+        result.synced++;
+        console.log(`📋 Synced ${type} bot to: ${targetBotPath} (forced replacement)`);
       }
 
       // Ensure Files folder exists
@@ -1448,11 +1459,9 @@ class LinkPlatformsController {
 
             const targetBotPath = path.join(expertsPath, 'MQL4.mq4');
             if (fs.existsSync(botPath)) {
-              if (!fs.existsSync(targetBotPath) || this.areFilesDifferent(botPath, targetBotPath)) {
-                fs.copyFileSync(botPath, targetBotPath);
-                result.synced++;
-                console.log(`📋 Synced MQL4 bot to: ${targetBotPath}`);
-              }
+              fs.copyFileSync(botPath, targetBotPath);
+              result.synced++;
+              console.log(`📋 Synced MQL4 bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
@@ -1501,11 +1510,9 @@ class LinkPlatformsController {
 
             const targetBotPath = path.join(expertsPath, 'MQL5.mq5');
             if (fs.existsSync(botPath)) {
-              if (!fs.existsSync(targetBotPath) || this.areFilesDifferent(botPath, targetBotPath)) {
-                fs.copyFileSync(botPath, targetBotPath);
-                result.synced++;
-                console.log(`📋 Synced MQL5 bot to: ${targetBotPath}`);
-              }
+              fs.copyFileSync(botPath, targetBotPath);
+              result.synced++;
+              console.log(`📋 Synced MQL5 bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
@@ -1535,8 +1542,8 @@ class LinkPlatformsController {
         }
       }
 
-      // Procesar carpetas cTrader solo si no es búsqueda únicamente
-      if (!searchOnly) {
+      // Procesar carpetas cTrader solo si no es búsqueda únicamente y cTrader está habilitado
+      if (!searchOnly && this.cTraderEnabled) {
         for (const folder of ctraderFolders) {
           try {
             // Determine the correct structure based on the folder name
@@ -1567,11 +1574,9 @@ class LinkPlatformsController {
 
             const targetBotPath = path.join(expertsPath, 'cTrader.cBot');
             if (fs.existsSync(botPath)) {
-              if (!fs.existsSync(targetBotPath) || this.areFilesDifferent(botPath, targetBotPath)) {
-                fs.copyFileSync(botPath, targetBotPath);
-                result.synced++;
-                console.log(`📋 Synced cTrader bot to: ${targetBotPath}`);
-              }
+              fs.copyFileSync(botPath, targetBotPath);
+              result.synced++;
+              console.log(`📋 Synced cTrader bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
@@ -1627,15 +1632,20 @@ class LinkPlatformsController {
   // Búsqueda específica para Windows - usa el comando PowerShell específico
   async findBothMQLFoldersWindows() {
     try {
-      console.log(`🪟 Windows detected - using PowerShell command for MQL folder search...`);
+      const platformsText = this.cTraderEnabled ? 'MQL4, MQL5, cTrader' : 'MQL4, MQL5';
+      console.log(`🪟 Windows detected - using PowerShell command for unified platform search (${platformsText})...`);
 
-      // Comando PowerShell específico para buscar carpetas MQL4 y MQL5
+      // Comando PowerShell específico para buscar carpetas MQL4, MQL5 y opcionalmente cTrader
+      const searchTargets = this.cTraderEnabled 
+        ? '@(\'MQL4\',\'MQL5\',\'cTrader\',\'cAlgo\',\'Spotware\')'
+        : '@(\'MQL4\',\'MQL5\')';
+      
       const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
     Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
-    Where-Object { $_.Name -in @('MQL4','MQL5') } |
+    Where-Object { $_.Name -in ${searchTargets} } |
     Select-Object -ExpandProperty FullName
 }`;
-      console.log(`🔍 Executing PowerShell command for MQL folder search...`);
+      console.log(`🔍 Executing PowerShell command for unified platform search...`);
 
       // Usar exec asíncrono para manejar timeouts y errores
       let stdout = '';
@@ -1663,55 +1673,24 @@ class LinkPlatformsController {
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
-      console.log(`📁 Found ${allFolders.length} MQL folders in system:`);
+      console.log(`📁 Found ${allFolders.length} platform folders in system:`);
       allFolders.forEach(folder => console.log(`   - ${folder}`));
 
-      // Separar MQL4 y MQL5
+      // Separar MQL4, MQL5 y opcionalmente cTrader usando el mismo comando unificado
       const mql4Folders = allFolders.filter(folder => folder.endsWith('\\MQL4') || folder.endsWith('/MQL4'));
       const mql5Folders = allFolders.filter(folder => folder.endsWith('\\MQL5') || folder.endsWith('/MQL5'));
-
-      // Para cTrader, mantener la búsqueda original ya que no está en el comando específico
-      const allCtraderFolders = [];
-      try {
-        const drives = await this.getWindowsDrives();
-        const ctraderSearchPromises = drives.map(async drive => {
-          try {
-            const ctraderCommand = `dir /s /b /ad "${drive}" 2>nul | findstr /i "\\\\cAlgo$\\|\\\\Spotware$"`;
-            const { stdout: ctraderStdout } = await execAsync(ctraderCommand, {
-              maxBuffer: 10 * 1024 * 1024,
-              timeout: 30000,
-              shell: 'cmd.exe',
-            });
-
-            if (ctraderStdout && ctraderStdout.trim()) {
-              const ctraderFolders = ctraderStdout
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .filter(folder =>
-                  folder.toUpperCase().endsWith('\\CTRADER') ||
-                  folder.toUpperCase().endsWith('\\CALGO') ||
-                  folder.toUpperCase().endsWith('\\SPOTWARE')
-                );
-              return ctraderFolders;
-            }
-            return [];
-          } catch (error) {
-            console.warn(`⚠️ Error searching cTrader folders in drive ${drive}: ${error.message}`);
-            return [];
-          }
-        });
-
-        const ctraderResults = await Promise.all(ctraderSearchPromises);
-        ctraderResults.forEach(folders => allCtraderFolders.push(...folders));
-      } catch (error) {
-        console.warn(`⚠️ Error during cTrader folder search: ${error.message}`);
-      }
+      const ctraderFolders = this.cTraderEnabled 
+        ? allFolders.filter(folder => 
+            folder.endsWith('\\cTrader') || folder.endsWith('/cTrader') ||
+            folder.endsWith('\\cAlgo') || folder.endsWith('/cAlgo') ||
+            folder.endsWith('\\Spotware') || folder.endsWith('/Spotware')
+          )
+        : [];
 
       // Remover duplicados
       const uniqueMQL4 = [...new Set(mql4Folders)];
       const uniqueMQL5 = [...new Set(mql5Folders)];
-      const uniqueCtrader = [...new Set(allCtraderFolders)];
+      const uniqueCtrader = [...new Set(ctraderFolders)];
 
       console.log(
         `✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 + ${uniqueCtrader.length} cTrader folders`
@@ -1735,8 +1714,12 @@ class LinkPlatformsController {
   async findBothMQLFoldersMacOS() {
     const homeDir = os.homedir();
 
-    // Comando optimizado para macOS - incluye cTrader
-    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" -o -name "cTrader" \\) -type d 2>/dev/null`;
+    // Comando optimizado para macOS - incluye opcionalmente cTrader, cAlgo y Spotware
+    const searchTargets = this.cTraderEnabled 
+      ? '-name "MQL4" -o -name "MQL5" -o -name "cTrader" -o -name "cAlgo" -o -name "Spotware"'
+      : '-name "MQL4" -o -name "MQL5"';
+    
+    const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing macOS search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
@@ -1766,7 +1749,13 @@ class LinkPlatformsController {
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-          ctraderFolders: allFolders.filter(folder => folder.endsWith('/cTrader')),
+          ctraderFolders: this.cTraderEnabled 
+            ? allFolders.filter(folder => 
+                folder.endsWith('/cTrader') || 
+                folder.endsWith('/cAlgo') || 
+                folder.endsWith('/Spotware')
+              )
+            : [],
         };
 
         console.log(
@@ -1796,8 +1785,12 @@ class LinkPlatformsController {
   async findBothMQLFoldersLinux() {
     const homeDir = os.homedir();
 
-    // Comando optimizado para Linux - incluye cTrader
-    const command = `find "${homeDir}" \\( -name "MQL4" -o -name "MQL5" -o -name "cTrader" \\) -type d 2>/dev/null`;
+    // Comando optimizado para Linux - incluye opcionalmente cTrader, cAlgo y Spotware
+    const searchTargets = this.cTraderEnabled 
+      ? '-name "MQL4" -o -name "MQL5" -o -name "cTrader" -o -name "cAlgo" -o -name "Spotware"'
+      : '-name "MQL4" -o -name "MQL5"';
+    
+    const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing Linux search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
 
@@ -1827,7 +1820,13 @@ class LinkPlatformsController {
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-          ctraderFolders: allFolders.filter(folder => folder.endsWith('/cTrader')),
+          ctraderFolders: this.cTraderEnabled 
+            ? allFolders.filter(folder => 
+                folder.endsWith('/cTrader') || 
+                folder.endsWith('/cAlgo') || 
+                folder.endsWith('/Spotware')
+              )
+            : [],
         };
 
         console.log(
