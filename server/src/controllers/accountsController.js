@@ -263,9 +263,14 @@ export const registerMasterAccount = (req, res) => {
       status: 'success',
       copyingEnabled: false,
     });
-    // Trigger background linking after registering master
+    // Trigger background linking after registering master (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFoldersManual();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after master account registration');
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register master account' });
@@ -354,9 +359,14 @@ export const registerSlaveAccount = (req, res) => {
     }
 
     res.json(responseData);
-    // Trigger background linking after registering slave
+    // Trigger background linking after registering slave (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFoldersManual();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after slave account registration');
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
@@ -633,9 +643,14 @@ export const updateMasterAccount = (req, res) => {
       account: userAccounts.masterAccounts[masterAccountId],
       status: 'success',
     });
-    // Trigger background linking after master update
+    // Trigger background linking after master update (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFoldersManual();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after master account update');
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update master account' });
@@ -706,9 +721,14 @@ export const updateSlaveAccount = (req, res) => {
       connectedTo: userAccounts.connections[slaveAccountId] || null,
       status: 'success',
     });
-    // Trigger background linking after slave update
+    // Trigger background linking after slave update (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFoldersManual();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after slave account update');
+        linkPlatformsController.findAndSyncMQLFoldersManual();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update slave account' });
@@ -720,7 +740,12 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
   try {
     // Use csvManager to find appropriate CSV file
     let csvFilePath = null;
+    let currentStatus = 'ONLINE'; // Default status
+    let currentTimestamp = null; // Will be set from CSV
 
+    // Import csvManager dynamically
+    const csvManager = (await import('../services/csvManager.js')).default;
+    
     // Find which cached file contains this account or find a suitable file for the platform
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
       // Check if this file contains the account
@@ -732,8 +757,39 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
 
       if (accountExists) {
         csvFilePath = filePath;
+        
+        // Try to preserve the current status and timestamp from the existing CSV
+        try {
+          const content = readFileSync(filePath, 'utf8');
+          const lines = content.split('\n');
+          
+          for (const line of lines) {
+            if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
+              const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
+              const timestampMatch = line.match(/\[(\d+)\]/);
+              if (statusMatch) {
+                currentStatus = statusMatch[1];
+                console.log(`🔒 Preserving current status: ${currentStatus} for account ${accountId}`);
+              }
+              if (timestampMatch) {
+                currentTimestamp = parseInt(timestampMatch[1]);
+                console.log(`🔒 Preserving current timestamp: ${currentTimestamp} for account ${accountId}`);
+              }
+              break;
+            }
+          }
+        } catch (error) {
+          console.log(`⚠️ Could not read current status/timestamp for ${accountId}, using defaults`);
+        }
+        
         break;
       }
+    }
+
+    // If we couldn't find the timestamp, use current time as fallback
+    if (currentTimestamp === null) {
+      currentTimestamp = Math.floor(Date.now() / 1000);
+      console.log(`⚠️ Using current timestamp as fallback: ${currentTimestamp} for account ${accountId}`);
     }
 
     // If no file found with the account, find a file for the platform
@@ -758,20 +814,17 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
       return false;
     }
 
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-
-    // Generate new CSV2 format content for pending account (WITH SPACES)
-    let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
-    csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [PENDING]\n`;
-
-    // Write the pending account to CSV in new format with Unix line endings
-    // Ensure we're writing to .csv not .cssv
-    const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
-    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
-    console.log(`📝 Wrote account ${accountId} back to CSV as PENDING using new CSV2 format:`);
-    console.log(csvContent);
-    return true;
+    // Instead of overwriting the entire file, use csvManager.convertToPending() 
+    // which properly modifies only the specific account lines
+    const success = csvManager.convertToPending(accountId);
+    
+    if (success) {
+      console.log(`📝 Successfully converted account ${accountId} to PENDING using csvManager (preserving status: ${currentStatus})`);
+      return true;
+    } else {
+      console.log(`❌ Failed to convert account ${accountId} to PENDING using csvManager`);
+      return false;
+    }
   } catch (error) {
     console.error('Error writing account to CSV as pending:', error);
     return false;
@@ -781,6 +834,9 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
 // Function to update CSV account to MASTER using new CSV2 format
 const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
   try {
+    // Import csvManager dynamically
+    const csvManager = (await import('../services/csvManager.js')).default;
+    
     // Use cached CSV files from csvManager to find the account
     let csvFilePath = null;
 
@@ -804,11 +860,41 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
       return false;
     }
 
-    const currentTimestamp = Math.floor(Date.now() / 1000);
+    // Try to preserve the current status and timestamp from the existing CSV
+    let currentStatus = 'ONLINE'; // Default status
+    let currentTimestamp = null; // Will be set from CSV
+    try {
+      const content = readFileSync(csvFilePath, 'utf8');
+      const lines = content.split('\n');
+      
+      for (const line of lines) {
+        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
+          const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
+          const timestampMatch = line.match(/\[(\d+)\]/);
+          if (statusMatch) {
+            currentStatus = statusMatch[1];
+            console.log(`🔒 Preserving current status: ${currentStatus} for account ${accountId}`);
+          }
+          if (timestampMatch) {
+            currentTimestamp = parseInt(timestampMatch[1]);
+            console.log(`🔒 Preserving current timestamp: ${currentTimestamp} for account ${accountId}`);
+          }
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️ Could not read current status/timestamp for ${accountId}, using defaults`);
+    }
+
+    // If we couldn't find the timestamp, use current time as fallback
+    if (currentTimestamp === null) {
+      currentTimestamp = Math.floor(Date.now() / 1000);
+      console.log(`⚠️ Using current timestamp as fallback: ${currentTimestamp} for account ${accountId}`);
+    }
 
     // Generate new CSV2 format content for master account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
-    csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+    csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]\n`;
     csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}]\n`;
 
     // Write the master account to CSV in new format
@@ -889,7 +975,31 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
       return false;
     }
 
-    const currentTimestamp = Math.floor(Date.now() / 1000);
+    // Try to preserve the current timestamp from the existing CSV
+    let currentTimestamp = null; // Will be set from CSV
+    try {
+      const content = readFileSync(csvFilePath, 'utf8');
+      const lines = content.split('\n');
+      
+      for (const line of lines) {
+        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
+          const timestampMatch = line.match(/\[(\d+)\]/);
+          if (timestampMatch) {
+            currentTimestamp = parseInt(timestampMatch[1]);
+            console.log(`🔒 Preserving current timestamp: ${currentTimestamp} for account ${accountId}`);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️ Could not read current timestamp for ${accountId}, using fallback`);
+    }
+
+    // If we couldn't find the timestamp, use current time as fallback
+    if (currentTimestamp === null) {
+      currentTimestamp = Math.floor(Date.now() / 1000);
+      console.log(`⚠️ Using current timestamp as fallback: ${currentTimestamp} for account ${accountId}`);
+    }
 
     // Get master CSV path if masterId is available
     let masterCsvPath = 'NULL';
@@ -935,9 +1045,29 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
       }
     }
 
+    // Try to preserve the current ONLINE/OFFLINE status from the existing CSV
+    let currentOnlineStatus = 'ONLINE'; // Default status
+    try {
+      const content = readFileSync(csvFilePath, 'utf8');
+      const lines = content.split('\n');
+      
+      for (const line of lines) {
+        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
+          const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
+          if (statusMatch) {
+            currentOnlineStatus = statusMatch[1];
+            console.log(`🔒 Preserving current online status: ${currentOnlineStatus} for account ${accountId}`);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️ Could not read current online status for ${accountId}, using default: ${currentOnlineStatus}`);
+    }
+
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
-    csvContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+    csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]\n`;
     csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
 
     // Write the slave account to CSV in new format with Unix line endings
@@ -1255,15 +1385,33 @@ export const deleteSlaveAccount = (req, res) => {
   }
 
   const wasConnectedTo = userAccounts.connections[slaveAccountId];
+  const slaveAccount = userAccounts.slaveAccounts[slaveAccountId];
+  const platform = slaveAccount?.platform || 'MT4';
+  
   delete userAccounts.connections[slaveAccountId];
   delete userAccounts.slaveAccounts[slaveAccountId];
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     console.log(
-      `Slave account deleted: ${slaveAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)${wasConnectedTo ? ` (was connected to ${wasConnectedTo})` : ''}`
+      `✅ Step 1: Slave account ${slaveAccountId} deleted from user accounts (was connected to: ${wasConnectedTo || 'none'})`
     );
+
+    // STEP 2: Convert slave account to PENDING in CSV
+    console.log(`🔧 Step 2: Converting slave ${slaveAccountId} to PENDING in CSV...`);
+    
+    // Use the same method as master accounts to convert to pending
+    writeAccountToCSVAsPending(slaveAccountId, platform).then(csvWritten => {
+      if (csvWritten) {
+        console.log(`📝 Step 2 completed: Slave account ${slaveAccountId} converted to PENDING in CSV`);
+      } else {
+        console.log(`❌ Step 2 failed: Could not convert slave account ${slaveAccountId} to PENDING in CSV`);
+      }
+    }).catch(error => {
+      console.error(`Error converting slave ${slaveAccountId} to pending:`, error);
+    });
+
     res.json({
-      message: 'Slave account deleted successfully',
+      message: 'Slave account deleted successfully and converted to pending',
       slaveAccountId,
       wasConnectedTo: wasConnectedTo || null,
       status: 'deleted',
@@ -1353,10 +1501,16 @@ export const getPendingAccounts = async (req, res) => {
           continue; // Skip this account
         }
         
-        // RULE 2: If more than 3 seconds have passed, mark as "offline"
-        let finalStatus = account.status;
-        if (timeDifference > 3) {
-          finalStatus = 'offline';
+        // RULE 2: Respect the original status from CSV, don't override based on timestamp
+        let finalStatus = account.status || 'online';
+        
+        // Only apply timestamp-based logic if the account doesn't have a specific status
+        if (!account.status) {
+          if (timeDifference > 3) {
+            finalStatus = 'offline';
+          } else {
+            finalStatus = 'online';
+          }
         }
         
         const pendingAccount = {
@@ -1492,9 +1646,14 @@ export const convertPendingToMaster = async (req, res) => {
         status: 'converted_to_master',
         copyingEnabled: false,
       });
-      // Trigger background linking after conversion to master
+      // Trigger background linking after conversion to master (only if not already running)
       try {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
+        if (!linkPlatformsController.isLinking) {
+          console.log('🔄 Triggering background Link Platforms after conversion to master');
+          linkPlatformsController.findAndSyncMQLFoldersManual();
+        } else {
+          console.log('⚠️ Link Platforms already running - skipping background trigger');
+        }
       } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
@@ -1596,9 +1755,14 @@ export const convertPendingToSlave = async (req, res) => {
       }
 
       res.json(responseData);
-      // Trigger background linking after conversion to slave
+      // Trigger background linking after conversion to slave (only if not already running)
       try {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
+        if (!linkPlatformsController.isLinking) {
+          console.log('🔄 Triggering background Link Platforms after conversion to slave');
+          linkPlatformsController.findAndSyncMQLFoldersManual();
+        } else {
+          console.log('⚠️ Link Platforms already running - skipping background trigger');
+        }
       } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
@@ -2128,10 +2292,17 @@ export const getUnifiedAccountData = async (req, res) => {
         continue; // Skip this account
       }
       
-      // RULE 2: Determine online/offline status based on 3-second threshold
-      let finalStatus = 'online';
-      if (timeDifference > 3) {
-        finalStatus = 'offline';
+      // RULE 2: For pending accounts, respect their original status from CSV
+      // Don't override the status based on timestamp difference
+      let finalStatus = account.status || 'online';
+      
+      // Only apply timestamp-based logic if the account doesn't have a specific status
+      if (!account.status) {
+        if (timeDifference > 3) {
+          finalStatus = 'offline';
+        } else {
+          finalStatus = 'online';
+        }
       }
       
       const pendingAccount = {
@@ -2243,8 +2414,27 @@ export const getUnifiedAccountData = async (req, res) => {
     const serverStats = {
       totalCSVFiles: csvManager.csvFiles.size,
       totalPendingAccounts: allPendingAccounts.length,
-      onlinePendingAccounts: allPendingAccounts.filter(acc => acc.status === 'online').length,
-      offlinePendingAccounts: allPendingAccounts.filter(acc => acc.status === 'offline').length,
+      
+      // Count online accounts (all types)
+      onlinePendingAccounts: (
+        // Pending accounts online
+        allPendingAccounts.filter(acc => acc.status === 'online').length +
+        // Master accounts online
+        Object.values(cleanMasterAccounts).filter(acc => acc.status === 'online').length +
+        // Slave accounts online
+        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'online').length
+      ),
+      
+      // Count offline accounts (all types)
+      offlinePendingAccounts: (
+        // Pending accounts offline
+        allPendingAccounts.filter(acc => acc.status === 'offline').length +
+        // Master accounts offline
+        Object.values(cleanMasterAccounts).filter(acc => acc.status === 'offline').length +
+        // Slave accounts offline
+        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'offline').length
+      ),
+      
       totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
       totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length,
       totalUnconnectedSlaves: cleanUnconnectedSlaves.length,

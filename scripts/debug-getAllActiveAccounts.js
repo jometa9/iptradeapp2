@@ -172,7 +172,6 @@ function getAllActiveAccounts() {
 }
 
 // Ejecutar el debug
-console.log('🔍 Debugging getAllActiveAccounts...');
 const result = getAllActiveAccounts();
 
 console.log('\n📊 Final Result:');

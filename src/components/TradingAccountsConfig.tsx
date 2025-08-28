@@ -445,13 +445,13 @@ export function TradingAccountsConfig() {
     // Buscar la cuenta en los datos CSV para obtener el estado enabled/disabled
     const masterAccount = csvAccounts?.masterAccounts?.[masterAccountId];
     if (masterAccount) {
-      // El estado enabled viene del config.enabled
+      // El estado enabled viene del config.enabled - solo depender del estado del master
       return masterAccount.config?.enabled === true;
     }
 
     // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
-    return copierStatus.globalStatus && masterStatus?.masterStatus === true;
+    return masterStatus?.masterStatus === true;
   };
 
   // Get effective copier status for slave account
@@ -470,31 +470,17 @@ export function TradingAccountsConfig() {
     }
 
     if (slaveAccount) {
-      // El estado enabled viene del config.enabled
+      // El estado enabled viene del config.enabled - solo depender del estado del slave
       const slaveEnabled = slaveAccount.config?.enabled === true;
-
-      // Si el slave está conectado a un master, verificar que el master esté habilitado
-      if (masterAccountId && masterAccountId !== '' && masterAccountId !== 'none') {
-        const masterStatus = getMasterEffectiveStatus(masterAccountId);
-        return copierStatus.globalStatus && masterStatus && slaveEnabled;
-      } else {
-        // Si el slave está desconectado, solo verificar el estado global y el estado del slave
-        return copierStatus.globalStatus && slaveEnabled;
-      }
+      return slaveEnabled;
     }
 
     // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const slaveConfig = slaveConfigs[slaveAccountId];
     const slaveEnabled = slaveConfig?.config?.enabled === true;
 
-    // Si el slave está conectado a un master, verificar que el master esté habilitado
-    if (masterAccountId && masterAccountId !== '' && masterAccountId !== 'none') {
-      const masterStatus = getMasterEffectiveStatus(masterAccountId);
-      return copierStatus.globalStatus && masterStatus && slaveEnabled;
-    } else {
-      // Si el slave está desconectado, solo verificar el estado global y el estado del slave
-      return copierStatus.globalStatus && slaveEnabled;
-    }
+    // Solo depender del estado del slave, sin verificar master o global status
+    return slaveEnabled;
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -592,7 +578,7 @@ export function TradingAccountsConfig() {
         newSet.delete(accountId);
         return newSet;
       });
-    }, 10000);
+    }, 5000);
   }, []);
 
   const confirmDeleteAccount = async () => {
@@ -606,15 +592,17 @@ export function TradingAccountsConfig() {
       // Ocultar la cuenta inmediatamente
       hideAccountTemporarily(deleteConfirmId);
 
-      // Determinar si es una master account o una cuenta normal
+      // Determinar el tipo de cuenta para usar el endpoint correcto
       const accountToDelete = accounts.find(acc => acc.id === deleteConfirmId);
       const isMasterAccount = accountToDelete?.accountType === 'master';
+      const isSlaveAccount = accountToDelete?.accountType === 'slave';
 
       console.log(`🔍 Debug delete account:`, {
         deleteConfirmId,
         accountToDelete,
         accountType: accountToDelete?.accountType,
         isMasterAccount,
+        isSlaveAccount,
         totalAccounts: accounts.length,
       });
 
@@ -623,13 +611,16 @@ export function TradingAccountsConfig() {
       if (isMasterAccount) {
         // Usar el endpoint correcto para borrar master accounts (desconecta slaves primero)
         success = await csvFrontendService.deleteMasterAccount(deleteConfirmId);
+      } else if (isSlaveAccount) {
+        // Usar el endpoint correcto para borrar slave accounts (elimina de DB y convierte a pending)
+        success = await csvFrontendService.deleteSlaveAccount(deleteConfirmId);
       } else {
-        // Para otras cuentas, usar el método normal de conversión a pending
+        // Para cuentas que no son ni master ni slave, usar conversión a pending
         success = await csvFrontendService.convertToPending(deleteConfirmId);
       }
 
       if (success) {
-        const actionText = isMasterAccount ? 'deleted' : 'converted to pending';
+        const actionText = isMasterAccount ? 'deleted' : (isSlaveAccount ? 'deleted' : 'converted to pending');
         toast({
           title: 'Account deleted',
           description: `Account ${deleteConfirmId} has been ${actionText}.`,
@@ -1067,51 +1058,64 @@ export function TradingAccountsConfig() {
 
     // Use connectivity stats from backend if available, otherwise fallback to frontend calculation
     if (connectivityStats) {
-      const { online, offline, total } = connectivityStats;
+      const { online, offline, pending, total } = connectivityStats;
 
       if (total === 0) return 'none';
 
-      // Si todas las cuentas están online
-      if (online === total && offline === 0) {
+      // Calculate percentages
+      const pendingPercentage = (pending / total) * 100;
+      const offlinePercentage = (offline / total) * 100;
+      const onlinePercentage = (online / total) * 100;
+
+      // ORANGE: When most accounts are pending (more than 50% pending)
+      if (pendingPercentage > 50) {
+        return 'pending';
+      }
+
+      // GREEN: When all accounts are online and none are pending
+      if (onlinePercentage === 100 && pendingPercentage === 0) {
         return 'optimal';
       }
 
-      // Si todas las cuentas están offline
-      if (offline === total && online === 0) {
+      // RED: When most accounts are offline (more than 50% offline)
+      if (offlinePercentage > 50) {
         return 'offline';
       }
 
-      // Si hay una mezcla de online y offline
-      if (online > 0 && offline > 0) {
-        return 'mixed';
-      }
-
-      return 'warning';
+      // Default to mixed status for other cases
+      return 'mixed';
     }
 
     // Fallback to frontend calculation
     const onlineCount = accounts.filter(acc => acc.status === 'online').length;
     const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
+    const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
     const total = accounts.length;
 
     if (total === 0) return 'none';
 
-    // Si todas las cuentas están online
-    if (onlineCount === total && offlineCount === 0) {
+    // Calculate percentages
+    const pendingPercentage = (pendingCount / total) * 100;
+    const offlinePercentage = (offlineCount / total) * 100;
+    const onlinePercentage = (onlineCount / total) * 100;
+
+    // ORANGE: When most accounts are pending (more than 50% pending)
+    if (pendingPercentage > 50) {
+      return 'pending';
+    }
+
+    // GREEN: When all accounts are online and none are pending
+    if (onlinePercentage === 100 && pendingPercentage === 0) {
       return 'optimal';
     }
 
-    // Si todas las cuentas están offline
-    if (offlineCount === total && onlineCount === 0) {
+    // RED: When most accounts are offline (more than 50% offline)
+    if (offlinePercentage > 50) {
       return 'offline';
     }
 
-    // Si hay una mezcla de online y offline
-    if (onlineCount > 0 && offlineCount > 0) {
-      return 'mixed';
-    }
-
-    return 'warning';
+    // Default to mixed status for other cases
+    return 'mixed';
   };
 
   const getServerStatusDetails = () => {
@@ -1159,12 +1163,6 @@ export function TradingAccountsConfig() {
             recommendation: 'Address offline accounts to improve system performance',
             severity: 'warning',
           };
-        case 'warning':
-          return {
-            message: 'Some accounts may need attention',
-            recommendation: 'Review account connections and statuses',
-            severity: 'warning',
-          };
         default:
           return {
             message: 'Unknown status',
@@ -1175,11 +1173,24 @@ export function TradingAccountsConfig() {
     }
 
     // Fallback to frontend calculation
-    const slavesCount = accounts.filter(acc => acc.accountType === 'slave').length;
-    const mastersCount = accounts.filter(acc => acc.accountType === 'master').length;
-    const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
-    const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
-    const relevantTotal = slavesCount + mastersCount + offlineCount + pendingCount;
+    // Usar directamente los stats del servidor
+    const stats = unifiedData?.serverStats;
+    
+    // Si no hay stats, retornar todos en 0
+    if (!stats) {
+      return {
+        message: 'No server stats available',
+        recommendation: 'Check server connection',
+        severity: 'warning'
+      };
+    }
+
+    const mastersCount = stats.totalMasterAccounts;
+    const slavesCount = stats.totalSlaveAccounts;
+    const pendingCount = stats.totalPendingAccounts;
+    const onlineCount = stats.onlinePendingAccounts;
+    const offlineCount = stats.offlinePendingAccounts;
+    const relevantTotal = mastersCount + slavesCount + pendingCount;
 
     if (relevantTotal === 0) {
       return {
@@ -1219,12 +1230,6 @@ export function TradingAccountsConfig() {
         return {
           message: `Mixed status: ${mastersPercentage}% masters, ${slavesPercentage}% slaves, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
           recommendation: 'Connect slaves to masters and address offline accounts',
-          severity: 'warning',
-        };
-      case 'warning':
-        return {
-          message: 'Some accounts may need attention',
-          recommendation: 'Review account connections and statuses',
           severity: 'warning',
         };
       default:
@@ -1452,7 +1457,6 @@ export function TradingAccountsConfig() {
                 <Switch
                   checked={localGlobalStatus}
                   onCheckedChange={handleToggleGlobalStatus}
-                  disabled={updatingCopier === 'global'}
                 />
               </div>
             </div>
@@ -1470,8 +1474,8 @@ export function TradingAccountsConfig() {
                     ? 'bg-orange-50 border-orange-200'
                     : getServerStatus() === 'mixed'
                       ? 'bg-orange-50 border-orange-200'
-                      : getServerStatus() === 'warning'
-                        ? 'bg-yellow-50 border-yellow-200'
+                                        : getServerStatus() === 'mixed'
+                    ? 'bg-yellow-50 border-yellow-200'
                         : 'bg-gray-50 border-gray-200'
             }`}
           >
@@ -1489,8 +1493,6 @@ export function TradingAccountsConfig() {
                         return <Clock className="h-4 w-4 text-orange-500" />;
                       case 'mixed':
                         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
-                      case 'warning':
-                        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
                       default:
                         return <Info className="h-4 w-4 text-gray-500" />;
                     }
@@ -1504,8 +1506,6 @@ export function TradingAccountsConfig() {
                           ? 'Not Connected'
                           : getServerStatus() === 'mixed'
                             ? 'Mixed Status'
-                            : getServerStatus() === 'warning'
-                              ? 'Some Issues'
                               : 'No Accounts'}
                   </div>
                 </div>
@@ -1523,9 +1523,7 @@ export function TradingAccountsConfig() {
               {/* Slaves */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
                 <div className="text-2xl font-bold text-green-700">
-                  {connectivityStats
-                    ? connectivityStats.slaves.total
-                    : accounts.filter(acc => acc.accountType === 'slave').length}
+                  {unifiedData?.serverStats?.totalSlaveAccounts || 0}
                 </div>
                 <div className="text-xs text-green-700 text-center">Slaves</div>
               </div>
@@ -1533,9 +1531,7 @@ export function TradingAccountsConfig() {
               {/* Masters */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-blue-200 shadow-sm">
                 <div className="text-2xl font-bold text-blue-700">
-                  {connectivityStats
-                    ? connectivityStats.masters.total
-                    : accounts.filter(acc => acc.accountType === 'master').length}
+                  {unifiedData?.serverStats?.totalMasterAccounts || 0}
                 </div>
                 <div className="text-xs text-blue-700 text-center">Masters</div>
               </div>
@@ -1543,12 +1539,7 @@ export function TradingAccountsConfig() {
               {/* Pending */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
                 <div className="text-2xl font-bold text-orange-700">
-                  {(() => {
-                    const pendingValue = connectivityStats
-                      ? connectivityStats.pending
-                      : accounts.filter(acc => acc.status === 'pending').length;
-                    return pendingValue;
-                  })()}
+                  {unifiedData?.serverStats?.totalPendingAccounts || 0}
                 </div>
                 <div className="text-xs text-orange-700 text-center">Pendings</div>
               </div>
@@ -1556,7 +1547,17 @@ export function TradingAccountsConfig() {
               {/* Online */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-emerald-200 shadow-sm">
                 <div className="text-2xl font-bold text-emerald-700">
-                  {connectivityStats ? connectivityStats.online : 0}
+                  {(() => {
+                    const stats = unifiedData?.serverStats;
+                    if (!stats) return 0;
+                    
+                    // Contar masters online
+                    const mastersOnline = Object.values(unifiedData?.configuredAccounts?.masterAccounts || {})
+                      .filter(master => master.status === 'online').length;
+                    
+                    // Sumar masters online + pending online
+                    return mastersOnline + (stats.onlinePendingAccounts || 0);
+                  })()}
                 </div>
                 <div className="text-xs text-emerald-700 text-center">Online</div>
               </div>
@@ -1564,7 +1565,17 @@ export function TradingAccountsConfig() {
               {/* Offline */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
                 <div className="text-2xl font-bold text-red-700">
-                  {connectivityStats ? connectivityStats.offline : 0}
+                  {(() => {
+                    const stats = unifiedData?.serverStats;
+                    if (!stats) return 0;
+                    
+                    // Contar masters offline
+                    const mastersOffline = Object.values(unifiedData?.configuredAccounts?.masterAccounts || {})
+                      .filter(master => master.status === 'offline').length;
+                    
+                    // Sumar masters offline + pending offline
+                    return mastersOffline + (stats.offlinePendingAccounts || 0);
+                  })()}
                 </div>
                 <div className="text-xs text-red-700 text-center">Offline</div>
               </div>
@@ -1572,7 +1583,9 @@ export function TradingAccountsConfig() {
               {/* Total */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
                 <div className="text-2xl font-bold text-gray-700">
-                  {connectivityStats ? connectivityStats.total : accounts.length}
+                  {(unifiedData?.serverStats?.totalMasterAccounts || 0) + 
+                   (unifiedData?.serverStats?.totalSlaveAccounts || 0) + 
+                   (unifiedData?.serverStats?.totalPendingAccounts || 0)}
                 </div>
                 <div className="text-xs text-gray-700 text-center">Total</div>
               </div>
@@ -2008,11 +2021,9 @@ export function TradingAccountsConfig() {
                             </td>
                             <td className=" py-2 align-middle">
                               <div className="flex items-center justify-center h-full w-full">
-                                <Tooltip tip={getStatusDisplayText(masterAccount.status)}>
-                                  <span className="flex items-center justify-center h-5 w-5">
-                                    {getStatusIcon(masterAccount.status)}
-                                  </span>
-                                </Tooltip>
+                                <span className="flex items-center justify-center h-5 w-5">
+                                  {getStatusIcon(masterAccount.status)}
+                                </span>
                               </div>
                             </td>
                             <td className=" px-4 py-2 align-middle actions-column">
@@ -2022,20 +2033,8 @@ export function TradingAccountsConfig() {
                                   onCheckedChange={enabled =>
                                     toggleAccountStatus(masterAccount.accountNumber, enabled)
                                   }
-                                  disabled={
-                                    updatingCopier === `master-${masterAccount.accountNumber}` ||
-                                    !copierStatus?.globalStatus ||
-                                    masterAccount.status === 'offline'
-                                  }
-                                  title={
-                                    masterAccount.status === 'offline'
-                                      ? 'Account is offline - copy trading disabled'
-                                      : !copierStatus?.globalStatus
-                                        ? 'Global copier is OFF'
-                                        : getMasterEffectiveStatus(masterAccount.accountNumber)
-                                          ? 'Stop sending signals to slaves'
-                                          : 'Start sending signals to slaves'
-                                  }
+
+                                  title='Copy trading'
                                 />
                               </div>
                             </td>
@@ -2208,11 +2207,9 @@ export function TradingAccountsConfig() {
                                   <td className=" px-2 py-1.5 align-middle"></td>
                                   <td className=" px-4 py-1.5 align-middle">
                                     <div className="flex items-center justify-center h-full w-full">
-                                      <Tooltip tip={getStatusDisplayText(accountToUse.status)}>
-                                        <span className="flex items-center justify-center h-5 w-5">
-                                          {getStatusIcon(accountToUse.status)}
-                                        </span>
-                                      </Tooltip>
+                                      <span className="flex items-center justify-center h-5 w-5">
+                                        {getStatusIcon(accountToUse.status)}
+                                      </span>
                                     </div>
                                   </td>
                                   <td className=" px-4 py-1.5 align-middle actions-column">
@@ -2225,57 +2222,8 @@ export function TradingAccountsConfig() {
                                         onCheckedChange={enabled =>
                                           toggleAccountStatus(accountToUse.accountNumber, enabled)
                                         }
-                                        disabled={(() => {
-                                          const isUpdating =
-                                            updatingCopier ===
-                                            `slave-${accountToUse.accountNumber}`;
-                                          const globalStatusOff = !copierStatus?.globalStatus;
-                                          const masterNotEffective = !getMasterEffectiveStatus(
-                                            masterAccount.accountNumber
-                                          );
-                                          const slaveOffline = accountToUse.status === 'offline';
-                                          const masterNotOnline = !accountToUse.masterOnline;
 
-                                          console.log(
-                                            '🔍 DEBUG: Switch disabled conditions for slave:',
-                                            accountToUse.accountNumber,
-                                            {
-                                              isUpdating,
-                                              globalStatusOff,
-                                              masterNotEffective,
-                                              slaveOffline,
-                                              masterNotOnline,
-                                              accountToUse: accountToUse,
-                                              copierStatus: copierStatus,
-                                            }
-                                          );
-
-                                          return (
-                                            isUpdating ||
-                                            globalStatusOff ||
-                                            masterNotEffective ||
-                                            slaveOffline ||
-                                            masterNotOnline
-                                          );
-                                        })()}
-                                        title={
-                                          accountToUse.status === 'offline'
-                                            ? 'Account is offline - copy trading disabled'
-                                            : !accountToUse.masterOnline
-                                              ? 'Master account is offline - copy trading disabled'
-                                              : !copierStatus?.globalStatus
-                                                ? 'Global copier is OFF'
-                                                : !getMasterEffectiveStatus(
-                                                      masterAccount.accountNumber
-                                                    )
-                                                  ? 'Master is not sending signals'
-                                                  : getSlaveEffectiveStatus(
-                                                        accountToUse.accountNumber,
-                                                        masterAccount.accountNumber
-                                                      )
-                                                    ? 'Stop receiving signals from master'
-                                                    : 'Start receiving signals from master'
-                                        }
+                                        title='Copy trading'
                                       />
                                     </div>
                                   </td>
@@ -2494,11 +2442,9 @@ export function TradingAccountsConfig() {
                         <td className="w-8 px-2 py-2 align-middle"></td>
                         <td className="w-20 px-4 py-2 align-middle">
                           <div className="flex items-center justify-center h-full w-full">
-                            <Tooltip tip={getStatusDisplayText(orphanSlave.status)}>
-                              <span className="flex items-center justify-center h-5 w-5">
-                                {getStatusIcon(orphanSlave.status)}
-                              </span>
-                            </Tooltip>
+                            <span className="flex items-center justify-center h-5 w-5">
+                              {getStatusIcon(orphanSlave.status)}
+                            </span>
                           </div>
                         </td>
                         <td className="w-32 px-4 py-2 align-middle">
@@ -2508,20 +2454,8 @@ export function TradingAccountsConfig() {
                               onCheckedChange={enabled =>
                                 toggleAccountStatus(orphanSlave.accountNumber, enabled)
                               }
-                              disabled={
-                                updatingCopier === `slave-${orphanSlave.accountNumber}` ||
-                                !copierStatus?.globalStatus ||
-                                orphanSlave.status === 'offline'
-                              }
-                              title={
-                                orphanSlave.status === 'offline'
-                                  ? 'Account is offline - copy trading disabled'
-                                  : !copierStatus?.globalStatus
-                                    ? 'Global copier is OFF'
-                                    : getSlaveEffectiveStatus(orphanSlave.accountNumber)
-                                      ? 'Stop copy trading'
-                                      : 'Start copy trading'
-                              }
+
+                              title='Copy trading'
                             />
                           </div>
                         </td>

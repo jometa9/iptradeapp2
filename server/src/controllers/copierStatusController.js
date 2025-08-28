@@ -87,12 +87,7 @@ export const isCopierEnabled = (masterAccountId, apiKey) => {
     return false;
   }
 
-  // Check if account is offline - CRITICAL: Never allow copy trading for offline accounts
-  const userAccounts = getUserAccounts(apiKey);
-  const masterAccount = userAccounts.masterAccounts[masterAccountId];
-  if (masterAccount && masterAccount.status === 'offline') {
-    return false;
-  }
+
 
   // Check specific master account status (default to false if not configured)
   const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
@@ -244,19 +239,7 @@ export const setMasterStatus = async (req, res) => {
     });
   }
 
-  // Check if account is offline before enabling
-  if (enabled) {
-    const userAccounts = getUserAccounts(apiKey);
-    const masterAccount = userAccounts.masterAccounts[masterAccountId];
 
-    if (masterAccount && masterAccount.status === 'offline') {
-      return res.status(400).json({
-        error: 'Cannot enable copy trading for offline account',
-        message: 'Account must be online to enable copy trading',
-        accountStatus: 'offline',
-      });
-    }
-  }
 
   const userCopierStatus = loadUserCopierStatus(apiKey);
   userCopierStatus.masterAccounts[masterAccountId] = Boolean(enabled);

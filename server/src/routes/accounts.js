@@ -411,9 +411,14 @@ router.post('/register-pending', (req, res) => {
       accountId,
       status: 'pending',
     });
-    // Trigger background linking after registering a pending account
+    // Trigger background linking after registering a pending account (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFolders();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after pending account registration');
+        linkPlatformsController.findAndSyncMQLFolders();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);
@@ -501,9 +506,14 @@ router.post('/register-pending-user', requireValidSubscription, (req, res) => {
       accountId,
       status: 'pending',
     });
-    // Trigger background linking after registering a pending account
+    // Trigger background linking after registering a pending account (only if not already running)
     try {
-      linkPlatformsController.findAndSyncMQLFolders();
+      if (!linkPlatformsController.isLinking) {
+        console.log('🔄 Triggering background Link Platforms after pending account registration');
+        linkPlatformsController.findAndSyncMQLFolders();
+      } else {
+        console.log('⚠️ Link Platforms already running - skipping background trigger');
+      }
     } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);

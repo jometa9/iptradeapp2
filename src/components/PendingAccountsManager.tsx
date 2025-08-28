@@ -163,17 +163,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     refresh: refreshData,
   } = useUnifiedAccountDataContext();
 
-  // Extract data from unified response
-  const originalPendingData = unifiedData?.pendingData || null;
+  // Extract data from unified response - use directly without local state
+  const pendingData = unifiedData?.pendingData || null;
   const csvAccounts = unifiedData?.configuredAccounts || null;
-
-  // Estado local optimizado para evitar parpadeos
-  const [pendingData, setPendingData] = useState(originalPendingData);
-
-  // Sincronizar con datos originales cuando cambien
-  useEffect(() => {
-    setPendingData(originalPendingData);
-  }, [originalPendingData]);
 
   const masterAccounts = React.useMemo(() => {
     if (!csvAccounts?.masterAccounts) return [];

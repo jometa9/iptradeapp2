@@ -222,6 +222,34 @@ class CSVFrontendService extends SimpleEventEmitter {
     }
   }
 
+  // Borrar una slave account (elimina de base de datos y convierte a pending en CSV)
+  public async deleteSlaveAccount(slaveAccountId: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `http://localhost:${this.serverPort}/api/accounts/slave/${slaveAccountId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'x-api-key': this.getApiKey(),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Procesar la respuesta y emitir eventos
+        this.processCSVData(data);
+        return true;
+      }
+
+      console.error(`❌ Failed to delete slave account ${slaveAccountId}:`, response.status);
+      return false;
+    } catch (error) {
+      console.error('Error deleting slave account:', error);
+      return false;
+    }
+  }
+
   // REMOVED: getCopierStatus() - Use getUnifiedAccountData() instead
   // Copier status is now included in the unified endpoint response
 

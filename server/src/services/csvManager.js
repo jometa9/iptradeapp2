@@ -975,19 +975,24 @@ class CSVManager extends EventEmitter {
               currentAccountData.status = values[1].toLowerCase(); // online/offline
               currentAccountData.timestamp = values[2];
 
-              // Para cuentas pending, calcular si realmente está online basado en timestamp
+              // Para cuentas pending, respetar el estado original del CSV
+              // No sobrescribir el estado basado en timestamp para cuentas convertidas
               if (currentAccountData.account_type === 'pending') {
-                const now = Date.now() / 1000;
-                const pingTime = parseInt(values[2]) || 0;
-                const timeDiff = now - pingTime; // No usar abs() para detectar timestamps futuros
+                // Solo aplicar lógica de timestamp si el estado original es 'online'
+                // y queremos verificar si realmente sigue online
+                if (values[1].toLowerCase() === 'online') {
+                  const now = Date.now() / 1000;
+                  const pingTime = parseInt(values[2]) || 0;
+                  const timeDiff = now - pingTime;
 
-                // Si el timestamp es mayor a 5 segundos en el pasado, está offline
-                // También marcar offline si el timestamp está en el futuro (posible problema de sincronización)
-                const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos (igual que ACTIVITY_TIMEOUT)
-
-                if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
-                  currentAccountData.status = 'offline';
+                  const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos
+                  
+                  // Solo cambiar a offline si el timestamp indica que no está activo
+                  if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
+                    currentAccountData.status = 'offline';
+                  }
                 }
+                // Si el estado original es 'offline', mantenerlo como offline
               }
             }
             break;
@@ -1312,8 +1317,6 @@ class CSVManager extends EventEmitter {
               totalSlaves: existingTotalSlaves, // Preservar contador
             };
             
-            // Debug: Log the config for this master account
-            console.log(`🔍 [getAllActiveAccounts] Master ${accountId} config:`, row.config);
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
 

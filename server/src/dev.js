@@ -56,12 +56,9 @@ const hasAutoLinkExecuted = () => {
   try {
     if (fs.existsSync(AUTO_LINK_CACHE_FILE)) {
       const cache = JSON.parse(fs.readFileSync(AUTO_LINK_CACHE_FILE, 'utf8'));
-      const now = new Date();
-      const cacheTime = new Date(cache.timestamp);
-
-      // Cache válido por 24 horas
-      const hoursDiff = (now - cacheTime) / (1000 * 60 * 60);
-      return hoursDiff < 24;
+      
+      // Cache NUNCA expira - una vez ejecutado, no se vuelve a ejecutar automáticamente
+      return cache.executed === true;
     }
   } catch (error) {
     console.log('⚠️ Error reading auto-link cache:', error.message);
@@ -123,9 +120,9 @@ async function startDevServer() {
         // Auto-run Link Platforms on server start (with cache)
         (async () => {
           try {
-            // Verificar si ya se ejecutó el auto-link recientemente
+            // Verificar si ya se ejecutó el auto-link (cache nunca expira)
             if (hasAutoLinkExecuted()) {
-              console.log('💾 Auto-link cache found - skipping auto-start');
+              console.log('💾 Auto-link cache found (permanent) - skipping auto-start');
               return;
             }
 

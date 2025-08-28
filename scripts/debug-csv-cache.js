@@ -36,8 +36,6 @@ const debugCSVCache = () => {
     fileIndex++;
   });
   
-  // Test getAllActiveAccounts
-  console.log('\n🧪 Testing getAllActiveAccounts...');
   const allAccounts = csvManager.getAllActiveAccounts();
   console.log(`📊 Total pending accounts found: ${allAccounts.pendingAccounts.length}`);
   
