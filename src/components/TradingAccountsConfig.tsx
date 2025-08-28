@@ -612,8 +612,14 @@ export function TradingAccountsConfig() {
         // Usar el endpoint correcto para borrar master accounts (desconecta slaves primero)
         success = await csvFrontendService.deleteMasterAccount(deleteConfirmId);
       } else if (isSlaveAccount) {
-        // Usar el endpoint correcto para borrar slave accounts (elimina de DB y convierte a pending)
+        // Intentar usar el endpoint específico para slave accounts
         success = await csvFrontendService.deleteSlaveAccount(deleteConfirmId);
+        
+        // Si falla (devuelve false), usar convertToPending como fallback
+        if (!success) {
+          console.log(`⚠️ Slave endpoint failed for ${deleteConfirmId}, trying convertToPending as fallback`);
+          success = await csvFrontendService.convertToPending(deleteConfirmId);
+        }
       } else {
         // Para cuentas que no son ni master ni slave, usar conversión a pending
         success = await csvFrontendService.convertToPending(deleteConfirmId);

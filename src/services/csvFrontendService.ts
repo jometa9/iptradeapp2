@@ -242,6 +242,12 @@ class CSVFrontendService extends SimpleEventEmitter {
         return true;
       }
 
+      // Si es 404, significa que no está registrada como slave en la DB
+      if (response.status === 404) {
+        console.log(`⚠️ Slave account ${slaveAccountId} not found in user database (404)`);
+        return false; // Permitir que el frontend use convertToPending como fallback
+      }
+
       console.error(`❌ Failed to delete slave account ${slaveAccountId}:`, response.status);
       return false;
     } catch (error) {
