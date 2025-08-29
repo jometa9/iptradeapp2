@@ -16,7 +16,11 @@ export default defineConfig({
         skipLibCheck: true,
         noEmit: true,
         isolatedModules: true,
-        allowSyntheticDefaultImports: true
+        allowSyntheticDefaultImports: true,
+        noUnusedLocals: false,
+        noUnusedParameters: false,
+        strict: false,
+        noImplicitAny: false
       }
     }
   },

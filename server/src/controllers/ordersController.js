@@ -66,13 +66,11 @@ const initializeAccountCsv = accountId => {
 export function killProcessOnPort(port) {
   return new Promise(resolve => {
     const isWindows = process.platform === 'win32';
-    console.log(`🔍 Scanning for processes using port ${port}...`);
 
     if (isWindows) {
       // Windows implementation
       exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
         if (error || !stdout) {
-          console.log(`✅ No processes found using port ${port}`);
           resolve();
           return;
         }
@@ -95,27 +93,19 @@ export function killProcessOnPort(port) {
         const pids = Array.from(pidMap.keys());
 
         if (pids.length > 0) {
-          console.log(`🔸 Found processes using port ${port}: ${pids.join(', ')}`);
           const killPromises = pids.map(pid => {
             return new Promise(killResolve => {
               exec(`taskkill /PID ${pid} /F`, killError => {
-                if (killError) {
-                  console.log(`❌ Could not kill process ${pid}: ${killError.message}`);
-                } else {
-                  console.log(`✅ Killed process ${pid}`);
-                }
                 killResolve();
               });
             });
           });
 
           Promise.all(killPromises).then(() => {
-            console.log(`🗑️  All processes on port ${port} terminated`);
             // Wait a bit to ensure processes are fully terminated
             setTimeout(() => resolve(), 1000);
           });
         } else {
-          console.log(`✅ No processes found using port ${port}`);
           resolve();
         }
       });
@@ -169,8 +159,6 @@ export function killProcessOnPort(port) {
 
         function killProcesses(pidsToKill) {
           if (pidsToKill.length > 0) {
-            console.log(`🔸 Found processes using port ${port}: ${pidsToKill.join(', ')}`);
-
             const killPromises = pidsToKill.map(pid => {
               return new Promise(killResolve => {
                 // First try SIGTERM (graceful)
@@ -178,15 +166,9 @@ export function killProcessOnPort(port) {
                   if (killError) {
                     // If SIGTERM fails, use SIGKILL (force)
                     exec(`kill -9 ${pid}`, forceKillError => {
-                      if (forceKillError) {
-                        console.log(`❌ Could not kill process ${pid}: ${forceKillError.message}`);
-                      } else {
-                        console.log(`✅ Force killed process ${pid}`);
-                      }
                       killResolve();
                     });
                   } else {
-                    console.log(`✅ Gracefully killed process ${pid}`);
                     killResolve();
                   }
                 });
@@ -194,12 +176,10 @@ export function killProcessOnPort(port) {
             });
 
             Promise.all(killPromises).then(() => {
-              console.log(`🗑️  All processes on port ${port} terminated`);
               // Wait a bit to ensure processes are fully terminated
               setTimeout(() => resolve(), 1000);
             });
           } else {
-            console.log(`✅ No processes found using port ${port}`);
             resolve();
           }
         }
@@ -212,13 +192,12 @@ export function killProcessOnPort(port) {
 const loadExistingOrders = async accountId => {
   const csvPath = getAccountCsvPath(accountId);
   if (!existsSync(csvPath)) return {};
-  
+
   // Use async file reading to avoid EBUSY errors
   const data = await new Promise((resolve, reject) => {
     readFile(csvPath, 'utf8', (err, content) => {
       if (err) {
         if (err.code === 'EBUSY' || err.code === 'EACCES') {
-          console.log(`📁 File ${csvPath} is busy, returning empty orders`);
           resolve(''); // Return empty string if file is busy
         } else {
           reject(err);
@@ -312,9 +291,6 @@ export const createNewOrder = (req, res) => {
     });
   }
 
-  console.log('Received order for account:', accountId);
-  console.log('Original order data:', req.body);
-
   // Initialize CSV for this account if it doesn't exist
   initializeAccountCsv(accountId);
 
@@ -348,7 +324,6 @@ export const createNewOrder = (req, res) => {
 
     // Apply transformations based on master account configuration
     const transformedOrder = applyTransformations(orderData, accountId);
-    console.log(`Order ${i} transformed:`, { original: orderData, transformed: transformedOrder });
 
     const cleanTp = transformedOrder.tp ? transformedOrder.tp.replace(/\0/g, '') : '0.00000';
     const timestamp = existingOrders[orderId] || Math.floor(Date.now() / 1000);
@@ -369,8 +344,6 @@ export const createNewOrder = (req, res) => {
     ordersFound++;
     i++;
   }
-
-  console.log(`Account ${accountId} final CSV content:`, csvContent);
 
   enqueueWrite(accountId, csvContent, err => {
     if (err) {
@@ -404,11 +377,8 @@ export const getOrders = (req, res) => {
     });
   }
 
-  console.log(`GET request from authenticated slave account: ${slaveId}`);
-
   // Validate that the slave account is registered
   if (!isSlaveAccountRegistered(slaveId)) {
-    console.log(`Slave account ${slaveId} is not registered`);
     res.setHeader('Content-Type', 'text/plain');
     return res.send('0'); // Return empty content if slave is not registered
   }
@@ -417,14 +387,12 @@ export const getOrders = (req, res) => {
   const masterAccount = getSlaveConnection(slaveId);
 
   if (!masterAccount) {
-    console.log(`No master configured for slave: ${slaveId}`);
     res.setHeader('Content-Type', 'text/plain');
     return res.send('0'); // Return empty content if no master is configured
   }
 
   // Validate that the master account is also registered
   if (!isMasterAccountRegistered(masterAccount)) {
-    console.log(`Connected master account ${masterAccount} is not registered for slave ${slaveId}`);
     res.setHeader('Content-Type', 'text/plain');
     return res.send('0'); // Return empty content if master is not registered
   }
@@ -432,7 +400,6 @@ export const getOrders = (req, res) => {
   // Check if copier is enabled for this master account
   const copierEnabled = isCopierEnabled(masterAccount, apiKey);
   if (!copierEnabled) {
-    console.log(`Copier is OFF for master ${masterAccount}, slave ${slaveId} cannot copy orders`);
     res.setHeader('Content-Type', 'text/plain');
     return res.send('0'); // Return empty content when copier is disabled
   }
@@ -444,7 +411,6 @@ export const getOrders = (req, res) => {
     if (err) {
       // If master's file doesn't exist, return empty content
       if (err.code === 'ENOENT') {
-        console.log(`Master account ${masterAccount} file not found for slave ${slaveId}`);
         res.setHeader('Content-Type', 'text/plain');
         return res.send('0');
       }
@@ -454,9 +420,6 @@ export const getOrders = (req, res) => {
     // Detect if there are actual order changes
     const changes = detectOrderChanges(masterAccount, data);
     if (!changes.hasChanges) {
-      console.log(
-        `No order changes detected for master ${masterAccount}, slave ${slaveId} - skipping update`
-      );
       res.setHeader('Content-Type', 'text/plain');
       return res.send('0');
     }
@@ -502,7 +465,6 @@ export const getOrders = (req, res) => {
 
           // If transformations return null, skip this order (filtered out)
           if (transformedOrder === null) {
-            console.log(`Order filtered out by slave ${slaveId} configuration:`, orderData);
             continue;
           }
 
@@ -526,17 +488,10 @@ export const getOrders = (req, res) => {
       // If no orders passed the filter, return only counter (master online but no orders)
       if (transformedContent === lines[0]) {
         res.setHeader('Content-Type', 'text/plain');
-        console.log(
-          `All orders filtered out for slave ${slaveId} from master ${masterAccount} - returning counter only`
-        );
         return res.send(lines[0]); // Return only the counter [X]
       }
 
       res.setHeader('Content-Type', 'text/plain');
-      console.log(
-        `Slave ${slaveId} requesting data from master ${masterAccount} (COPIER ON):`,
-        transformedContent
-      );
       res.send(transformedContent);
     } catch (parseError) {
       console.error(`Error parsing CSV data for slave ${slaveId}:`, parseError);

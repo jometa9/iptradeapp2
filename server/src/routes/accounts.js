@@ -404,8 +404,6 @@ router.post('/register-pending', (req, res) => {
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
     saveUserAccounts('iptrade_89536f5b9e643c0433f3', userAccounts);
 
-    console.log(`🔄 New account registered as pending: ${accountId}`);
-
     res.json({
       message: 'Account successfully registered as pending',
       accountId,
@@ -414,10 +412,7 @@ router.post('/register-pending', (req, res) => {
     // Trigger background linking after registering a pending account (only if not already running)
     try {
       if (!linkPlatformsController.isLinking) {
-        console.log('🔄 Triggering background Link Platforms after pending account registration');
         linkPlatformsController.findAndSyncMQLFolders();
-      } else {
-        console.log('⚠️ Link Platforms already running - skipping background trigger');
       }
     } catch {}
   } catch (error) {
@@ -499,8 +494,6 @@ router.post('/register-pending-user', requireValidSubscription, (req, res) => {
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
     saveUserAccounts(apiKey, userAccounts);
 
-    console.log(`🔄 New account registered as pending for user: ${accountId}`);
-
     res.json({
       message: 'Account successfully registered as pending',
       accountId,
@@ -509,10 +502,7 @@ router.post('/register-pending-user', requireValidSubscription, (req, res) => {
     // Trigger background linking after registering a pending account (only if not already running)
     try {
       if (!linkPlatformsController.isLinking) {
-        console.log('🔄 Triggering background Link Platforms after pending account registration');
         linkPlatformsController.findAndSyncMQLFolders();
-      } else {
-        console.log('⚠️ Link Platforms already running - skipping background trigger');
       }
     } catch {}
   } catch (error) {

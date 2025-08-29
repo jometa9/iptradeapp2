@@ -15,7 +15,6 @@ export const ongoingValidations = new Map();
 const mapPlanName = (apiPlanName, subscriptionType) => {
   // Check if the user is an admin, give them IPTRADE Managed VPS regardless of plan
   if (subscriptionType === 'admin') {
-    console.log('🔑 User is admin, mapping to IPTRADE Managed VPS');
     return 'IPTRADE Managed VPS';
   }
 
@@ -69,7 +68,6 @@ const PLAN_LIMITS = {
 export const validateSubscription = async apiKey => {
   // Check if there's already an ongoing validation for this API key
   if (ongoingValidations.has(apiKey)) {
-    console.log('⏳ Validation already in progress for API key, waiting for result...');
     return await ongoingValidations.get(apiKey);
   }
 
@@ -88,19 +86,10 @@ export const validateSubscription = async apiKey => {
 
 // Internal function that performs the actual validation
 const performValidation = async apiKey => {
-  console.log('🔍 === SUBSCRIPTION VALIDATION START ===');
-  console.log('📝 API Key received:', apiKey ? apiKey.substring(0, 8) + '...' : 'undefined');
-  console.log('🌍 Environment variables:');
-  console.log('  - LICENSE_API_URL:', process.env.LICENSE_API_URL);
-  console.log('  - NODE_ENV:', process.env.NODE_ENV);
-
   try {
     // Use the external license API URL from .env
     const licenseApiUrl =
       process.env.LICENSE_API_URL || 'https://iptradecopier.com/api/validate-subscription';
-
-    console.log('🔗 Constructed API URL:', licenseApiUrl);
-    console.log('🎯 Full request URL:', `${licenseApiUrl}?apiKey=${encodeURIComponent(apiKey)}`);
 
     const requestStart = Date.now();
 
@@ -113,17 +102,9 @@ const performValidation = async apiKey => {
       clearTimeout(timeoutId);
       const requestDuration = Date.now() - requestStart;
 
-      console.log('⏱️ Request duration:', requestDuration + 'ms');
-      console.log('📡 Response status:', response.status);
-      console.log('📡 Response ok:', response.ok);
-      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
-
       if (!response.ok) {
-        console.log('❌ Response not ok - status:', response.status);
-
         // If API key is not found in external API, treat as free user
         if (response.status === 401 || response.status === 404) {
-          console.log('⚠️ API key not found in external API (401/404), treating as free user');
           const freeUserData = {
             valid: true,
             userData: {
@@ -133,24 +114,17 @@ const performValidation = async apiKey => {
               subscriptionType: 'free',
             },
           };
-          console.log('✅ Returning free user data:', freeUserData);
           return freeUserData;
         }
 
         const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
-        console.log('❌ Error response data:', errorData);
         return { valid: false, error: errorData.error || 'Validation failed' };
       }
 
       const userData = await response.json();
-      console.log('📦 Received user data:', JSON.stringify(userData, null, 2));
 
       // Check if response contains error (some APIs return 200 with error field)
       if (userData.error) {
-        console.log(
-          '⚠️ External API returned error in 200 response, treating as free user:',
-          userData.error
-        );
         const freeUserData = {
           valid: true,
           userData: {
@@ -160,26 +134,20 @@ const performValidation = async apiKey => {
             subscriptionType: 'free',
           },
         };
-        console.log('✅ Returning free user data due to API error:', freeUserData);
         return freeUserData;
       }
 
       // Validate that we have the required fields
       if (!userData.userId || !userData.email || !userData.name || !userData.subscriptionType) {
-        console.log('❌ Missing required fields in user data');
         return { valid: false, error: 'Invalid user data format' };
       }
 
       // Validate subscription type
       const validSubscriptionTypes = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
       if (!validSubscriptionTypes.includes(userData.subscriptionType)) {
-        console.log('❌ Invalid subscription type:', userData.subscriptionType);
         return { valid: false, error: 'Invalid subscription type' };
       }
 
-      console.log('✅ Subscription validation successful');
-      console.log('✅ Final user data:', JSON.stringify(userData, null, 2));
-      console.log('🔍 === SUBSCRIPTION VALIDATION END ===');
       return { valid: true, userData };
     } catch (fetchError) {
       clearTimeout(timeoutId);
@@ -192,7 +160,6 @@ const performValidation = async apiKey => {
     console.error('💥 Error details:', error);
 
     // Fallback to free user on connection error
-    console.log('⚠️ External API unavailable, treating as free user');
     const fallbackData = {
       valid: true,
       userData: {
@@ -202,8 +169,6 @@ const performValidation = async apiKey => {
         subscriptionType: 'free',
       },
     };
-    console.log('✅ Returning fallback data due to error:', fallbackData);
-    console.log('🔍 === SUBSCRIPTION VALIDATION END (ERROR) ===');
     return fallbackData;
   }
 };
@@ -264,7 +229,6 @@ export const requireValidSubscription = async (req, res, next) => {
   const apiKey = extractApiKey(req);
 
   if (!apiKey) {
-    console.log('❌ No API key provided, returning 401');
     return res.status(401).json({
       error: 'API Key required',
       message:
@@ -287,9 +251,8 @@ export const requireValidSubscription = async (req, res, next) => {
 
     // Check if there's an ongoing validation
     if (ongoingValidations.has(apiKey)) {
-      console.log('⏳ Waiting for ongoing validation to complete...');
       const validation = await ongoingValidations.get(apiKey);
-      
+
       if (validation.valid) {
         req.user = validation.userData;
         req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
@@ -304,11 +267,9 @@ export const requireValidSubscription = async (req, res, next) => {
     }
 
     // Perform new validation
-    console.log('🔄 Performing new subscription validation...');
     const validation = await validateSubscription(apiKey);
 
     if (!validation.valid) {
-      console.log('❌ Subscription validation failed:', validation.error);
       return res.status(401).json({
         error: validation.error,
         details: validation,
@@ -321,14 +282,11 @@ export const requireValidSubscription = async (req, res, next) => {
       timestamp: now,
     });
 
-    console.log('💾 Stored validation result in cache, valid for 12 hours');
-
     // Attach user info, subscription limits, and apiKey to request
     req.user = validation.userData;
     req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
     req.apiKey = apiKey; // Add apiKey for account isolation
 
-    console.log('✅ Auth successful (validated), proceeding to next middleware');
     next();
   } catch (error) {
     console.error('❌ Error in requireValidSubscription middleware:', error);
@@ -414,10 +372,7 @@ export const checkNewAccountLimits = (req, res, next) => {
 
 // Middleware to check limits for pending account conversions
 export const allowPendingConversions = (req, res, next) => {
-  console.log('🔍 allowPendingConversions middleware called');
-
   if (!req.user || !req.subscriptionLimits || !req.apiKey) {
-    console.log('❌ Missing required data in allowPendingConversions');
     return res.status(401).json({
       error: 'Subscription validation required',
       message: 'Please use requireValidSubscription middleware first',
@@ -425,23 +380,19 @@ export const allowPendingConversions = (req, res, next) => {
   }
 
   const limits = req.subscriptionLimits;
-  console.log('📊 Subscription limits:', limits);
 
   // If no account limit (unlimited plan), allow conversion
   if (limits.maxAccounts === null) {
-    console.log('✅ Unlimited plan, allowing conversion');
     return next();
   }
 
   // Count existing accounts for this specific user (including pending accounts)
   const accountCounts = countUserAccounts(req.apiKey);
-  console.log('📊 Account counts:', accountCounts);
 
   // Get user-friendly plan name
   const displayPlanName = req.user.subscriptionType === 'free' ? 'Free' : req.user.subscriptionType;
 
   if (accountCounts.total >= limits.maxAccounts) {
-    console.log(`❌ Account limit exceeded: ${accountCounts.total}/${limits.maxAccounts}`);
     return res.status(403).json({
       error: 'Account limit exceeded',
       message: `Your ${displayPlanName} plan allows maximum ${limits.maxAccounts} accounts. You currently have ${accountCounts.total} accounts. Cannot convert pending accounts.`,
@@ -453,7 +404,6 @@ export const allowPendingConversions = (req, res, next) => {
     });
   }
 
-  console.log('✅ Account limit check passed, allowing conversion');
   next();
 };
 

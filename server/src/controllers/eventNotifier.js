@@ -20,14 +20,12 @@ const clientEventQueues = new Map();
 export const registerClient = clientId => {
   if (!clientEventQueues.has(clientId)) {
     clientEventQueues.set(clientId, []);
-    console.log(`📡 Cliente ${clientId} registrado para eventos`);
   }
 };
 
 // Desregistrar un cliente
 export const unregisterClient = clientId => {
   clientEventQueues.delete(clientId);
-  console.log(`📡 Cliente ${clientId} desregistrado de eventos`);
 };
 
 // Emitir un evento a todos los clientes registrados
@@ -38,8 +36,6 @@ export const emitEvent = (eventType, data) => {
     timestamp: new Date().toISOString(),
     id: Date.now().toString(),
   };
-
-  console.log(`📢 Evento emitido: ${eventType}`, data);
 
   // Agregar evento a la cola de todos los clientes
   for (const [clientId, eventQueue] of clientEventQueues.entries()) {

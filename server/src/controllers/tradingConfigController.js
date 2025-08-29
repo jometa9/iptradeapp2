@@ -60,7 +60,6 @@ export const createDefaultTradingConfig = masterAccountId => {
     configs[masterAccountId] = getDefaultConfig();
 
     if (saveTradingConfig(configs)) {
-      console.log(`✅ Created default trading configuration for master ${masterAccountId}`);
       return true;
     } else {
       console.error(`❌ Failed to create trading configuration for master ${masterAccountId}`);
@@ -115,10 +114,6 @@ export const applyTransformations = (orderData, masterAccountId) => {
       const originalTp = transformedData.tp;
       transformedData.sl = originalTp;
       transformedData.tp = originalSl;
-
-      console.log(
-        `Applied reverse trading for ${masterAccountId}: ${originalType} → ${reversedType}, SL/TP swapped`
-      );
     }
   }
 
@@ -186,7 +181,6 @@ export const setTradingConfig = (req, res) => {
   }
 
   if (saveTradingConfig(configs)) {
-    console.log(`Trading configuration updated for ${masterAccountId}:`, configs[masterAccountId]);
     res.json({
       message: 'Trading configuration saved successfully',
       masterAccountId,
@@ -217,7 +211,6 @@ export const removeTradingConfig = (req, res) => {
   delete configs[masterAccountId];
 
   if (saveTradingConfig(configs)) {
-    console.log(`Trading configuration removed for master account: ${masterAccountId}`);
     res.json({
       message: 'Trading configuration removed successfully',
       masterAccountId,
@@ -250,7 +243,6 @@ export const resetTradingConfig = (req, res) => {
   configs[masterAccountId] = getDefaultConfig();
 
   if (saveTradingConfig(configs)) {
-    console.log(`Trading configuration reset to defaults for ${masterAccountId}`);
     res.json({
       message: 'Trading configuration reset to defaults',
       masterAccountId,

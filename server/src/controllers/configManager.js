@@ -32,7 +32,6 @@ export const loadAccountsConfig = () => {
 
     // Migrate old structure if needed
     if (!config.userAccounts && (config.masterAccounts || config.slaveAccounts)) {
-      console.log('⚠️  Detected old account structure, migrating to user-based structure...');
       const migratedConfig = {
         userAccounts: {},
         globalData: {
@@ -43,9 +42,6 @@ export const loadAccountsConfig = () => {
 
       // Save migrated structure (old data will be lost since we don't know which user it belongs to)
       writeFileSync(accountsFilePath, JSON.stringify(migratedConfig, null, 2));
-      console.log(
-        '✅ Migration completed. Old account data has been cleared due to lack of user association.'
-      );
       return migratedConfig;
     }
 

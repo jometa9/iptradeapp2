@@ -175,9 +175,6 @@ export const updateCSVAccountType = async (req, res) => {
               cleanLine.includes(`[${accountId}]`)
             ) {
               isConvertingFromMaster = true;
-              console.log(
-                `🔍 Account ${accountId} is currently a master, will disconnect slaves if converting to slave`
-              );
               break;
             }
           }
@@ -217,7 +214,6 @@ export const updateCSVAccountType = async (req, res) => {
                       const slaveId = matches[3].replace(/[\[\]]/g, '').trim();
                       if (slaveId && slaveId !== accountId) {
                         slavesToDisconnect.push({ slaveId, filePath });
-                        console.log(`🔍 Found slave ${slaveId} connected to master ${accountId}`);
                       }
                     }
                     break;
@@ -235,14 +231,11 @@ export const updateCSVAccountType = async (req, res) => {
     // Process each file
     for (const filePath of csvFiles) {
       try {
-        console.log(`🔍 Checking file: ${filePath}`);
         if (existsSync(filePath)) {
           const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n').filter(line => line.trim());
-          console.log(`📄 File has ${lines.length} lines`);
 
           if (lines.length < 1) {
-            console.log('⚠️ File is empty, skipping');
             continue;
           }
 
@@ -253,8 +246,6 @@ export const updateCSVAccountType = async (req, res) => {
           for (const line of lines) {
             // Clean the line from BOM and special characters
             const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
-            console.log(`📄 Processing line: ${line}`);
-            console.log(`📄 Clean line: ${cleanLine}`);
 
             // Simple check: if the line contains the accountId, this is our file
             if (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId)) {
@@ -262,13 +253,10 @@ export const updateCSVAccountType = async (req, res) => {
               const matches = cleanLine.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 3) {
                 const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
-                console.log(`📋 Extracted values from line with account: [${values.join('][')}]`);
 
                 // Find platform (usually the second or third bracket)
                 accountPlatform = values.find(v => ['MT4', 'MT5', 'CTRADER'].includes(v)) || 'MT4';
                 foundAccount = true;
-                console.log(`✅ Found account ${accountId} on platform ${accountPlatform}`);
-                console.log(`🎯 Will update CONFIG line in this file`);
                 break;
               }
             }
@@ -278,14 +266,10 @@ export const updateCSVAccountType = async (req, res) => {
               const matches = cleanLine.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 4) {
                 const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
-                console.log(`📋 Extracted TYPE values: [${values.join('][')}]`);
 
                 if (values[3] === accountId) {
                   foundAccount = true;
                   accountPlatform = values[2] || 'MT4';
-                  console.log(
-                    `✅ Found account ${accountId} (${values[1]}) on platform ${accountPlatform}`
-                  );
                   break;
                 }
               }
@@ -298,9 +282,6 @@ export const updateCSVAccountType = async (req, res) => {
                 if (values[0] === '0' && values[1] === accountId) {
                   foundAccount = true;
                   accountPlatform = values[2] || 'MT4';
-                  console.log(
-                    `✅ Found pending account ${accountId} in old format on platform ${accountPlatform}`
-                  );
                   break;
                 }
               }
@@ -315,16 +296,13 @@ export const updateCSVAccountType = async (req, res) => {
 
             let newContent = '';
             for (const line of lines) {
-              console.log(`🔍 Processing line: "${line}"`);
               const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
-              console.log(`🔍 Clean line: "${cleanLine}"`);
 
               // Update TYPE line if it contains the account
               if (
                 cleanLine.includes('[TYPE]') &&
                 (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
               ) {
-                console.log(`✅ Found TYPE line for account ${accountId}, updating to ${newType}`);
                 newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
@@ -332,14 +310,9 @@ export const updateCSVAccountType = async (req, res) => {
                   cleanLine.includes(accountId) ||
                   cleanLine.includes(`Account ${accountId}`))
               ) {
-                console.log(
-                  `✅ Found CONFIG line for account ${accountId}, updating to ${newType}`
-                );
-
                 // Preserve the current ENABLED/DISABLED status
                 const enabledMatch = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
                 const currentStatus = enabledMatch ? enabledMatch[1] : 'DISABLED';
-                console.log(`🔒 Preserving copy trading status: ${currentStatus}`);
 
                 if (newType === 'master') {
                   newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
@@ -368,19 +341,13 @@ export const updateCSVAccountType = async (req, res) => {
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING')) &&
                 (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
               ) {
-                console.log(`✅ Found TYPE line with PENDING, updating to ${newType}`);
                 newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
               ) {
-                console.log(`✅ Found CONFIG line with PENDING, updating to ${newType}`);
-
                 // For PENDING accounts, default to DISABLED since they're not configured yet
                 const currentStatus = 'DISABLED';
-                console.log(
-                  `🔒 PENDING account - setting copy trading status to: ${currentStatus}`
-                );
 
                 if (newType === 'master') {
                   newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
@@ -406,7 +373,6 @@ export const updateCSVAccountType = async (req, res) => {
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
-                console.log(`⏰ Updating STATUS timestamp`);
                 newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
               } else {
                 newContent += line + '\n';
@@ -417,23 +383,14 @@ export const updateCSVAccountType = async (req, res) => {
             const correctPath = filePath.replace(/\.cssv$/, '.csv');
             writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
-            console.log(
-              `✏️ Updated TYPE and CONFIG lines for account ${accountId} to ${newType} in ${filePath}`
-            );
-            console.log(`📄 New content:\n${newContent}`);
 
             // IMPORTANT: Immediately refresh cache for this specific file to ensure latest data
-            console.log(`🔄 Refreshing cache for updated file: ${filePath}`);
             if (csvManager.csvFiles.has(filePath)) {
               csvManager.csvFiles.set(filePath, {
                 lastModified: csvManager.getFileLastModified(filePath),
                 data: csvManager.parseCSVFile(filePath),
               });
             }
-          } else {
-            console.log(
-              `ℹ️ Account ${accountId} not found in this file (expected if account is in different CSV)`
-            );
           }
         }
       } catch (error) {
@@ -444,10 +401,6 @@ export const updateCSVAccountType = async (req, res) => {
     if (filesUpdated > 0) {
       // If converting from master to slave, disconnect all connected slaves
       if (isConvertingFromMaster && newType === 'slave' && slavesToDisconnect.length > 0) {
-        console.log(
-          `🔄 Disconnecting ${slavesToDisconnect.length} slaves from master ${accountId}`
-        );
-
         for (const { slaveId, filePath } of slavesToDisconnect) {
           try {
             if (existsSync(filePath)) {
@@ -474,7 +427,6 @@ export const updateCSVAccountType = async (req, res) => {
                   // Set masterId and masterCsvPath to NULL to disconnect (8-parameter format)
                   newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [NULL] [NULL]\n`;
                   slaveFound = true;
-                  console.log(`✅ Disconnected slave ${slaveId} from master ${accountId}`);
                 } else if (cleanLine.includes('[STATUS]')) {
                   // Update timestamp for the slave
                   newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
@@ -487,7 +439,6 @@ export const updateCSVAccountType = async (req, res) => {
                 // Ensure we're writing to .csv not .cssv
                 const correctPath = filePath.replace(/\.cssv$/, '.csv');
                 writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
-                console.log(`✏️ Updated slave ${slaveId} to disconnect from master ${accountId}`);
               }
             }
           } catch (error) {
@@ -497,9 +448,6 @@ export const updateCSVAccountType = async (req, res) => {
       }
 
       // Update user accounts database to reflect the conversion
-      console.log(
-        `🔄 Updating user accounts database for account ${accountId} conversion to ${newType}...`
-      );
 
       let accountMoved = false;
 
@@ -535,7 +483,6 @@ export const updateCSVAccountType = async (req, res) => {
           }
 
           accountMoved = true;
-          console.log(`✅ Moved account ${accountId} from pending to master in user database`);
         } else if (userAccounts.slaveAccounts && userAccounts.slaveAccounts[accountId]) {
           // Move from slave to master
           const slaveAccount = userAccounts.slaveAccounts[accountId];
@@ -562,7 +509,6 @@ export const updateCSVAccountType = async (req, res) => {
           }
 
           accountMoved = true;
-          console.log(`✅ Moved account ${accountId} from slave to master in user database`);
         }
       } else if (newType === 'slave') {
         // Move from pending/master to slave
@@ -590,11 +536,9 @@ export const updateCSVAccountType = async (req, res) => {
           if (slaveConfig?.masterAccountId && slaveConfig.masterAccountId !== 'NULL') {
             if (!userAccounts.connections) userAccounts.connections = {};
             userAccounts.connections[accountId] = slaveConfig.masterAccountId;
-            console.log(`🔗 Connected slave ${accountId} to master ${slaveConfig.masterAccountId}`);
           }
 
           accountMoved = true;
-          console.log(`✅ Moved account ${accountId} from pending to slave in user database`);
         } else if (userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) {
           // Move from master to slave
           const masterAccount = userAccounts.masterAccounts[accountId];
@@ -619,21 +563,15 @@ export const updateCSVAccountType = async (req, res) => {
           if (slaveConfig?.masterAccountId && slaveConfig.masterAccountId !== 'NULL') {
             if (!userAccounts.connections) userAccounts.connections = {};
             userAccounts.connections[accountId] = slaveConfig.masterAccountId;
-            console.log(`🔗 Connected slave ${accountId} to master ${slaveConfig.masterAccountId}`);
           }
 
           accountMoved = true;
-          console.log(`✅ Moved account ${accountId} from master to slave in user database`);
         }
       }
 
       // Save user accounts if any changes were made
       if (accountMoved) {
-        if (saveUserAccounts(apiKey, userAccounts)) {
-          console.log(`💾 User accounts database updated successfully for ${accountId}`);
-        } else {
-          console.log(`⚠️ Failed to save user accounts database for ${accountId}`);
-        }
+        saveUserAccounts(apiKey, userAccounts);
       }
 
       // Refresh CSV data from existing files (no new search)
@@ -648,7 +586,6 @@ export const updateCSVAccountType = async (req, res) => {
         apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
         timestamp: new Date().toISOString(),
       });
-      console.log(`📢 SSE: Emitted accountConverted event for ${accountId} to ${newType}`);
 
       const disconnectMessage =
         isConvertingFromMaster && newType === 'slave' && slavesToDisconnect.length > 0
@@ -688,8 +625,6 @@ export const deletePendingFromCSV = async (req, res) => {
     if (!accountId) {
       return res.status(400).json({ error: 'Account ID is required' });
     }
-
-    console.log(`🗑️ Request to delete pending account ${accountId} from CSV files`);
 
     // Buscar todos los archivos IPTRADECSV2.csv que contienen esta cuenta
     const patterns = [
@@ -732,7 +667,6 @@ export const deletePendingFromCSV = async (req, res) => {
 
           if (firstValues[0] === '0' && firstValues.length >= 5) {
             // Nuevo formato simplificado - no hay header
-            console.log(`📄 Processing new simplified format for deletion: ${filePath}`);
 
             for (let i = 0; i < lines.length; i++) {
               const lineValues = lines[i].split(',').map(v => v.trim());
@@ -740,7 +674,6 @@ export const deletePendingFromCSV = async (req, res) => {
               // Verificar formato: [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
               if (lineValues[0] === '0' && lineValues.length >= 5) {
                 if (lineValues[1] === accountId) {
-                  console.log(`🗑️ Removing account ${accountId} from new format file ${filePath}`);
                   modified = true;
                   // No agregar esta línea (eliminar)
                 } else {
@@ -766,7 +699,6 @@ export const deletePendingFromCSV = async (req, res) => {
               const accountIdIndex = headers.indexOf('account_id');
 
               if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
-                console.log(`🗑️ Removing account ${accountId} from legacy format file ${filePath}`);
                 modified = true;
                 // No agregar esta línea (eliminar)
               } else {
@@ -781,7 +713,6 @@ export const deletePendingFromCSV = async (req, res) => {
             const correctPath = filePath.replace(/\.cssv$/, '.csv');
             writeFileSync(correctPath, filteredLines.join('\n'));
             deletedFromFiles++;
-            console.log(`✅ Updated file: ${filePath}`);
           }
         }
       } catch (error) {
@@ -795,14 +726,12 @@ export const deletePendingFromCSV = async (req, res) => {
     }
 
     if (deletedFromFiles > 0) {
-      console.log(`✅ Deleted account ${accountId} from ${deletedFromFiles} CSV file(s)`);
       res.json({
         success: true,
         message: `Account ${accountId} deleted from ${deletedFromFiles} CSV file(s)`,
         filesModified: deletedFromFiles,
       });
     } else {
-      console.log(`⚠️ Account ${accountId} not found in any CSV files`);
       res.status(404).json({
         error: 'Account not found',
         message: `Account ${accountId} not found in any CSV files`,
@@ -817,8 +746,6 @@ export const deletePendingFromCSV = async (req, res) => {
 // Nuevo endpoint simplificado para pending accounts
 export const scanPendingAccounts = async (req, res) => {
   try {
-    console.log('🔍 Starting simplified pending accounts scan...');
-
     // Usar getAllActiveAccounts que parsea correctamente el nuevo formato
     const allAccounts = await csvManager.getAllActiveAccounts();
     const pendingAccounts = allAccounts.pendingAccounts || [];
@@ -851,10 +778,6 @@ export const scanPendingAccounts = async (req, res) => {
       platforms: Object.keys(platformStats),
     };
 
-    // Solo loguear cuando hay resultados significativos
-    if (response.summary.totalAccounts > 0) {
-      console.log('✅ Pending accounts scan completed:', response.summary);
-    }
     res.json(response);
   } catch (error) {
     console.error('❌ Error scanning pending accounts:', error);
@@ -869,8 +792,6 @@ export const scanPendingAccounts = async (req, res) => {
 // Conectar plataformas - Escaneo completo del sistema y registro automático (método original)
 export const connectPlatforms = async (req, res) => {
   try {
-    console.log('🔍 Starting platform connection scan...');
-
     const apiKey = req.apiKey;
     if (!apiKey) {
       return res.status(401).json({ error: 'API key required' });
@@ -878,11 +799,9 @@ export const connectPlatforms = async (req, res) => {
 
     const userAccounts = getUserAccounts(apiKey);
     const previousCount = csvManager.csvFiles.size;
-    console.log(`📊 Current CSV files: ${previousCount}`);
 
     // Primero obtener las cuentas cacheadas
     const cachedAccounts = await csvManager.getAllActiveAccounts();
-    console.log(`📋 Found ${cachedAccounts.pendingAccounts?.length || 0} cached pending accounts`);
 
     // Usar archivos ya cargados (no hacer búsqueda completa)
     const files = Array.from(csvManager.csvFiles.keys());
@@ -890,7 +809,6 @@ export const connectPlatforms = async (req, res) => {
     // Guardar explícitamente el cache de CSV si hay archivos
     if (csvManager.csvFiles.size > 0) {
       csvManager.saveCSVPathsToCache();
-      console.log(`💾 Guardando cache con ${csvManager.csvFiles.size} archivos CSV`);
     }
 
     const newCount = csvManager.csvFiles.size;
@@ -932,7 +850,6 @@ export const connectPlatforms = async (req, res) => {
             }
             userAccounts.pendingAccounts[accountId] = pendingAccount;
             registeredCount++;
-            console.log(`🔄 Auto-registered CSV account ${accountId} (${platform}) as pending`);
           }
         }
       });
@@ -941,11 +858,9 @@ export const connectPlatforms = async (req, res) => {
     // Guardar cambios si se registraron cuentas
     if (registeredCount > 0) {
       saveUserAccounts(apiKey, userAccounts);
-      console.log(`💾 Saved ${registeredCount} new pending accounts`);
 
       // Asegurar que se guarde el cache de CSV después de registrar nuevas cuentas
       csvManager.saveCSVPathsToCache();
-      console.log(`💾 Updated CSV paths cache with ${csvManager.csvFiles.size} files`);
     }
 
     // Obtener estadísticas actualizadas
@@ -997,9 +912,6 @@ export const connectPlatforms = async (req, res) => {
       timestamp: new Date().toISOString(),
     };
 
-    console.log('✅ Platform connection scan completed');
-    console.log(`📊 Statistics: ${JSON.stringify(response.statistics, null, 2)}`);
-
     res.json(response);
   } catch (error) {
     console.error('❌ Error in connectPlatforms:', error);
@@ -1014,8 +926,6 @@ export const connectPlatforms = async (req, res) => {
 // Escanear cuentas de plataforma - Método más simple que solo escanea
 export const scanPlatformAccounts = async (req, res) => {
   try {
-    console.log('🔍 Starting platform accounts scan...');
-
     const previousCount = csvManager.csvFiles.size;
 
     // Refresh data from existing files (no new search)
@@ -1032,8 +942,6 @@ export const scanPlatformAccounts = async (req, res) => {
       totalAccounts: allAccounts.length,
       accounts: allAccounts,
     });
-
-    console.log(`✅ Platform scan completed: ${newCount} files, ${allAccounts.length} accounts`);
   } catch (error) {
     console.error('❌ Error scanning platform accounts:', error);
     res.status(500).json({ error: 'Failed to scan platform accounts' });
@@ -1084,8 +992,6 @@ export const registerCSVAsPending = (req, res) => {
             }
             userAccounts.pendingAccounts[accountId] = pendingAccount;
             registeredCount++;
-
-            console.log(`🔄 CSV account ${accountId} registered as pending`);
           }
         }
       });

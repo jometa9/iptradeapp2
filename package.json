@@ -11,21 +11,21 @@
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "dev:frontend": "vite --port 5174",
     "dev:server": "node server/src/dev.js",
-    "build": "vite build",
-    "build:no-check": "vite build",
+    "build": "vite build --mode production --no-check",
+    "build:no-check": "vite build --mode production",
     "build:force": "vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"wait-on http://localhost:5174 && cross-env VITE_PORT=5174 electron .\"",
-    "electron:build": "npm run build && electron-builder --publish=never",
-    "electron:build:ci": "npm run build && electron-builder --publish=always",
+    "electron:build": "npm run build && electron-builder --win --publish=never",
+    "electron:build:ci": "npm run build && electron-builder --win --publish=always",
     "electron:preview": "electron .",
     "build:server": "npm run build --prefix server",
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "version:major": "npm version major",
-    "publish": "npm run electron:build && electron-builder --publish=always",
-    "release": "node scripts/release.js",
+    "publish": "npm run build && electron-builder --win --publish=always",
+    "release": "npm run electron:build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write . && eslint . --fix",
@@ -135,51 +135,10 @@
         "releaseType": "release"
       }
     ],
-    "mac": {
-      "category": "public.app-category.finance",
-      "icon": "public/iconShadow025.png",
-      "artifactName": "IPTRADE-APP-${arch}.dmg",
-      "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "background": "public/dmg3.png",
-      "window": {
-        "width": 658,
-        "height": 498
-      },
-      "contents": [
-        {
-          "x": 200,
-          "y": 310,
-          "type": "file"
-        },
-        {
-          "x": 458,
-          "y": 310,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
     "win": {
       "icon": "public/iconShadow025.png",
       "target": "nsis",
       "artifactName": "IPTRADE.exe"
-    },
-    "linux": {
-      "icon": "public/iconShadow025.png",
-      "target": "AppImage",
-      "artifactName": "IPTRADE.AppImage"
     }
   }
 }

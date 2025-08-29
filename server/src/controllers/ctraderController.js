@@ -139,11 +139,8 @@ export const connectToApi = async (req, res) => {
       });
     }
 
-    console.log(`🚀 Connecting to cTrader API for user ${userId} (Demo: ${useDemo})`);
-
     // Get accounts via WebSocket + Protobuf (OFFICIAL METHOD)
     const accounts = await CtraderApiService.getAllUserAccountsWebSocket(userId, useDemo);
-    console.log(`✅ Retrieved ${accounts.length} accounts via WebSocket+Protobuf`);
 
     if (accounts.length > 0) {
       // Check connection status
@@ -464,8 +461,6 @@ export const refreshAccounts = async (req, res) => {
         error: 'User not authenticated with cTrader',
       });
     }
-
-    console.log(`🔄 Refreshing accounts for user ${userId}`);
 
     // Get fresh accounts via WebSocket + Protobuf
     const accounts = await CtraderApiService.getAllUserAccountsWebSocket(userId, true); // Default to demo

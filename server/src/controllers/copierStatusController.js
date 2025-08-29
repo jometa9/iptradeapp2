@@ -87,8 +87,6 @@ export const isCopierEnabled = (masterAccountId, apiKey) => {
     return false;
   }
 
-
-
   // Check specific master account status (default to false if not configured)
   const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
   return masterStatus === true;
@@ -110,9 +108,6 @@ export const createDisabledMasterConfig = (masterAccountId, apiKey) => {
     userCopierStatus.masterAccounts[masterAccountId] = false; // Disabled by default for new accounts from pending
 
     if (saveUserCopierStatus(apiKey, userCopierStatus)) {
-      console.log(
-        `✅ Created disabled master copier configuration for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...)`
-      );
       return true;
     } else {
       console.error(
@@ -138,7 +133,6 @@ export const getGlobalStatus = (req, res) => {
 
 // Set global copier status
 export const setGlobalStatus = async (req, res) => {
-  console.log('🔄 Setting global copier status with body:', req.body);
   const { enabled } = req.body;
 
   if (enabled === undefined) {
@@ -161,13 +155,11 @@ export const setGlobalStatus = async (req, res) => {
     const filesUpdated = await csvManager.updateGlobalStatus(enabled);
     const status = enabled ? 'ON' : 'OFF';
 
-    console.log(`✅ Global copier status changed to: ${status} (${filesUpdated} files updated)`);
-
     // Forzar un escaneo y emisión de actualizaciones
     try {
       await csvManager.scanAndEmitPendingUpdates();
     } catch (error) {
-      console.log('⚠️ scanAndEmitPendingUpdates not available, skipping...');
+      // scanAndEmitPendingUpdates not available, skipping...
     }
 
     res.json({
@@ -219,7 +211,6 @@ export const getMasterStatus = (req, res) => {
 
 // Set copier status for specific master account (user-based)
 export const setMasterStatus = async (req, res) => {
-  console.log(`🔄 setMasterStatus called with:`, req.body);
   const { masterAccountId, enabled } = req.body;
   const apiKey = req.apiKey;
 
@@ -239,8 +230,6 @@ export const setMasterStatus = async (req, res) => {
     });
   }
 
-
-
   const userCopierStatus = loadUserCopierStatus(apiKey);
   userCopierStatus.masterAccounts[masterAccountId] = Boolean(enabled);
 
@@ -259,13 +248,6 @@ export const setMasterStatus = async (req, res) => {
 
       // Actualizar el CSV del master
       const masterUpdated = await csvManager.updateAccountStatus(masterAccountId, enabled);
-      if (masterUpdated) {
-        console.log(
-          `✅ CSV updated for master ${masterAccountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-        );
-      } else {
-        console.log(`⚠️ Failed to update CSV for master ${masterAccountId}`);
-      }
 
       // Obtener las slaves conectadas a este master desde ambas fuentes:
       // 1. Configuración de cuentas registradas
@@ -282,25 +264,10 @@ export const setMasterStatus = async (req, res) => {
       // Combinar ambas fuentes y eliminar duplicados
       const allConnectedSlaves = [...new Set([...configConnectedSlaves, ...csvConnectedSlaves])];
 
-      console.log(`🔍 Found slaves connected to master ${masterAccountId}:`);
-      console.log(
-        `   📋 From accounts config: ${configConnectedSlaves.length} slaves:`,
-        configConnectedSlaves
-      );
-      console.log(`   📄 From CSV data: ${csvConnectedSlaves.length} slaves:`, csvConnectedSlaves);
-      console.log(`   🎯 Total unique slaves: ${allConnectedSlaves.length}:`, allConnectedSlaves);
-
       // Actualizar el CSV de cada slave conectada
       for (const slaveId of allConnectedSlaves) {
         try {
           const slaveUpdated = await csvManager.updateAccountStatus(slaveId, enabled);
-          if (slaveUpdated) {
-            console.log(
-              `✅ CSV updated for slave ${slaveId} to ${enabled ? 'ENABLED' : 'DISABLED'}`
-            );
-          } else {
-            console.log(`⚠️ Failed to update CSV for slave ${slaveId}`);
-          }
         } catch (slaveError) {
           console.error(`❌ Error updating CSV for slave ${slaveId}:`, slaveError);
         }
@@ -313,9 +280,6 @@ export const setMasterStatus = async (req, res) => {
       // No fallar la respuesta si el CSV no se puede actualizar
     }
 
-    console.log(
-      `Copier status for ${masterAccountId} (user: ${apiKey ? apiKey.substring(0, 8) : 'unknown'}...) changed to: ${status}`
-    );
     res.json({
       message: `Copier status for ${masterAccountId} set to ${status}`,
       masterAccountId,
@@ -403,9 +367,6 @@ export const removeMasterStatus = (req, res) => {
   delete userCopierStatus.masterAccounts[masterAccountId];
 
   if (saveUserCopierStatus(apiKey, userCopierStatus)) {
-    console.log(
-      `Copier status removed for master account: ${masterAccountId} (reset to default: ON)`
-    );
     res.json({
       message: `Copier status for ${masterAccountId} reset to default (ON)`,
       masterAccountId,
@@ -431,7 +392,6 @@ export const emergencyShutdown = (req, res) => {
   }
 
   if (saveCopierStatus(config)) {
-    console.log('EMERGENCY SHUTDOWN: All copiers turned OFF');
     res.json({
       message: 'EMERGENCY SHUTDOWN: All copiers turned OFF',
       globalStatus: false,
@@ -454,7 +414,6 @@ export const resetAllToOn = (req, res) => {
   }
 
   if (saveCopierStatus(config)) {
-    console.log('All copier statuses reset to ON');
     res.json({
       message: 'All copier statuses reset to ON',
       globalStatus: true,

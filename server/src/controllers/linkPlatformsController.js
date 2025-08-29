@@ -292,21 +292,15 @@ class LinkPlatformsController {
 
   // Legacy methods for backward compatibility
   async findAndSyncMQLFoldersManual() {
-    console.log('❤️❤️❤️❤️❤️ Manual user request - redirecting to unified method');
     return await this.findAndSyncMQLFolders();
   }
 
   async findAndSyncMQLFoldersOptimized() {
-    console.log('🔗 Auto-start request - redirecting to unified method');
     return await this.findAndSyncMQLFolders();
   }
 
   // Procesar rutas cacheadas
   async processCachedPaths(cachedPaths, result) {
-    console.log(
-      `⚡ Processing ${cachedPaths.mql4Folders.length} cached MQL4 + ${cachedPaths.mql5Folders.length} cached MQL5 folders...`
-    );
-
     // Procesar MQL4 folders
     for (const folder of cachedPaths.mql4Folders) {
       if (fs.existsSync(folder)) {
@@ -323,10 +317,6 @@ class LinkPlatformsController {
 
     result.mql4Folders = cachedPaths.mql4Folders.filter(folder => fs.existsSync(folder));
     result.mql5Folders = cachedPaths.mql5Folders.filter(folder => fs.existsSync(folder));
-
-    console.log(
-      `⚡ Cached processing completed: ${result.mql4Folders.length} MQL4 + ${result.mql5Folders.length} MQL5 folders`
-    );
   }
 
   // Procesar una carpeta MQL individual
@@ -341,7 +331,6 @@ class LinkPlatformsController {
       if (!fs.existsSync(expertPath)) {
         fs.mkdirSync(expertPath, { recursive: true });
         result.created++;
-        console.log(`📁 Created ${type}/Experts folder: ${expertPath}`);
       }
 
       // Always copy bot to ensure latest version
@@ -349,14 +338,12 @@ class LinkPlatformsController {
       if (fs.existsSync(botPath)) {
         fs.copyFileSync(botPath, targetBotPath);
         result.synced++;
-        console.log(`📋 Synced ${type} bot to: ${targetBotPath} (forced replacement)`);
       }
 
       // Ensure Files folder exists
       if (!fs.existsSync(filesPath)) {
         fs.mkdirSync(filesPath, { recursive: true });
         result.created++;
-        console.log(`📁 Created ${type}/Files folder: ${filesPath}`);
       }
 
       // Look for existing CSV files with IPTRADECSV2 pattern
@@ -369,16 +356,10 @@ class LinkPlatformsController {
         csvFiles.forEach(csvFile => {
           const csvPath = path.join(filesPath, csvFile);
           result.csvFiles.push(csvPath);
-          console.log(`📄 Found existing CSV file: ${csvPath}`);
 
           // Register the CSV file in csvManager for watching
           try {
-            const added = csvManager.addCSVFile(csvPath);
-            if (added) {
-              console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
-            } else {
-              console.log(`⚠️ CSV file not registered (may be duplicate): ${csvPath}`);
-            }
+            csvManager.addCSVFile(csvPath);
           } catch (error) {
             console.error(`❌ Error registering CSV file for watching: ${error.message}`);
           }
@@ -397,16 +378,10 @@ class LinkPlatformsController {
         fs.writeFileSync(csvPath, emptyCSVContent, 'utf8');
         result.csvFiles.push(csvPath);
         result.filesCreated++;
-        console.log(`📄 Created empty CSV file: ${csvPath}`);
 
         // Register the new CSV file in csvManager for watching
         try {
-          const added = csvManager.addCSVFile(csvPath);
-          if (added) {
-            console.log(`🔧 Registered CSV file for watching: ${csvPath}`);
-          } else {
-            console.log(`⚠️ CSV file not registered (may be duplicate): ${csvPath}`);
-          }
+          csvManager.addCSVFile(csvPath);
         } catch (error) {
           console.error(`❌ Error registering CSV file for watching: ${error.message}`);
         }
@@ -426,8 +401,6 @@ class LinkPlatformsController {
 
     // Búsqueda simple en todo el sistema
     try {
-      console.log(`🔍 Scanning system for MQL folders...`);
-
       // Emitir evento de syncing antes de empezar el proceso completo
       this.emitLinkPlatformsEvent('syncing', {
         message: 'Syncing Expert Advisors to platforms...',
@@ -448,14 +421,6 @@ class LinkPlatformsController {
       console.error(`❌ Error scanning system:`, error);
     }
 
-    console.log(
-      `✅ Full scan completed: ${result.mql4Folders.length} MQL4 folders, ${result.mql5Folders.length} MQL5 folders`
-    );
-    console.log(
-      `📁 Created: ${result.created}, Synced: ${result.synced}, Errors: ${result.errors.length}`
-    );
-    console.log(`📄 CSV files created: ${result.filesCreated}`);
-
     // Guardar nuevo cache
     const pathsToCache = {
       mql4Folders: result.mql4Folders,
@@ -472,8 +437,7 @@ class LinkPlatformsController {
 
     // Log summary of registered CSV files
     try {
-      const summary = csvManager.getCSVFilesSummary();
-      console.log(`📊 Link Platforms completed with ${summary.totalFiles} CSV files registered`);
+      csvManager.getCSVFilesSummary();
     } catch (error) {
       console.error(`❌ Error getting CSV summary: ${error.message}`);
     }
@@ -488,46 +452,24 @@ class LinkPlatformsController {
   // Realizar búsqueda en background para nuevas instalaciones (SIN afectar frontend)
   async performBackgroundScan() {
     try {
-      console.log('🔄 Background scan: Looking for new MQL installations...');
-      console.log('ℹ️ Background scan running silently - no frontend spinner will be shown');
-
       const newPaths = { mql4Folders: [], mql5Folders: [] };
 
       try {
-        console.log('🔍 Background scan: Starting drive scan...');
         const driveResult = await this.scanDrive('', true); // Solo buscar, no procesar
-        console.log('🔍 Background scan: Drive scan completed, processing results...');
         newPaths.mql4Folders.push(...driveResult.mql4Folders);
         newPaths.mql5Folders.push(...driveResult.mql5Folders);
-        console.log(
-          `🔍 Background scan: Found ${newPaths.mql4Folders.length} MQL4 + ${newPaths.mql5Folders.length} MQL5 folders`
-        );
       } catch (error) {
         console.error(`❌ Background scan error:`, error);
       }
 
       // Comparar con cache actual
-      console.log('🔍 Background scan: Comparing with cached paths...');
       const currentMQL4 = this.cachedPaths?.mql4Folders || [];
       const currentMQL5 = this.cachedPaths?.mql5Folders || [];
-
-      console.log(
-        `🔍 Background scan: Current cache has ${currentMQL4.length} MQL4 + ${currentMQL5.length} MQL5 folders`
-      );
 
       const newMQL4 = newPaths.mql4Folders.filter(path => !currentMQL4.includes(path));
       const newMQL5 = newPaths.mql5Folders.filter(path => !currentMQL5.includes(path));
 
-      console.log(
-        `🔍 Background scan: Found ${newMQL4.length} new MQL4 + ${newMQL5.length} new MQL5 folders`
-      );
-
       if (newMQL4.length > 0 || newMQL5.length > 0) {
-        console.log(
-          `🆕 Background scan found new installations: ${newMQL4.length} MQL4 + ${newMQL5.length} MQL5`
-        );
-        console.log('🔧 Processing new installations in background...');
-
         // Procesar nuevas rutas SIN cambiar estado de linking
         const backgroundResult = {
           mql4Folders: newMQL4,
@@ -560,10 +502,6 @@ class LinkPlatformsController {
           await this.configureCSVWatching(backgroundResult.csvFiles);
         }
 
-        console.log(
-          `✅ Background sync completed: ${backgroundResult.synced} new bots synced silently`
-        );
-
         // Emitir evento especial de background (opcional - para logs del frontend)
         this.emitBackgroundScanEvent('completed', {
           message: `Background scan found and synced ${newMQL4.length + newMQL5.length} new installations`,
@@ -574,13 +512,10 @@ class LinkPlatformsController {
           },
         });
       } else {
-        console.log('ℹ️ Background scan: No new MQL installations found');
-        console.log('📡 Background scan: Emitting completion event...');
         this.emitBackgroundScanEvent('completed', {
           message: 'Background scan completed - no new installations found',
           newInstallations: { mql4: 0, mql5: 0, synced: 0 },
         });
-        console.log('✅ Background scan: Event emitted successfully');
       }
     } catch (error) {
       console.error('❌ Background scan failed:', error);
@@ -593,18 +528,11 @@ class LinkPlatformsController {
 
   // Función interna para configurar CSV watching sin emitir eventos (usada dentro del proceso principal)
   async configureCSVWatchingForExistingFilesInternal() {
-    console.log('🔧 Configuring CSV watching for existing files in the system...');
-
     // Guardar los archivos existentes antes de buscar nuevos
     const existingFiles = new Map(csvManager.csvFiles);
-    console.log(`📊 Current CSV files in cache: ${existingFiles.size}`);
 
     // En Windows, usar el comando PowerShell específico para buscar archivos CSV
     if (this.operatingSystem === 'windows') {
-      console.log(
-        `🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`
-      );
-
       try {
         // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
         const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
@@ -612,7 +540,6 @@ class LinkPlatformsController {
     Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
     Select-Object -ExpandProperty FullName
 }`;
-        console.log(`🔍 Executing PowerShell command for CSV search...`);
 
         // Usar exec asíncrono para manejar timeouts y errores
         let stdout = '';
@@ -628,9 +555,6 @@ class LinkPlatformsController {
           // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
-            console.log(
-              `⚠️ PowerShell command returned error code but found files, using results anyway`
-            );
           }
         }
 
@@ -640,23 +564,17 @@ class LinkPlatformsController {
           .map(line => line.trim())
           .filter(line => line.length > 0);
 
-        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
-        allCsvFiles.forEach(file => console.log(`   - ${file}`));
-
-        // Configurar watching para todos los archivos encontrados
         for (const csvPath of allCsvFiles) {
           if (fs.existsSync(csvPath)) {
             // Si el archivo ya existe en el caché, mantener sus datos
             if (existingFiles.has(csvPath)) {
               csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
-              console.log(`📍 Preserved existing CSV in watch list: ${csvPath}`);
             } else {
               // Si es un archivo nuevo, agregarlo al caché
               csvManager.csvFiles.set(csvPath, {
                 lastModified: csvManager.getFileLastModified(csvPath),
                 data: csvManager.parseCSVFile(csvPath),
               });
-              console.log(`📍 Added new CSV to watch list: ${csvPath}`);
             }
           }
         }
@@ -667,27 +585,18 @@ class LinkPlatformsController {
         // Guardar el cache después de encontrar los archivos CSV
         if (csvManager.csvFiles.size > 0) {
           csvManager.saveCSVPathsToCache();
-          console.log(
-            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV (${existingFiles.size} existentes + ${csvManager.csvFiles.size - existingFiles.size} nuevos)`
-          );
         }
-
-        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
       } catch (error) {
         console.error(`❌ Error during Windows system-wide CSV search for existing files:`, error);
         // En caso de error, restaurar los archivos existentes
         existingFiles.forEach((value, key) => {
           csvManager.csvFiles.set(key, value);
         });
-        console.log(`🔄 Restored ${existingFiles.size} existing files after error`);
       }
     } else if (this.operatingSystem === 'macos') {
-      console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
-
       try {
         // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
         const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-        console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
         let stdout = '';
@@ -699,9 +608,6 @@ class LinkPlatformsController {
           // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
-            console.log(
-              `⚠️ Find command returned error code but found files, using results anyway`
-            );
           }
         }
         const allCsvFiles = stdout
@@ -709,23 +615,18 @@ class LinkPlatformsController {
           .split('\n')
           .filter(line => line.trim());
 
-        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
-        allCsvFiles.forEach(file => console.log(`   - ${file}`));
-
         // Configurar watching para todos los archivos encontrados
         for (const csvPath of allCsvFiles) {
           if (fs.existsSync(csvPath)) {
             // Si el archivo ya existe en el caché, mantener sus datos
             if (existingFiles.has(csvPath)) {
               csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
-              console.log(`📍 Preserved existing CSV in watch list: ${csvPath}`);
             } else {
               // Si es un archivo nuevo, agregarlo al caché
               csvManager.csvFiles.set(csvPath, {
                 lastModified: csvManager.getFileLastModified(csvPath),
                 data: csvManager.parseCSVFile(csvPath),
               });
-              console.log(`📍 Added new CSV to watch list: ${csvPath}`);
             }
           }
         }
@@ -736,38 +637,26 @@ class LinkPlatformsController {
         // Guardar el cache después de encontrar los archivos CSV
         if (csvManager.csvFiles.size > 0) {
           csvManager.saveCSVPathsToCache();
-          console.log(
-            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV (${existingFiles.size} existentes + ${csvManager.csvFiles.size - existingFiles.size} nuevos)`
-          );
         }
-
-        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
       } catch (error) {
         console.error(`❌ Error during system-wide CSV search for existing files:`, error);
         // En caso de error, restaurar los archivos existentes
         existingFiles.forEach((value, key) => {
           csvManager.csvFiles.set(key, value);
         });
-        console.log(`🔄 Restored ${existingFiles.size} existing files after error`);
       }
     } else {
       // Para otros sistemas operativos, usar la lógica original
-      console.log('🔧 Using original CSV watching logic for non-macOS/Windows systems');
     }
   }
 
   // Nueva función para configurar el CSV watching para archivos existentes en el sistema
   async configureCSVWatchingForExistingFiles() {
-    console.log('🔧 Configuring CSV watching for existing files in the system...');
-
     // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
     if (this.operatingSystem === 'macos') {
-      console.log(`🍎 macOS detected - performing system-wide CSV search for existing files...`);
-
       try {
         // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
         const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-        console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
         let stdout = '';
@@ -779,18 +668,12 @@ class LinkPlatformsController {
           // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
-            console.log(
-              `⚠️ Find command returned error code but found files, using results anyway`
-            );
           }
         }
         const allCsvFiles = stdout
           .trim()
           .split('\n')
           .filter(line => line.trim());
-
-        console.log(`📁 Found ${allCsvFiles.length} existing CSV files in system:`);
-        allCsvFiles.forEach(file => console.log(`   - ${file}`));
 
         // Configurar watching para todos los archivos encontrados
         allCsvFiles.forEach(csvPath => {
@@ -799,7 +682,6 @@ class LinkPlatformsController {
               lastModified: csvManager.getFileLastModified(csvPath),
               data: csvManager.parseCSVFile(csvPath),
             });
-            console.log(`📍 Added existing CSV to watch list: ${csvPath}`);
           }
         });
 
@@ -809,18 +691,11 @@ class LinkPlatformsController {
         // Guardar el cache después de encontrar los archivos CSV
         if (csvManager.csvFiles.size > 0) {
           csvManager.saveCSVPathsToCache();
-          console.log(
-            `💾 Cache actualizado con ${csvManager.csvFiles.size} archivos CSV encontrados`
-          );
         }
-
-        console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} existing files`);
       } catch (error) {
         console.error(`❌ Error during system-wide CSV search for existing files:`, error);
       }
     } else {
-      // Para otros sistemas operativos, usar la lógica original
-      console.log('🔧 Using original CSV watching logic for non-macOS systems');
     }
 
     // Emit idle event after CSV watching configuration is complete
@@ -832,12 +707,8 @@ class LinkPlatformsController {
 
   // Nueva función para configurar el CSV watching específicamente en las rutas encontradas
   async configureCSVWatching(csvPaths) {
-    console.log(`🔧 Configuring CSV watching for ${csvPaths.length} specific paths...`);
-
     // En Windows, usar el comando PowerShell específico para buscar archivos CSV
     if (this.operatingSystem === 'windows') {
-      console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell...`);
-
       try {
         // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
         const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
@@ -845,7 +716,6 @@ class LinkPlatformsController {
     Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
     Select-Object -ExpandProperty FullName
 }`;
-        console.log(`🔍 Executing PowerShell command for CSV search...`);
 
         // Usar exec asíncrono para manejar timeouts y errores
         let stdout = '';
@@ -861,9 +731,6 @@ class LinkPlatformsController {
           // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
-            console.log(
-              `⚠️ PowerShell command returned error code but found files, using results anyway`
-            );
           }
         }
 
@@ -872,9 +739,6 @@ class LinkPlatformsController {
           .split('\n')
           .map(line => line.trim())
           .filter(line => line.length > 0);
-
-        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
-        allCsvFiles.forEach(file => console.log(`   - ${file}`));
 
         // Filtrar solo archivos CSV con formato válido
         const validCsvFiles = [];
@@ -898,11 +762,6 @@ class LinkPlatformsController {
               if (lines.length > 0) {
                 const firstLine = lines[0];
 
-                // Log para debugging
-                console.log(`🔍 Checking file: ${csvPath}`);
-                console.log(`   Raw first line bytes: ${Buffer.from(firstLine).toString('hex')}`);
-                console.log(`   Raw first line: "${firstLine}"`);
-
                 // Buscar patrones válidos en cualquier parte de la línea
                 // Esto manejará archivos con BOM u otros caracteres al inicio
                 const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
@@ -910,37 +769,16 @@ class LinkPlatformsController {
 
                 const hasValidFormat = hasBracketFormat || hasCommaFormat;
 
-                console.log(`   Has bracket format: ${hasBracketFormat}`);
-                console.log(`   Has comma format: ${hasCommaFormat}`);
-                console.log(`   Valid format: ${hasValidFormat}`);
-
                 if (hasValidFormat) {
                   validCsvFiles.push(csvPath);
 
                   // Log detallado del contenido del archivo CSV válido
-                  console.log(`\n📄 === VALID CSV FILE FOUND ===`);
-                  console.log(`📁 File: ${csvPath}`);
-                  console.log(`📊 Total lines: ${lines.length}`);
-                  console.log(`📋 Raw content:`);
-                  console.log(content);
-                  console.log(`📋 Processed lines:`);
-                  lines.forEach((line, index) => {
-                    console.log(`   Line ${index + 1}: "${line}"`);
-                  });
-                  console.log(`📄 === END CSV CONTENT ===\n`);
                 } else {
-                  console.log(`❌ Skipping invalid format: ${csvPath}`);
                 }
               }
-            } catch (error) {
-              console.log(`❌ Error reading CSV file ${csvPath}: ${error.message}`);
-            }
+            } catch (error) {}
           }
         }
-
-        console.log(
-          `✅ Found ${validCsvFiles.length} valid CSV files out of ${allCsvFiles.length} total files`
-        );
 
         // Configurar watching para archivos válidos
         validCsvFiles.forEach(csvPath => {
@@ -948,7 +786,6 @@ class LinkPlatformsController {
             lastModified: csvManager.getFileLastModified(csvPath),
             data: csvManager.parseCSVFile(csvPath),
           });
-          console.log(`📍 Added valid CSV to watch list: ${csvPath}`);
         });
       } catch (error) {
         console.error(`❌ Error during Windows system-wide CSV search:`, error);
@@ -960,18 +797,14 @@ class LinkPlatformsController {
               lastModified: csvManager.getFileLastModified(csvPath),
               data: csvManager.parseCSVFile(csvPath),
             });
-            console.log(`📍 Added fallback CSV to watch list: ${csvPath}`);
           }
         });
       }
     } else if (this.operatingSystem === 'macos') {
-      console.log(`🍎 macOS detected - performing system-wide CSV search...`);
-
       try {
         // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
         // Comando para buscar archivos CSV en todo el sistema
         const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-        console.log(`🔍 Executing: ${findCommand}`);
 
         // Usar exec asíncrono para evitar crash por exit code 1
         let stdout = '';
@@ -983,18 +816,12 @@ class LinkPlatformsController {
           // Usamos el stdout aunque haya error
           if (error.stdout) {
             stdout = error.stdout;
-            console.log(
-              `⚠️ Find command returned error code but found files, using results anyway`
-            );
           }
         }
         const allCsvFiles = stdout
           .trim()
           .split('\n')
           .filter(line => line.trim());
-
-        console.log(`📁 Found ${allCsvFiles.length} CSV files in system:`);
-        allCsvFiles.forEach(file => console.log(`   - ${file}`));
 
         // Filtrar solo archivos CSV con formato válido
         const validCsvFiles = [];
@@ -1019,20 +846,11 @@ class LinkPlatformsController {
                 const firstLine = lines[0];
 
                 // Log para debugging
-                console.log(`🔍 Checking file: ${csvPath}`);
-                console.log(`   Raw first line bytes: ${Buffer.from(firstLine).toString('hex')}`);
-                console.log(`   Raw first line: "${firstLine}"`);
-
-                // Buscar patrones válidos en cualquier parte de la línea
                 // Esto manejará archivos con BOM u otros caracteres al inicio
                 const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
                 const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
 
                 const hasValidFormat = hasBracketFormat || hasCommaFormat;
-
-                console.log(`   Has bracket format: ${hasBracketFormat}`);
-                console.log(`   Has comma format: ${hasCommaFormat}`);
-                console.log(`   Valid format: ${hasValidFormat}`);
 
                 if (hasValidFormat) {
                   validCsvFiles.push(csvPath);
@@ -1506,7 +1324,6 @@ class LinkPlatformsController {
 
   // Búsqueda simple y rápida de MQL4 y MQL5 con detección de OS
   async findBothMQLFolders() {
-
     switch (this.operatingSystem) {
       case 'windows':
         return await this.findBothMQLFoldersWindows();
@@ -1524,9 +1341,6 @@ class LinkPlatformsController {
   async findBothMQLFoldersWindows() {
     try {
       const platformsText = this.cTraderEnabled ? 'MQL4, MQL5, cTrader' : 'MQL4, MQL5';
-      console.log(
-        `🪟 Windows detected - using PowerShell command for unified platform search (${platformsText})...`
-      );
 
       // Comando PowerShell específico para buscar carpetas MQL4, MQL5 y opcionalmente cTrader
       const searchTargets = this.cTraderEnabled
@@ -1538,7 +1352,6 @@ class LinkPlatformsController {
     Where-Object { $_.Name -in ${searchTargets} } |
     Select-Object -ExpandProperty FullName
 }`;
-      console.log(`🔍 Executing PowerShell command for unified platform search...`);
 
       // Usar exec asíncrono para manejar timeouts y errores
       let stdout = '';
@@ -1554,9 +1367,6 @@ class LinkPlatformsController {
         // Usamos el stdout aunque haya error
         if (error.stdout) {
           stdout = error.stdout;
-          console.log(
-            `⚠️ PowerShell command returned error code but found folders, using results anyway`
-          );
         }
       }
 
@@ -1565,9 +1375,6 @@ class LinkPlatformsController {
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0);
-
-      console.log(`📁 Found ${allFolders.length} platform folders in system:`);
-      allFolders.forEach(folder => console.log(`   - ${folder}`));
 
       // Separar MQL4, MQL5 y opcionalmente cTrader usando el mismo comando unificado
       const mql4Folders = allFolders.filter(
@@ -1593,13 +1400,6 @@ class LinkPlatformsController {
       const uniqueMQL5 = [...new Set(mql5Folders)];
       const uniqueCtrader = [...new Set(ctraderFolders)];
 
-      console.log(
-        `✅ Windows search completed: ${uniqueMQL4.length} MQL4 + ${uniqueMQL5.length} MQL5 + ${uniqueCtrader.length} cTrader folders`
-      );
-      uniqueMQL4.forEach(folder => console.log(`  📂 MQL4: ${folder}`));
-      uniqueMQL5.forEach(folder => console.log(`  📂 MQL5: ${folder}`));
-      uniqueCtrader.forEach(folder => console.log(`  📂 cTrader: ${folder}`));
-
       return {
         mql4Folders: uniqueMQL4,
         mql5Folders: uniqueMQL5,
@@ -1621,8 +1421,6 @@ class LinkPlatformsController {
       : '-name "MQL4" -o -name "MQL5"';
 
     const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
-    console.log(`🔍 Executing macOS search: ${command}`);
-    console.log(`🏠 Home directory: ${homeDir}`);
 
     try {
       const result = await execAsync(command, {
@@ -1637,15 +1435,10 @@ class LinkPlatformsController {
       });
 
       if (result.stdout && result.stdout.trim()) {
-        console.log(`📝 macOS search completed successfully`);
-
         const allFolders = result.stdout
           .split('\n')
           .map(line => line.trim())
           .filter(line => line.length > 0);
-
-        console.log(`📋 Found ${allFolders.length} platform folders:`);
-        allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
@@ -1660,25 +1453,19 @@ class LinkPlatformsController {
             : [],
         };
 
-        console.log(
-          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 + ${categorizedResult.ctraderFolders.length} cTrader folders`
-        );
         return categorizedResult;
       }
 
-      console.log(`🔄 No platform folders found in macOS, returning empty result`);
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     } catch (error) {
       console.error(`❌ Error during macOS platform search:`, error.message);
 
       // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
       if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
-        console.log(`⚠️ Search timeout or permission error, returning empty result`);
         return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
       }
 
       // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
-      console.log(`⚠️ Unexpected error during search, returning empty result`);
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
@@ -1693,8 +1480,6 @@ class LinkPlatformsController {
       : '-name "MQL4" -o -name "MQL5"';
 
     const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
-    console.log(`🔍 Executing Linux search: ${command}`);
-    console.log(`🏠 Home directory: ${homeDir}`);
 
     try {
       const result = await execAsync(command, {
@@ -1709,15 +1494,10 @@ class LinkPlatformsController {
       });
 
       if (result.stdout && result.stdout.trim()) {
-        console.log(`📝 Linux search completed successfully`);
-
         const allFolders = result.stdout
           .split('\n')
           .map(line => line.trim())
           .filter(line => line.length > 0);
-
-        console.log(`📋 Found ${allFolders.length} platform folders:`);
-        allFolders.forEach(folder => console.log(`  📂 ${folder}`));
 
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
@@ -1732,25 +1512,19 @@ class LinkPlatformsController {
             : [],
         };
 
-        console.log(
-          `📁 Categorized: ${categorizedResult.mql4Folders.length} MQL4 + ${categorizedResult.mql5Folders.length} MQL5 + ${categorizedResult.ctraderFolders.length} cTrader folders`
-        );
         return categorizedResult;
       }
 
-      console.log(`🔄 No platform folders found in Linux, returning empty result`);
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     } catch (error) {
       console.error(`❌ Error during Linux MQL search:`, error.message);
 
       // Si el error es por timeout o permisos, retornar resultado vacío en lugar de fallar
       if (error.code === 'ETIMEDOUT' || error.message.includes('Permission denied')) {
-        console.log(`⚠️ Search timeout or permission error, returning empty result`);
         return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
       }
 
       // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
-      console.log(`⚠️ Unexpected error during search, returning empty result`);
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
@@ -1772,7 +1546,6 @@ class LinkPlatformsController {
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
-      console.log(`📁 Found ${folders.length} ${folderName} folders`);
       return folders;
     } catch (error) {
       console.error(`❌ Error finding ${folderName}: ${error.message}`);

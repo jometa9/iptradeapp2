@@ -30,7 +30,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
   // PROTECCIÓN: Solo una conexión por IP
   if (activeConnectionsByIP.has(clientIP)) {
-    console.log(`🚫 SSE: BLOCKING duplicate connection from IP: ${clientIP}`);
     res.status(429).json({ error: 'Only one SSE connection per IP allowed' });
     return;
   }
@@ -38,13 +37,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
   activeSSEConnections++;
   const connectionId = activeSSEConnections;
   activeConnectionsByIP.set(clientIP, connectionId);
-
-  console.log(`🔌 SSE connection #${connectionId} established (Total: ${activeSSEConnections})`);
-  console.log(
-    `📋 Connection details: User-Agent=${req.headers['user-agent']?.substring(0, 50)}...`
-  );
-  console.log(`🔑 API Key: ${req.query.apiKey?.substring(0, 12)}...`);
-  console.log(`📍 Client IP: ${clientIP}`);
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -88,7 +80,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
         // CSV updates disabled - pending accounts fetched on-demand only
-        console.log(`📁 CSV file updated: ${filePath} (SSE disabled for pending accounts)`);
       };
 
       // Pending accounts updates removed - use direct endpoint calls instead
@@ -96,10 +87,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // NUEVO: Manejar eventos de conversión de cuentas
       const handleAccountConverted = payload => {
         try {
-          console.log(
-            `🔄 [SSE BACKEND] Account converted: ${payload.accountId} to ${payload.newType}`
-          );
-
           // Pending accounts updates removed - frontend should use direct endpoint calls
 
           // Enviar evento de conversión
@@ -117,10 +104,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de Link Platforms
       const handleLinkPlatformsEvent = payload => {
         try {
-          console.log(
-            `📨 Forwarding Link Platforms event to SSE #${connectionId}: ${payload.type}`
-          );
-          console.log(`🔍 Total active SSE connections: ${activeSSEConnections}`);
           sendUpdate({
             type: 'linkPlatformsEvent',
             timestamp: payload.timestamp || new Date().toISOString(),
@@ -137,7 +120,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de background scan (SOLO para logs, NO afecta spinner)
       const handleBackgroundScanEvent = payload => {
         try {
-          console.log(`🔇 Forwarding background scan event: ${payload.type}`);
           sendUpdate({
             type: 'backgroundScanEvent',
             timestamp: payload.timestamp || new Date().toISOString(),
@@ -160,9 +142,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Reemitir eventos de eliminación de cuentas
       const handleAccountDeleted = payload => {
         try {
-          console.log(
-            `📢 Forwarding accountDeleted event: ${payload.accountType} ${payload.accountId}`
-          );
           sendUpdate({
             type: 'accountDeleted',
             timestamp: payload.timestamp || new Date().toISOString(),
@@ -182,7 +161,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       // Esperar un momento para que csvManager cargue los archivos
       // O forzar un escaneo si no hay archivos cargados
       if (csvManager.csvFiles.size === 0) {
-        console.log('⏳ SSE: Waiting for CSV files to be loaded...');
         // Dar más tiempo para que Link Platforms configure los archivos
         await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
@@ -191,7 +169,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       }
 
       // SSE initial data disabled - pending accounts fetched on-demand only
-      console.log('📊 SSE: Initial data disabled for pending accounts');
 
       // Pending accounts updates removed - frontend should use direct endpoint calls
 
@@ -199,10 +176,8 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       import('../controllers/linkPlatformsController.js')
         .then(linkPlatformsModule => {
           const linkStatus = linkPlatformsModule.default.getLinkingStatus();
-          console.log('📤 SSE: Checking Link Platforms status for new client:', linkStatus);
 
           if (linkStatus.isLinking) {
-            console.log('📤 SSE: Sending Link Platforms started event to new client');
             sendUpdate({
               type: 'linkPlatformsEvent',
               timestamp: linkStatus.timestamp,
@@ -218,7 +193,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
 
               // If the last result was within the last 30 seconds, show it
               if (timeDiff < 30) {
-                console.log('📤 SSE: Sending recent completed Link Platforms result to new client');
                 // Send the start event first
                 sendUpdate({
                   type: 'linkPlatformsEvent',
@@ -239,7 +213,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
                 }, 100);
               } else {
                 // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
-                console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
                 sendUpdate({
                   type: 'linkPlatformsEvent',
                   timestamp: new Date().toISOString(),
@@ -249,7 +222,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
               }
             } else {
               // SIEMPRE enviar idle cuando el cliente se conecta y no hay linking activo
-              console.log('📤 SSE: Sending idle state to new client (ensuring spinner stops)');
               sendUpdate({
                 type: 'linkPlatformsEvent',
                 timestamp: new Date().toISOString(),
@@ -267,10 +239,6 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
       req.on('close', () => {
         activeSSEConnections--;
         activeConnectionsByIP.delete(clientIP);
-        console.log(
-          `🔌 SSE connection #${connectionId} closed (Remaining: ${activeSSEConnections})`
-        );
-        console.log(`📍 Released IP: ${clientIP}`);
         clearInterval(heartbeat);
         csvManager.off('fileUpdated', handleCSVUpdate);
         csvManager.off('linkPlatformsEvent', handleLinkPlatformsEvent);
@@ -329,7 +297,6 @@ router.get('/csv/events/frontend', (req, res) => {
       const handleCSVUpdate = (filePath, data) => {
         // Cuando un archivo CSV se actualiza, enviar datos procesados
         // CSV updates disabled - pending accounts fetched on-demand only
-        console.log(`📁 CSV file updated: ${filePath} (SSE disabled for pending accounts)`);
       };
 
       // Agregar listener al CSV Manager
@@ -338,7 +305,6 @@ router.get('/csv/events/frontend', (req, res) => {
       // Esperar un momento para que csvManager cargue los archivos
       // O forzar un escaneo si no hay archivos cargados
       if (csvManager.csvFiles.size === 0) {
-        console.log('⏳ SSE: Waiting for CSV files to be loaded...');
         // Dar más tiempo para que Link Platforms configure los archivos
         await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
@@ -347,7 +313,6 @@ router.get('/csv/events/frontend', (req, res) => {
       }
 
       // SSE initial data disabled - pending accounts fetched on-demand only
-      console.log('📊 SSE: Initial data disabled for pending accounts');
 
       // Pending accounts updates removed - frontend should use direct endpoint calls
 
@@ -387,7 +352,6 @@ router.get('/csv/accounts/all', requireValidSubscription, getAllAccounts);
 // DEPRECATED: Get copier status from CSV - Use /api/accounts/unified instead
 const getCopierStatus = async (req, res) => {
   try {
-    console.log('⚠️ [DEPRECATED] /api/csv/copier/status called - use /api/accounts/unified instead');
     const csvManager = (await import('../services/csvManager.js')).default;
     const copierStatus = await csvManager.getCopierStatus();
 
@@ -729,8 +693,6 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
     const { accountId } = req.params;
     const csvManager = (await import('../services/csvManager.js')).default;
 
-    console.log(`🔄 Converting account ${accountId} to pending via API...`);
-
     const success = csvManager.convertToPending(accountId);
     if (success) {
       // Emitir evento SSE inmediatamente
@@ -739,8 +701,6 @@ router.post('/csv/convert-to-pending/:accountId', requireValidSubscription, asyn
         newType: 'pending',
         timestamp: new Date().toISOString(),
       });
-
-      console.log(`✅ Account ${accountId} converted to pending successfully via API`);
 
       res.json({
         success: true,

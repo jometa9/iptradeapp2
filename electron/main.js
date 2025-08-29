@@ -17,7 +17,7 @@ const server = require(getServerPath());
 // Start the server
 const PORT = 30;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  // Server running on port 30
 });
 
 function createWindow() {

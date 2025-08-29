@@ -77,7 +77,6 @@ export function startServer() {
         console.error('[SERVER FAILED TO START]', err);
         reject(err);
       } else {
-        console.log(`Server running on port ${PORT}`);
         resolve(server);
       }
     });

@@ -12,8 +12,6 @@ export const initializeMT5 = async (req, res) => {
       });
     }
 
-    console.log(`🚀 Initializing MT5 for user ${userId}`);
-
     const result = await Mt5ApiService.initializeMT5(userId, terminalPath);
 
     res.json({
@@ -42,8 +40,6 @@ export const loginToMT5Account = async (req, res) => {
         error: 'userId, account, password, and server are required',
       });
     }
-
-    console.log(`🔐 Logging into MT5 account ${account} for user ${userId}`);
 
     // Check if MT5 is initialized
     if (!Mt5ApiService.isConnected(userId)) {
@@ -100,8 +96,6 @@ export const loginWithStoredCredentials = async (req, res) => {
         error: 'userId, account, and server are required',
       });
     }
-
-    console.log(`🔐 Logging into MT5 with stored credentials for user ${userId}`);
 
     // Get stored credentials
     const credentials = Mt5AuthService.getAccountCredentials(userId, account, server);
@@ -286,8 +280,6 @@ export const placeOrder = async (req, res) => {
       });
     }
 
-    console.log(`📈 Placing order for user ${userId}: ${symbol} ${volume} lots`);
-
     const result = await Mt5ApiService.placeOrder(
       userId,
       symbol,
@@ -337,8 +329,6 @@ export const closePosition = async (req, res) => {
         error: 'MT5 not connected',
       });
     }
-
-    console.log(`📉 Closing position ${ticket} for user ${userId}`);
 
     const result = await Mt5ApiService.closePosition(userId, ticket);
 
@@ -443,8 +433,6 @@ export const disconnectFromMT5 = async (req, res) => {
         error: 'userId is required',
       });
     }
-
-    console.log(`🔌 Disconnecting MT5 for user ${userId}`);
 
     await Mt5ApiService.disconnect(userId);
 

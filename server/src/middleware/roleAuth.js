@@ -89,10 +89,6 @@ export const authenticateAccount = (req, res, next) => {
     }
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
     saveUserAccounts(tempApiKey, userAccounts);
-
-    console.log(
-      `🔄 New account detected and registered as pending: ${accountId} (${platform}) (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`
-    );
   } else if (isPending && userAccounts.pendingAccounts[accountId]) {
     // Update existing pending account with platform information if missing
     const pendingAccount = userAccounts.pendingAccounts[accountId];
@@ -100,10 +96,6 @@ export const authenticateAccount = (req, res, next) => {
       pendingAccount.platform = platform;
       pendingAccount.broker = pendingAccount.broker || 'Unknown';
       saveUserAccounts(tempApiKey, userAccounts);
-
-      console.log(
-        `🔄 Updated existing pending account with platform: ${accountId} (${platform}) (user: ${tempApiKey ? tempApiKey.substring(0, 8) : 'unknown'}...)`
-      );
     }
   }
 

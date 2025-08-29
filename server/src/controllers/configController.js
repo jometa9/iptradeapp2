@@ -79,7 +79,6 @@ export const setMasterForSlave = (req, res) => {
   config[slaveId] = masterAccount;
 
   if (saveConfig(config)) {
-    console.log(`Configuration updated: Slave ${slaveId} -> Master ${masterAccount}`);
     res.json({
       message: 'Configuration saved successfully',
       slaveId: slaveId,
@@ -110,7 +109,6 @@ export const removeSlaveMasterMapping = (req, res) => {
   delete config[slaveId];
 
   if (saveConfig(config)) {
-    console.log(`Configuration removed for slave: ${slaveId}`);
     res.json({
       message: 'Configuration removed successfully',
       slaveId: slaveId,

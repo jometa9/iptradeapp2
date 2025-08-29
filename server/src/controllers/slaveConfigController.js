@@ -82,7 +82,6 @@ export const createDisabledSlaveConfig = slaveAccountId => {
     configs[slaveAccountId] = getDisabledSlaveConfig();
 
     if (saveSlaveConfigs(configs)) {
-      console.log(`✅ Created disabled slave configuration for ${slaveAccountId}`);
       return true;
     } else {
       console.error(`❌ Failed to create slave configuration for ${slaveAccountId}`);
@@ -125,8 +124,6 @@ export const createSlaveConfigWithSettings = (slaveAccountId, settings) => {
   configs[slaveAccountId] = baseConfig;
 
   if (saveSlaveConfigs(configs)) {
-    console.log(`✅ Created slave configuration for ${slaveAccountId} with settings:`, settings);
-    console.log(`📋 Final config:`, baseConfig);
     return true;
   } else {
     console.error(`❌ Failed to create slave configuration for ${slaveAccountId}`);
@@ -158,20 +155,16 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
     return null; // Slave is disabled, don't process order
   }
 
-
-
   let transformedData = { ...orderData };
 
   // Symbol filtering
   if (slaveConfig.allowedSymbols.length > 0) {
     if (!slaveConfig.allowedSymbols.includes(transformedData.symbol)) {
-      console.log(`Symbol ${transformedData.symbol} not allowed for slave ${slaveAccountId}`);
       return null;
     }
   }
 
   if (slaveConfig.blockedSymbols.includes(transformedData.symbol)) {
-    console.log(`Symbol ${transformedData.symbol} is blocked for slave ${slaveAccountId}`);
     return null;
   }
 
@@ -179,13 +172,11 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
   const orderType = transformedData.type.toUpperCase();
   if (slaveConfig.allowedOrderTypes.length > 0) {
     if (!slaveConfig.allowedOrderTypes.includes(orderType)) {
-      console.log(`Order type ${orderType} not allowed for slave ${slaveAccountId}`);
       return null;
     }
   }
 
   if (slaveConfig.blockedOrderTypes.includes(orderType)) {
-    console.log(`Order type ${orderType} is blocked for slave ${slaveAccountId}`);
     return null;
   }
 
@@ -203,13 +194,9 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
   const finalLot = parseFloat(transformedData.lot);
   if (slaveConfig.maxLotSize !== null && finalLot > slaveConfig.maxLotSize) {
     transformedData.lot = slaveConfig.maxLotSize.toString();
-    console.log(`Lot size capped at ${slaveConfig.maxLotSize} for slave ${slaveAccountId}`);
   }
   if (slaveConfig.minLotSize !== null && finalLot < slaveConfig.minLotSize) {
     transformedData.lot = slaveConfig.minLotSize.toString();
-    console.log(
-      `Lot size increased to minimum ${slaveConfig.minLotSize} for slave ${slaveAccountId}`
-    );
   }
 
   // Apply reverse trading (after master reverse trading)
@@ -225,10 +212,6 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
       const originalTp = transformedData.tp;
       transformedData.sl = originalTp;
       transformedData.tp = originalSl;
-
-      console.log(
-        `Applied slave reverse trading for ${slaveAccountId}: ${currentType} → ${reversedType}, SL/TP swapped`
-      );
     }
   }
 
@@ -282,7 +265,6 @@ export const getSlaveConfig = async (req, res) => {
                   lastUpdated: new Date().toISOString(),
                 };
 
-                console.log(`✅ Loaded slave config from CSV for ${slaveAccountId}:`, csvConfig);
                 break;
               }
             }
@@ -290,8 +272,6 @@ export const getSlaveConfig = async (req, res) => {
           break;
         }
       }
-    } else {
-      console.log(`⚠️ csvManager not available for reading slave config ${slaveAccountId}`);
     }
   } catch (error) {
     console.error(`Error reading CSV config for ${slaveAccountId}:`, error);
@@ -301,7 +281,6 @@ export const getSlaveConfig = async (req, res) => {
   if (!csvConfig) {
     const configs = loadSlaveConfigs();
     csvConfig = configs[slaveAccountId] || getDefaultSlaveConfig();
-    console.log(`📄 Using JSON config as fallback for ${slaveAccountId}:`, csvConfig);
   }
 
   res.json({
@@ -313,13 +292,11 @@ export const getSlaveConfig = async (req, res) => {
 
 // Test endpoint
 export const testSlaveConfig = async (req, res) => {
-  console.log(`🧪 testSlaveConfig called`);
   res.json({ message: 'Test endpoint working' });
 };
 
 // Set slave configuration
 export const setSlaveConfig = async (req, res) => {
-  console.log(`🔄 setSlaveConfig called with:`, req.body);
   const {
     slaveAccountId,
     lotMultiplier,
@@ -344,12 +321,9 @@ export const setSlaveConfig = async (req, res) => {
   // Check if this is a free user (null plan)
   if (userPlan === null && subscriptionLimits?.maxLotSize === 0.01) {
     // For free users, override lot configurations to force 0.01
-    console.log(`Applying free user lot restrictions for slave ${slaveAccountId}`);
     req.body.forceLot = 0.01;
     req.body.lotMultiplier = 1.0;
   }
-
-
 
   const configs = loadSlaveConfigs();
 
@@ -389,7 +363,6 @@ export const setSlaveConfig = async (req, res) => {
   }
 
   if (enabled !== undefined) {
-    console.log(`🔄 Setting enabled=${enabled} for slave ${slaveAccountId}`);
     configs[slaveAccountId].enabled = Boolean(enabled);
   }
 
@@ -399,13 +372,11 @@ export const setSlaveConfig = async (req, res) => {
 
   // Handle masterId update
   if (masterId !== undefined) {
-    console.log(`🔄 Setting masterId=${masterId} for slave ${slaveAccountId}`);
     configs[slaveAccountId].masterId = masterId === 'none' || masterId === '' ? null : masterId;
   }
 
   // Handle masterCsvPath update (for direct reading in Windows)
   if (masterCsvPath !== undefined) {
-    console.log(`🔄 Setting masterCsvPath=${masterCsvPath} for slave ${slaveAccountId}`);
     configs[slaveAccountId].masterCsvPath =
       masterCsvPath === 'none' || masterCsvPath === '' ? null : masterCsvPath;
   }
@@ -414,10 +385,8 @@ export const setSlaveConfig = async (req, res) => {
 
   // Save configuration
   if (saveSlaveConfigs(configs)) {
-    console.log(`Slave config updated for ${slaveAccountId}:`, configs[slaveAccountId]);
-
     // Actualizar también el CSV para sincronizar con el frontend
-    console.log(`🔄 CSV update check - slaveAccountId: ${slaveAccountId}`);
+
     try {
       // Buscar el archivo CSV correcto para esta cuenta usando datos del scan
       const csvManager = await import('../services/csvManager.js')
@@ -438,7 +407,6 @@ export const setSlaveConfig = async (req, res) => {
           if (accountExists) {
             targetFile = filePath;
             foundAccount = true;
-            console.log(`✅ Found account ${slaveAccountId} in scanned data: ${filePath}`);
             break;
           }
 
@@ -448,17 +416,13 @@ export const setSlaveConfig = async (req, res) => {
             if (content.includes(`[${slaveAccountId}]`)) {
               targetFile = filePath;
               foundAccount = true;
-              console.log(`✅ Found account ${slaveAccountId} in raw content: ${filePath}`);
               break;
             }
           }
         }
-      } else {
-        console.log(`⚠️ csvManager not available, cannot update CSV for slave ${slaveAccountId}`);
       }
 
       if (targetFile && foundAccount) {
-        console.log(`✅ CSV file exists: ${targetFile}`);
         const content = readFileSync(targetFile, 'utf8');
         const lines = content.split('\n');
         const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -478,15 +442,12 @@ export const setSlaveConfig = async (req, res) => {
             // SIEMPRE preservar el estado original del CSV al editar
             const originalEnabled = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
             const enabled = originalEnabled ? originalEnabled[1] : 'ENABLED';
-            console.log('🔒 Preserving original CSV enabled status =', enabled);
-            console.log('🔍 DEBUG: Original CSV line =', cleanLine);
 
             // Get master CSV path if masterId is available
             let masterCsvPath = 'NULL';
             if (masterId && masterId !== 'NULL') {
               try {
                 masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
-                console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
               } catch (error) {
                 console.error(`Error finding master CSV path for ${masterId}:`, error);
                 masterCsvPath = 'NULL';
@@ -494,7 +455,6 @@ export const setSlaveConfig = async (req, res) => {
             }
 
             const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
-            console.log(`🔄 Updating CONFIG line from "${cleanLine}" to "${newConfigLine.trim()}"`);
             newContent += newConfigLine;
           } else if (cleanLine.includes('[STATUS]')) {
             // Actualizar timestamp
@@ -505,9 +465,6 @@ export const setSlaveConfig = async (req, res) => {
         }
 
         writeFileSync(targetFile, newContent, 'utf8');
-        console.log(`✅ CSV updated for slave ${slaveAccountId} with complete configuration`);
-      } else {
-        console.log(`❌ CSV file not found or account ${slaveAccountId} not found in CSV files`);
       }
     } catch (error) {
       console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
@@ -558,7 +515,6 @@ export const removeSlaveConfig = (req, res) => {
   delete configs[slaveAccountId];
 
   if (saveSlaveConfigs(configs)) {
-    console.log(`Slave configuration removed for: ${slaveAccountId}`);
     res.json({
       message: 'Slave configuration removed successfully',
       slaveAccountId,
@@ -591,7 +547,6 @@ export const resetSlaveConfig = (req, res) => {
   configs[slaveAccountId] = getDefaultSlaveConfig();
 
   if (saveSlaveConfigs(configs)) {
-    console.log(`Slave configuration reset to defaults for ${slaveAccountId}`);
     res.json({
       message: 'Slave configuration reset to defaults',
       slaveAccountId,
@@ -610,8 +565,6 @@ export { loadSlaveConfigs, saveSlaveConfigs };
 export const disconnectSlaveFromMaster = async (req, res) => {
   const { slaveAccountId, masterAccountId } = req.params;
 
-  console.log(`🔄 Disconnecting slave ${slaveAccountId} from master ${masterAccountId}`);
-
   try {
     // Find the CSV file for the slave account
     const csvFiles = await findCSVFilesForAccount(slaveAccountId);
@@ -627,9 +580,6 @@ export const disconnectSlaveFromMaster = async (req, res) => {
     for (const csvFile of csvFiles) {
       if (await updateCSVFileToDisconnectSlave(csvFile, slaveAccountId)) {
         success = true;
-        console.log(
-          `✅ Successfully disconnected slave ${slaveAccountId} from master ${masterAccountId} in ${csvFile}`
-        );
       }
     }
 
@@ -660,8 +610,6 @@ export const disconnectSlaveFromMaster = async (req, res) => {
 export const disconnectAllSlavesFromMaster = async (req, res) => {
   const { masterAccountId } = req.params;
 
-  console.log(`🔄 Disconnecting all slaves from master ${masterAccountId}`);
-
   try {
     // Import csvManager to find slaves connected to this master
     const csvManager = await import('../services/csvManager.js')
@@ -669,7 +617,6 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
       .catch(() => null);
 
     if (!csvManager || !csvManager.csvFiles) {
-      console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return res.status(500).json({
         error: 'CSV manager not available',
         message: 'No CSV files have been scanned yet',
@@ -690,15 +637,11 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
             slaveId: account.account_id,
             filePath: filePath,
           });
-          console.log(
-            `🔍 Found slave ${account.account_id} connected to master ${masterAccountId} in ${filePath}`
-          );
         }
       });
     }
 
     if (connectedSlaves.length === 0) {
-      console.log(`⚠️ No slaves found connected to master ${masterAccountId}`);
       return res.json({
         success: true,
         message: `No slaves found connected to master ${masterAccountId}`,
@@ -708,16 +651,11 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
       });
     }
 
-    console.log(`🔍 Found ${connectedSlaves.length} slaves connected to master ${masterAccountId}`);
-
     let successCount = 0;
     for (const { slaveId, filePath } of connectedSlaves) {
       try {
         if (await updateCSVFileToDisconnectSlave(filePath, slaveId)) {
           successCount++;
-          console.log(
-            `✅ Disconnected slave ${slaveId} from master ${masterAccountId} in ${filePath}`
-          );
         }
       } catch (error) {
         console.error(`Error disconnecting slave ${slaveId}:`, error);
@@ -743,15 +681,12 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
 // Helper function to find CSV files for an account
 const findCSVFilesForAccount = async accountId => {
   try {
-    console.log(`🔍 Searching for account ${accountId} CSV files using scanned data...`);
-
     // Import csvManager to use scanned CSV files
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
       .catch(() => null);
 
     if (!csvManager || !csvManager.csvFiles) {
-      console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return [];
     }
 
@@ -763,7 +698,6 @@ const findCSVFilesForAccount = async accountId => {
       const accountExists = fileData.data.some(account => account.account_id === accountId);
 
       if (accountExists) {
-        console.log(`✅ Found account ${accountId} in scanned data: ${filePath}`);
         foundFiles.push(filePath);
       }
 
@@ -772,16 +706,11 @@ const findCSVFilesForAccount = async accountId => {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf8');
         if (content.includes(`[${accountId}]`)) {
-          console.log(`✅ Found account ${accountId} in raw content: ${filePath}`);
           if (!foundFiles.includes(filePath)) {
             foundFiles.push(filePath);
           }
         }
       }
-    }
-
-    if (foundFiles.length === 0) {
-      console.log(`⚠️ Account ${accountId} not found in any scanned CSV file`);
     }
 
     return foundFiles;
@@ -794,14 +723,11 @@ const findCSVFilesForAccount = async accountId => {
 // Helper function to find CSV file path for a master account
 const findMasterCSVPath = async masterId => {
   try {
-    console.log(`🔍 Searching for master account ${masterId} CSV path using scanned data...`);
-
     // Import csvManager to use scanned CSV files
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
       .catch(() => null);
     if (!csvManager || !csvManager.csvFiles) {
-      console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return null;
     }
 
@@ -811,7 +737,6 @@ const findMasterCSVPath = async masterId => {
       const accountExists = fileData.data.some(account => account.account_id === masterId);
 
       if (accountExists) {
-        console.log(`✅ Found master account ${masterId} in scanned data: ${filePath}`);
         return filePath;
       }
 
@@ -819,13 +744,11 @@ const findMasterCSVPath = async masterId => {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf8');
         if (content.includes(`[${masterId}]`)) {
-          console.log(`✅ Found master account ${masterId} in raw content: ${filePath}`);
           return filePath;
         }
       }
     }
 
-    console.log(`⚠️ Master account ${masterId} not found in any scanned CSV file`);
     return null;
   } catch (error) {
     console.error(`Error finding CSV path for master account ${masterId}:`, error);
@@ -843,7 +766,6 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
       readFile(csvFilePath, 'utf8', (err, data) => {
         if (err) {
           if (err.code === 'EBUSY' || err.code === 'EACCES') {
-            console.log(`📁 File ${csvFilePath} is busy, retrying...`);
             // Retry after a short delay
             setTimeout(() => {
               readFile(csvFilePath, 'utf8', (err2, data2) => {
@@ -859,7 +781,6 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
         }
       });
     });
-    // console.log(`📄 Original CSV content for ${slaveAccountId}:`, csvContent);
 
     const lines = csvContent.split('\n');
     let updated = false;
@@ -880,7 +801,6 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
         lines[configLineIndex].includes('[SLAVE]')
       ) {
         const configLine = lines[configLineIndex];
-        // console.log(`🔍 Found CONFIG line: ${configLine}`);
 
         // Update the CONFIG line to set masterId to NULL (handle both 7 and 8 parameter formats)
         let updatedConfigLine = configLine;
@@ -911,7 +831,6 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
         if (updatedConfigLine !== configLine) {
           lines[configLineIndex] = updatedConfigLine;
           updated = true;
-          // console.log(`🔄 Updated CONFIG line: ${configLine} -> ${updatedConfigLine}`);
         }
       }
     }
@@ -922,10 +841,8 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
       // Ensure we're writing to .csv not .cssv
       const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
       writeFileSync(correctPath, updatedContent, 'utf8');
-      // console.log(`✅ Successfully updated CSV file ${csvFilePath}`);
       return true;
     } else {
-      // console.log(`⚠️ No changes made to CSV file ${csvFilePath}`);
       return false;
     }
   } catch (error) {
