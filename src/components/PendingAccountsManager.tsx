@@ -79,7 +79,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const [showConvertingBadge, setShowConvertingBadge] = useState<Set<string>>(new Set());
 
   // Inicializar isCollapsed desde localStorage
-  const [isCollapsed, setIsCollapsed] = useState(() => {
+  const [isCollapsed] = useState(() => {
     const saved = localStorage.getItem('pendingAccountsCollapsed');
     return saved ? JSON.parse(saved) : false;
   });
@@ -123,10 +123,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isRotating, setIsRotating] = useState(false);
 
-  // Guardar isCollapsed en localStorage cuando cambie
-  useEffect(() => {
-    localStorage.setItem('pendingAccountsCollapsed', JSON.stringify(isCollapsed));
-  }, [isCollapsed]);
+
 
   // Effect for rotating messages when link platform process is active
   useEffect(() => {

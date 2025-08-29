@@ -95,10 +95,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleCommunity = () => {
-    const urlCommunity = 'https://t.me/iptradecopier';
-    openExternalLink(urlCommunity);
-  };
+
 
   const handleLinkPlatforms = async () => {
     try {
@@ -109,29 +106,7 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleResetAutoLinkCache = async () => {
-    try {
-      // Limpiar cache del servidor
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      const url = `http://localhost:${serverPort}/api/clear-auto-link-cache`;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'x-api-key': secretKey || 'test-key',
-        },
-      });
-
-      if (response.ok) {
-        await response.json();
-
-        // También limpiar cache del frontend
-        clearAutoLinkCache();
-      }
-    } catch (error) {
-      // Silent error handling
-    }
-  };
 
   // Removed: separate connect platforms handler (unified under linkPlatforms)
 

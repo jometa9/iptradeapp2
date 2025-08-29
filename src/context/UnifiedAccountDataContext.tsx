@@ -3,8 +3,15 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
 
+// Extended interface to include visibility state
+interface ExtendedUnifiedAccountDataReturn extends ReturnType<typeof useUnifiedAccountData> {
+  isHidden: boolean;
+  isBlinking: boolean;
+  toggleHidden: () => void;
+}
+
 // Create context
-const UnifiedAccountDataContext = createContext<ReturnType<typeof useUnifiedAccountData> | null>(null);
+const UnifiedAccountDataContext = createContext<ExtendedUnifiedAccountDataReturn | null>(null);
 
 // Provider component
 export const UnifiedAccountDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
