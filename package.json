@@ -11,7 +11,7 @@
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "dev:frontend": "vite --port 5174",
     "dev:server": "node server/src/dev.js",
-    "build": "vite build --mode production --no-check",
+    "build": "vite build --mode production",
     "build:no-check": "vite build --mode production",
     "build:force": "vite build --mode production",
     "lint": "eslint .",
