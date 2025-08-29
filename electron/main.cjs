@@ -16,26 +16,12 @@ async function requestMacOSPermissions() {
     const hasAccessibilityPermission = systemPreferences.isTrustedAccessibilityClient(false);
 
     if (!hasAccessibilityPermission) {
-      console.log('[PERMISSIONS] Requesting accessibility permissions...');
       const granted = await systemPreferences.askForAccessibilityPermission();
-      console.log('[PERMISSIONS] Accessibility permission granted:', granted);
-    } else {
-      console.log('[PERMISSIONS] Accessibility permissions already granted');
     }
 
     // Verificar permisos de notificaciones
     const hasNotificationPermission = systemPreferences.isTrustedAccessibilityClient(false);
-    if (!hasNotificationPermission) {
-      console.log('[PERMISSIONS] Requesting notification permissions...');
-    } else {
-      console.log('[PERMISSIONS] Notification permissions already granted');
-    }
-
-    // Verificar permisos de archivos
-    console.log('[PERMISSIONS] File system permissions handled by entitlements');
-  } catch (error) {
-    console.log('[PERMISSIONS] Error requesting permissions:', error.message);
-  }
+  } catch (error) {}
 }
 
 // Helper para leer el puerto del .env raíz o variables de entorno
@@ -78,32 +64,20 @@ if (!isDev) {
 }
 
 // Configurar eventos del autoUpdater
-autoUpdater.on('checking-for-update', () => {
-  console.log('Checking for update...');
-});
+autoUpdater.on('checking-for-update', () => {});
 
 autoUpdater.on('update-available', info => {
-  console.log('Update available.');
   // Notificar al renderer process
   if (mainWindow) {
     mainWindow.webContents.send('update-available', info);
   }
 });
 
-autoUpdater.on('update-not-available', info => {
-  console.log('Update not available.');
-});
+autoUpdater.on('update-not-available', info => {});
 
-autoUpdater.on('error', err => {
-  console.log('Error in auto-updater. ' + err);
-});
+autoUpdater.on('error', err => {});
 
 autoUpdater.on('download-progress', progressObj => {
-  let log_message = 'Download speed: ' + progressObj.bytesPerSecond;
-  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
-  log_message = log_message + ' (' + progressObj.transferred + '/' + progressObj.total + ')';
-  console.log(log_message);
-
   // Enviar progreso al renderer
   if (mainWindow) {
     mainWindow.webContents.send('download-progress', progressObj);
@@ -111,7 +85,6 @@ autoUpdater.on('download-progress', progressObj => {
 });
 
 autoUpdater.on('update-downloaded', info => {
-  console.log('Update downloaded');
   // Mostrar diálogo para reiniciar
   if (mainWindow) {
     mainWindow.webContents.send('update-downloaded', info);
@@ -184,16 +157,11 @@ ipcMain.handle('get-window-config', () => {
 
 async function startServer() {
   try {
-    console.log('[ELECTRON] Development mode:', isDev);
-
     const port = getPortFromEnv();
 
     if (isDev) {
-      console.log('[ELECTRON] Starting development server...');
-
       // En desarrollo, lanzar el servidor como proceso hijo
       const serverPath = path.join(__dirname, '../server/src/dev.js');
-      console.log('[ELECTRON] Starting server from:', serverPath);
 
       serverProcess = spawn('node', [serverPath], {
         cwd: path.join(__dirname, '..'),
@@ -204,39 +172,25 @@ async function startServer() {
         windowsHide: true,
       });
 
-      serverProcess.stdout.on('data', data => {
-        console.log(`[SERVER] ${data.toString().trim()}`);
-      });
+      serverProcess.stdout.on('data', data => {});
 
-      serverProcess.stderr.on('data', data => {
-        console.error(`[SERVER ERROR] ${data.toString().trim()}`);
-      });
+      serverProcess.stderr.on('data', data => {});
 
-      serverProcess.on('close', code => {
-        console.log(`[SERVER] Process exited with code ${code}`);
-      });
+      serverProcess.on('close', code => {});
 
-      serverProcess.on('error', err => {
-        console.error('[SERVER] Failed to start:', err);
-      });
+      serverProcess.on('error', err => {});
 
       // Esperar un poco para que el servidor se inicie
       await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('[ELECTRON] Development server should be starting...');
       return;
     }
 
     // Only start the embedded server in production
     const serverPath = path.join(process.resourcesPath, 'server/dist/server.mjs');
-    console.log('[ELECTRON] Loading server from:', serverPath);
 
     const { startServer } = require(serverPath);
     serverInstance = await startServer();
-
-    console.log('[ELECTRON] Server started successfully');
-  } catch (error) {
-    console.error('[ELECTRON] Failed to start server:', error);
-  }
+  } catch (error) {}
 }
 
 async function createAdaptiveIcon() {
@@ -332,13 +286,9 @@ async function createTray() {
       const serverPort = getPortFromEnv();
       const sseUrl = `http://localhost:${serverPort}/api/csv/events/frontend`;
 
-      console.log('🔗 Tray: Setting up SSE connection for real-time updates');
-      console.log('🔗 Tray: Connecting to:', sseUrl);
-
       const eventSource = new EventSource(sseUrl);
 
       eventSource.onopen = () => {
-        console.log('✅ Tray: SSE connection opened successfully');
         // Actualización inicial del menú - se actualizará cuando lleguen los datos
         tray.setContextMenu(createTrayMenu('OFF'));
       };
@@ -354,24 +304,19 @@ async function createTray() {
             // Solo actualizar si el estado cambió
             if (tray.lastCopierStatus !== copierStatus) {
               tray.setContextMenu(createTrayMenu(copierStatus));
-              console.log(`📡 Tray: Copier status updated to ${copierStatus}`);
               tray.lastCopierStatus = copierStatus;
             }
           }
-        } catch (error) {
-          console.error('❌ Tray: Error parsing SSE message:', error);
-        }
+        } catch (error) {}
       };
 
       eventSource.onerror = error => {
-        console.error('❌ Tray: SSE connection error:', error);
         // En caso de error, mostrar estado OFF
         tray.setContextMenu(createTrayMenu('OFF'));
 
         // Reintentar conexión después de 5 segundos
         setTimeout(() => {
           if (eventSource.readyState === EventSource.CLOSED) {
-            console.log('🔄 Tray: Retrying SSE connection...');
             setupSSEForTray();
           }
         }, 5000);
@@ -437,11 +382,6 @@ function createWindow() {
   mainWindow = new BrowserWindow(windowConfig);
 
   // Log de la configuración aplicada
-  console.log(`[WINDOW] Platform: ${process.platform}`);
-  console.log(`[WINDOW] macOS detected: ${isMacOS}`);
-  console.log(`[WINDOW] Frame: ${windowConfig.frame ? 'Native' : 'Custom'}`);
-  console.log(`[WINDOW] Title bar: ${windowConfig.titleBarStyle}`);
-  console.log(`[WINDOW] Menu bar: ${windowConfig.autoHideMenuBar ? 'Hidden' : 'Visible'}`);
 
   // Deshabilitar teclas de acceso rápido del navegador
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -488,7 +428,6 @@ function createWindow() {
     // Verificar si la combinación de teclas está en la lista de deshabilitadas
     for (const shortcut of disabledShortcuts) {
       if (shortcut.condition) {
-        console.log(`[SECURITY] Blocked shortcut: ${shortcut.name}`);
         event.preventDefault();
         return;
       }
@@ -502,13 +441,11 @@ function createWindow() {
 
   // Prevenir que se abran las DevTools
   mainWindow.webContents.on('devtools-opened', () => {
-    console.log('[SECURITY] DevTools attempted to open - closing immediately');
     mainWindow.webContents.closeDevTools();
   });
 
   // Prevenir que se abran nuevas ventanas
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    console.log(`[SECURITY] Blocked window open attempt: ${url}`);
     return { action: 'deny' };
   });
 
@@ -523,8 +460,6 @@ function createWindow() {
     // En Windows, cerrar la aplicación completamente cuando se cierra la ventana
     if (process.platform === 'win32') {
       event.preventDefault();
-
-      console.log('[ELECTRON] Window closing - shutting down application...');
 
       // Marcar que estamos cerrando
       app.isQuiting = true;
@@ -628,14 +563,11 @@ app.whenReady().then(async () => {
 
   createWindow();
 
-  console.log('[APP] Creating tray...');
   await createTray();
-  console.log('[APP] Tray creation completed');
 
   // Configurar el icono del dock en macOS
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, '../public/iconShadow025.png'));
-    console.log('[APP] Dock icon set for macOS');
   }
 
   app.on('activate', function () {
@@ -644,8 +576,6 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async function () {
-  console.log('[ELECTRON] All windows closed');
-
   // En Windows, cerrar la aplicación completamente
   if (process.platform === 'win32') {
     app.isQuiting = true;
@@ -663,14 +593,10 @@ app.on('window-all-closed', async function () {
 
 // Función para limpiar todos los procesos
 async function cleanupProcesses() {
-  console.log('[ELECTRON] Starting cleanup...');
-
   // Cerrar el servidor
   if (serverInstance) {
-    console.log('[ELECTRON] Closing server instance...');
     return new Promise(resolve => {
       serverInstance.close(() => {
-        console.log('[ELECTRON] Server closed');
         serverInstance = null;
         resolve();
       });
@@ -679,14 +605,12 @@ async function cleanupProcesses() {
 
   // Terminar el proceso del servidor en desarrollo
   if (serverProcess) {
-    console.log('[ELECTRON] Killing development server process...');
     serverProcess.kill('SIGTERM');
     serverProcess = null;
   }
 
   // Destruir el tray
   if (tray) {
-    console.log('[ELECTRON] Destroying tray...');
     tray.destroy();
     tray = null;
   }
@@ -715,13 +639,11 @@ app.on('will-quit', () => {
 
 // Manejar señales de proceso para limpiar cuando se cierra desde la terminal
 process.on('SIGINT', async () => {
-  console.log('[ELECTRON] SIGINT received, cleaning up...');
   await cleanupProcesses();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('[ELECTRON] SIGTERM received, cleaning up...');
   await cleanupProcesses();
   process.exit(0);
 });
@@ -729,7 +651,6 @@ process.on('SIGTERM', async () => {
 // En Windows, también manejar CTRL+C
 if (process.platform === 'win32') {
   process.on('SIGBREAK', async () => {
-    console.log('[ELECTRON] SIGBREAK received, cleaning up...');
     await cleanupProcesses();
     process.exit(0);
   });

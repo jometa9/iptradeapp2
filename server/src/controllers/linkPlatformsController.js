@@ -29,7 +29,6 @@ class LinkPlatformsController {
   // Detectar el sistema operativo
   detectOperatingSystem() {
     const platform = os.platform();
-    console.log(`🖥️ Detected operating system: ${platform}`);
 
     switch (platform) {
       case 'win32':
@@ -47,7 +46,6 @@ class LinkPlatformsController {
   // Método para habilitar/deshabilitar cTrader
   setCTraderEnabled(enabled) {
     this.cTraderEnabled = enabled;
-    console.log(`🔧 cTrader support ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   // Método para obtener el estado de cTrader
@@ -56,17 +54,9 @@ class LinkPlatformsController {
   }
 
   async linkPlatforms(req, res) {
-    console.log('🚀 ===== LINK PLATFORMS ENDPOINT CALLED =====');
-    console.log('📡 Request method:', req.method);
-    console.log('📡 Request URL:', req.url);
-    console.log('📡 Request headers:', req.headers);
-    console.log('📡 API Key present:', req.headers['x-api-key'] ? 'YES' : 'NO');
-    console.log('📊 Current isLinking state:', this.isLinking);
-
     try {
       // Check if Link Platforms is already running
       if (this.isLinking) {
-        console.log('⚠️ Link Platforms is already running - rejecting new request');
         return res.status(409).json({
           success: false,
           message:
@@ -75,19 +65,7 @@ class LinkPlatformsController {
         });
       }
 
-      console.log('🔗 Starting Link Platforms process...');
-      console.log('👤 Manual user request - will perform full scan (ignore cache)');
-
       const result = await this.findAndSyncMQLFoldersManual();
-
-      console.log('✅ Link Platforms process completed successfully');
-      console.log('📊 Result summary:', {
-        mql4Folders: result.mql4Folders?.length || 0,
-        mql5Folders: result.mql5Folders?.length || 0,
-        created: result.created,
-        synced: result.synced,
-        errors: result.errors?.length || 0,
-      });
 
       res.json({
         success: true,
@@ -106,11 +84,8 @@ class LinkPlatformsController {
   }
 
   async findAndSyncMQLFolders() {
-    console.log('🔗 Starting Link Platforms process...');
-
     // Track linking state
     this.isLinking = true;
-    console.log('📊 Link Platforms state set to TRUE:', this.isLinking);
 
     const result = {
       mql4Folders: [],
@@ -149,14 +124,6 @@ class LinkPlatformsController {
         }
       }
 
-      console.log(
-        `✅ Link Platforms completed: ${result.mql4Folders.length} MQL4 folders, ${result.mql5Folders.length} MQL5 folders`
-      );
-      console.log(
-        `📁 Created: ${result.created}, Synced: ${result.synced}, Errors: ${result.errors.length}`
-      );
-      console.log(`📄 CSV files found: ${result.csvFiles.length}`);
-
       // Configurar CSV manager con las rutas específicas encontradas
       try {
         await this.configureCSVWatching(result.csvFiles);
@@ -181,7 +148,6 @@ class LinkPlatformsController {
     } finally {
       // Always reset linking state
       this.isLinking = false;
-      console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
 
       // Emit SSE event to notify frontend that linking has finished
       this.emitLinkPlatformsEvent('idle', {
@@ -200,9 +166,7 @@ class LinkPlatformsController {
         const cacheData = JSON.parse(fs.readFileSync(this.cacheFilePath, 'utf8'));
         this.cachedPaths = cacheData.paths;
         this.lastScanTime = new Date(cacheData.timestamp);
-        console.log(
-          `💾 Loaded cached MQL paths: ${this.cachedPaths?.mql4Folders?.length || 0} MQL4 + ${this.cachedPaths?.mql5Folders?.length || 0} MQL5 folders`
-        );
+
         return true;
       }
     } catch (error) {
@@ -226,9 +190,6 @@ class LinkPlatformsController {
       };
 
       fs.writeFileSync(this.cacheFilePath, JSON.stringify(cacheData, null, 2));
-      console.log(
-        `💾 Saved ${paths.mql4Folders.length + paths.mql5Folders.length} MQL paths to cache`
-      );
     } catch (error) {
       console.error('❌ Error saving cache:', error);
     }
@@ -243,7 +204,6 @@ class LinkPlatformsController {
     const hasMQL5Paths = this.cachedPaths.mql5Folders && this.cachedPaths.mql5Folders.length > 0;
 
     if (!hasMQL4Paths && !hasMQL5Paths) {
-      console.log('📋 Cache exists but is empty (no MQL paths found) - need to search');
       return false;
     }
 
@@ -251,26 +211,17 @@ class LinkPlatformsController {
     const cacheAge = (now - this.lastScanTime) / (1000 * 60 * 60); // horas
     const isTimeValid = cacheAge < this.cacheValidityHours;
 
-    console.log(
-      `📋 Cache validation: ${hasMQL4Paths ? 'MQL4✅' : 'MQL4❌'} ${hasMQL5Paths ? 'MQL5✅' : 'MQL5❌'} Time:${isTimeValid ? '✅' : '❌'}(${cacheAge.toFixed(1)}h)`
-    );
-
     return isTimeValid;
   }
 
   // Unified method - ALWAYS full system scan (replaces both manual and optimized)
   async findAndSyncMQLFolders() {
-    console.log('🔗 Starting Link Platforms process...');
-    console.log('🔍 Performing full system scan for comprehensive search...');
-
     // Track linking state
     this.isLinking = true;
-    console.log('📊 Link Platforms state set to TRUE:', this.isLinking);
 
     // Safety timeout to reset state if process gets stuck
     const safetyTimeout = setTimeout(() => {
       if (this.isLinking) {
-        console.log('⚠️ Safety timeout triggered - resetting Link Platforms state');
         this.isLinking = false;
         this.emitLinkPlatformsEvent('error', {
           message: 'Link Platforms process timed out',
@@ -300,11 +251,11 @@ class LinkPlatformsController {
 
     try {
       // PASO 1: Configurar CSV watching para archivos existentes PRIMERO
-      console.log('🔧 Step 1: Configuring CSV watching for existing files...');
+
       await this.configureCSVWatchingForExistingFilesInternal();
 
       // PASO 2: Realizar scan completo de MetaTrader folders
-      console.log('🔧 Step 2: Performing full scan for MetaTrader folders...');
+
       await this.performFullScan(result);
 
       // Emitir evento de finalización completa
@@ -328,7 +279,6 @@ class LinkPlatformsController {
 
       // Always reset linking state
       this.isLinking = false;
-      console.log('📊 Link Platforms state set to FALSE:', this.isLinking);
 
       // Emit SSE event to notify frontend that linking has finished
       this.emitLinkPlatformsEvent('idle', {
@@ -410,17 +360,17 @@ class LinkPlatformsController {
       }
 
       // Look for existing CSV files with IPTRADECSV2 pattern
-      const csvFiles = fs.readdirSync(filesPath).filter(file => 
-        file.includes('IPTRADECSV2') && file.endsWith('.csv')
-      );
-      
+      const csvFiles = fs
+        .readdirSync(filesPath)
+        .filter(file => file.includes('IPTRADECSV2') && file.endsWith('.csv'));
+
       if (csvFiles.length > 0) {
         // Found existing CSV files
         csvFiles.forEach(csvFile => {
           const csvPath = path.join(filesPath, csvFile);
           result.csvFiles.push(csvPath);
           console.log(`📄 Found existing CSV file: ${csvPath}`);
-          
+
           // Register the CSV file in csvManager for watching
           try {
             const added = csvManager.addCSVFile(csvPath);
@@ -438,7 +388,7 @@ class LinkPlatformsController {
         const platformSuffix = type === 'MQL4' ? 'MT4' : 'MT5';
         const csvFileName = `IPTRADECSV2${platformSuffix}.csv`;
         const csvPath = path.join(filesPath, csvFileName);
-        
+
         // Create empty CSV file with basic structure
         const emptyCSVContent = `[TYPE][PENDING][${platformSuffix}][0]
 [STATUS][OFFLINE][0]
@@ -651,7 +601,9 @@ class LinkPlatformsController {
 
     // En Windows, usar el comando PowerShell específico para buscar archivos CSV
     if (this.operatingSystem === 'windows') {
-      console.log(`🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`);
+      console.log(
+        `🪟 Windows detected - performing system-wide CSV search with PowerShell for existing files...`
+      );
 
       try {
         // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
@@ -1086,37 +1038,19 @@ class LinkPlatformsController {
                   validCsvFiles.push(csvPath);
 
                   // Log detallado del contenido del archivo CSV válido
-                  console.log(`\n📄 === VALID CSV FILE FOUND ===`);
-                  console.log(`📁 File: ${csvPath}`);
-                  console.log(`📊 Total lines: ${lines.length}`);
-                  console.log(`📋 Raw content:`);
-                  console.log(content);
-                  console.log(`📋 Processed lines:`);
-                  lines.forEach((line, index) => {
-                    console.log(`   Line ${index + 1}: "${line}"`);
-                  });
-                  console.log(`📄 === END CSV CONTENT ===\n`);
-                } else {
-                  console.log(`❌ Skipping invalid format: ${csvPath}`);
                 }
               }
             } catch (error) {
-              console.log(`❌ Error reading CSV file ${csvPath}: ${error.message}`);
+              `❌ Error reading CSV file ${csvPath}: ${error.message}`;
             }
           }
         }
 
-        console.log(
-          `✅ Found ${validCsvFiles.length} valid CSV files out of ${allCsvFiles.length} total files`
-        );
-
-        // Configurar watching para archivos válidos
         validCsvFiles.forEach(csvPath => {
           csvManager.csvFiles.set(csvPath, {
             lastModified: csvManager.getFileLastModified(csvPath),
             data: csvManager.parseCSVFile(csvPath),
           });
-          console.log(`📍 Added valid CSV to watch list: ${csvPath}`);
         });
       } catch (error) {
         console.error(`❌ Error during system-wide CSV search:`, error);
@@ -1128,7 +1062,6 @@ class LinkPlatformsController {
               lastModified: csvManager.getFileLastModified(csvPath),
               data: csvManager.parseCSVFile(csvPath),
             });
-            console.log(`📍 Added fallback CSV to watch list: ${csvPath}`);
           }
         });
       }
@@ -1140,7 +1073,6 @@ class LinkPlatformsController {
             lastModified: csvManager.getFileLastModified(csvPath),
             data: csvManager.parseCSVFile(csvPath),
           });
-          console.log(`📍 Added CSV to watch list: ${csvPath}`);
         }
       });
     }
@@ -1148,7 +1080,7 @@ class LinkPlatformsController {
     // Configurar file watching
     csvManager.startFileWatching();
 
-    console.log(`✅ CSV watching configured for ${csvManager.csvFiles.size} files`);
+    `✅ CSV watching configured for ${csvManager.csvFiles.size} files`;
   }
 
   // Método para emitir eventos de Link Platforms via CSV Manager
@@ -1164,14 +1096,8 @@ class LinkPlatformsController {
       if (eventType === 'completed') {
         this.lastLinkPlatformsResult = eventData;
         this.lastLinkPlatformsTimestamp = eventData.timestamp;
-        console.log('📋 Stored completed event for new clients:', {
-          backgroundScan: eventData.result?.backgroundScan,
-          synced: eventData.result?.synced,
-          errors: eventData.result?.errors?.length || 0,
-        });
       }
 
-      console.log(`📡 Emitting Link Platforms event: ${eventType}`);
       csvManager.emit('linkPlatformsEvent', eventData);
     } catch (error) {
       console.error('Error emitting Link Platforms event:', error);
@@ -1186,7 +1112,6 @@ class LinkPlatformsController {
         timestamp: new Date().toISOString(),
         ...data,
       };
-      console.log(`🔇 Emitting silent background scan event: ${eventType}`);
       csvManager.emit('backgroundScanEvent', eventData);
     } catch (error) {
       console.error('Error emitting background scan event:', error);
@@ -1224,8 +1149,6 @@ class LinkPlatformsController {
 
   async getAvailableDrives() {
     try {
-      console.log(`🔍 Getting available drives for ${this.operatingSystem}...`);
-
       switch (this.operatingSystem) {
         case 'windows':
           return await this.getWindowsDrives();
@@ -1252,7 +1175,7 @@ class LinkPlatformsController {
       .filter(line => line && line.length > 0)
       .map(drive => drive + '\\');
 
-    console.log(`🔍 Found Windows drives: ${drives.join(', ')}`);
+    `🔍 Found Windows drives: ${drives.join(', ')}`;
     return drives;
   }
 
@@ -1290,7 +1213,6 @@ class LinkPlatformsController {
         .map(volume => `/Volumes/${volume}`);
 
       basePaths.push(...volumes);
-      console.log(`📀 Found mounted volumes: ${volumes.join(', ')}`);
     } catch (error) {
       console.warn('⚠️ Could not list mounted volumes:', error.message);
     }
@@ -1305,16 +1227,11 @@ class LinkPlatformsController {
       }
     });
 
-    console.log(`🔍 Found macOS paths: ${existingPaths.join(', ')}`);
-
     // Log de rutas específicas de MetaTrader encontradas
     const metaTraderPaths = existingPaths.filter(
       pathStr =>
         pathStr.toLowerCase().includes('metaquotes') || pathStr.toLowerCase().includes('metatrader')
     );
-    if (metaTraderPaths.length > 0) {
-      console.log(`🎯 Found specific MetaTrader paths: ${metaTraderPaths.join(', ')}`);
-    }
 
     return existingPaths;
   }
@@ -1350,7 +1267,7 @@ class LinkPlatformsController {
         .filter(line => line && line.length > 0 && !line.startsWith('/snap/'));
 
       basePaths.push(...mountPoints);
-      console.log(`📀 Found mount points: ${mountPoints.join(', ')}`);
+      `📀 Found mount points: ${mountPoints.join(', ')}`;
     } catch (error) {
       console.warn('⚠️ Could not list mount points:', error.message);
     }
@@ -1365,18 +1282,12 @@ class LinkPlatformsController {
       }
     });
 
-    console.log(`🔍 Found Linux paths: ${existingPaths.join(', ')}`);
-
-    // Log de rutas específicas de Wine/MetaTrader encontradas
     const winePaths = existingPaths.filter(
       pathStr =>
         pathStr.includes('.wine') ||
         pathStr.toLowerCase().includes('metatrader') ||
         pathStr.toLowerCase().includes('metaquotes')
     );
-    if (winePaths.length > 0) {
-      console.log(`🍷 Found Wine/MetaTrader paths: ${winePaths.join(', ')}`);
-    }
 
     return existingPaths;
   }
@@ -1420,11 +1331,7 @@ class LinkPlatformsController {
 
     try {
       // Buscar MQL4, MQL5 y cTrader en UNA SOLA PASADA para máxima eficiencia
-      console.log('🚀 Starting unified search for MQL4, MQL5 and cTrader folders...');
       const { mql4Folders, mql5Folders, ctraderFolders } = await this.findBothMQLFolders();
-      console.log(
-        `✅ Unified search completed: ${mql4Folders.length} MQL4 + ${mql5Folders.length} MQL5 + ${ctraderFolders.length} cTrader folders`
-      );
 
       // Solo agregar carpetas al resultado
       result.mql4Folders = mql4Folders;
@@ -1454,36 +1361,31 @@ class LinkPlatformsController {
             if (!fs.existsSync(expertsPath)) {
               fs.mkdirSync(expertsPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created MQL4/Experts folder: ${expertsPath}`);
             }
 
             const targetBotPath = path.join(expertsPath, 'MQL4.mq4');
             if (fs.existsSync(botPath)) {
               fs.copyFileSync(botPath, targetBotPath);
               result.synced++;
-              console.log(`📋 Synced MQL4 bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
             if (!fs.existsSync(filesPath)) {
               fs.mkdirSync(filesPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created MQL4/Files folder: ${filesPath}`);
             }
 
             // Only detect existing CSV files, don't create them
-            const csvFiles = fs.readdirSync(filesPath).filter(file => 
-              file.includes('IPTRADECSV2') && file.endsWith('.csv')
-            );
-            
+            const csvFiles = fs
+              .readdirSync(filesPath)
+              .filter(file => file.includes('IPTRADECSV2') && file.endsWith('.csv'));
+
             if (csvFiles.length > 0) {
               csvFiles.forEach(csvFile => {
                 const csvPath = path.join(filesPath, csvFile);
                 result.csvFiles.push(csvPath);
-                console.log(`📄 Found existing CSV file: ${csvPath}`);
               });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL4 folder ${folder}: ${error.message}`);
@@ -1505,36 +1407,31 @@ class LinkPlatformsController {
             if (!fs.existsSync(expertsPath)) {
               fs.mkdirSync(expertsPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created MQL5/Experts folder: ${expertsPath}`);
             }
 
             const targetBotPath = path.join(expertsPath, 'MQL5.mq5');
             if (fs.existsSync(botPath)) {
               fs.copyFileSync(botPath, targetBotPath);
               result.synced++;
-              console.log(`📋 Synced MQL5 bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
             if (!fs.existsSync(filesPath)) {
               fs.mkdirSync(filesPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created MQL5/Files folder: ${filesPath}`);
             }
 
             // Only detect existing CSV files, don't create them
-            const csvFiles = fs.readdirSync(filesPath).filter(file => 
-              file.includes('IPTRADECSV2') && file.endsWith('.csv')
-            );
-            
+            const csvFiles = fs
+              .readdirSync(filesPath)
+              .filter(file => file.includes('IPTRADECSV2') && file.endsWith('.csv'));
+
             if (csvFiles.length > 0) {
               csvFiles.forEach(csvFile => {
                 const csvPath = path.join(filesPath, csvFile);
                 result.csvFiles.push(csvPath);
-                console.log(`📄 Found existing CSV file: ${csvPath}`);
               });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing MQL5 folder ${folder}: ${error.message}`);
@@ -1569,36 +1466,31 @@ class LinkPlatformsController {
             if (!fs.existsSync(expertsPath)) {
               fs.mkdirSync(expertsPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created cTrader Robots folder: ${expertsPath}`);
             }
 
             const targetBotPath = path.join(expertsPath, 'cTrader.cBot');
             if (fs.existsSync(botPath)) {
               fs.copyFileSync(botPath, targetBotPath);
               result.synced++;
-              console.log(`📋 Synced cTrader bot to: ${targetBotPath} (forced replacement)`);
             }
 
             // Ensure Files folder and CSV exist
             if (!fs.existsSync(filesPath)) {
               fs.mkdirSync(filesPath, { recursive: true });
               result.created++;
-              console.log(`📁 Created cTrader Files folder: ${filesPath}`);
             }
 
             // Only detect existing CSV files, don't create them
-            const csvFiles = fs.readdirSync(filesPath).filter(file => 
-              file.includes('IPTRADECSV2') && file.endsWith('.csv')
-            );
-            
+            const csvFiles = fs
+              .readdirSync(filesPath)
+              .filter(file => file.includes('IPTRADECSV2') && file.endsWith('.csv'));
+
             if (csvFiles.length > 0) {
               csvFiles.forEach(csvFile => {
                 const csvPath = path.join(filesPath, csvFile);
                 result.csvFiles.push(csvPath);
-                console.log(`📄 Found existing CSV file: ${csvPath}`);
               });
             } else {
-              console.log(`ℹ️  No CSV file found (this is normal): ${filesPath}`);
             }
           } catch (error) {
             result.errors.push(`Error processing cTrader folder ${folder}: ${error.message}`);
@@ -1614,7 +1506,6 @@ class LinkPlatformsController {
 
   // Búsqueda simple y rápida de MQL4 y MQL5 con detección de OS
   async findBothMQLFolders() {
-    console.log(`🔍 Starting MQL folder search for ${this.operatingSystem}...`);
 
     switch (this.operatingSystem) {
       case 'windows':
@@ -1633,13 +1524,15 @@ class LinkPlatformsController {
   async findBothMQLFoldersWindows() {
     try {
       const platformsText = this.cTraderEnabled ? 'MQL4, MQL5, cTrader' : 'MQL4, MQL5';
-      console.log(`🪟 Windows detected - using PowerShell command for unified platform search (${platformsText})...`);
+      console.log(
+        `🪟 Windows detected - using PowerShell command for unified platform search (${platformsText})...`
+      );
 
       // Comando PowerShell específico para buscar carpetas MQL4, MQL5 y opcionalmente cTrader
-      const searchTargets = this.cTraderEnabled 
-        ? '@(\'MQL4\',\'MQL5\',\'cTrader\',\'cAlgo\',\'Spotware\')'
-        : '@(\'MQL4\',\'MQL5\')';
-      
+      const searchTargets = this.cTraderEnabled
+        ? "@('MQL4','MQL5','cTrader','cAlgo','Spotware')"
+        : "@('MQL4','MQL5')";
+
       const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
     Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
     Where-Object { $_.Name -in ${searchTargets} } |
@@ -1677,13 +1570,21 @@ class LinkPlatformsController {
       allFolders.forEach(folder => console.log(`   - ${folder}`));
 
       // Separar MQL4, MQL5 y opcionalmente cTrader usando el mismo comando unificado
-      const mql4Folders = allFolders.filter(folder => folder.endsWith('\\MQL4') || folder.endsWith('/MQL4'));
-      const mql5Folders = allFolders.filter(folder => folder.endsWith('\\MQL5') || folder.endsWith('/MQL5'));
-      const ctraderFolders = this.cTraderEnabled 
-        ? allFolders.filter(folder => 
-            folder.endsWith('\\cTrader') || folder.endsWith('/cTrader') ||
-            folder.endsWith('\\cAlgo') || folder.endsWith('/cAlgo') ||
-            folder.endsWith('\\Spotware') || folder.endsWith('/Spotware')
+      const mql4Folders = allFolders.filter(
+        folder => folder.endsWith('\\MQL4') || folder.endsWith('/MQL4')
+      );
+      const mql5Folders = allFolders.filter(
+        folder => folder.endsWith('\\MQL5') || folder.endsWith('/MQL5')
+      );
+      const ctraderFolders = this.cTraderEnabled
+        ? allFolders.filter(
+            folder =>
+              folder.endsWith('\\cTrader') ||
+              folder.endsWith('/cTrader') ||
+              folder.endsWith('\\cAlgo') ||
+              folder.endsWith('/cAlgo') ||
+              folder.endsWith('\\Spotware') ||
+              folder.endsWith('/Spotware')
           )
         : [];
 
@@ -1715,10 +1616,10 @@ class LinkPlatformsController {
     const homeDir = os.homedir();
 
     // Comando optimizado para macOS - incluye opcionalmente cTrader, cAlgo y Spotware
-    const searchTargets = this.cTraderEnabled 
+    const searchTargets = this.cTraderEnabled
       ? '-name "MQL4" -o -name "MQL5" -o -name "cTrader" -o -name "cAlgo" -o -name "Spotware"'
       : '-name "MQL4" -o -name "MQL5"';
-    
+
     const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing macOS search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
@@ -1749,11 +1650,12 @@ class LinkPlatformsController {
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-          ctraderFolders: this.cTraderEnabled 
-            ? allFolders.filter(folder => 
-                folder.endsWith('/cTrader') || 
-                folder.endsWith('/cAlgo') || 
-                folder.endsWith('/Spotware')
+          ctraderFolders: this.cTraderEnabled
+            ? allFolders.filter(
+                folder =>
+                  folder.endsWith('/cTrader') ||
+                  folder.endsWith('/cAlgo') ||
+                  folder.endsWith('/Spotware')
               )
             : [],
         };
@@ -1786,10 +1688,10 @@ class LinkPlatformsController {
     const homeDir = os.homedir();
 
     // Comando optimizado para Linux - incluye opcionalmente cTrader, cAlgo y Spotware
-    const searchTargets = this.cTraderEnabled 
+    const searchTargets = this.cTraderEnabled
       ? '-name "MQL4" -o -name "MQL5" -o -name "cTrader" -o -name "cAlgo" -o -name "Spotware"'
       : '-name "MQL4" -o -name "MQL5"';
-    
+
     const command = `find "${homeDir}" \\( ${searchTargets} \\) -type d 2>/dev/null`;
     console.log(`🔍 Executing Linux search: ${command}`);
     console.log(`🏠 Home directory: ${homeDir}`);
@@ -1820,11 +1722,12 @@ class LinkPlatformsController {
         const categorizedResult = {
           mql4Folders: allFolders.filter(folder => folder.endsWith('/MQL4')),
           mql5Folders: allFolders.filter(folder => folder.endsWith('/MQL5')),
-          ctraderFolders: this.cTraderEnabled 
-            ? allFolders.filter(folder => 
-                folder.endsWith('/cTrader') || 
-                folder.endsWith('/cAlgo') || 
-                folder.endsWith('/Spotware')
+          ctraderFolders: this.cTraderEnabled
+            ? allFolders.filter(
+                folder =>
+                  folder.endsWith('/cTrader') ||
+                  folder.endsWith('/cAlgo') ||
+                  folder.endsWith('/Spotware')
               )
             : [],
         };

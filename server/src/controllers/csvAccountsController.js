@@ -6,16 +6,13 @@ import csvManager from '../services/csvManager.js';
 // Helper function to find CSV file path for a master account
 const findMasterCSVPath = async masterId => {
   try {
-    console.log(`🔍 Searching for master account ${masterId} CSV path using scanned data...`);
-
     // Use csvManager that's already imported at the top of this file
     if (!csvManager || !csvManager.csvFiles) {
-      console.log(`⚠️ csvManager not available or no CSV files scanned`);
       return null;
     }
 
     // IMPORTANT: Refresh cache before searching to ensure we have the latest data
-    console.log(`🔄 Refreshing CSV cache before searching for master account ${masterId}...`);
+
     await csvManager.refreshAllFileData();
 
     // Search through scanned CSV files
@@ -24,7 +21,6 @@ const findMasterCSVPath = async masterId => {
       const accountExists = fileData.data.some(account => account.account_id === masterId);
 
       if (accountExists) {
-        console.log(`✅ Found master account ${masterId} in scanned data: ${filePath}`);
         return filePath;
       }
 
@@ -32,13 +28,11 @@ const findMasterCSVPath = async masterId => {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf8');
         if (content.includes(`[${masterId}]`)) {
-          console.log(`✅ Found master account ${masterId} in raw content: ${filePath}`);
           return filePath;
         }
       }
     }
 
-    console.log(`⚠️ Master account ${masterId} not found in any scanned CSV file`);
     return null;
   } catch (error) {
     console.error(`Error finding CSV path for master account ${masterId}:`, error);
@@ -89,7 +83,6 @@ const generateCSV2Content = async (
     if (masterId && masterId !== 'NULL') {
       try {
         masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
-        console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
       } catch (error) {
         console.error(`Error finding master CSV path for ${masterId}:`, error);
         masterCsvPath = 'NULL';
@@ -132,11 +125,6 @@ export const getPendingCSVAccounts = (req, res) => {
 
 // Update CSV account type from pending to master/slave using new CSV2 format
 export const updateCSVAccountType = async (req, res) => {
-  console.log('🚀 updateCSVAccountType called with:', {
-    accountId: req.params.accountId,
-    newType: req.body.newType,
-    slaveConfig: req.body.slaveConfig,
-  });
   try {
     const { accountId } = req.params;
     const { newType, slaveConfig } = req.body; // 'master' or 'slave', plus slave configs
@@ -159,8 +147,6 @@ export const updateCSVAccountType = async (req, res) => {
     // Import user accounts management functions
     const { getUserAccounts, saveUserAccounts } = await import('./configManager.js');
     const userAccounts = getUserAccounts(apiKey);
-
-    console.log(`🔄 Updating CSV account ${accountId} to ${newType} using new CSV2 format...`);
 
     // Use csvManager to get scanned CSV files
     let filesUpdated = 0;
@@ -205,8 +191,6 @@ export const updateCSVAccountType = async (req, res) => {
 
     // If converting from master to slave, find and disconnect all connected slaves
     if (isConvertingFromMaster && newType === 'slave') {
-      console.log(`🔄 Converting from master to slave - will disconnect all connected slaves`);
-
       for (const filePath of csvFiles) {
         try {
           if (existsSync(filePath)) {
@@ -247,9 +231,6 @@ export const updateCSVAccountType = async (req, res) => {
         }
       }
     }
-
-    console.log(`📁 Checking ${csvFiles.length} specific CSV files`);
-    console.log('📁 Files to check:', csvFiles);
 
     // Process each file
     for (const filePath of csvFiles) {
@@ -374,7 +355,6 @@ export const updateCSVAccountType = async (req, res) => {
                   if (masterId && masterId !== 'NULL') {
                     try {
                       masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
-                      console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
                     } catch (error) {
                       console.error(`Error finding master CSV path for ${masterId}:`, error);
                       masterCsvPath = 'NULL';
@@ -416,7 +396,6 @@ export const updateCSVAccountType = async (req, res) => {
                   if (masterId && masterId !== 'NULL') {
                     try {
                       masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
-                      console.log(`🔍 Master CSV path for ${masterId}: ${masterCsvPath}`);
                     } catch (error) {
                       console.error(`Error finding master CSV path for ${masterId}:`, error);
                       masterCsvPath = 'NULL';
@@ -506,8 +485,8 @@ export const updateCSVAccountType = async (req, res) => {
 
               if (slaveFound) {
                 // Ensure we're writing to .csv not .cssv
-            const correctPath = filePath.replace(/\.cssv$/, '.csv');
-            writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
+                const correctPath = filePath.replace(/\.cssv$/, '.csv');
+                writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
                 console.log(`✏️ Updated slave ${slaveId} to disconnect from master ${accountId}`);
               }
             }

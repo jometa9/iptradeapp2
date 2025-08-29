@@ -38,20 +38,6 @@ if (existsSync(rootEnvPath)) {
 const app = express();
 const PORT = process.env.PORT || 30;
 
-// Debug: Let's see what environment variables are loaded
-console.log('Environment variables:');
-console.log('- process.env.PORT:', process.env.PORT);
-console.log('- Final PORT:', PORT);
-console.log('- NODE_ENV:', process.env.NODE_ENV);
-// console.log(
-//   '- CTRADER_CLIENT_ID:',
-//   process.env.CTRADER_CLIENT_ID ? 'configured ✅' : 'NOT configured ❌'
-// );
-// console.log(
-//   '- CTRADER_CLIENT_SECRET:',
-//   process.env.CTRADER_CLIENT_SECRET ? 'configured ✅' : 'NOT configured ❌'
-// );
-
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -81,7 +67,6 @@ app.use((err, req, res, next) => {
 export default app;
 
 async function startServer() {
-  console.log(`🚀 Starting IPTRADE Server on port ${PORT}...`);
 
   // Kill any existing processes on this port
   await killProcessOnPort(PORT);
@@ -92,16 +77,9 @@ async function startServer() {
   const startServerAttempt = (attempt = 1) => {
     return new Promise((resolve, reject) => {
       const server = app.listen(PORT, () => {
-        console.log('🎉 === IPTRADE SERVER STARTED ===');
-        console.log(`📡 Server running on http://127.0.0.1:${PORT}`);
-        console.log(`🔗 Health check: http://127.0.0.1:${PORT}/api/status`);
-        // Auto-run Link Platforms on server start
         (async () => {
           try {
-            console.log('🧩 Auto-running Link Platforms on server start...');
-
             const result = await linkPlatformsController.findAndSyncMQLFoldersOptimized();
-            console.log('✅ Auto Link Platforms result:', result);
           } catch (err) {
             console.error('❌ Auto Link Platforms failed on start:', err);
           }
@@ -111,7 +89,7 @@ async function startServer() {
 
       server.on('error', async err => {
         if (err.code === 'EADDRINUSE') {
-          console.log(`⚠️  Port ${PORT} is still in use (attempt ${attempt}/3), cleaning again...`);
+          (`⚠️  Port ${PORT} is still in use (attempt ${attempt}/3), cleaning again...`);
 
           if (attempt < 3) {
             // Try to kill processes again and retry

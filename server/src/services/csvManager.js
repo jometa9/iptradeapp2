@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, readFile } from 'fs';
+import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
-import { basename, join, resolve } from 'path';
+import { join, resolve } from 'path';
 
 import { validateBeforeWrite } from './csvValidator2.js';
 import { detectOrderChanges } from './orderChangeDetector.js';
@@ -52,15 +52,11 @@ class CSVManager extends EventEmitter {
 
   // Función para limpiar el cache y archivos cargados (usada cuando se activa Link Accounts)
   clearCacheAndFiles() {
-    console.log('🧹 Clearing CSV cache and loaded files...');
-    
     // Limpiar archivos cargados
     this.csvFiles.clear();
-    
+
     // Detener todos los watchers
     this.stopFileWatching();
-    
-    console.log('✅ CSV cache and files cleared');
   }
 
   // Parse new CSV2 format: [TYPE][PENDING][MT4][12345] or [TYPE] [PENDING] [MT4] [12345]
@@ -472,8 +468,6 @@ class CSVManager extends EventEmitter {
 
       if (existsSync(cachePath)) {
         const stats = statSync(cachePath);
-      } else {
-        console.log(`❌ El archivo no se creó después de escribir`);
       }
     } catch (error) {
       console.error('❌ Error guardando cache:', error.message);
@@ -572,8 +566,6 @@ class CSVManager extends EventEmitter {
                 lastModified: this.getFileLastModified(normalizedPath),
                 data: this.parseCSVFile(normalizedPath),
               });
-            } else {
-              console.log(`⚠️ Skipping duplicate CSV file: ${normalizedPath}`);
             }
           });
         }
@@ -603,14 +595,12 @@ class CSVManager extends EventEmitter {
 
       // Check for duplicates using normalized path
       if (this.csvFiles.has(normalizedPath)) {
-        console.log(`ℹ️ CSV file already registered (normalized): ${normalizedPath}`);
         return true;
       }
 
       // Check for duplicates by comparing with existing paths
       const isDuplicate = this.isDuplicatePath(normalizedPath);
       if (isDuplicate) {
-        console.log(`⚠️ Duplicate CSV path detected, skipping: ${normalizedPath}`);
         return false;
       }
 
@@ -620,8 +610,6 @@ class CSVManager extends EventEmitter {
         lastModified: this.getFileLastModified(normalizedPath),
         data: csvData,
       });
-
-      console.log(`✅ Added CSV file for watching: ${normalizedPath}`);
 
       // Save updated paths to cache
       this.saveCSVPathsToCache();
@@ -651,14 +639,12 @@ class CSVManager extends EventEmitter {
 
       // Check for duplicates using normalized path
       if (this.csvFiles.has(normalizedPath)) {
-        console.log(`ℹ️ CSV file already registered (normalized): ${normalizedPath}`);
         return true;
       }
 
       // Check for duplicates by comparing with existing paths
       const isDuplicate = this.isDuplicatePath(normalizedPath);
       if (isDuplicate) {
-        console.log(`⚠️ Duplicate CSV path detected, skipping: ${normalizedPath}`);
         return false;
       }
 
@@ -667,8 +653,6 @@ class CSVManager extends EventEmitter {
         lastModified: this.getFileLastModified(normalizedPath),
         data: this.parseCSVFile(normalizedPath),
       });
-
-      console.log(`✅ Added CSV file for watching: ${normalizedPath}`);
 
       // Save updated paths to cache
       this.saveCSVPathsToCache();
@@ -718,8 +702,6 @@ class CSVManager extends EventEmitter {
     const duplicates = [];
     const toRemove = new Set();
 
-    console.log(`🔍 Validating ${paths.length} CSV files for duplicates...`);
-
     for (let i = 0; i < paths.length; i++) {
       for (let j = i + 1; j < paths.length; j++) {
         const path1 = paths[i];
@@ -729,7 +711,6 @@ class CSVManager extends EventEmitter {
           duplicates.push({ path1, path2 });
           // Keep the first one, remove the second
           toRemove.add(path2);
-          console.log(`⚠️ Found duplicate: ${path1} === ${path2}`);
         }
       }
     }
@@ -737,13 +718,10 @@ class CSVManager extends EventEmitter {
     // Remove duplicates
     toRemove.forEach(path => {
       this.csvFiles.delete(path);
-      console.log(`🗑️ Removed duplicate CSV file: ${path}`);
     });
 
     if (duplicates.length > 0) {
-      console.log(`✅ Removed ${duplicates.length} duplicate CSV files`);
     } else {
-      console.log(`✅ No duplicate CSV files found`);
     }
 
     return duplicates;
@@ -760,19 +738,11 @@ class CSVManager extends EventEmitter {
       paths: paths,
     };
 
-    console.log(`📊 CSV Files Summary:`);
-    console.log(`   Total: ${summary.totalFiles}`);
-    console.log(`   MQL4: ${summary.mql4Files.length}`);
-    console.log(`   MQL5: ${summary.mql5Files.length}`);
-    console.log(`   Other: ${summary.otherFiles.length}`);
-
     return summary;
   }
 
   // Detener watching de archivos CSV
   stopFileWatching() {
-    console.log('🛑 Stopping file watching...');
-    
     // Limpiar watchers
     this.watchers.forEach(watcher => {
       if (watcher.close) watcher.close();
@@ -794,14 +764,10 @@ class CSVManager extends EventEmitter {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-
-    console.log('✅ File watching stopped');
   }
 
   // File watching deshabilitado - pending accounts solo se consultan desde frontend
   startFileWatching() {
-    console.log('📋 File watching disabled - pending accounts will be fetched on-demand from frontend');
-    
     // Limpiar watchers y polling anteriores si existen
     this.stopFileWatching();
   }
@@ -846,9 +812,7 @@ class CSVManager extends EventEmitter {
               timestamp: Date.now(),
             });
           }
-        } catch (error) {
-          console.log(`📁 Skipping order change detection for ${filePath} (file busy)`);
-        }
+        } catch (error) {}
       }
 
       this.csvFiles.set(filePath, {
@@ -881,26 +845,28 @@ class CSVManager extends EventEmitter {
   // Refrescar datos de todos los archivos ya cargados (sin buscar nuevos)
   async refreshAllFileData() {
     const promises = [];
-    
+
     this.csvFiles.forEach((fileData, filePath) => {
       if (existsSync(filePath)) {
         promises.push(
-          this.parseCSVFileAsync(filePath).then(newData => {
-            this.csvFiles.set(filePath, {
-              lastModified: this.getFileLastModified(filePath),
-              data: newData,
-            });
-          }).catch(error => {
-            console.error(`Error refreshing file ${filePath}:`, error);
-            // Mantener datos anteriores si hay error
-          })
+          this.parseCSVFileAsync(filePath)
+            .then(newData => {
+              this.csvFiles.set(filePath, {
+                lastModified: this.getFileLastModified(filePath),
+                data: newData,
+              });
+            })
+            .catch(error => {
+              console.error(`Error refreshing file ${filePath}:`, error);
+              // Mantener datos anteriores si hay error
+            })
         );
       } else {
         // Remover archivo si ya no existe
         this.csvFiles.delete(filePath);
       }
     });
-    
+
     await Promise.allSettled(promises);
   }
 
@@ -910,8 +876,6 @@ class CSVManager extends EventEmitter {
       if (!existsSync(filePath)) {
         return [];
       }
-
-
 
       // Leer como buffer para detectar encoding
       const buffer = readFileSync(filePath);
@@ -986,7 +950,7 @@ class CSVManager extends EventEmitter {
                   const timeDiff = now - pingTime;
 
                   const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos
-                  
+
                   // Solo cambiar a offline si el timestamp indica que no está activo
                   if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
                     currentAccountData.status = 'offline';
@@ -1012,12 +976,7 @@ class CSVManager extends EventEmitter {
               if (currentAccountData.account_type === 'master') {
                 const enabled = values[2] === 'ENABLED';
                 const name = values[3] || 'Master Account';
-                
-                console.log(`🔍 [parseCSVFile] Parsing MASTER config for ${currentAccountData.account_id}:`);
-                console.log(`   values[2] = "${values[2]}"`);
-                console.log(`   enabled = values[2] === 'ENABLED' = ${enabled}`);
-                console.log(`   name = "${name}"`);
-                
+
                 currentAccountData.config = {
                   enabled: enabled,
                   name: name,
@@ -1190,7 +1149,10 @@ class CSVManager extends EventEmitter {
                 const configType = values[1].toLowerCase();
                 if (configType === 'master' && currentAccountData.account_type === 'pending') {
                   currentAccountData.account_type = 'master';
-                } else if (configType === 'slave' && currentAccountData.account_type === 'pending') {
+                } else if (
+                  configType === 'slave' &&
+                  currentAccountData.account_type === 'pending'
+                ) {
                   currentAccountData.account_type = 'slave';
                 }
 
@@ -1216,11 +1178,8 @@ class CSVManager extends EventEmitter {
         }
 
         return Array.from(accounts.values());
-
       } catch (error) {
         if (error.code === 'EBUSY' || error.code === 'EACCES') {
-          console.log(`📁 File ${filePath} is busy (attempt ${attempt}/${maxRetries}), retrying in ${retryDelay}ms...`);
-          
           if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, retryDelay));
             continue;
@@ -1262,15 +1221,16 @@ class CSVManager extends EventEmitter {
     const refreshPromises = [];
     this.csvFiles.forEach((fileData, filePath) => {
       refreshPromises.push(
-        this.parseCSVFileAsync(filePath).then(freshData => {
-          fileData.data = freshData;
-        }).catch(error => {
-          console.log(`⚠️ Skipping file ${filePath} due to lock: ${error.message}`);
-          // Mantener datos anteriores si hay error de bloqueo
-        })
+        this.parseCSVFileAsync(filePath)
+          .then(freshData => {
+            fileData.data = freshData;
+          })
+          .catch(error => {
+            // Mantener datos anteriores si hay error de bloqueo
+          })
       );
     });
-    
+
     // Esperar a que todos los archivos se procesen
     await Promise.allSettled(refreshPromises);
 
@@ -1316,16 +1276,16 @@ class CSVManager extends EventEmitter {
               connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
               totalSlaves: existingTotalSlaves, // Preservar contador
             };
-            
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
 
             // Validar que el masterId sea un ID válido (no un valor de configuración)
-            const isValidMasterId = masterId && 
-              masterId !== 'NULL' && 
-              masterId !== 'ENABLED' && 
-              masterId !== 'DISABLED' && 
-              masterId !== 'ON' && 
+            const isValidMasterId =
+              masterId &&
+              masterId !== 'NULL' &&
+              masterId !== 'ENABLED' &&
+              masterId !== 'DISABLED' &&
+              masterId !== 'ON' &&
               masterId !== 'OFF' &&
               !isNaN(parseInt(masterId)); // Debe ser un número
 
@@ -1380,13 +1340,14 @@ class CSVManager extends EventEmitter {
       fileData.data.forEach(row => {
         if (row.account_type === 'slave') {
           const rowMasterId = row.config?.masterId || row.master_id;
-          
+
           // Validar que el masterId sea un ID válido (no un valor de configuración)
-          const isValidMasterId = rowMasterId && 
-            rowMasterId !== 'NULL' && 
-            rowMasterId !== 'ENABLED' && 
-            rowMasterId !== 'DISABLED' && 
-            rowMasterId !== 'ON' && 
+          const isValidMasterId =
+            rowMasterId &&
+            rowMasterId !== 'NULL' &&
+            rowMasterId !== 'ENABLED' &&
+            rowMasterId !== 'DISABLED' &&
+            rowMasterId !== 'ON' &&
             rowMasterId !== 'OFF' &&
             !isNaN(parseInt(rowMasterId)); // Debe ser un número
 
@@ -1444,22 +1405,18 @@ class CSVManager extends EventEmitter {
   // Función para escanear y emitir actualizaciones de pending accounts
   async scanAndEmitPendingUpdates() {
     try {
-      console.log('🔄 [csvManager] Scanning for pending account updates...');
-      
       // Refrescar todos los archivos CSV
       await this.refreshAllFileData();
-      
+
       // Obtener todas las cuentas activas
       const allAccounts = await this.getAllActiveAccounts();
-      
+
       // Emitir evento con las cuentas pending actualizadas
       this.emit('pendingAccountsUpdated', {
         pendingAccounts: allAccounts.pendingAccounts || [],
         timestamp: new Date().toISOString(),
-        totalAccounts: allAccounts.pendingAccounts?.length || 0
+        totalAccounts: allAccounts.pendingAccounts?.length || 0,
       });
-      
-      console.log(`✅ [csvManager] Emitted pending accounts update: ${allAccounts.pendingAccounts?.length || 0} accounts`);
     } catch (error) {
       console.error('❌ [csvManager] Error scanning pending updates:', error);
     }
@@ -1818,8 +1775,6 @@ class CSVManager extends EventEmitter {
   // Actualizar estado global del copier
   async updateGlobalStatus(enabled) {
     try {
-      console.log(`🔄 [csvManager] Updating global copier status to: ${enabled ? 'ENABLED' : 'DISABLED'}`);
-      
       // 1. Actualizar el archivo de configuración global
       const configPath = join(process.cwd(), 'config', 'copier_status.json');
       const config = {
@@ -1835,7 +1790,6 @@ class CSVManager extends EventEmitter {
 
       // Guardar la configuración global
       writeFileSync(configPath, JSON.stringify(config, null, 2));
-      console.log(`✅ [csvManager] Global config updated: ${configPath}`);
 
       // 2. Actualizar todos los archivos CSV2 que tenemos cacheados
       let updatedFiles = 0;
@@ -1855,14 +1809,13 @@ class CSVManager extends EventEmitter {
 
             for (const line of lines) {
               let updatedLine = line;
-              
+
               // Buscar líneas CONFIG que contengan el estado opuesto y reemplazarlo
               if (line.includes('[CONFIG]') && line.includes(oldStatus)) {
                 updatedLine = line.replace(new RegExp(`\\[${oldStatus}\\]`, 'g'), `[${newStatus}]`);
                 fileModified = true;
-                console.log(`   📝 [csvManager] Updated CONFIG line in ${basename(filePath)}: ${oldStatus} → ${newStatus}`);
               }
-              
+
               newLines.push(updatedLine);
             }
 
@@ -1873,15 +1826,12 @@ class CSVManager extends EventEmitter {
 
               // Refrescar datos en memoria
               this.refreshFileData(filePath);
-              console.log(`   ✅ [csvManager] File updated: ${basename(filePath)}`);
             }
           }
         } catch (error) {
           console.error(`❌ [csvManager] Error processing file ${filePath}:`, error);
         }
       }
-
-      console.log(`✅ [csvManager] Global status update complete: ${updatedFiles} files updated`);
 
       // Emitir evento de actualización
       this.emit('globalStatusChanged', {
