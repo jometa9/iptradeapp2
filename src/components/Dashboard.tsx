@@ -95,8 +95,6 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-
-
   const handleLinkPlatforms = async () => {
     try {
       await linkPlatforms();
@@ -105,8 +103,6 @@ export const Dashboard: React.FC = () => {
       // Silent error handling
     }
   };
-
-
 
   // Removed: separate connect platforms handler (unified under linkPlatforms)
 

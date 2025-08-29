@@ -123,8 +123,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isRotating, setIsRotating] = useState(false);
 
-
-
   // Effect for rotating messages when link platform process is active
   useEffect(() => {
     if (
