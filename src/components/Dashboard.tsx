@@ -9,7 +9,6 @@ import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
 // Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
-import { useOperatingSystem } from '../hooks/useOperatingSystem';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
@@ -20,7 +19,7 @@ export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
   const { linkPlatforms, isLinking, clearAutoLinkCache } = useLinkPlatforms();
-  const operatingSystem = useOperatingSystem();
+
   // Get visibility state from UnifiedAccountDataContext
   const { isHidden, isBlinking, toggleHidden } = useUnifiedAccountDataContext();
 
@@ -38,19 +37,6 @@ export const Dashboard: React.FC = () => {
   // isRecentLogin not used
   // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
-
-  const getOSInfo = () => {
-    switch (operatingSystem) {
-      case 'windows':
-        return { text: 'Windows' };
-      case 'macos':
-        return { text: 'macOS' };
-      case 'linux':
-        return { text: 'Linux' };
-      default:
-        return { text: 'Unknown' };
-    }
-  };
 
   // Fetch user IP on component mount
   const fetchUserIP = async () => {
@@ -116,8 +102,7 @@ export const Dashboard: React.FC = () => {
 
   const handleLinkPlatforms = async () => {
     try {
-      const osInfo = getOSInfo();
-      const result = await linkPlatforms();
+      await linkPlatforms();
       // Silent processing
     } catch (error) {
       // Silent error handling
@@ -138,7 +123,7 @@ export const Dashboard: React.FC = () => {
       });
 
       if (response.ok) {
-        const result = await response.json();
+        await response.json();
 
         // También limpiar cache del frontend
         clearAutoLinkCache();

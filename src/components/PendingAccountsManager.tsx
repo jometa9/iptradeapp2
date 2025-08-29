@@ -3,9 +3,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Cable, HousePlug, Inbox, Link, PartyPopper, TrafficCone, Unplug } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
-import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
@@ -158,7 +158,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   // Use unified hook for all account data
   const {
     data: unifiedData,
-    loading: loadingPending,
     error: pendingError,
     refresh: refreshData,
   } = useUnifiedAccountDataContext();
@@ -533,8 +532,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         const error = await csvUpdateResponse.json();
         throw new Error(error.message || 'Failed to update CSV account type');
       }
-
-
 
       // Si hay un masterAccountId, también podríamos necesitar registrar la conexión
       // Por ahora solo actualizamos el CSV
