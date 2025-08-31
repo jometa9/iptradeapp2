@@ -582,6 +582,8 @@ class CSVManager extends EventEmitter {
     }
   }
 
+
+
   // Add a single CSV file to the manager for watching (async version)
   async addCSVFileAsync(filePath) {
     try {
@@ -1188,7 +1190,7 @@ class CSVManager extends EventEmitter {
             return [];
           }
         } else {
-          console.error(`Error parsing CSV file ${filePath}:`, error);
+          this.handleFileError(filePath, error, 'parsing');
           return [];
         }
       }
@@ -1203,6 +1205,9 @@ class CSVManager extends EventEmitter {
       unconnectedSlaves: [],
       pendingAccounts: [],
     };
+
+    // Track processed account IDs to prevent duplicates across account types
+    const processedAccountIds = new Set();
 
     // Función helper para calcular estado online/offline
     const calculateStatus = timestamp => {
@@ -1226,7 +1231,10 @@ class CSVManager extends EventEmitter {
             fileData.data = freshData;
           })
           .catch(error => {
-            // Mantener datos anteriores si hay error de bloqueo
+            // Manejar errores de permisos eliminando el archivo del cache
+            if (this.isPermissionError(error)) {
+              this.handleFileError(filePath, error, 'refreshing');
+            }
           })
       );
     });
@@ -1242,6 +1250,11 @@ class CSVManager extends EventEmitter {
           const platform = row.platform || this.extractPlatformFromPath(filePath);
           const { status, timeSinceLastPing } = calculateStatus(row.timestamp);
 
+          // Skip if this account ID has already been processed
+          if (processedAccountIds.has(accountId)) {
+            return;
+          }
+
           // Incluir cuentas pending
           if (accountType === 'pending') {
             // Incluir todas las cuentas pending que estén en el archivo CSV
@@ -1256,6 +1269,7 @@ class CSVManager extends EventEmitter {
               config: row.config || {},
               filePath: filePath, // Para debug
             });
+            processedAccountIds.add(accountId);
           }
 
           if (accountType === 'master') {
@@ -1276,6 +1290,7 @@ class CSVManager extends EventEmitter {
               connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
               totalSlaves: existingTotalSlaves, // Preservar contador
             };
+            processedAccountIds.add(accountId);
           } else if (accountType === 'slave') {
             const masterId = row.config?.masterId || row.master_id;
 
@@ -1324,6 +1339,7 @@ class CSVManager extends EventEmitter {
                 config: row.config || {},
               });
             }
+            processedAccountIds.add(accountId);
           }
         }
       });
@@ -1590,7 +1606,12 @@ class CSVManager extends EventEmitter {
       });
 
       // Escribir archivo actualizado
-      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      try {
+        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      } catch (writeError) {
+        this.handleFileError(targetFile, writeError, 'writing');
+        return false;
+      }
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
@@ -1722,6 +1743,7 @@ class CSVManager extends EventEmitter {
         if (existsSync(tmpFile)) {
           require('fs').unlinkSync(tmpFile);
         }
+        this.handleFileError(targetFile, error, 'writing config');
         return false;
       }
 
@@ -1820,16 +1842,20 @@ class CSVManager extends EventEmitter {
             }
 
             if (fileModified) {
-              const updatedContent = newLines.join('\n');
-              writeFileSync(filePath, updatedContent, 'utf8');
-              updatedFiles++;
+              try {
+                const updatedContent = newLines.join('\n');
+                writeFileSync(filePath, updatedContent, 'utf8');
+                updatedFiles++;
 
-              // Refrescar datos en memoria
-              this.refreshFileData(filePath);
+                // Refrescar datos en memoria
+                this.refreshFileData(filePath);
+              } catch (writeError) {
+                this.handleFileError(filePath, writeError, 'writing');
+              }
             }
           }
         } catch (error) {
-          console.error(`❌ [csvManager] Error processing file ${filePath}:`, error);
+          this.handleFileError(filePath, error, 'processing');
         }
       }
 
@@ -1923,7 +1949,12 @@ class CSVManager extends EventEmitter {
       }
 
       // Escribir archivo actualizado
-      writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      try {
+        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+      } catch (writeError) {
+        this.handleFileError(targetFile, writeError, 'writing');
+        return false;
+      }
 
       // Refrescar datos en memoria
       this.refreshFileData(targetFile);
@@ -1937,7 +1968,7 @@ class CSVManager extends EventEmitter {
 
       return true;
     } catch (error) {
-      console.error(`Error updating account ${accountId} status:`, error);
+      this.handleFileError(targetFile, error, `updating account ${accountId} status`);
       return false;
     }
   }
@@ -2004,6 +2035,59 @@ class CSVManager extends EventEmitter {
       watcher.close();
     });
     this.watchers.clear();
+  }
+
+  // Eliminar archivo problemático del cache y watching
+  removeProblematicFile(filePath) {
+    try {
+      console.log(`🗑️ [csvManager] Removing problematic file from cache: ${filePath}`);
+      
+      // Eliminar del Map de archivos CSV
+      if (this.csvFiles.has(filePath)) {
+        this.csvFiles.delete(filePath);
+        console.log(`✅ [csvManager] Removed from csvFiles cache: ${filePath}`);
+      }
+
+      // Eliminar del file watcher si existe
+      if (this.fileWatchers && this.fileWatchers.has(filePath)) {
+        const watcher = this.fileWatchers.get(filePath);
+        if (watcher) {
+          watcher.close();
+          this.fileWatchers.delete(filePath);
+          console.log(`✅ [csvManager] Removed file watcher: ${filePath}`);
+        }
+      }
+
+      // Actualizar el cache JSON
+      this.saveCSVPathsToCache();
+      
+      console.log(`✅ [csvManager] Successfully removed problematic file: ${filePath}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ [csvManager] Error removing problematic file ${filePath}:`, error);
+      return false;
+    }
+  }
+
+  // Verificar si un error es de permisos
+  isPermissionError(error) {
+    return error.code === 'EPERM' || 
+           error.code === 'EACCES' || 
+           error.message.includes('operation not permitted') ||
+           error.message.includes('permission denied');
+  }
+
+  // Manejar error de archivo y eliminar si es de permisos
+  handleFileError(filePath, error, operation = 'processing') {
+    console.error(`❌ [csvManager] Error ${operation} file ${filePath}:`, error);
+    
+    if (this.isPermissionError(error)) {
+      console.log(`🚫 [csvManager] Permission error detected, removing file from cache: ${filePath}`);
+      this.removeProblematicFile(filePath);
+      return true; // Indicar que el archivo fue eliminado
+    }
+    
+    return false; // Indicar que el archivo no fue eliminado
   }
 }
 

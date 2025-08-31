@@ -26,6 +26,52 @@ router.get('/test', (req, res) => {
 
 /**
  * @swagger
+ * /subscription-limits:
+ *   get:
+ *     summary: Get subscription limits for the current user
+ *     tags: [Status]
+ *     parameters:
+ *       - in: query
+ *         name: apiKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Subscription limits for the user
+ *       401:
+ *         description: Invalid API Key
+ */
+router.get('/subscription-limits', async (req, res) => {
+  const { apiKey } = req.query;
+
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API Key is required' });
+  }
+
+  try {
+    const validation = await validateSubscription(apiKey);
+    
+    if (!validation.valid) {
+      return res.status(401).json({ error: 'Invalid API Key' });
+    }
+
+    const limits = getSubscriptionLimits(validation.userData.subscriptionType);
+    
+    return res.status(200).json({
+      subscriptionType: validation.userData.subscriptionType,
+      limits
+    });
+  } catch (error) {
+    console.error('Error getting subscription limits:', error);
+    res.status(500).json({ error: 'Failed to get subscription limits' });
+  }
+});
+
+
+
+/**
+ * @swagger
  * /status:
  *   get:
  *     summary: Get server status
@@ -161,6 +207,8 @@ router.get('/subscription-cache-status', async (req, res) => {
     res.status(500).json({ error: 'Failed to get cache status' });
   }
 });
+
+
 
 /**
  * @swagger

@@ -627,7 +627,7 @@ router.get('/stats', requireValidSubscription, getAccountActivityStats);
  *                 csvFilesAccessed:
  *                   type: number
  */
-router.get('/unified', requireValidSubscription, getUnifiedAccountData);
+router.get('/unified', getUnifiedAccountData);
 
 // Get connectivity statistics (real synchronization status)
 /**

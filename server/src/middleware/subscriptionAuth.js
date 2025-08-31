@@ -11,6 +11,7 @@ const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 // Add a map to track ongoing validation promises to prevent duplicate requests
 export const ongoingValidations = new Map();
 
+
 // Map API plan names to internal plan names
 const mapPlanName = (apiPlanName, subscriptionType) => {
   // Check if the user is an admin, give them IPTRADE Managed VPS regardless of plan
@@ -58,8 +59,8 @@ const PLAN_LIMITS = {
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support'],
   },
   admin: {
-    maxAccounts: null, // No limit
-    maxLotSize: null, // No limit
+    maxAccounts: 1, // No limit
+    maxLotSize: 0.01, // Testing limit
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support', 'admin_access'],
   },
 };
@@ -103,18 +104,9 @@ const performValidation = async apiKey => {
       const requestDuration = Date.now() - requestStart;
 
       if (!response.ok) {
-        // If API key is not found in external API, treat as free user
+        // If API key is not found in external API, fail validation
         if (response.status === 401 || response.status === 404) {
-          const freeUserData = {
-            valid: true,
-            userData: {
-              userId: 'user_' + apiKey.substring(0, 8),
-              email: 'user@free.com',
-              name: 'Free User',
-              subscriptionType: 'free',
-            },
-          };
-          return freeUserData;
+          return { valid: false, error: 'Invalid license key' };
         }
 
         const errorData = await response.json().catch(() => ({ error: 'Validation failed' }));
@@ -125,16 +117,7 @@ const performValidation = async apiKey => {
 
       // Check if response contains error (some APIs return 200 with error field)
       if (userData.error) {
-        const freeUserData = {
-          valid: true,
-          userData: {
-            userId: 'user_' + apiKey.substring(0, 8),
-            email: 'user@free.com',
-            name: 'Free User',
-            subscriptionType: 'free',
-          },
-        };
-        return freeUserData;
+        return { valid: false, error: userData.error || 'Invalid license' };
       }
 
       // Validate that we have the required fields
@@ -159,17 +142,8 @@ const performValidation = async apiKey => {
     console.error('💥 Error stack:', error.stack);
     console.error('💥 Error details:', error);
 
-    // Fallback to free user on connection error
-    const fallbackData = {
-      valid: true,
-      userData: {
-        userId: 'user_' + apiKey.substring(0, 8),
-        email: 'user@free.com',
-        name: 'Free User',
-        subscriptionType: 'free',
-      },
-    };
-    return fallbackData;
+    // Fail validation on connection error
+    return { valid: false, error: 'Connection error during license validation' };
   }
 };
 
@@ -275,6 +249,8 @@ export const requireValidSubscription = async (req, res, next) => {
         details: validation,
       });
     }
+
+
 
     // Store in cache with current timestamp
     subscriptionCache.set(apiKey, {
@@ -450,4 +426,5 @@ export default {
   enforceLotSizeRestrictions,
   subscriptionCache,
   ongoingValidations,
+
 };

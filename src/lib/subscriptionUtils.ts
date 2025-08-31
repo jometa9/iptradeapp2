@@ -19,7 +19,7 @@ interface LotValidation {
 }
 
 // Plan limits configuration based on subscription type
-export const PLAN_LIMITS: Record<string, SubscriptionLimits> = {
+const PLAN_LIMITS = {
   free: {
     maxAccounts: 3,
     maxLotSize: 0.01,
@@ -41,15 +41,15 @@ export const PLAN_LIMITS: Record<string, SubscriptionLimits> = {
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support'],
   },
   admin: {
-    maxAccounts: null, // No limit
-    maxLotSize: null, // No limit
+    maxAccounts: null, // Testing limit
+    maxLotSize: null, // Testing limit
     features: ['unlimited_copy_trading', 'managed_vps', 'priority_support', 'admin_access'],
   },
 };
 
 // Get subscription limits for a user
 export const getSubscriptionLimits = (subscriptionType: string): SubscriptionLimits => {
-  return PLAN_LIMITS[subscriptionType] || PLAN_LIMITS['free'];
+  return PLAN_LIMITS[subscriptionType] || PLAN_LIMITS.free;
 };
 
 // Check if user has unlimited plan
@@ -153,21 +153,22 @@ export const shouldShowSubscriptionLimitsCard = (
     return false;
   }
 
+  const limits = getSubscriptionLimits(userInfo.subscriptionType);
+
   // Usuarios free siempre ven la tarjeta
   if (userInfo.subscriptionType === 'free') {
     return true;
   }
 
-  // Para otros usuarios, solo mostrar cuando alcancen su límite
-  const limits = getSubscriptionLimits(userInfo.subscriptionType);
-
-  // Si no hay límite (unlimited, managed_vps, admin), no mostrar tarjeta
+  // Si no hay límite de cuentas (unlimited, managed_vps), no mostrar tarjeta
   if (limits.maxAccounts === null) {
     return false;
   }
 
-  // Solo mostrar cuando alcancen el límite
-  return currentAccountCount >= limits.maxAccounts;
+  // Mostrar cuando:
+  // 1. Alcancen el límite de cuentas
+  // 2. Tengan límite de lot size
+  return currentAccountCount >= limits.maxAccounts || limits.maxLotSize !== null;
 };
 
 export type { LotValidation, SubscriptionLimits, UserInfo };

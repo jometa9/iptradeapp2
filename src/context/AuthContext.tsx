@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (secretKey: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
+  onSubscriptionChange: (callback: (previousSubscription: string, currentSubscription: string) => void) => void;
 }
 
 interface UserInfo {
@@ -39,10 +40,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [subscriptionChangeCallback, setSubscriptionChangeCallback] = useState<((previousSubscription: string, currentSubscription: string) => void) | null>(null);
   
   // Add debounce mechanism to prevent multiple simultaneous validations
   const validationInProgress = useRef<boolean>(false);
   const validationPromise = useRef<Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> | null>(null);
+  
+  // Add subscription change polling
+  const subscriptionPollingInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Validar licencia contra API externa
   const validateLicense = async (
@@ -63,6 +68,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       validationInProgress.current = false;
       validationPromise.current = null;
+    }
+  };
+
+  // Start subscription polling (check every hour)
+  const startSubscriptionPolling = (apiKey: string) => {
+    // Clear any existing polling
+    if (subscriptionPollingInterval.current) {
+      clearInterval(subscriptionPollingInterval.current);
+    }
+
+    // Start new polling (check every hour)
+    subscriptionPollingInterval.current = setInterval(async () => {
+      const validation = await performValidation(apiKey);
+      if (validation.valid && validation.userInfo) {
+        const oldSubscription = userInfo?.subscriptionType;
+        const newSubscription = validation.userInfo.subscriptionType;
+
+        // Update user info with new subscription data
+        setUserInfo(validation.userInfo);
+        localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
+        localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
+
+        // If subscription type changed, notify
+        if (oldSubscription && newSubscription && oldSubscription !== newSubscription) {
+          console.log(`🔄 Subscription updated from ${oldSubscription} to ${newSubscription}`);
+          if (subscriptionChangeCallback) {
+            subscriptionChangeCallback(oldSubscription, newSubscription);
+          }
+        }
+      }
+    }, 60 * 60 * 1000); // 1 hour
+  };
+
+  // Stop subscription polling
+  const stopSubscriptionPolling = () => {
+    if (subscriptionPollingInterval.current) {
+      clearInterval(subscriptionPollingInterval.current);
+      subscriptionPollingInterval.current = null;
     }
   };
 
@@ -132,6 +175,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(`${STORAGE_KEY}_last_validation`, now.toString());
         localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
 
+        // Start subscription change polling (check every 5 minutes)
+        startSubscriptionPolling(key);
+
         return true;
       } else {
         setError(validation.message || 'Invalid license or inactive subscription');
@@ -145,9 +191,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Register subscription change callback
+  const registerSubscriptionChangeCallback = (callback: (previousSubscription: string, currentSubscription: string) => void) => {
+    setSubscriptionChangeCallback(() => callback);
+  };
+
   // Función de logout
   const logout = async () => {
     const currentSecretKey = secretKey;
+
+    // Stop subscription polling
+    stopSubscriptionPolling();
 
     // Clear all local state immediately
     setIsAuthenticated(false);
@@ -237,6 +291,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem(`${STORAGE_KEY}_last_validation`, now.toString());
             localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
 
+            // Start subscription change polling
+            startSubscriptionPolling(storedKey);
+
             // Set up timer for next validation in 12 hours
             setTimeout(
               () => {
@@ -277,6 +334,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkAuth();
+
+    // Cleanup function to stop polling when component unmounts
+    return () => {
+      stopSubscriptionPolling();
+    };
   }, []);
 
   const value: AuthContextType = {
@@ -288,6 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     logout,
     clearError,
+    onSubscriptionChange: registerSubscriptionChangeCallback,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

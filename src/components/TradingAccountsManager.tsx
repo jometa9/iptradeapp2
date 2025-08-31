@@ -7,7 +7,9 @@ import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
   getPlanDisplayName,
+  getSubscriptionLimits,
   isUnlimitedPlan,
+  shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
 import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
@@ -28,6 +30,40 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { toast } from './ui/use-toast';
+
+// Componente para mostrar límites de suscripción
+const SubscriptionLimitsCard: React.FC<{
+  userInfo: any;
+  totalAccounts: number;
+  canAddMoreAccounts: boolean;
+}> = ({ userInfo, totalAccounts, canAddMoreAccounts }) => {
+  const showCard = shouldShowSubscriptionLimitsCard(userInfo, totalAccounts);
+
+  if (!showCard) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account Limits</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {getAccountLimitMessage(userInfo, totalAccounts)}
+          </p>
+          {!canAddMoreAccounts && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                You have reached your account limit. Please upgrade your plan to add more
+                accounts.
+              </p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface TradingAccount {
   id: string;
@@ -68,7 +104,7 @@ const PLATFORMS = [
 ];
 
 export const TradingAccountsManager: React.FC = () => {
-  const { userInfo, secretKey, isAuthenticated } = useAuth();
+  const { userInfo, secretKey, isAuthenticated, onSubscriptionChange } = useAuth();
   const { data: unifiedData, loading, error, refresh } = useUnifiedAccountData();
   const [showMasterDialog, setShowMasterDialog] = useState(false);
   const [showSlaveDialog, setShowSlaveDialog] = useState(false);
@@ -95,6 +131,18 @@ export const TradingAccountsManager: React.FC = () => {
   const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
+  // Register subscription change callback
+  useEffect(() => {
+    if (onSubscriptionChange) {
+      onSubscriptionChange((previousSubscription, currentSubscription) => {
+        console.log(`🔄 TradingAccountsManager: Subscription changed from ${previousSubscription} to ${currentSubscription}`);
+        
+        // Refresh account data to apply new subscription limits
+        refresh();
+      });
+    }
+  }, [onSubscriptionChange, refresh]);
+
   // Extract data from unified response
   const accounts = unifiedData?.configuredAccounts || { masterAccounts: {}, unconnectedSlaves: [] };
   const serverStats = unifiedData?.serverStats || {
@@ -111,9 +159,14 @@ export const TradingAccountsManager: React.FC = () => {
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Unknown';
 
   // Function to check if subscription limits card should be shown
-  const shouldShowSubscriptionLimitsCard = (_user: any, currentAccounts: number) => {
-    // getSubscriptionLimits not available - simplified logic
-    return currentAccounts >= 8; // Show when 8+ accounts
+  const shouldShowSubscriptionLimitsCard = (user: any, currentAccounts: number) => {
+    if (!user) return false;
+    
+    const limits = getSubscriptionLimits(user.subscriptionType);
+    if (limits.maxAccounts === null) {
+      return false; // Unlimited plan
+    }
+    return currentAccounts >= limits.maxAccounts;
   };
 
   // Data is loaded automatically by the unified hook
@@ -131,10 +184,6 @@ export const TradingAccountsManager: React.FC = () => {
       });
 
       if (response.ok) {
-        toast({
-          title: 'Success',
-          description: 'Master account registered successfully',
-        });
         setShowMasterDialog(false);
         setMasterForm({ masterAccountId: '', name: '', description: '', broker: '', platform: '' });
         refresh();
@@ -143,11 +192,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error(errorData.error || 'Failed to register master account');
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Error registering master account',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -183,23 +227,13 @@ export const TradingAccountsManager: React.FC = () => {
         // Reload accounts to show the new slave account
         await refresh();
 
-        // If the slave was connected to a master, show a success message
-        if (slaveForm.masterAccountId && slaveForm.masterAccountId !== 'none') {
-          toast({
-            title: 'Slave Account Deployed',
-            description: `Slave account ${slaveForm.slaveAccountId} has been deployed under master ${slaveForm.masterAccountId}`,
-          });
-        }
+   
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to register slave account');
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Error registering slave account',
-        variant: 'destructive',
-      });
+      
     }
   };
 
@@ -224,11 +258,6 @@ export const TradingAccountsManager: React.FC = () => {
         throw new Error('Failed to delete master account');
       }
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete master account',
-        variant: 'destructive',
-      });
     } finally {
       setIsProcessing(false);
     }
@@ -373,29 +402,14 @@ export const TradingAccountsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Subscription Info Card para planes con límites */}
-      {userInfo && shouldShowSubscriptionLimitsCard(userInfo, totalAccounts) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Limits</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {getAccountLimitMessage(userInfo, totalAccounts)}
-              </p>
-              {!canAddMoreAccounts && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <p className="text-sm text-yellow-800">
-                    You have reached your account limit. Please upgrade your plan to add more
-                    accounts.
-                  </p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+             {/* Subscription Info Card para planes con límites */}
+       {userInfo && (
+         <SubscriptionLimitsCard 
+           userInfo={userInfo} 
+           totalAccounts={totalAccounts} 
+           canAddMoreAccounts={canAddMoreAccounts}
+         />
+       )}
 
       {/* Información de plan sin límites para planes premium */}
       {userInfo && userInfo.subscriptionType === 'premium' && !isUnlimitedPlan(userInfo) ? (

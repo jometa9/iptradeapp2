@@ -2162,6 +2162,8 @@ export const getUnifiedAccountData = async (req, res) => {
 
     // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
     const cleanMasterAccounts = {};
+    const processedMasterIds = new Set();
+    
     Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
       // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
       const isValidMasterId =
@@ -2180,6 +2182,7 @@ export const getUnifiedAccountData = async (req, res) => {
         }
 
         cleanMasterAccounts[masterId] = allAccounts.masterAccounts[masterId];
+        processedMasterIds.add(masterId);
 
         const masterConfig = allAccounts.masterAccounts[masterId]?.config;
       }
@@ -2188,6 +2191,7 @@ export const getUnifiedAccountData = async (req, res) => {
     // Clean unconnected slaves - remove duplicates and invalid configurations
     const cleanUnconnectedSlaves = [];
     const seenSlaveIds = new Set();
+    const loggedPendingSlaveSkips = new Set(); // Track logged skips to avoid spam
 
     (allAccounts.unconnectedSlaves || []).forEach(slave => {
       // Skip if we've already seen this slave ID
@@ -2198,12 +2202,14 @@ export const getUnifiedAccountData = async (req, res) => {
       // Skip if this account is already in pending accounts
       if (pendingAccountIds.has(slave.id)) {
         // Only log once per session to avoid spam
-        if (!this._loggedPendingSlaveSkips) {
-          this._loggedPendingSlaveSkips = new Set();
+        if (!loggedPendingSlaveSkips.has(slave.id)) {
+          loggedPendingSlaveSkips.add(slave.id);
         }
-        if (!this._loggedPendingSlaveSkips.has(slave.id)) {
-          this._loggedPendingSlaveSkips.add(slave.id);
-        }
+        return;
+      }
+
+      // Skip if this account is already processed as a master account
+      if (processedMasterIds.has(slave.id)) {
         return;
       }
 
@@ -2240,11 +2246,16 @@ export const getUnifiedAccountData = async (req, res) => {
       seenSlaveIds.add(slave.id);
     });
 
-    // Clean slave accounts - remove duplicates with pending accounts
+    // Clean slave accounts - remove duplicates with pending accounts and master accounts
     const cleanSlaveAccounts = {};
     Object.keys(allAccounts.slaveAccounts || {}).forEach(slaveId => {
       // Skip if this slave account is already in pending accounts
       if (pendingAccountIds.has(slaveId)) {
+        return;
+      }
+
+      // Skip if this account is already processed as a master account
+      if (processedMasterIds.has(slaveId)) {
         return;
       }
 
@@ -2259,6 +2270,11 @@ export const getUnifiedAccountData = async (req, res) => {
     });
 
     // Calculate server statistics from the cleaned data
+    const totalConnectedSlaves = Object.values(cleanMasterAccounts).reduce(
+      (sum, master) => sum + (master.connectedSlaves ? master.connectedSlaves.length : 0),
+      0
+    );
+
     const serverStats = {
       totalCSVFiles: csvManager.csvFiles.size,
       totalPendingAccounts: allPendingAccounts.length,
@@ -2271,7 +2287,12 @@ export const getUnifiedAccountData = async (req, res) => {
         Object.values(cleanMasterAccounts).filter(acc => acc.status === 'online').length +
         // Slave accounts online (both connected and unconnected)
         Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'online').length +
-        cleanUnconnectedSlaves.filter(acc => acc.status === 'online').length,
+        cleanUnconnectedSlaves.filter(acc => acc.status === 'online').length +
+        // Connected slaves online
+        Object.values(cleanMasterAccounts).reduce(
+          (sum, master) => sum + (master.connectedSlaves ? master.connectedSlaves.filter(slave => slave.status === 'online').length : 0),
+          0
+        ),
 
       // Count offline accounts (all types)
       totalOfflineAccounts:
@@ -2281,10 +2302,15 @@ export const getUnifiedAccountData = async (req, res) => {
         Object.values(cleanMasterAccounts).filter(acc => acc.status === 'offline').length +
         // Slave accounts offline (both connected and unconnected)
         Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'offline').length +
-        cleanUnconnectedSlaves.filter(acc => acc.status === 'offline').length,
+        cleanUnconnectedSlaves.filter(acc => acc.status === 'offline').length +
+        // Connected slaves offline
+        Object.values(cleanMasterAccounts).reduce(
+          (sum, master) => sum + (master.connectedSlaves ? master.connectedSlaves.filter(slave => slave.status === 'offline').length : 0),
+          0
+        ),
 
       totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
-      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length + cleanUnconnectedSlaves.length,
+      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length + cleanUnconnectedSlaves.length + totalConnectedSlaves,
       totalUnconnectedSlaves: cleanUnconnectedSlaves.length,
     };
 

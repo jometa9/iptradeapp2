@@ -30,6 +30,7 @@ import {
   getAccountLimitMessage,
   getLotSizeMessage,
   getPlanDisplayName,
+  getSubscriptionLimits,
   shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
@@ -1377,13 +1378,13 @@ const TradingAccountsConfigComponent = () => {
   // fadeOutAnimation removed - not used
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Debug logs removed */}
 
       {/* Subscription Info Card para planes con límites */}
       {userInfo && shouldShowSubscriptionLimitsCard(userInfo, accounts.length) && (
         <Card
-          className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3"
+          className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3 mb-3"
           style={fadeInDownAnimation}
         >
           <AlertTriangle className="w-6 h-6 text-yellow-900" />
@@ -1748,7 +1749,13 @@ const TradingAccountsConfigComponent = () => {
                           <div>
                             <Label htmlFor="lotCoefficient">
                               Lot Size Multiplier
-                              {!canCustomizeLotSizesValue && ' (Fixed at 1.0 for Free plan)'}
+                              {(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                if (limits.maxLotSize !== null) {
+                                  return ` (Fixed at 1.0 for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
+                                }
+                                return '';
+                              })()}
                             </Label>
                             <Input
                               id="lotCoefficient"
@@ -1782,36 +1789,59 @@ const TradingAccountsConfigComponent = () => {
                                   lotCoefficient: canCustomizeLotSizesValue ? value : 1,
                                 });
                               }}
-                              disabled={!canCustomizeLotSizesValue}
+                              disabled={(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                return limits.maxLotSize !== null;
+                              })()}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                              {canCustomizeLotSizesValue
-                                ? 'Multiplies the lot size from the master account'
-                                : 'Free plan users cannot customize lot multipliers'}
+                              {(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                if (limits.maxLotSize !== null) {
+                                  return `Lot multiplier disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan has lot size restrictions`;
+                                }
+                                return "Multiplies the lot size from the master account";
+                              })()}
                             </p>
                           </div>
 
                           <div>
                             <Label htmlFor="forceLot">
-                              Force Fixed Lot Size
-                              {!canCustomizeLotSizesValue && ' (Fixed at 0.01 for Free plan)'}
+                              Fixed Lot Size
+                              {(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                if (limits.maxLotSize !== null) {
+                                  return ` (Limited to ${limits.maxLotSize} for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
+                                }
+                                return '';
+                              })()}
                             </Label>
                             <Input
                               id="forceLot"
                               name="forceLot"
                               type="number"
                               min="0"
-                              max={canCustomizeLotSizesValue ? '100' : '0.01'}
+                              max={(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                if (limits.maxLotSize !== null) {
+                                  return limits.maxLotSize.toString();
+                                }
+                                return '100';
+                              })()}
                               step="0.01"
                               value={
-                                canCustomizeLotSizesValue
-                                  ? formState.forceLot && formState.forceLot > 0
+                                (() => {
+                                  const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                  if (limits.maxLotSize !== null) {
+                                    // Si hay límite de lot, mostrar el límite máximo
+                                    return limits.maxLotSize.toFixed(2);
+                                  }
+                                  // Si no hay límite, usar la lógica normal
+                                  return formState.forceLot && formState.forceLot > 0
                                     ? formState.forceLot.toFixed(2)
-                                    : '0.00'
-                                  : formState.forceLot > 0
-                                    ? '0.01'
-                                    : '0.00'
+                                    : '0.00';
+                                })()
                               }
                               onChange={e => {
                                 const inputValue = e.target.value;
@@ -1823,25 +1853,41 @@ const TradingAccountsConfigComponent = () => {
                                   if (!isNaN(parsedValue)) {
                                     // Redondear a 2 decimales para evitar problemas de precisión
                                     value = Math.round(parsedValue * 100) / 100;
+                                    
+                                    // Aplicar límites de suscripción
+                                    if (!canCustomizeLotSizesValue) {
+                                      value = value > 0 ? 0.01 : 0;
+                                    } else {
+                                      // Para planes con límites personalizados
+                                      const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                      if (limits.maxLotSize !== null && value > limits.maxLotSize) {
+                                        value = limits.maxLotSize;
+                                        toastUtil({
+                                          title: "Lot size limit exceeded",
+                                          description: `Your plan limits lot size to ${limits.maxLotSize}`,
+                                          variant: "destructive"
+                                        });
+                                      }
+                                    }
                                   }
                                 }
 
                                 setFormState({
                                   ...formState,
-                                  forceLot: canCustomizeLotSizesValue
-                                    ? value
-                                    : value > 0
-                                      ? 0.01
-                                      : 0,
+                                  forceLot: value
                                 });
                               }}
                               disabled={!canCustomizeLotSizesValue}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                              {canCustomizeLotSizesValue
-                                ? 'If set above 0, uses this fixed lot size instead of copying'
-                                : 'Free plan users are limited to 0.01 lot size'}
+                              {(() => {
+                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                if (limits.maxLotSize !== null) {
+                                  return `Fixed lot size disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan limits lot size to ${limits.maxLotSize}`;
+                                }
+                                return "If set above 0, uses this fixed lot size instead of copying";
+                              })()}
                             </p>
                           </div>
 

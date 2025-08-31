@@ -38,7 +38,7 @@ const router = express.Router();
  *         description: Global copier status updated
  */
 router.get('/copier/global', requireValidSubscription, getGlobalStatus);
-router.post('/copier/global', requireValidSubscription, setGlobalStatus);
+router.post('/copier/global', setGlobalStatus);
 router.put('/copier/global', requireValidSubscription, setGlobalStatus);
 
 /**

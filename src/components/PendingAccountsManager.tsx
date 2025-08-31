@@ -7,9 +7,11 @@ import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataConte
 import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import {
-  canCreateMoreAccounts,
   getAccountLimitMessage,
+  getLotSizeMessage,
+  getPlanDisplayName,
   getSubscriptionLimits,
+  shouldShowSubscriptionLimitsCard,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
 import { SSEService } from '../services/sseService';
@@ -177,18 +179,25 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     });
   }, [csvAccounts]);
 
-  // Obtener total de cuentas (masters + slaves) para el usuario
-  const totalAccounts = React.useMemo(() => {
-    if (!csvAccounts) return 0;
-    return (
-      Object.keys(csvAccounts.masterAccounts || {}).length +
-      (csvAccounts.unconnectedSlaves || []).length
-    );
-  }, [csvAccounts]);
+  // Obtener total de cuentas configuradas (masters + slaves) para el usuario
+  const totalConfiguredAccounts = React.useMemo(() => {
+    // Usar serverStats del hook unificado para consistencia
+    if (!unifiedData?.serverStats) return 0;
+    return unifiedData.serverStats.totalMasterAccounts + unifiedData.serverStats.totalSlaveAccounts;
+  }, [unifiedData?.serverStats]);
 
-  const accountLimit = React.useMemo(() => {
-    return userInfo ? getSubscriptionLimits(userInfo.subscriptionType).maxAccounts : null;
-  }, [userInfo]);
+  // Obtener límites de suscripción
+  const subscriptionLimits = React.useMemo(() => {
+    if (!userInfo) return { maxAccounts: null, showLimitsCard: false };
+    
+    const limits = getSubscriptionLimits(userInfo.subscriptionType);
+    const showCard = shouldShowSubscriptionLimitsCard(userInfo, totalConfiguredAccounts);
+    
+    return {
+      maxAccounts: limits.maxAccounts,
+      showLimitsCard: showCard
+    };
+  }, [userInfo, totalConfiguredAccounts]);
 
   // Helper function to get linking status message and icon
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
@@ -830,8 +839,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       title="Make Master"
                                       disabled={
                                         isConverting ||
-                                        (userInfo &&
-                                          !canCreateMoreAccounts(userInfo, totalAccounts)) ||
+                                        (subscriptionLimits.maxAccounts !== null && 
+                                         totalConfiguredAccounts >= subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
@@ -847,8 +856,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       title="Make Slave"
                                       disabled={
                                         isConverting ||
-                                        (userInfo &&
-                                          !canCreateMoreAccounts(userInfo, totalAccounts)) ||
+                                        (subscriptionLimits.maxAccounts !== null && 
+                                         totalConfiguredAccounts >= subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
@@ -883,7 +892,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   {/* Master Connection Section */}
                                   <div>
                                     <div className="flex items-center justify-between">
-                                      <Label htmlFor="convert-master">Connect to</Label>
+                                      <Label htmlFor="convert-master">Connect to Master Account</Label>
                                       <Button
                                         type="button"
                                         variant="ghost"
@@ -950,25 +959,67 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
                                   <div>
                                     <Label htmlFor="lotCoefficient">
-                                      Lot Multiplier (0.01 - 100)
+                                      Lot Multiplier
+                                      {(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        if (limits.maxLotSize !== null) {
+                                          return ` (Fixed at 1.0 for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
+                                        }
+                                        return '';
+                                      })()}
                                     </Label>
                                     <Input
                                       id="lotCoefficient"
                                       type="number"
                                       min="0.01"
-                                      max="100"
+                                      max={userInfo?.subscriptionType === 'free' ? '1.00' : '100'}
                                       step="0.01"
-                                      value={conversionForm.lotCoefficient.toFixed(2)}
+                                      disabled={(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        return limits.maxLotSize !== null;
+                                      })()}
+                                      value={
+                                        userInfo?.subscriptionType === 'free'
+                                          ? '1.00'
+                                          : conversionForm.lotCoefficient.toFixed(2)
+                                      }
                                       onChange={e => {
                                         const inputValue = e.target.value;
                                         let value = 1;
 
                                         if (inputValue !== '') {
-                                          // Permitir valores con hasta 2 decimales
                                           const parsedValue = parseFloat(inputValue);
                                           if (!isNaN(parsedValue) && parsedValue > 0) {
-                                            // Redondear a 2 decimales para evitar problemas de precisión
                                             value = Math.round(parsedValue * 100) / 100;
+                                            
+                                            // Aplicar límites según suscripción
+                                            const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                            
+                                            if (limits.maxLotSize !== null) {
+                                              // Plan con límites
+                                              if (userInfo?.subscriptionType === 'free') {
+                                                // Plan free: forzar multiplicador a 1
+                                                value = 1;
+                                                if (parsedValue !== 1) {
+                                                  toast({
+                                                    title: "Lot multiplier restricted",
+                                                    description: "Free plan users cannot modify lot multiplier",
+                                                    variant: "destructive"
+                                                  });
+                                                }
+                                              } else {
+                                                // Otros planes con límites
+                                                const maxMultiplier = limits.maxLotSize / 0.01; // Calcular multiplicador máximo basado en lot size máximo
+                                                if (value > maxMultiplier) {
+                                                  value = maxMultiplier;
+                                                  toast({
+                                                    title: "Lot multiplier limit exceeded",
+                                                    description: `Your plan limits lot multiplier to ${maxMultiplier}x`,
+                                                    variant: "destructive"
+                                                  });
+                                                }
+                                              }
+                                            }
                                           }
                                         }
 
@@ -980,7 +1031,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       className="bg-white border border-gray-200"
                                     />
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                      Multiplies the lot size from the master account
+                                      {(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        if (limits.maxLotSize !== null) {
+                                          return `Lot multiplier disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan has lot size restrictions`;
+                                        }
+                                        return "Multiplies the lot size from the master account";
+                                      })()}
                                     </p>
                                   </div>
                                 </div>
@@ -988,28 +1045,80 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                 {/* Second Row: Fixed Lot + Reverse Trading */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                                   <div>
-                                    <Label htmlFor="forceLot">Fixed Lot (0 to disable)</Label>
+                                    <Label htmlFor="forceLot">
+                                      Fixed Lot Size
+                                      {(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        if (limits.maxLotSize !== null) {
+                                          return ` (Limited to ${limits.maxLotSize} for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
+                                        }
+                                        return '';
+                                      })()}
+                                    </Label>
                                     <Input
                                       id="forceLot"
                                       type="number"
                                       min="0"
-                                      max="100"
+                                      max={(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        if (limits.maxLotSize !== null) {
+                                          return limits.maxLotSize.toString();
+                                        }
+                                        return '100';
+                                      })()}
                                       step="0.01"
+                                      disabled={(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        return limits.maxLotSize !== null;
+                                      })()}
                                       value={
-                                        conversionForm.forceLot > 0
-                                          ? conversionForm.forceLot.toFixed(2)
-                                          : '0.00'
+                                        (() => {
+                                          const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                          if (limits.maxLotSize !== null) {
+                                            // Si hay límite de lot, mostrar el límite máximo
+                                            return limits.maxLotSize.toFixed(2);
+                                          }
+                                          // Si no hay límite, usar la lógica normal
+                                          return conversionForm.forceLot > 0
+                                            ? conversionForm.forceLot.toFixed(2)
+                                            : '0.00';
+                                        })()
                                       }
                                       onChange={e => {
                                         const inputValue = e.target.value;
                                         let value = 0;
 
                                         if (inputValue !== '') {
-                                          // Permitir valores con hasta 2 decimales
                                           const parsedValue = parseFloat(inputValue);
                                           if (!isNaN(parsedValue)) {
-                                            // Redondear a 2 decimales para evitar problemas de precisión
                                             value = Math.round(parsedValue * 100) / 100;
+                                            
+                                            // Aplicar límites según suscripción
+                                            const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                            
+                                            if (value > 0) { // Solo aplicar límites si se está configurando un lot size fijo
+                                              if (limits.maxLotSize !== null) {
+                                                if (userInfo?.subscriptionType === 'free') {
+                                                  // Plan free: forzar lot size a 0.01
+                                                  value = 0.01;
+                                                  if (parsedValue > 0.01) {
+                                                    toast({
+                                                      title: "Lot size restricted",
+                                                      description: "Free plan users are limited to 0.01 lot size",
+                                                      variant: "destructive"
+                                                    });
+                                                  }
+                                                } else if (value > limits.maxLotSize) {
+                                                  // Otros planes con límites
+                                                  value = limits.maxLotSize;
+                                                  toast({
+                                                    title: "Lot size limit exceeded",
+                                                    description: `Your plan limits lot size to ${limits.maxLotSize}`,
+                                                    variant: "destructive"
+                                                  });
+                                                }
+                                              }
+                                            }
                                           }
                                         }
 
@@ -1021,7 +1130,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       className="bg-white border border-gray-200"
                                     />
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                      If greater than 0, uses this fixed lot instead of copying
+                                      {(() => {
+                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        if (limits.maxLotSize !== null) {
+                                          return `Fixed lot size disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan limits lot size to ${limits.maxLotSize}`;
+                                        }
+                                        return "If set above 0, uses this fixed lot size instead of copying";
+                                      })()}
                                     </p>
                                   </div>
 
@@ -1051,13 +1166,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                             </form>
                           </div>
                         )}
-                        {/* Show limit message if reached */}
-                        {userInfo && accountLimit !== null && totalAccounts >= accountLimit && (
-                          <div className="p-2 text-xs text-orange-800 font-semibold">
-                            {getAccountLimitMessage(userInfo, totalAccounts)} Delete an account to
-                            add another one.
-                          </div>
-                        )}
+                                                                {/* Show limit message if reached */}
                       </div>
                     );
                   })}

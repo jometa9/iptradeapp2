@@ -901,6 +901,8 @@ class LinkPlatformsController {
     `✅ CSV watching configured for ${csvManager.csvFiles.size} files`;
   }
 
+
+
   // Método para emitir eventos de Link Platforms via CSV Manager
   emitLinkPlatformsEvent(eventType, data) {
     try {
