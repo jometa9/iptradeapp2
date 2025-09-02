@@ -1138,6 +1138,28 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
                                 {/* Second Row: Fixed Lot + Reverse Trading */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                  
+                                {/* Third Row: Prefix and Suffix */}
+                                  <div>
+                                    <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                                    <Input
+                                      id="prefix"
+                                      name="prefix"
+                                      type="text"
+                                      placeholder="Enter prefix..."
+                                      value={conversionForm.prefix}
+                                      onChange={e =>
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          prefix: e.target.value,
+                                        }))
+                                      }
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Text to remove at the beginning of ticker symbols
+                                    </p>
+                                  </div>
                                   <div>
                                     <Label htmlFor="forceLot">
                                       Fixed Lot Size
@@ -1233,28 +1255,6 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       })()}
                                     </p>
                                   </div>
-                                {/* Third Row: Prefix and Suffix */}
-                                  <div>
-                                    <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
-                                    <Input
-                                      id="prefix"
-                                      name="prefix"
-                                      type="text"
-                                      placeholder="Enter prefix..."
-                                      value={conversionForm.prefix}
-                                      onChange={e =>
-                                        setConversionForm(prev => ({
-                                          ...prev,
-                                          prefix: e.target.value,
-                                        }))
-                                      }
-                                      className="bg-white border border-gray-200"
-                                    />
-                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                      Text to remove at the beginning of ticker symbols
-                                    </p>
-                                  </div>
-
                                   <div>
                                     <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
                                     <Input
