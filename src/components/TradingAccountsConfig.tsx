@@ -1701,13 +1701,16 @@ const TradingAccountsConfigComponent = () => {
                             ))}
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                          Select the type of account you want to convert
+                        </p>
                       </div>
 
                       {/* Configuration fields for Master accounts - only prefix/suffix */}
                       {formState.accountType === 'master' && editingAccount && (
                         <>
                           {/* Prefix and Suffix Fields for Masters */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
                               <Input
@@ -1819,6 +1822,9 @@ const TradingAccountsConfigComponent = () => {
                                 })()}
                               </SelectContent>
                             </Select>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Set the master account to connect to
+                            </p>
                           </div>
 
                           <div>
@@ -1967,7 +1973,6 @@ const TradingAccountsConfigComponent = () => {
                           </div>
 
 
-                          {/* Prefix and Suffix Fields */}
                             <div>
                               <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
                               <Input

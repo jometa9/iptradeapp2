@@ -1047,7 +1047,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                       {masterAccounts.length === 0
                                         ? 'No master accounts available. Convert a pending account to master first.'
-                                        : 'Set the master account to convert to'}
+                                        : 'Set the master account to connect to'}
                                     </p>
                                   </div>
 
