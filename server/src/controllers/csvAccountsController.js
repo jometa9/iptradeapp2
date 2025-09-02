@@ -54,7 +54,7 @@ const generateCSV2Content = async (
   content += `[STATUS] [ONLINE] [${timestamp}]\n`;
 
   if (accountType === 'master') {
-    // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE]
+    // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE][PREFIX][SUFFIX]
     // Mantener el estado actual si existe, o usar ENABLED por defecto
     const currentStatus =
       slaveConfig?.enabled !== undefined
@@ -62,13 +62,17 @@ const generateCSV2Content = async (
           ? 'ENABLED'
           : 'DISABLED'
         : 'ENABLED';
-    content += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
+    const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+    const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
+    content += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
   } else if (accountType === 'slave') {
-    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
+    // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH][PREFIX][SUFFIX]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
     const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
     const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
     const masterId = slaveConfig?.masterAccountId || 'NULL';
+    const prefix = slaveConfig?.prefix || '';
+    const suffix = slaveConfig?.suffix || '';
 
     // Mantener el estado actual si existe, o usar ENABLED por defecto
     const currentStatus =
@@ -89,7 +93,7 @@ const generateCSV2Content = async (
       }
     }
 
-    content += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
+    content += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
   }
 
   return content;
@@ -315,13 +319,17 @@ export const updateCSVAccountType = async (req, res) => {
                 const currentStatus = enabledMatch ? enabledMatch[1] : 'DISABLED';
 
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
+                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
                   const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
+                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
 
                   // Get master CSV path if masterId is available
                   let masterCsvPath = 'NULL';
@@ -334,7 +342,7 @@ export const updateCSVAccountType = async (req, res) => {
                     }
                   }
 
-                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
                 }
               } else if (
                 cleanLine.includes('[TYPE]') &&
@@ -350,13 +358,17 @@ export const updateCSVAccountType = async (req, res) => {
                 const currentStatus = 'DISABLED';
 
                 if (newType === 'master') {
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}]\n`;
+                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
                   const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
                   const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
                   const masterId = slaveConfig?.masterAccountId || 'NULL';
+                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
 
                   // Get master CSV path if masterId is available
                   let masterCsvPath = 'NULL';
@@ -369,7 +381,7 @@ export const updateCSVAccountType = async (req, res) => {
                     }
                   }
 
-                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
+                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
@@ -538,6 +550,17 @@ export const updateCSVAccountType = async (req, res) => {
             userAccounts.connections[accountId] = slaveConfig.masterAccountId;
           }
 
+          // Create slave configuration with the provided settings
+          const { createSlaveConfigWithSettings } = await import('./slaveConfigController.js');
+          createSlaveConfigWithSettings(accountId, {
+            masterAccountId: slaveConfig?.masterAccountId || null,
+            lotCoefficient: slaveConfig?.lotCoefficient || 1.0,
+            forceLot: slaveConfig?.forceLot || null,
+            reverseTrade: slaveConfig?.reverseTrade || false,
+            prefix: slaveConfig?.prefix || '',
+            suffix: slaveConfig?.suffix || '',
+          });
+
           accountMoved = true;
         } else if (userAccounts.masterAccounts && userAccounts.masterAccounts[accountId]) {
           // Move from master to slave
@@ -564,6 +587,17 @@ export const updateCSVAccountType = async (req, res) => {
             if (!userAccounts.connections) userAccounts.connections = {};
             userAccounts.connections[accountId] = slaveConfig.masterAccountId;
           }
+
+          // Create slave configuration with the provided settings
+          const { createSlaveConfigWithSettings } = await import('./slaveConfigController.js');
+          createSlaveConfigWithSettings(accountId, {
+            masterAccountId: slaveConfig?.masterAccountId || null,
+            lotCoefficient: slaveConfig?.lotCoefficient || 1.0,
+            forceLot: slaveConfig?.forceLot || null,
+            reverseTrade: slaveConfig?.reverseTrade || false,
+            prefix: slaveConfig?.prefix || '',
+            suffix: slaveConfig?.suffix || '',
+          });
 
           accountMoved = true;
         }

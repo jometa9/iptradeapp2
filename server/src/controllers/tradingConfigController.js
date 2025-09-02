@@ -44,6 +44,8 @@ const getDefaultConfig = () => ({
   lotMultiplier: 1.0,
   forceLot: null,
   reverseTrading: false,
+  prefix: '',
+  suffix: '',
 });
 
 // Create default trading configuration for new master account
@@ -117,6 +119,12 @@ export const applyTransformations = (orderData, masterAccountId) => {
     }
   }
 
+  // Apply prefix and suffix to comment
+  if (accountConfig.prefix || accountConfig.suffix) {
+    const originalComment = transformedData.comment || '';
+    transformedData.comment = `${accountConfig.prefix}${originalComment}${accountConfig.suffix}`;
+  }
+
   return transformedData;
 };
 
@@ -139,8 +147,8 @@ export const getTradingConfig = (req, res) => {
 };
 
 // Set trading configuration for specific master account
-export const setTradingConfig = (req, res) => {
-  const { masterAccountId, lotMultiplier, forceLot, reverseTrading } = req.body;
+export const setTradingConfig = async (req, res) => {
+  const { masterAccountId, lotMultiplier, forceLot, reverseTrading, prefix, suffix } = req.body;
 
   if (!masterAccountId) {
     return res.status(400).json({
@@ -180,7 +188,34 @@ export const setTradingConfig = (req, res) => {
     configs[masterAccountId].reverseTrading = Boolean(reverseTrading);
   }
 
+  if (prefix !== undefined) {
+    configs[masterAccountId].prefix = String(prefix || '');
+  }
+
+  if (suffix !== undefined) {
+    configs[masterAccountId].suffix = String(suffix || '');
+  }
+
   if (saveTradingConfig(configs)) {
+    // Also update CSV file with the new configuration
+    try {
+      // Import csvManager dynamically to avoid circular imports
+      const csvManager = (await import('../services/csvManager.js')).default;
+      
+      const csvConfig = {
+        type: 'master',
+        enabled: true, // Preserve current enabled state - we don't change it here
+        name: masterAccountId,
+        prefix: configs[masterAccountId].prefix,
+        suffix: configs[masterAccountId].suffix,
+      };
+      
+      csvManager.writeConfig(masterAccountId, csvConfig);
+    } catch (error) {
+      console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);
+      // Don't fail the response if CSV update fails
+    }
+
     res.json({
       message: 'Trading configuration saved successfully',
       masterAccountId,

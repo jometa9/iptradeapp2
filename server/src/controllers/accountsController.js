@@ -578,7 +578,7 @@ export const getAllAccounts = async (req, res) => {
 // Update master account
 export const updateMasterAccount = (req, res) => {
   const { masterAccountId } = req.params;
-  const { name, description, broker, platform, status } = req.body;
+  const { name, description, broker, platform, status, prefix, suffix } = req.body;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
   if (!apiKey) {
@@ -600,15 +600,21 @@ export const updateMasterAccount = (req, res) => {
     });
   }
 
-  // Update fields if provided
-  if (name !== undefined) userAccounts.masterAccounts[masterAccountId].name = name;
-  if (description !== undefined)
-    userAccounts.masterAccounts[masterAccountId].description = description;
-  if (broker !== undefined) userAccounts.masterAccounts[masterAccountId].broker = broker;
-  if (platform !== undefined) userAccounts.masterAccounts[masterAccountId].platform = platform;
-  if (status !== undefined) userAccounts.masterAccounts[masterAccountId].status = status;
-
-  userAccounts.masterAccounts[masterAccountId].lastUpdated = new Date().toISOString();
+  // Update fields if provided, preserving existing values
+  const existingAccount = userAccounts.masterAccounts[masterAccountId];
+  
+  // Create updated account object with existing values
+  userAccounts.masterAccounts[masterAccountId] = {
+    ...existingAccount,
+    name: name !== undefined ? name : existingAccount.name,
+    description: description !== undefined ? description : existingAccount.description,
+    broker: broker !== undefined ? broker : existingAccount.broker,
+    platform: platform !== undefined ? platform : existingAccount.platform,
+    status: status !== undefined ? status : existingAccount.status,
+    prefix: prefix !== undefined ? prefix : (existingAccount.prefix || ''),
+    suffix: suffix !== undefined ? suffix : (existingAccount.suffix || ''),
+    lastUpdated: new Date().toISOString()
+  };
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     res.json({
@@ -654,14 +660,21 @@ export const updateSlaveAccount = (req, res) => {
   }
 
   // Update fields if provided
-  if (name !== undefined) userAccounts.slaveAccounts[slaveAccountId].name = name;
-  if (description !== undefined)
-    userAccounts.slaveAccounts[slaveAccountId].description = description;
-  if (broker !== undefined) userAccounts.slaveAccounts[slaveAccountId].broker = broker;
-  if (platform !== undefined) userAccounts.slaveAccounts[slaveAccountId].platform = platform;
-  if (status !== undefined) userAccounts.slaveAccounts[slaveAccountId].status = status;
-
-  userAccounts.slaveAccounts[slaveAccountId].lastUpdated = new Date().toISOString();
+  // Update fields if provided, preserving existing values
+  const existingAccount = userAccounts.slaveAccounts[slaveAccountId];
+  
+  // Create updated account object with existing values
+  userAccounts.slaveAccounts[slaveAccountId] = {
+    ...existingAccount,
+    name: name !== undefined ? name : existingAccount.name,
+    description: description !== undefined ? description : existingAccount.description,
+    broker: broker !== undefined ? broker : existingAccount.broker,
+    platform: platform !== undefined ? platform : existingAccount.platform,
+    status: status !== undefined ? status : existingAccount.status,
+    prefix: existingAccount.prefix || '', // Preserve prefix
+    suffix: existingAccount.suffix || '', // Preserve suffix
+    lastUpdated: new Date().toISOString()
+  };
 
   // Handle master connection if provided
   if (masterAccountId !== undefined) {
@@ -845,7 +858,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
     // Generate new CSV2 format content for master account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
     csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}]\n`;
+    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []\n`;
 
     // Write the master account to CSV in new format
     // Ensure we're writing to .csv not .cssv
@@ -1003,7 +1016,7 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
     csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [NULL] [NULL] [${masterId}] [${masterCsvPath}]\n`;
+    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]\n`;
 
     // Write the slave account to CSV in new format with Unix line endings
     // Ensure we're writing to .csv not .cssv
@@ -2160,9 +2173,19 @@ export const getUnifiedAccountData = async (req, res) => {
       pendingAccountIds.add(account.account_id);
     }
 
-    // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
-    const cleanMasterAccounts = {};
-    const processedMasterIds = new Set();
+          // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
+      const cleanMasterAccounts = {};
+      const processedMasterIds = new Set();
+
+      // Helper function to get config with prefix/suffix
+      const getAccountConfig = (account) => {
+        const config = account.config || {};
+        return {
+          ...config,
+          prefix: config.prefix || '',
+          suffix: config.suffix || '',
+        };
+      };
     
     Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
       // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
@@ -2181,10 +2204,12 @@ export const getUnifiedAccountData = async (req, res) => {
           return;
         }
 
-        cleanMasterAccounts[masterId] = allAccounts.masterAccounts[masterId];
+        const masterAccount = allAccounts.masterAccounts[masterId];
+        cleanMasterAccounts[masterId] = {
+          ...masterAccount,
+          config: getAccountConfig(masterAccount)
+        };
         processedMasterIds.add(masterId);
-
-        const masterConfig = allAccounts.masterAccounts[masterId]?.config;
       }
     });
 
@@ -2242,7 +2267,10 @@ export const getUnifiedAccountData = async (req, res) => {
         slave.config.masterId = null;
       }
 
-      cleanUnconnectedSlaves.push(slave);
+      cleanUnconnectedSlaves.push({
+        ...slave,
+        config: getAccountConfig(slave)
+      });
       seenSlaveIds.add(slave.id);
     });
 
@@ -2259,7 +2287,11 @@ export const getUnifiedAccountData = async (req, res) => {
         return;
       }
 
-      cleanSlaveAccounts[slaveId] = allAccounts.slaveAccounts[slaveId];
+      const slaveAccount = allAccounts.slaveAccounts[slaveId];
+      cleanSlaveAccounts[slaveId] = {
+        ...slaveAccount,
+        config: getAccountConfig(slaveAccount)
+      };
     });
 
     // Get copier status from the cleaned data

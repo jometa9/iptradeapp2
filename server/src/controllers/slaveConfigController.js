@@ -45,6 +45,8 @@ const getDefaultSlaveConfig = () => ({
   lotMultiplier: 1.0,
   forceLot: null,
   reverseTrading: false,
+  prefix: '',
+  suffix: '',
 
   // Master connection
   masterId: null,
@@ -114,6 +116,14 @@ export const createSlaveConfigWithSettings = (slaveAccountId, settings) => {
 
   if (settings.reverseTrade !== undefined) {
     baseConfig.reverseTrading = settings.reverseTrade;
+  }
+
+  if (settings.prefix !== undefined) {
+    baseConfig.prefix = String(settings.prefix || '');
+  }
+
+  if (settings.suffix !== undefined) {
+    baseConfig.suffix = String(settings.suffix || '');
   }
 
   // Update description to indicate it was converted from pending
@@ -215,6 +225,12 @@ export const applySlaveTransformations = (orderData, slaveAccountId) => {
     }
   }
 
+  // Apply slave-specific prefix and suffix to comment (after master transformations)
+  if (slaveConfig.prefix || slaveConfig.suffix) {
+    const originalComment = transformedData.comment || '';
+    transformedData.comment = `${slaveConfig.prefix}${originalComment}${slaveConfig.suffix}`;
+  }
+
   return transformedData;
 };
 
@@ -260,7 +276,9 @@ export const getSlaveConfig = async (req, res) => {
                   forceLot: values[4] !== 'NULL' ? parseFloat(values[4]) : null,
                   reverseTrading: values[5] === 'TRUE',
                   masterId: values[6] !== 'NULL' ? values[6] : null,
-                  masterCsvPath: values.length >= 8 && values[7] !== 'NULL' ? values[7] : null, // Include master CSV path if available
+                  masterCsvPath: values.length >= 8 && values[7] !== 'NULL' ? values[7] : null,
+                  prefix: values.length >= 9 ? values[8] : '',
+                  suffix: values.length >= 10 ? values[9] : '',
                   description: '',
                   lastUpdated: new Date().toISOString(),
                 };
@@ -306,6 +324,8 @@ export const setSlaveConfig = async (req, res) => {
     description,
     masterId,
     masterCsvPath,
+    prefix,
+    suffix,
   } = req.body;
 
   if (!slaveAccountId) {
@@ -360,6 +380,14 @@ export const setSlaveConfig = async (req, res) => {
 
   if (reverseTrading !== undefined) {
     configs[slaveAccountId].reverseTrading = Boolean(reverseTrading);
+  }
+
+  if (prefix !== undefined) {
+    configs[slaveAccountId].prefix = String(prefix || '');
+  }
+
+  if (suffix !== undefined) {
+    configs[slaveAccountId].suffix = String(suffix || '');
   }
 
   if (enabled !== undefined) {
@@ -438,6 +466,8 @@ export const setSlaveConfig = async (req, res) => {
             const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
             const reverseTrade = slaveConfig?.reverseTrading ? 'TRUE' : 'FALSE';
             const masterId = slaveConfig?.masterId || 'NULL';
+            const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
+            const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
 
             // SIEMPRE preservar el estado original del CSV al editar
             const originalEnabled = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
@@ -454,7 +484,7 @@ export const setSlaveConfig = async (req, res) => {
               }
             }
 
-            const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}]\n`;
+            const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
             newContent += newConfigLine;
           } else if (cleanLine.includes('[STATUS]')) {
             // Actualizar timestamp
@@ -805,15 +835,15 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
         // Update the CONFIG line to set masterId to NULL (handle both 7 and 8 parameter formats)
         let updatedConfigLine = configLine;
 
-        // Try 8-parameter format first (new format with masterCsvPath)
+        // Try 10-parameter format first (new format with masterCsvPath, prefix, suffix)
         if (
           configLine.match(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]/
           )
         ) {
           updatedConfigLine = configLine.replace(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
-            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL] [NULL]'
+            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]/,
+            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL] [NULL] [$7] [$8]'
           );
         }
         // Fallback to 7-parameter format (old format)

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync, writeFile, rename, copyFile, unlink } from 'fs';
 import { glob } from 'glob';
 import { join, resolve } from 'path';
 
@@ -16,10 +16,133 @@ class CSVManager extends EventEmitter {
     this.debounceTimeoutMs = 1000; // Ventana de debounce para agrupar cambios de archivo (1 segundo)
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.heartbeatInterval = null; // Para el heartbeat de los watchers
-    this.pollingInterval = null; // Para el polling de archivos
-    this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
-    this.init();
-  }
+          this.pollingInterval = null; // Para el polling de archivos
+      this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
+      
+      // Sistema de cola para escrituras
+      this.writeQueue = new Map(); // Cola de escrituras por archivo
+      this.writeInProgress = new Set(); // Set de archivos siendo escritos
+      this.maxRetries = 3; // Número máximo de reintentos por operación
+      this.retryDelay = 1000; // Delay base entre reintentos (ms)
+      this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
+      
+      this.init();
+    }
+
+    // Procesar cola de escrituras
+    async processWriteQueue(filePath) {
+      if (this.writeInProgress.has(filePath)) {
+        return; // Ya hay una escritura en progreso para este archivo
+      }
+
+      const queue = this.writeQueue.get(filePath);
+      if (!queue || queue.length === 0) {
+        return; // No hay operaciones pendientes
+      }
+
+      this.writeInProgress.add(filePath);
+
+      try {
+        while (queue.length > 0) {
+          const operation = queue[0]; // Peek la primera operación
+          
+          try {
+            const success = await this.writeFileWithRetry(
+              filePath,
+              operation.content,
+              this.maxRetries,
+              this.retryDelay
+            );
+
+            if (success) {
+              queue.shift(); // Remover la operación completada
+              operation.resolve(true);
+            } else {
+              // Si falló después de todos los reintentos
+              operation.reject(new Error(`Failed to write to ${filePath} after ${this.maxRetries} attempts`));
+              queue.shift(); // Remover la operación fallida
+            }
+          } catch (error) {
+            if (error.code === 'EPERM' || error.code === 'EBUSY') {
+              // Si el archivo está bloqueado, esperar y reintentar
+              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+              continue;
+            }
+            
+            // Para otros errores, rechazar la operación y continuar con la siguiente
+            operation.reject(error);
+            queue.shift();
+          }
+        }
+      } finally {
+        this.writeInProgress.delete(filePath);
+        this.writeQueue.delete(filePath);
+      }
+    }
+
+    // Agregar operación a la cola de escrituras
+    async queueFileWrite(filePath, content) {
+      return new Promise((resolve, reject) => {
+        // Inicializar cola si no existe
+        if (!this.writeQueue.has(filePath)) {
+          this.writeQueue.set(filePath, []);
+        }
+
+        // Agregar operación a la cola
+        const queue = this.writeQueue.get(filePath);
+        queue.push({ content, resolve, reject });
+
+        // Iniciar procesamiento si no hay una escritura en progreso
+        if (!this.writeInProgress.has(filePath)) {
+          this.processWriteQueue(filePath);
+        }
+      });
+    }
+
+    // Función helper para escribir archivo con reintentos
+    async writeFileWithRetry(filePath, content, maxRetries = 3, retryDelay = 1000) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // Intentar escribir en un archivo temporal primero
+          const tmpPath = `${filePath}.tmp`;
+          await new Promise((resolve, reject) => {
+            writeFile(tmpPath, content, 'utf8', (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+
+          // Si la escritura temporal fue exitosa, intentar renombrar
+          await new Promise((resolve, reject) => {
+            rename(tmpPath, filePath, (err) => {
+              if (err) {
+                // Si falla el rename, intentar copiar y eliminar
+                copyFile(tmpPath, filePath, (copyErr) => {
+                  if (copyErr) {
+                    reject(copyErr);
+                  } else {
+                    unlink(tmpPath, () => resolve());
+                  }
+                });
+              } else {
+                resolve();
+              }
+            });
+          });
+
+          return true;
+        } catch (error) {
+          if (error.code === 'EPERM' || error.code === 'EBUSY') {
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+              continue;
+            }
+          }
+          throw error;
+        }
+      }
+      return false;
+    }
 
   init() {
     // Inicializar el estado global del copier
@@ -978,13 +1101,17 @@ class CSVManager extends EventEmitter {
               if (currentAccountData.account_type === 'master') {
                 const enabled = values[2] === 'ENABLED';
                 const name = values[3] || 'Master Account';
+                const prefix = values[4] || '';
+                const suffix = values[5] || '';
 
                 currentAccountData.config = {
                   enabled: enabled,
                   name: name,
+                  prefix: prefix,
+                  suffix: suffix,
                 };
               } else if (currentAccountData.account_type === 'slave') {
-                // Parse slave configuration: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH]
+                // Parse slave configuration: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH][PREFIX][SUFFIX]
                 currentAccountData.config = {
                   enabled: values[2] === 'ENABLED',
                   lotMultiplier: parseFloat(values[3]) || 1.0,
@@ -992,6 +1119,8 @@ class CSVManager extends EventEmitter {
                   reverseTrading: values[5] === 'TRUE',
                   masterId: values[6] !== 'NULL' ? values[6] : null,
                   masterCsvPath: values[7] !== 'NULL' ? values[7] : null, // Include master CSV path
+                  prefix: values[8] || '',
+                  suffix: values[9] || '',
                 };
                 // Para compatibilidad con getAllActiveAccounts
                 currentAccountData.master_id = currentAccountData.config.masterId;
@@ -1158,12 +1287,14 @@ class CSVManager extends EventEmitter {
                   currentAccountData.account_type = 'slave';
                 }
 
-                if (currentAccountData.account_type === 'master') {
-                  currentAccountData.config = {
-                    masterId: currentAccountId,
-                    enabled: values[2] === 'ENABLED',
-                    name: values[3] || `Account ${currentAccountId}`,
-                  };
+                              if (currentAccountData.account_type === 'master') {
+                currentAccountData.config = {
+                  masterId: currentAccountId,
+                  enabled: values[2] === 'ENABLED',
+                  name: values[3] || `Account ${currentAccountId}`,
+                  prefix: values[4] || '',
+                  suffix: values[5] || '',
+                };
                 } else if (currentAccountData.account_type === 'slave') {
                   currentAccountData.config = {
                     enabled: values[2] === 'ENABLED',
@@ -1172,6 +1303,8 @@ class CSVManager extends EventEmitter {
                     reverseTrading: values[5] === 'TRUE',
                     masterId: values[6] !== 'NULL' ? values[6] : null,
                     masterCsvPath: values[7] !== 'NULL' ? values[7] : null,
+                    prefix: values[8] || '',
+                    suffix: values[9] || '',
                   };
                 }
               }
@@ -1697,8 +1830,10 @@ class CSVManager extends EventEmitter {
           // Construir nueva línea CONFIG según el tipo de cuenta
           if (config.type === 'master') {
             configUpdated = true;
+            const prefix = config.prefix || '';
+            const suffix = config.suffix || '';
             updatedLines.push(
-              `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`
+              `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [${prefix}] [${suffix}]`
             );
           } else if (config.type === 'slave') {
             configUpdated = true;
@@ -1712,13 +1847,17 @@ class CSVManager extends EventEmitter {
       // Si no encontramos línea CONFIG, agregar una al final
       if (!configUpdated) {
         if (config.type === 'master') {
+          const prefix = config.prefix ? config.prefix : 'NULL';
+          const suffix = config.suffix ? config.suffix : 'NULL';
           updatedLines.push(
-            `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}]`
+            `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [${prefix}] [${suffix}]`
           );
         } else if (config.type === 'slave') {
           const slaveConfig = config.slaveConfig || {};
+          const prefix = slaveConfig.prefix ? slaveConfig.prefix : 'NULL';
+          const suffix = slaveConfig.suffix ? slaveConfig.suffix : 'NULL';
           updatedLines.push(
-            `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.maxLotSize || 'NULL'}] [${slaveConfig.minLotSize || 'NULL'}] [${slaveConfig.masterId || 'NULL'}]`
+            `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.masterId || 'NULL'}] [NULL] [${prefix}] [${suffix}]`
           );
         }
       }
@@ -1807,7 +1946,7 @@ class CSVManager extends EventEmitter {
       // Asegurar que el directorio existe
       const configDir = join(process.cwd(), 'config');
       if (!existsSync(configDir)) {
-        require('fs').mkdirSync(configDir, { recursive: true });
+        mkdirSync(configDir, { recursive: true });
       }
 
       // Guardar la configuración global
@@ -1820,22 +1959,39 @@ class CSVManager extends EventEmitter {
       for (const [filePath, fileData] of this.csvFiles.entries()) {
         try {
           if (existsSync(filePath)) {
-            let fileModified = false;
             const content = readFileSync(filePath, 'utf8');
             const lines = content.split('\n');
             const newLines = [];
-
-            // Buscar y reemplazar directamente ENABLED/DISABLED en líneas CONFIG
-            const newStatus = enabled ? 'ENABLED' : 'DISABLED';
-            const oldStatus = enabled ? 'DISABLED' : 'ENABLED';
+            let fileModified = false;
 
             for (const line of lines) {
               let updatedLine = line;
 
-              // Buscar líneas CONFIG que contengan el estado opuesto y reemplazarlo
-              if (line.includes('[CONFIG]') && line.includes(oldStatus)) {
-                updatedLine = line.replace(new RegExp(`\\[${oldStatus}\\]`, 'g'), `[${newStatus}]`);
-                fileModified = true;
+              if (line.includes('[CONFIG]')) {
+                const matches = line.match(/\[([^\]]+)\]/g);
+                if (matches && matches.length >= 2) {
+                  const configType = matches[1].replace(/[\[\]]/g, '').trim();
+                  
+                  if (configType === 'MASTER') {
+                    // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [PREFIX] [SUFFIX]
+                    const name = matches[3]?.replace(/[\[\]]/g, '').trim() || 'Master Account';
+                    const prefix = matches[4]?.replace(/[\[\]]/g, '').trim() || '';
+                    const suffix = matches[5]?.replace(/[\[\]]/g, '').trim() || '';
+                    updatedLine = `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [${name}] [${prefix}] [${suffix}]`;
+                    fileModified = true;
+                  } else if (configType === 'SLAVE') {
+                    // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
+                    const lotMult = matches[3]?.replace(/[\[\]]/g, '').trim() || '1.0';
+                    const forceLot = matches[4]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+                    const reverse = matches[5]?.replace(/[\[\]]/g, '').trim() || 'FALSE';
+                    const masterId = matches[6]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+                    const masterCsvPath = matches[7]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+                    const prefix = matches[8]?.replace(/[\[\]]/g, '').trim() || '';
+                    const suffix = matches[9]?.replace(/[\[\]]/g, '').trim() || '';
+                    updatedLine = `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
+                    fileModified = true;
+                  }
+                }
               }
 
               newLines.push(updatedLine);
@@ -1843,11 +1999,8 @@ class CSVManager extends EventEmitter {
 
             if (fileModified) {
               try {
-                const updatedContent = newLines.join('\n');
-                writeFileSync(filePath, updatedContent, 'utf8');
+                writeFileSync(filePath, newLines.join('\n') + '\n', 'utf8');
                 updatedFiles++;
-
-                // Refrescar datos en memoria
                 this.refreshFileData(filePath);
               } catch (writeError) {
                 this.handleFileError(filePath, writeError, 'writing');
@@ -1876,19 +2029,17 @@ class CSVManager extends EventEmitter {
     }
   }
 
-  // Actualizar estado de una cuenta específica
+    // Actualizar estado de una cuenta específica
   async updateAccountStatus(accountId, enabled) {
     try {
       // Buscar el archivo CSV correcto para esta cuenta
       let targetFile = null;
-      let accountType = null;
 
       // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
         fileData.data.forEach(row => {
           if (row.account_id === accountId) {
             targetFile = filePath;
-            accountType = row.account_type;
           }
         });
       });
@@ -1917,26 +2068,24 @@ class CSVManager extends EventEmitter {
           const matches = line.match(/\[([^\]]+)\]/g);
           if (matches && matches.length >= 2) {
             const configType = matches[1].replace(/[\[\]]/g, '').trim();
-            if (configType === 'MASTER' || configType === 'SLAVE') {
-              let newLine;
-
-              // Diferentes patrones de reemplazo para MASTER y SLAVE debido a diferentes formatos
-              if (configType === 'MASTER') {
-                // Formato Master: [CONFIG] [MASTER] [ENABLED/DISABLED]
-                newLine = line.replace(
-                  /\[(ENABLED|DISABLED)\]/,
-                  `[${enabled ? 'ENABLED' : 'DISABLED'}]`
-                );
-              } else if (configType === 'SLAVE') {
-                // Formato Slave: [CONFIG][SLAVE][ENABLED/DISABLED][otros_campos...]
-                // Usar un regex más flexible que capture cualquier cosa después de SLAVE
-                newLine = line.replace(
-                  /(\[SLAVE\])\s*\[(ENABLED|DISABLED)\]/,
-                  `$1[${enabled ? 'ENABLED' : 'DISABLED'}]`
-                );
-              }
-
-              updatedLines.push(newLine);
+            if (configType === 'MASTER') {
+              // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [PREFIX] [SUFFIX]
+              const name = matches[3]?.replace(/[\[\]]/g, '').trim() || currentAccountId || 'Master Account';
+              const prefix = matches[4]?.replace(/[\[\]]/g, '').trim() || '';
+              const suffix = matches[5]?.replace(/[\[\]]/g, '').trim() || '';
+              const updatedLine = `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [${name}] [${prefix}] [${suffix}]`;
+              updatedLines.push(updatedLine);
+            } else if (configType === 'SLAVE') {
+              // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
+              const lotMult = matches[3]?.replace(/[\[\]]/g, '').trim() || '1.0';
+              const forceLot = matches[4]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+              const reverse = matches[5]?.replace(/[\[\]]/g, '').trim() || 'FALSE';
+              const masterId = matches[6]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+              const masterCsvPath = matches[7]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+              const prefix = matches[8]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+              const suffix = matches[9]?.replace(/[\[\]]/g, '').trim() || 'NULL';
+              const updatedLine = `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
+              updatedLines.push(updatedLine);
             } else {
               updatedLines.push(line);
             }
@@ -1951,13 +2100,11 @@ class CSVManager extends EventEmitter {
       // Escribir archivo actualizado
       try {
         writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+        this.refreshFileData(targetFile);
       } catch (writeError) {
         this.handleFileError(targetFile, writeError, 'writing');
         return false;
       }
-
-      // Refrescar datos en memoria
-      this.refreshFileData(targetFile);
 
       // Emitir evento de actualización
       this.emit('accountStatusChanged', {

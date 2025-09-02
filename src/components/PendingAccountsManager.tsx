@@ -7,8 +7,6 @@ import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataConte
 import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import {
-  getAccountLimitMessage,
-  getLotSizeMessage,
   getPlanDisplayName,
   getSubscriptionLimits,
   shouldShowSubscriptionLimitsCard,
@@ -33,6 +31,8 @@ interface ConversionForm {
   lotCoefficient: number;
   forceLot: number;
   reverseTrade: boolean;
+  prefix: string;
+  suffix: string;
 }
 
 type LinkingStep =
@@ -53,7 +53,7 @@ interface LinkingStatus {
 
 interface PendingAccountsManagerProps {
   isLinking?: boolean; // Optional prop to override hook state
-  linkPlatforms?: () => Promise<any>; // Function from parent component
+  linkPlatforms?: () => Promise<void>; // Function from parent component
 }
 
 export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
@@ -100,6 +100,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     lotCoefficient: 1,
     forceLot: 0,
     reverseTrade: false,
+    prefix: '',
+    suffix: '',
   });
 
   const scanningMessages = [
@@ -257,13 +259,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       setIsRefreshingMasters(true);
       // Force a refresh of the CSV data to get the latest master accounts
       await refreshData();
-      await refreshData();
-    } catch (error) {
+    } catch {
       // Silent error handling
     } finally {
       setIsRefreshingMasters(false);
     }
-  }, [refreshData, refreshData]);
+  }, [refreshData]);
 
   // loadAccountStats not used - using CSV data instead
 
@@ -284,11 +285,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   useEffect(() => {
     if (!secretKey) return;
 
-    const handleSSEMessage = (data: any) => {
+    const handleSSEMessage = (data: { type: string; eventType?: string; message?: string; command?: string; accountId?: string; newType?: string }) => {
       // Listen for Link Platforms events
       if (data.type === 'linkPlatformsEvent') {
         setLinkingStatus({
-          step: data.eventType,
+          step: data.eventType as LinkingStep,
           message: data.message || '',
           isActive: data.eventType !== 'completed' && data.eventType !== 'error',
         });
@@ -409,6 +410,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         lotCoefficient: 1,
         forceLot: 0,
         reverseTrade: false,
+        prefix: '',
+        suffix: '',
       });
     }
   };
@@ -447,15 +450,20 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     }, 30000);
   };
 
-  // Convert directly to master (no form needed)
-  const convertToMaster = async (accountId: string, accountPlatform: string) => {
+  // Convert to master with prefix/suffix configuration
+  const convertToMaster = async (accountId: string) => {
     setIsConverting(true);
 
     // Iniciar conversión (oculta la cuenta por 3 segundos)
     startConversion(accountId);
 
     try {
-      // Actualizar el CSV de pending a master
+      // Actualizar el CSV de pending a master con configuraciones
+      const masterConfig = {
+        prefix: conversionForm.prefix,
+        suffix: conversionForm.suffix,
+      };
+
       const csvUpdateResponse = await fetch(`${baseUrl}/api/csv/pending/${accountId}/update-type`, {
         method: 'PUT',
         headers: {
@@ -464,6 +472,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         },
         body: JSON.stringify({
           newType: 'master',
+          masterConfig: masterConfig,
         }),
       });
 
@@ -475,18 +484,32 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       // Cerrar el modal
       setConfirmingMasterId(null);
 
+      // Preparar mensaje de éxito con configuraciones
+      const configSummary = [];
+      if (conversionForm.prefix) {
+        configSummary.push(`Comment prefix: "${conversionForm.prefix}"`);
+      }
+      if (conversionForm.suffix) {
+        configSummary.push(`Comment suffix: "${conversionForm.suffix}"`);
+      }
+
+      const configText =
+        configSummary.length > 0
+          ? `\n\nConfigurations saved:\n• ${configSummary.join('\n• ')}`
+          : '';
+
       // Mostrar mensaje de éxito
       toast({
-        title: 'Success',
-        description: `Account ${accountId} converted to master successfully`,
+        title: 'Master Account Created Successfully',
+        description: `Account ${accountId} has been converted to master.${configText}`,
       });
 
       // Refrescar la lista de master accounts
       await loadMasterAccounts();
-    } catch (error) {
+    } catch (err) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error converting account to master',
+        description: err instanceof Error ? err.message : 'Error converting account to master',
         variant: 'destructive',
       });
     } finally {
@@ -515,6 +538,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         lotCoefficient: conversionForm.lotCoefficient,
         forceLot: conversionForm.forceLot > 0 ? conversionForm.forceLot : null,
         reverseTrade: conversionForm.reverseTrade,
+        prefix: conversionForm.prefix,
+        suffix: conversionForm.suffix,
       };
 
       const csvUpdateResponse = await fetch(
@@ -554,6 +579,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       if (conversionForm.reverseTrade) {
         configSummary.push('Reverse trading: enabled');
       }
+      if (conversionForm.prefix) {
+        configSummary.push(`Comment prefix: "${conversionForm.prefix}"`);
+      }
+      if (conversionForm.suffix) {
+        configSummary.push(`Comment suffix: "${conversionForm.suffix}"`);
+      }
 
       const configText =
         configSummary.length > 0
@@ -567,10 +598,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
       // Cerrar el formulario
       setExpandedAccountId(null);
-    } catch (error) {
+    } catch (err) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error converting account',
+        description: err instanceof Error ? err.message : 'Error converting account',
         variant: 'destructive',
       });
     } finally {
@@ -679,8 +710,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   onClick={async () => {
                     try {
                       await linkPlatforms();
-                    } catch (error) {
-                      // Silent error handling
+                        } catch {
+      // Silent error handling
                     }
                   }}
                   disabled={isLinking}
@@ -716,16 +747,22 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                       <div
                         key={account.account_id}
                         className={`border rounded-lg p-2 shadow ${
-                          isOnline
-                            ? 'bg-green-50 border-green-200'
-                            : 'bg-orange-50 border-orange-200'
+                          confirmingMasterId === account.account_id
+                            ? 'bg-blue-50 border-blue-200'
+                            : isOnline
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-orange-50 border-orange-200'
                         }`}
                       >
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <h3
                               className={`font-semibold ml-2 ${
-                                isOnline ? 'text-green-900' : 'text-orange-900'
+                                confirmingMasterId === account.account_id
+                                  ? ''
+                                  : isOnline
+                                    ? 'text-green-900'
+                                    : 'text-orange-900'
                               }`}
                             >
                               {account.account_id}
@@ -756,15 +793,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                             {confirmingMasterId === account.account_id ? (
                               <>
                                 <Button
+                                  type="button"
                                   size="sm"
                                   variant="outline"
-                                  className="bg-white h-9   rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
-                                  onClick={() =>
-                                    convertToMaster(
-                                      account.account_id,
-                                      account.platform || 'Unknown'
-                                    )
-                                  }
+                                  className="bg-white h-9 rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
+                                  onClick={() => convertToMaster(account.account_id)}
                                   disabled={isConverting}
                                 >
                                   {isConverting ? (
@@ -780,9 +813,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   )}
                                 </Button>
                                 <Button
+                                  type="button"
                                   size="sm"
                                   variant="outline"
-                                  className="bg-red-50 h-9  rounded-lg border-red-200 text-red-700 hover:bg-red-100"
+                                  className="bg-red-50 h-9 rounded-lg border-red-200 text-red-700 hover:bg-red-100"
                                   onClick={cancelConversion}
                                   disabled={isConverting}
                                 >
@@ -870,7 +904,67 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                           </div>
                         </div>
 
-                        {/* Inline Conversion Form */}
+                        {/* Master Configuration Form */}
+                        {confirmingMasterId === account.account_id && (
+                          <div className="p-2">
+                            <h2 className="text-lg flex items-center font-medium ">
+                              <HousePlug className="h-4 w-4 mr-2" />
+                              Convert to Master
+                            </h2>
+
+                            <form className="space-y-4 pt-2">
+                              {/* Trading Configuration */}
+                              <div className="space-y-4">
+                                {/* Comment Configuration */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className='w-full'>
+                                    <Label htmlFor="prefix" className="">Ticker Symbol Prefix</Label>
+                                    <Input
+                                      id="prefix"
+                                      name="prefix"
+                                      type="text"
+                                      placeholder="Enter prefix..."
+                                      value={conversionForm.prefix}
+                                      onChange={e =>
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          prefix: e.target.value,
+                                        }))
+                                      }
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Text to remove at the beginning of ticker symbols
+                                    </p>
+                                  </div>
+
+                                  <div className='w-full'>
+                                    <Label htmlFor="suffix" className="">Ticker Symbol Suffix</Label>
+                                    <Input
+                                      id="suffix"
+                                      name="suffix"
+                                      type="text"
+                                      placeholder="Enter suffix..."
+                                      value={conversionForm.suffix}
+                                      onChange={e =>
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          suffix: e.target.value,
+                                        }))
+                                      }
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Text to remove at the end of ticker symbols
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+
+                        {/* Slave Configuration Form */}
                         {expandedAccountId === account.account_id && (
                           <div className="p-2">
                             <h2 className="text-lg flex items-center font-medium ">
@@ -1139,28 +1233,67 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       })()}
                                     </p>
                                   </div>
-
-                                  <div className="flex items-center space-x-2 pt-1">
-                                    <Switch
-                                      id="reverseTrade"
-                                      checked={conversionForm.reverseTrade}
-                                      onCheckedChange={checked =>
+                                {/* Third Row: Prefix and Suffix */}
+                                  <div>
+                                    <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                                    <Input
+                                      id="prefix"
+                                      name="prefix"
+                                      type="text"
+                                      placeholder="Enter prefix..."
+                                      value={conversionForm.prefix}
+                                      onChange={e =>
                                         setConversionForm(prev => ({
                                           ...prev,
-                                          reverseTrade: checked,
+                                          prefix: e.target.value,
                                         }))
                                       }
+                                      className="bg-white border border-gray-200"
                                     />
-                                    <Label
-                                      htmlFor="reverseTrade"
-                                      className="font-medium cursor-pointer"
-                                    >
-                                      Reverse trades
-                                    </Label>
-                                    <p className="text-xs text-muted-foreground text-gray-500">
-                                      Reverse the trade direction (buy/sell)
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Text to remove at the beginning of ticker symbols
                                     </p>
                                   </div>
+
+                                  <div>
+                                    <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
+                                    <Input
+                                      id="suffix"
+                                      name="suffix"
+                                      type="text"
+                                      placeholder="Enter suffix..."
+                                      value={conversionForm.suffix}
+                                      onChange={e =>
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          suffix: e.target.value,
+                                        }))
+                                      }
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Text to remove at the end of ticker symbols
+                                    </p>
+                                  </div>
+                                <div>
+                            <Label htmlFor="forceLot">
+                              Reverse trading
+                            </Label>
+                            <Switch
+                                                        id="reverseTrade"
+                                                        checked={conversionForm.reverseTrade}
+                                                        onCheckedChange={checked =>
+                                                          setConversionForm(prev => ({
+                                                            ...prev,
+                                                            reverseTrade: checked,
+                                                          }))
+                                                        }
+                              className='block my-1'
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                             Reverse the trading direction (buy/sell)
+                            </p>
+                          </div>
                                 </div>
                               </div>
                             </form>

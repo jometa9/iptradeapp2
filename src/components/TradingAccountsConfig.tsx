@@ -56,6 +56,8 @@ interface TradingAccount {
   lotCoefficient?: number;
   forceLot?: number;
   reverseTrade?: boolean;
+  prefix?: string;
+  suffix?: string;
   connectedToMaster?: string;
   connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
   totalSlaves?: number;
@@ -297,6 +299,8 @@ const TradingAccountsConfigComponent = () => {
     lotCoefficient: 1,
     forceLot: 0,
     reverseTrade: false,
+    prefix: '',
+    suffix: '',
     connectedToMaster: 'none',
   });
 
@@ -521,6 +525,8 @@ const TradingAccountsConfigComponent = () => {
       lotCoefficient: account.lotCoefficient || 1,
       forceLot: account.forceLot || 0,
       reverseTrade: account.reverseTrade || false,
+      prefix: account.prefix || '',
+      suffix: account.suffix || '',
       connectedToMaster: account.connectedToMaster || 'none',
     };
 
@@ -778,6 +784,8 @@ const TradingAccountsConfigComponent = () => {
               forceLot: validatedForceLot,
               reverseTrading: formState.reverseTrade,
               masterId: formState.connectedToMaster === 'none' ? null : formState.connectedToMaster,
+              prefix: formState.prefix || '',
+              suffix: formState.suffix || '',
             };
 
             response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
@@ -811,6 +819,27 @@ const TradingAccountsConfigComponent = () => {
                 body: JSON.stringify(masterPayload),
               }
             );
+
+            // Also update trading configuration for master
+            if (response.ok) {
+              const tradingConfigPayload = {
+                masterAccountId: accountId,
+                lotMultiplier: formState.lotCoefficient,
+                forceLot: formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null,
+                reverseTrading: formState.reverseTrade,
+                prefix: formState.prefix || '',
+                suffix: formState.suffix || '',
+              };
+
+              await fetch(`http://localhost:${serverPort}/api/trading-config`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': secretKey || '',
+                },
+                body: JSON.stringify(tradingConfigPayload),
+              });
+            }
 
 
           }
@@ -903,6 +932,8 @@ const TradingAccountsConfigComponent = () => {
                 lotCoefficient: formState.lotCoefficient,
                 forceLot: formState.forceLot > 0 ? formState.forceLot : null,
                 reverseTrade: formState.reverseTrade,
+                prefix: formState.prefix || '',
+                suffix: formState.suffix || '',
               },
             };
 
@@ -972,6 +1003,8 @@ const TradingAccountsConfigComponent = () => {
               reverseTrading: formState.reverseTrade,
               enabled: true,
               description: 'Auto-configured from frontend',
+              prefix: formState.prefix || '',
+              suffix: formState.suffix || '',
             };
 
             await fetch(`http://localhost:${serverPort}/api/slave-config`, {
@@ -1670,16 +1703,58 @@ const TradingAccountsConfigComponent = () => {
                         </Select>
                       </div>
 
-                      {(() => {
-                        return (
-                          formState.accountType === 'slave' &&
-                          (!editingAccount ||
-                            editingAccount.accountType === 'slave' ||
-                            (editingAccount &&
-                              editingAccount.accountType === 'master' &&
-                              formState.accountType === 'slave'))
-                        );
-                      })() && (
+                      {/* Configuration fields for Master accounts - only prefix/suffix */}
+                      {formState.accountType === 'master' && editingAccount && (
+                        <>
+                          {/* Prefix and Suffix Fields for Masters */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                            <div>
+                              <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                              <Input
+                                id="prefix"
+                                name="prefix"
+                                type="text"
+                                placeholder="Enter prefix..."
+                                value={formState.prefix || ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    prefix: e.target.value,
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the beginning of ticker symbols
+                              </p>  
+                            </div>
+
+                            <div>
+                              <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
+                              <Input
+                                id="suffix"
+                                name="suffix"
+                                type="text"
+                                placeholder="Enter suffix..."
+                                value={formState.suffix || ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    suffix: e.target.value,
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the end of ticker symbols
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Full configuration fields for Slave accounts */}
+                      {formState.accountType === 'slave' && (
                         <>
                           <div>
                             <Label htmlFor="connectedToMaster">Connect to Master Account</Label>
@@ -1891,7 +1966,54 @@ const TradingAccountsConfigComponent = () => {
                             </p>
                           </div>
 
-                          <div className="flex items-center space-x-2 pt-1">
+
+                          {/* Prefix and Suffix Fields */}
+                            <div>
+                              <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                              <Input
+                                id="prefix"
+                                name="prefix"
+                                type="text"
+                                placeholder="Enter prefix..."
+                                value={formState.prefix || ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    prefix: e.target.value,
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the beginning of ticker symbols
+                              </p>
+                            </div>
+
+                            <div>
+                              <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
+                              <Input
+                                id="suffix"
+                                name="suffix"
+                                type="text"
+                                placeholder="Enter suffix..."
+                                value={formState.suffix || ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    suffix: e.target.value,
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the end of ticker symbols
+                              </p>
+                            </div>
+                            
+                          <div>
+                            <Label htmlFor="forceLot">
+                              Reverse trading
+                            </Label>
                             <Switch
                               id="reverseTrade"
                               checked={formState.reverseTrade}
@@ -1901,10 +2023,11 @@ const TradingAccountsConfigComponent = () => {
                                   reverseTrade: checked,
                                 })
                               }
+                              className='block my-1'
                             />
-                            <Label htmlFor="reverseTrade" className="font-medium cursor-pointer">
-                              Reverse trades (Buy → Sell, Sell → Buy)
-                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                             Reverse the trading direction (buy/sell)
+                            </p>
                           </div>
                         </>
                       )}
