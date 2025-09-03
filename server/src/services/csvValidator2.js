@@ -91,9 +91,10 @@ export const validateCSVStructure = lines => {
     for (let i = 3; i < lines.length; i++) {
       const orderLineResult = validateLine(lines[i]);
       if (!orderLineResult.valid || orderLineResult.values[0] !== 'ORDER') {
+        const errorMessage = orderLineResult.error || 'Unknown error';
         return {
           valid: false,
-          error: `Invalid ORDER line at position ${i + 1}: ${orderLineResult.error}`,
+          error: `Invalid ORDER line at position ${i + 1}: ${errorMessage}`,
         };
       }
     }

@@ -799,47 +799,24 @@ const TradingAccountsConfigComponent = () => {
 
 
           } else if (editingAccount.accountType === 'master') {
-            // Actualizar configuración de cuenta master
-            const masterPayload = {
-              name: formState.accountNumber,
-              description: '',
-              broker: '',
-              platform: formState.platform.toUpperCase(),
-              status: formState.status,
+            // Actualizar configuración de cuenta master - solo usar trading-config endpoint
+            const tradingConfigPayload = {
+              masterAccountId: accountId,
+              lotMultiplier: formState.lotCoefficient,
+              forceLot: formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null,
+              reverseTrading: formState.reverseTrade,
+              prefix: formState.prefix || '',
+              suffix: formState.suffix || '',
             };
 
-            response = await fetch(
-              `http://localhost:${serverPort}/api/accounts/master/${accountId}`,
-              {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': secretKey || '',
-                },
-                body: JSON.stringify(masterPayload),
-              }
-            );
-
-            // Also update trading configuration for master
-            if (response.ok) {
-              const tradingConfigPayload = {
-                masterAccountId: accountId,
-                lotMultiplier: formState.lotCoefficient,
-                forceLot: formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null,
-                reverseTrading: formState.reverseTrade,
-                prefix: formState.prefix || '',
-                suffix: formState.suffix || '',
-              };
-
-              await fetch(`http://localhost:${serverPort}/api/trading-config`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': secretKey || '',
-                },
-                body: JSON.stringify(tradingConfigPayload),
-              });
-            }
+            response = await fetch(`http://localhost:${serverPort}/api/trading-config`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': secretKey || '',
+              },
+              body: JSON.stringify(tradingConfigPayload),
+            });
 
 
           }

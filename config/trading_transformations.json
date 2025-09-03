@@ -7,6 +7,8 @@
   "250062001": {
     "lotMultiplier": 1,
     "forceLot": null,
-    "reverseTrading": false
+    "reverseTrading": false,
+    "prefix": "aa",
+    "suffix": "ee"
   }
 }

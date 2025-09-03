@@ -64,7 +64,7 @@ const generateCSV2Content = async (
         : 'ENABLED';
     const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
     const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
-    content += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
+    content += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
   } else if (accountType === 'slave') {
     // For slave accounts: [CONFIG][SLAVE][ENABLED/DISABLED][LOT_MULT][FORCE_LOT][REVERSE][MASTER_ID][MASTER_CSV_PATH][PREFIX][SUFFIX]
     const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -131,8 +131,10 @@ export const getPendingCSVAccounts = (req, res) => {
 export const updateCSVAccountType = async (req, res) => {
   try {
     const { accountId } = req.params;
-    const { newType, slaveConfig } = req.body; // 'master' or 'slave', plus slave configs
+    const { newType, slaveConfig, masterConfig } = req.body; // 'master' or 'slave', plus configs
     const apiKey = req.apiKey;
+
+
 
     if (!accountId || !newType) {
       return res.status(400).json({
@@ -246,6 +248,8 @@ export const updateCSVAccountType = async (req, res) => {
           let foundAccount = false;
           let accountPlatform = 'MT4';
 
+
+
           // Check if this file contains the pending account in the new CSV2 format
           for (const line of lines) {
             // Clean the line from BOM and special characters
@@ -319,9 +323,10 @@ export const updateCSVAccountType = async (req, res) => {
                 const currentStatus = enabledMatch ? enabledMatch[1] : 'DISABLED';
 
                 if (newType === 'master') {
-                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
-                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
+                  const prefix = masterConfig?.prefix ? masterConfig.prefix : 'NULL';
+                  const suffix = masterConfig?.suffix ? masterConfig.suffix : 'NULL';
+
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -358,9 +363,9 @@ export const updateCSVAccountType = async (req, res) => {
                 const currentStatus = 'DISABLED';
 
                 if (newType === 'master') {
-                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
-                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [${prefix}] [${suffix}]\n`;
+                  const prefix = masterConfig?.prefix ? masterConfig.prefix : 'NULL';
+                  const suffix = masterConfig?.suffix ? masterConfig.suffix : 'NULL';
+                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -393,6 +398,9 @@ export const updateCSVAccountType = async (req, res) => {
 
             // Ensure we're writing to .csv not .cssv
             const correctPath = filePath.replace(/\.cssv$/, '.csv');
+            
+
+            
             writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
 
