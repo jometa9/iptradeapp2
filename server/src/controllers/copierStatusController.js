@@ -152,15 +152,9 @@ export const setGlobalStatus = async (req, res) => {
     saveCopierStatus(config);
 
     // Actualizar todos los archivos CSV usando el csvManager
+    // SOLO enviar enabled para que solo cambie el status
     const filesUpdated = await csvManager.updateGlobalStatus(enabled);
     const status = enabled ? 'ON' : 'OFF';
-
-    // Forzar un escaneo y emisión de actualizaciones
-    try {
-      await csvManager.scanAndEmitPendingUpdates();
-    } catch (error) {
-      // scanAndEmitPendingUpdates not available, skipping...
-    }
 
     res.json({
       message: `Global copier status set to ${status}`,
@@ -241,54 +235,36 @@ export const setMasterStatus = async (req, res) => {
       userCopierStatus.globalStatus &&
       userCopierStatus.masterAccounts[masterAccountId];
 
-    // Actualizar CSV del master y de todas las slaves conectadas
     try {
       // Importar csvManager para usar su método updateAccountStatus
       const csvManager = (await import('../services/csvManager.js')).default;
 
-      // Actualizar el CSV del master
+      // Actualizar el CSV del master - SOLO enviar enabled para que solo cambie el status
       const masterUpdated = await csvManager.updateAccountStatus(masterAccountId, enabled);
 
-      // Obtener las slaves conectadas a este master desde ambas fuentes:
-      // 1. Configuración de cuentas registradas
-      const userAccounts = getUserAccounts(apiKey);
-      const configConnectedSlaves = Object.entries(userAccounts.connections || {})
-        .filter(([, masterId]) => masterId === masterAccountId)
-        .map(([slaveId]) => slaveId);
+      // Obtener las slaves conectadas a este master
+      const csvConnectedSlaves = csvManager.getConnectedSlaves(masterAccountId);
 
-      // 2. Datos del CSV (usando csvManager)
-      const csvConnectedSlaves = csvManager
-        .getConnectedSlaves(masterAccountId)
-        .map(slave => slave.id);
-
-      // Combinar ambas fuentes y eliminar duplicados
-      const allConnectedSlaves = [...new Set([...configConnectedSlaves, ...csvConnectedSlaves])];
-
-      // Actualizar el CSV de cada slave conectada
-      for (const slaveId of allConnectedSlaves) {
+      // Actualizar el CSV de cada slave conectada - SOLO enviar enabled
+      for (const slave of csvConnectedSlaves) {
         try {
-          const slaveUpdated = await csvManager.updateAccountStatus(slaveId, enabled);
+          await csvManager.updateAccountStatus(slave.id, enabled);
         } catch (slaveError) {
-          console.error(`❌ Error updating CSV for slave ${slaveId}:`, slaveError);
+          console.error(`❌ Error updating CSV for slave ${slave.id}:`, slaveError);
         }
       }
-    } catch (error) {
-      console.error(
-        `❌ Error updating CSV files for master ${masterAccountId} and connected slaves:`,
-        error
-      );
-      // No fallar la respuesta si el CSV no se puede actualizar
-    }
 
-    res.json({
-      message: `Copier status for ${masterAccountId} set to ${status}`,
-      masterAccountId,
-      masterStatus: userCopierStatus.masterAccounts[masterAccountId],
-      globalStatus: globalConfig.globalStatus,
-      userGlobalStatus: userCopierStatus.globalStatus,
-      effectiveStatus,
-      status: effectiveStatus ? 'ON' : 'OFF',
-    });
+      res.json({
+        message: `Copier status for ${masterAccountId} set to ${status}`,
+        masterAccountId,
+        enabled: Boolean(enabled),
+        status,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(`❌ Error updating status for master ${masterAccountId}:`, error);
+      res.status(500).json({ error: 'Failed to update master status' });
+    }
   } else {
     res.status(500).json({ error: 'Failed to save master account copier status' });
   }

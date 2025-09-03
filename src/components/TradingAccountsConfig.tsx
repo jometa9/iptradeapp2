@@ -530,21 +530,25 @@ const TradingAccountsConfigComponent = () => {
       connectedToMaster: account.connectedToMaster || 'none',
     };
 
-    // Si es una cuenta slave, usar la configuración que ya viene en los datos CSV
-    if (account.accountType === 'slave') {
+    // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
+    if (account.accountType === 'slave' || account.accountType === 'master') {
       // Para slaves conectados, usar el id como accountNumber si no existe
       const accountNumber = account.accountNumber || account.id;
 
       // Buscar la configuración tanto por accountNumber como por id
-      const slaveConfig = slaveConfigs[accountNumber] || slaveConfigs[account.id];
+      const accountConfig = account.accountType === 'slave' 
+        ? slaveConfigs[accountNumber] || slaveConfigs[account.id]
+        : unifiedData?.configuredAccounts?.masterAccounts?.[accountNumber];
 
-      if (slaveConfig?.config) {
-        // Actualizar el formulario con la configuración específica del slave
+      if (accountConfig?.config) {
+        // Actualizar el formulario con la configuración específica
         formData = {
           ...formData,
-          lotCoefficient: slaveConfig.config.lotMultiplier || 1,
-          forceLot: slaveConfig.config.forceLot || 0,
-          reverseTrade: slaveConfig.config.reverseTrading || false,
+          lotCoefficient: accountConfig.config.lotMultiplier || 1,
+          forceLot: accountConfig.config.forceLot || 0,
+          reverseTrade: accountConfig.config.reverseTrading || false,
+          prefix: accountConfig.config.prefix ?? '',
+          suffix: accountConfig.config.suffix ?? '',
         };
       }
     }
@@ -1695,11 +1699,11 @@ const TradingAccountsConfigComponent = () => {
                                 name="prefix"
                                 type="text"
                                 placeholder="Enter prefix..."
-                                value={formState.prefix || ''}
+                                value={formState.prefix ?? ''}
                                 onChange={e =>
                                   setFormState({
                                     ...formState,
-                                    prefix: e.target.value,
+                                    prefix: e.target.value || '',
                                   })
                                 }
                                 className="bg-white border border-gray-200 shadow-sm"
@@ -1716,11 +1720,11 @@ const TradingAccountsConfigComponent = () => {
                                 name="suffix"
                                 type="text"
                                 placeholder="Enter suffix..."
-                                value={formState.suffix || ''}
+                                value={formState.suffix ?? ''}
                                 onChange={e =>
                                   setFormState({
                                     ...formState,
-                                    suffix: e.target.value,
+                                    suffix: e.target.value || '',
                                   })
                                 }
                                 className="bg-white border border-gray-200 shadow-sm"

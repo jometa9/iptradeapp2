@@ -1288,14 +1288,16 @@ class CSVManager extends EventEmitter {
                 }
 
                               if (currentAccountData.account_type === 'master') {
+                // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
                 currentAccountData.config = {
                   masterId: currentAccountId,
                   enabled: values[2] === 'ENABLED',
                   name: values[3] || `Account ${currentAccountId}`,
-                  prefix: values[4] || '',
-                  suffix: values[5] || '',
+                  prefix: values[8] === 'NULL' ? '' : values[8],
+                  suffix: values[9] === 'NULL' ? '' : values[9],
                 };
                 } else if (currentAccountData.account_type === 'slave') {
+                  // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
                   currentAccountData.config = {
                     enabled: values[2] === 'ENABLED',
                     lotMultiplier: parseFloat(values[3]) || 1.0,
@@ -1303,8 +1305,8 @@ class CSVManager extends EventEmitter {
                     reverseTrading: values[5] === 'TRUE',
                     masterId: values[6] !== 'NULL' ? values[6] : null,
                     masterCsvPath: values[7] !== 'NULL' ? values[7] : null,
-                    prefix: values[8] || '',
-                    suffix: values[9] || '',
+                    prefix: values[8] === 'NULL' ? '' : values[8],
+                    suffix: values[9] === 'NULL' ? '' : values[9],
                   };
                 }
               }
@@ -1837,30 +1839,68 @@ class CSVManager extends EventEmitter {
           }
         }
         
-        // Si es una línea CONFIG para la cuenta actual, REEMPLAZARLA
-        if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-          console.log(`🔧 Replacing CONFIG line: "${line}"`);
-          
-          if (config.type === 'master') {
-            console.log(`🔍 Debug - prefix: "${config.prefix}" (type: ${typeof config.prefix}, length: ${config.prefix?.length})`);
-            console.log(`🔍 Debug - suffix: "${config.suffix}" (type: ${typeof config.suffix}, length: ${config.suffix?.length})`);
-            
-            const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
-            const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
-            
-            console.log(`🔍 Debug - final prefix: "${prefix}"`);
-            console.log(`🔍 Debug - final suffix: "${suffix}"`);
-            
-            const newConfigLine = `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
-            updatedLines.push(newConfigLine);
-            console.log(`🔧 With new line: "${newConfigLine}"`);
-          }
-          foundConfig = true;
-          // NO agregar la línea original, solo la nueva
-        } else {
-          // Mantener todas las demás líneas igual
-          updatedLines.push(line);
-        }
+                 // Si es una línea CONFIG para la cuenta actual, REEMPLAZARLA
+         if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+           console.log(`🔧 Replacing CONFIG line: "${line}"`);
+           
+           if (config.type === 'master') {
+                          // DETECTAR si solo se está cambiando el status (sin prefix/suffix)
+              console.log(`🔍 Checking if status-only change:`);
+              console.log(`- config.prefix: "${config.prefix}"`);
+              console.log(`- config.suffix: "${config.suffix}"`);
+              
+              const isStatusOnlyChange = (!config.prefix && !config.suffix) || (config.prefix === '' && config.suffix === '');
+              console.log(`- isStatusOnlyChange: ${isStatusOnlyChange}`);
+              
+              if (isStatusOnlyChange) {
+                // SOLO cambiar el status, preservar todos los demás campos
+                console.log(`🔧 Status-only change detected, preserving original values`);
+                
+                // Extraer todos los campos de la línea CONFIG existente
+                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+                console.log(`🔍 Original CONFIG parts:`, configParts);
+               
+               if (configParts.length >= 3) {
+                 const accountType = configParts[1]; // MASTER o SLAVE
+                 const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
+                 
+                 // Reconstruir la línea CONFIG manteniendo TODOS los campos originales, solo cambiando el status
+                 let newConfigLine = `[CONFIG] [${accountType}] [${newStatus}]`;
+                 
+                 // Agregar todos los campos adicionales que ya existían (desde el índice 3 en adelante)
+                 for (let j = 3; j < configParts.length; j++) {
+                   newConfigLine += ` [${configParts[j]}]`;
+                 }
+                 
+                 console.log(`🔧 New CONFIG line (status only): "${newConfigLine}"`);
+                 updatedLines.push(newConfigLine);
+               } else {
+                 // Si no se pueden parsear los campos, mantener la línea original
+                 console.log(`⚠️ Cannot parse CONFIG line, keeping original`);
+                 updatedLines.push(line);
+               }
+             } else {
+               // Cambio completo (con prefix/suffix), usar la lógica normal
+               console.log(`🔍 Debug - prefix: "${config.prefix}" (type: ${typeof config.prefix}, length: ${config.prefix?.length})`);
+               console.log(`🔍 Debug - suffix: "${config.suffix}" (type: ${typeof config.suffix}, length: ${config.suffix?.length})`);
+               
+               const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
+               const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
+               
+               console.log(`🔍 Debug - final prefix: "${prefix}"`);
+               console.log(`🔍 Debug - final suffix: "${suffix}"`);
+               
+               const newConfigLine = `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
+               updatedLines.push(newConfigLine);
+               console.log(`🔧 With new line: "${newConfigLine}"`);
+             }
+           }
+           foundConfig = true;
+           // NO agregar la línea original, solo la nueva
+         } else {
+           // Mantener todas las demás líneas igual
+           updatedLines.push(line);
+         }
       }
       
       // Si no encontramos línea CONFIG, agregar una al final
@@ -1875,20 +1915,17 @@ class CSVManager extends EventEmitter {
            }
          }
 
-      // Validar antes de escribir
-      const currentContent = readFileSync(targetFile, 'utf8');
-      const newContent = updatedLines.join('\n') + '\n';
+             // Validar antes de escribir
+       const currentContent = readFileSync(targetFile, 'utf8');
+       const newContent = updatedLines.join('\n') + '\n';
 
-      // Comentar validación temporalmente para debug
-      /*
-      const validationResult = validateBeforeWrite(currentContent, newContent);
-      if (!validationResult.valid) {
-        console.error(`❌ Validation failed: ${validationResult.error}`);
-        return false;
-      }
-      */
-      
-      console.log(`📝 Generated CSV content:`, newContent);
+       console.log(`📄 BEFORE - Original CSV content:`);
+       console.log(currentContent);
+       console.log(`📝 AFTER - New CSV content:`);
+       console.log(newContent);
+       console.log(`🔍 Changes summary:`);
+       console.log(`- Original lines: ${currentContent.split('\n').length}`);
+       console.log(`- New lines: ${newContent.split('\n').length}`);
 
       // Escribir archivo actualizado usando archivo temporal
       const tmpFile = `${targetFile}.tmp`;
@@ -1990,25 +2027,10 @@ class CSVManager extends EventEmitter {
                 if (matches && matches.length >= 2) {
                   const configType = matches[1].replace(/[\[\]]/g, '').trim();
                   
-                  if (configType === 'MASTER') {
-                    // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [PREFIX] [SUFFIX]
-                    const name = matches[3]?.replace(/[\[\]]/g, '').trim() || 'Master Account';
-                    const prefix = matches[4]?.replace(/[\[\]]/g, '').trim() || '';
-                    const suffix = matches[5]?.replace(/[\[\]]/g, '').trim() || '';
-                    updatedLine = `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [${name}] [${prefix}] [${suffix}]`;
-                    fileModified = true;
-                  } else if (configType === 'SLAVE') {
-                    // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
-                    const lotMult = matches[3]?.replace(/[\[\]]/g, '').trim() || '1.0';
-                    const forceLot = matches[4]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-                    const reverse = matches[5]?.replace(/[\[\]]/g, '').trim() || 'FALSE';
-                    const masterId = matches[6]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-                    const masterCsvPath = matches[7]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-                    const prefix = matches[8]?.replace(/[\[\]]/g, '').trim() || '';
-                    const suffix = matches[9]?.replace(/[\[\]]/g, '').trim() || '';
-                    updatedLine = `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
-                    fileModified = true;
-                  }
+                   // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
+                   updatedLine = line.replace('[ENABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+                   updatedLine = updatedLine.replace('[DISABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+                   fileModified = true;
                 }
               }
 
@@ -2082,34 +2104,17 @@ class CSVManager extends EventEmitter {
           }
           updatedLines.push(line);
         } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-          // Actualizar la línea CONFIG para la cuenta específica
-          const matches = line.match(/\[([^\]]+)\]/g);
-          if (matches && matches.length >= 2) {
-            const configType = matches[1].replace(/[\[\]]/g, '').trim();
-            if (configType === 'MASTER') {
-              // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [PREFIX] [SUFFIX]
-              const name = matches[3]?.replace(/[\[\]]/g, '').trim() || currentAccountId || 'Master Account';
-              const prefix = matches[4]?.replace(/[\[\]]/g, '').trim() || '';
-              const suffix = matches[5]?.replace(/[\[\]]/g, '').trim() || '';
-              const updatedLine = `[CONFIG] [MASTER] [${enabled ? 'ENABLED' : 'DISABLED'}] [${name}] [${prefix}] [${suffix}]`;
-              updatedLines.push(updatedLine);
-            } else if (configType === 'SLAVE') {
-              // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
-              const lotMult = matches[3]?.replace(/[\[\]]/g, '').trim() || '1.0';
-              const forceLot = matches[4]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-              const reverse = matches[5]?.replace(/[\[\]]/g, '').trim() || 'FALSE';
-              const masterId = matches[6]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-              const masterCsvPath = matches[7]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-              const prefix = matches[8]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-              const suffix = matches[9]?.replace(/[\[\]]/g, '').trim() || 'NULL';
-              const updatedLine = `[CONFIG] [SLAVE] [${enabled ? 'ENABLED' : 'DISABLED'}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
-              updatedLines.push(updatedLine);
-            } else {
-              updatedLines.push(line);
-            }
-          } else {
-            updatedLines.push(line);
-          }
+                     // Actualizar la línea CONFIG para la cuenta específica
+           const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+           
+           // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
+           if (parts.length >= 3) {
+             let newLine = line.replace('[ENABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+             newLine = newLine.replace('[DISABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+             updatedLines.push(newLine);
+           } else {
+             updatedLines.push(line);
+           }
         } else {
           updatedLines.push(line);
         }

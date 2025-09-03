@@ -2182,8 +2182,8 @@ export const getUnifiedAccountData = async (req, res) => {
         const config = account.config || {};
         return {
           ...config,
-          prefix: config.prefix || '',
-          suffix: config.suffix || '',
+          prefix: config.prefix === 'NULL' || !config.prefix ? '' : config.prefix,
+          suffix: config.suffix === 'NULL' || !config.suffix ? '' : config.suffix,
         };
       };
     
