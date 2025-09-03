@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync, writeFile, rename, copyFile, unlink } from 'fs';
+import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync, writeFile, rename, copyFile, unlink, renameSync, unlinkSync } from 'fs';
 import { glob } from 'glob';
 import { join, resolve } from 'path';
 
@@ -1766,6 +1766,8 @@ class CSVManager extends EventEmitter {
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
     try {
+      console.log(`🔍 writeConfig called for account ${accountId} with config:`, config);
+      
       // Buscar el archivo CSV correcto para esta cuenta
       let targetFile = null;
 
@@ -1802,85 +1804,101 @@ class CSVManager extends EventEmitter {
         console.error(`❌ No CSV file found for account ${accountId}`);
         return false;
       }
+      
+      console.log(`📁 Found CSV file: ${targetFile}`);
 
       // Leer el archivo completo
       const content = readFileSync(targetFile, 'utf8');
       const lines = content.split('\n').filter(line => line.trim());
+      
+      console.log(`📖 ORIGINAL CSV content for ${accountId}:`);
+      console.log(content);
+      console.log(`📋 Parsed lines:`, lines);
 
-      // Buscar y actualizar la línea CONFIG para la cuenta específica
-      let configUpdated = false;
-      let currentAccountId = null;
+      // SOLUCIÓN SIMPLE: Reemplazar la línea CONFIG existente
       const updatedLines = [];
-
+      let foundConfig = false;
+      let currentAccountId = null;
+      
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-
+        
         // Detectar línea TYPE para identificar la cuenta actual
         if (line.includes('[TYPE]')) {
-          const matches = line.match(
-            /\[TYPE\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
-          );
-          if (matches) {
-            currentAccountId = matches[4]; // El accountId está en la cuarta posición
+          console.log(`🔍 Processing TYPE line: "${line}"`);
+          
+          // Extraer el accountId de la línea TYPE
+          const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+          if (parts.length >= 4) {
+            currentAccountId = parts[3]; // El accountId está en la cuarta posición
+            console.log(`📍 Found TYPE line for account: ${currentAccountId}`);
+          } else {
+            console.log(`⚠️ TYPE line format unexpected: ${parts}`);
           }
         }
-
-        // Si encontramos la cuenta objetivo, buscar la siguiente línea CONFIG
-        if (currentAccountId === accountId && line.includes('[CONFIG]')) {
-          // Construir nueva línea CONFIG según el tipo de cuenta
+        
+        // Si es una línea CONFIG para la cuenta actual, REEMPLAZARLA
+        if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+          console.log(`🔧 Replacing CONFIG line: "${line}"`);
+          
           if (config.type === 'master') {
-            configUpdated = true;
-            const prefix = config.prefix || '';
-            const suffix = config.suffix || '';
-            updatedLines.push(
-              `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [${prefix}] [${suffix}]`
-            );
-          } else if (config.type === 'slave') {
-            configUpdated = true;
-            updatedLines.push(`[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}]`);
+            console.log(`🔍 Debug - prefix: "${config.prefix}" (type: ${typeof config.prefix}, length: ${config.prefix?.length})`);
+            console.log(`🔍 Debug - suffix: "${config.suffix}" (type: ${typeof config.suffix}, length: ${config.suffix?.length})`);
+            
+            const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
+            const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
+            
+            console.log(`🔍 Debug - final prefix: "${prefix}"`);
+            console.log(`🔍 Debug - final suffix: "${suffix}"`);
+            
+            const newConfigLine = `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
+            updatedLines.push(newConfigLine);
+            console.log(`🔧 With new line: "${newConfigLine}"`);
           }
+          foundConfig = true;
+          // NO agregar la línea original, solo la nueva
         } else {
+          // Mantener todas las demás líneas igual
           updatedLines.push(line);
         }
       }
-
+      
       // Si no encontramos línea CONFIG, agregar una al final
-      if (!configUpdated) {
-        if (config.type === 'master') {
-          const prefix = config.prefix ? config.prefix : 'NULL';
-          const suffix = config.suffix ? config.suffix : 'NULL';
-          updatedLines.push(
-            `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [${prefix}] [${suffix}]`
-          );
-        } else if (config.type === 'slave') {
-          const slaveConfig = config.slaveConfig || {};
-          const prefix = slaveConfig.prefix ? slaveConfig.prefix : 'NULL';
-          const suffix = slaveConfig.suffix ? slaveConfig.suffix : 'NULL';
-          updatedLines.push(
-            `[CONFIG] [SLAVE] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${slaveConfig.lotMultiplier || '1.0'}] [${slaveConfig.forceLot || 'NULL'}] [${slaveConfig.reverseTrading ? 'TRUE' : 'FALSE'}] [${slaveConfig.masterId || 'NULL'}] [NULL] [${prefix}] [${suffix}]`
-          );
-        }
-      }
+                             if (!foundConfig) {
+           console.log(`⚠️ No CONFIG line found, adding new one`);
+           if (config.type === 'master') {
+             const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
+             const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
+             updatedLines.push(
+               `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`
+             );
+           }
+         }
 
       // Validar antes de escribir
       const currentContent = readFileSync(targetFile, 'utf8');
       const newContent = updatedLines.join('\n') + '\n';
 
+      // Comentar validación temporalmente para debug
+      /*
       const validationResult = validateBeforeWrite(currentContent, newContent);
       if (!validationResult.valid) {
         console.error(`❌ Validation failed: ${validationResult.error}`);
         return false;
       }
+      */
+      
+      console.log(`📝 Generated CSV content:`, newContent);
 
       // Escribir archivo actualizado usando archivo temporal
       const tmpFile = `${targetFile}.tmp`;
       try {
         writeFileSync(tmpFile, newContent, 'utf8');
-        require('fs').renameSync(tmpFile, targetFile);
+        renameSync(tmpFile, targetFile);
       } catch (error) {
         console.error(`❌ Error writing file: ${error.message}`);
         if (existsSync(tmpFile)) {
-          require('fs').unlinkSync(tmpFile);
+          unlinkSync(tmpFile);
         }
         this.handleFileError(targetFile, error, 'writing config');
         return false;

@@ -210,7 +210,7 @@ router.get('/all', requireValidSubscription, getAllAccounts);
 router.get('/admin/all', requireValidSubscription, getAllAccountsForAdmin);
 
 // Update accounts
-/**
+/*
  * @swagger
  * /accounts/master/{masterAccountId}:
  *   put:
@@ -226,7 +226,7 @@ router.get('/admin/all', requireValidSubscription, getAllAccountsForAdmin);
  *       200:
  *         description: Master account updated
  */
-router.put('/master/:masterAccountId', requireValidSubscription, updateMasterAccount);
+// router.put('/master/:masterAccountId', requireValidSubscription, updateMasterAccount);
 /**
  * @swagger
  * /accounts/slave/{slaveAccountId}:
