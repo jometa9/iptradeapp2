@@ -1849,51 +1849,31 @@ class CSVManager extends EventEmitter {
               console.log(`- config.prefix: "${config.prefix}"`);
               console.log(`- config.suffix: "${config.suffix}"`);
               
-              const isStatusOnlyChange = (!config.prefix && !config.suffix) || (config.prefix === '' && config.suffix === '');
-              console.log(`- isStatusOnlyChange: ${isStatusOnlyChange}`);
+              // Extraer los campos actuales de la línea CONFIG
+              const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+              console.log(`🔍 Original CONFIG parts:`, configParts);
               
-              if (isStatusOnlyChange) {
-                // SOLO cambiar el status, preservar todos los demás campos
-                console.log(`🔧 Status-only change detected, preserving original values`);
+              if (configParts.length >= 3) {
+                const accountType = configParts[1]; // MASTER o SLAVE
+                const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
                 
-                // Extraer todos los campos de la línea CONFIG existente
-                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-                console.log(`🔍 Original CONFIG parts:`, configParts);
-               
-               if (configParts.length >= 3) {
-                 const accountType = configParts[1]; // MASTER o SLAVE
-                 const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
-                 
-                 // Reconstruir la línea CONFIG manteniendo TODOS los campos originales, solo cambiando el status
-                 let newConfigLine = `[CONFIG] [${accountType}] [${newStatus}]`;
-                 
-                 // Agregar todos los campos adicionales que ya existían (desde el índice 3 en adelante)
-                 for (let j = 3; j < configParts.length; j++) {
-                   newConfigLine += ` [${configParts[j]}]`;
-                 }
-                 
-                 console.log(`🔧 New CONFIG line (status only): "${newConfigLine}"`);
-                 updatedLines.push(newConfigLine);
-               } else {
-                 // Si no se pueden parsear los campos, mantener la línea original
-                 console.log(`⚠️ Cannot parse CONFIG line, keeping original`);
-                 updatedLines.push(line);
-               }
-             } else {
-               // Cambio completo (con prefix/suffix), usar la lógica normal
-               console.log(`🔍 Debug - prefix: "${config.prefix}" (type: ${typeof config.prefix}, length: ${config.prefix?.length})`);
-               console.log(`🔍 Debug - suffix: "${config.suffix}" (type: ${typeof config.suffix}, length: ${config.suffix?.length})`);
-               
-               const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
-               const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
-               
-               console.log(`🔍 Debug - final prefix: "${prefix}"`);
-               console.log(`🔍 Debug - final suffix: "${suffix}"`);
-               
-               const newConfigLine = `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
-               updatedLines.push(newConfigLine);
-               console.log(`🔧 With new line: "${newConfigLine}"`);
-             }
+                // Obtener prefix/suffix actuales si no se proporcionan nuevos
+                const currentPrefix = configParts[8] || 'NULL';
+                const currentSuffix = configParts[9] || 'NULL';
+                
+                // Usar nuevos valores si se proporcionan, o mantener los actuales
+                const prefix = (config.prefix !== undefined) ? (config.prefix || 'NULL') : currentPrefix;
+                const suffix = (config.suffix !== undefined) ? (config.suffix || 'NULL') : currentSuffix;
+                
+                // Reconstruir la línea CONFIG
+                const newConfigLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
+                console.log(`🔧 New CONFIG line: "${newConfigLine}"`);
+                updatedLines.push(newConfigLine);
+              } else {
+                // Si no se pueden parsear los campos, mantener la línea original
+                console.log(`⚠️ Cannot parse CONFIG line, keeping original`);
+                updatedLines.push(line);
+              }
            }
            foundConfig = true;
            // NO agregar la línea original, solo la nueva

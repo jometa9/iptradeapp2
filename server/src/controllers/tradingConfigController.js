@@ -204,13 +204,16 @@ export const setTradingConfig = async (req, res) => {
       // Import csvManager dynamically to avoid circular imports
       const csvManager = (await import('../services/csvManager.js')).default;
       
-      const csvConfig = {
-        type: 'master',
-        enabled: true, // Preserve current enabled state - we don't change it here
-        name: masterAccountId,
-        prefix: configs[masterAccountId].prefix,
-        suffix: configs[masterAccountId].suffix,
-      };
+              // Get current enabled state from CSV to preserve it
+        const currentEnabled = csvManager.isMasterEnabled(masterAccountId);
+
+        const csvConfig = {
+          type: 'master',
+          enabled: currentEnabled, // Preserve current enabled state
+          name: masterAccountId,
+          prefix: configs[masterAccountId].prefix,
+          suffix: configs[masterAccountId].suffix,
+        };
       
       console.log(`📋 CSV config to write:`, csvConfig);
       

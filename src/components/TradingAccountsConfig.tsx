@@ -62,6 +62,11 @@ interface TradingAccount {
   connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
   totalSlaves?: number;
   masterOnline?: boolean;
+  config?: {
+    enabled?: boolean;
+    prefix?: string;
+    suffix?: string;
+  };
 }
 
 // MasterAccountStatus interface moved to useUnifiedAccountData hook
@@ -211,6 +216,11 @@ const TradingAccountsConfigComponent = () => {
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
           masterOnline: master.masterOnline || false,
+          config: master.config || {
+            prefix: master.config?.prefix || '',
+            suffix: master.config?.suffix || '',
+            enabled: master.config?.enabled || false
+          }
         });
 
         // También agregar los slaves conectados a la lista principal
@@ -510,9 +520,16 @@ const TradingAccountsConfigComponent = () => {
     });
   };
 
+  // Función para cerrar el formulario de edición
+  const closeEditForm = () => {
+    setEditingAccount(null);
+    setIsAddingAccount(false);
+  };
+
   const handleEditAccount = async (account: TradingAccount) => {
-    setIsAddingAccount(true);
-    setEditingAccount(account);
+    try {
+      setIsAddingAccount(true);
+      setEditingAccount(account);
 
     // Preparar el formulario con los datos básicos de la cuenta
     let formData = {
@@ -530,27 +547,49 @@ const TradingAccountsConfigComponent = () => {
       connectedToMaster: account.connectedToMaster || 'none',
     };
 
-    // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
-    if (account.accountType === 'slave' || account.accountType === 'master') {
-      // Para slaves conectados, usar el id como accountNumber si no existe
-      const accountNumber = account.accountNumber || account.id;
+          // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
+      if (account.accountType === 'slave' || account.accountType === 'master') {
+        // Para slaves conectados, usar el id como accountNumber si no existe
+        const accountNumber = account.accountNumber || account.id;
 
-      // Buscar la configuración tanto por accountNumber como por id
-      const accountConfig = account.accountType === 'slave' 
-        ? slaveConfigs[accountNumber] || slaveConfigs[account.id]
-        : unifiedData?.configuredAccounts?.masterAccounts?.[accountNumber];
+        console.log('Editing account:', account);
+        console.log('UnifiedData:', unifiedData?.configuredAccounts?.masterAccounts);
 
-      if (accountConfig?.config) {
-        // Actualizar el formulario con la configuración específica
-        formData = {
-          ...formData,
-          lotCoefficient: accountConfig.config.lotMultiplier || 1,
-          forceLot: accountConfig.config.forceLot || 0,
-          reverseTrade: accountConfig.config.reverseTrading || false,
-          prefix: accountConfig.config.prefix ?? '',
-          suffix: accountConfig.config.suffix ?? '',
-        };
-      }
+        if (account.accountType === 'master') {
+          // Si es master account, usar su propia configuración
+          const masterConfig = unifiedData?.configuredAccounts?.masterAccounts?.[account.id]?.config;
+          console.log('Master config:', masterConfig);
+          
+          if (masterConfig) {
+            formData = {
+              ...formData,
+              prefix: masterConfig.prefix || '',
+              suffix: masterConfig.suffix || ''
+            };
+          }
+        } else if (account.accountType === 'slave') {
+          // Si es slave, buscar la configuración en account.config o en slaveConfigs
+          let slaveConfig = account.config;
+          
+          // Si no hay config en account, buscar en slaveConfigs
+          if (!slaveConfig) {
+            const accountNumber = account.accountNumber || account.id;
+            slaveConfig = slaveConfigs[accountNumber]?.config || slaveConfigs[account.id]?.config;
+          }
+          
+          console.log('Using slave config:', slaveConfig);
+          
+          if (slaveConfig) {
+            formData = {
+              ...formData,
+              lotCoefficient: slaveConfig.lotMultiplier ?? 1,
+              forceLot: slaveConfig.forceLot ?? 0,
+              reverseTrade: slaveConfig.reverseTrading ?? false,
+              prefix: slaveConfig.prefix || '',
+              suffix: slaveConfig.suffix || ''
+            };
+          }
+        }
     }
 
     setFormState(formData);
@@ -558,6 +597,14 @@ const TradingAccountsConfigComponent = () => {
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
+    } catch (error) {
+      console.error('Error loading slave config:', error);
+      toastUtil({
+        title: 'Error',
+        description: 'Failed to load slave configuration',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDeleteAccount = async (id: string) => {
@@ -2180,6 +2227,18 @@ const TradingAccountsConfigComponent = () => {
                                     No slaves
                                   </div>
                                 )}
+             
+                                  {/* Prefix/Suffix badges */}
+                                  {masterAccount?.config?.prefix && (
+                                    <div className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block">
+                                      Prefix {masterAccount.config.prefix}
+                                    </div>
+                                  )}
+                                  {masterAccount?.config?.suffix && (
+                                    <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block">
+                                     Suffix {masterAccount.config.suffix}
+                                    </div>
+                                  )}
                               </div>
                             </td>
                             <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">
@@ -2220,6 +2279,7 @@ const TradingAccountsConfigComponent = () => {
                                     className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
                                     onClick={e => {
                                       e.stopPropagation();
+                                      closeEditForm();
                                       disconnectAllSlaves(masterAccount.accountNumber);
                                     }}
                                     disabled={isDisconnecting === masterAccount.id}
@@ -2256,6 +2316,7 @@ const TradingAccountsConfigComponent = () => {
                                       className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                       onClick={e => {
                                         e.stopPropagation();
+                                        closeEditForm();
                                         handleEditAccount(masterAccount);
                                       }}
                                       title="Edit Account"
@@ -2270,6 +2331,7 @@ const TradingAccountsConfigComponent = () => {
                                       accountId={masterAccount.id}
                                       onClick={e => {
                                         e.stopPropagation();
+                                        closeEditForm();
                                         handleDeleteAccount(masterAccount.id);
                                       }}
                                       disabled={isDeletingAccount === masterAccount.id}
@@ -2283,6 +2345,7 @@ const TradingAccountsConfigComponent = () => {
                                       className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                       onClick={e => {
                                         e.stopPropagation();
+                                        closeEditForm();
                                         setDisconnectAllConfirmId(masterAccount.id);
                                       }}
                                       title="Disconnect All Slaves"
@@ -2420,12 +2483,35 @@ const TradingAccountsConfigComponent = () => {
                                               </div>
                                             );
                                           }
+
+                                          // Prefix (solo si está configurado)
+                                          if (config.prefix) {
+                                            labels.push(
+                                              <div
+                                                key="prefix"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                              >
+                                                Prefix {config.prefix}
+                                              </div>
+                                            );
+                                          }
+
+                                          // Suffix (solo si está configurado)
+                                          if (config.suffix) {
+                                            labels.push(
+                                              <div
+                                                key="suffix"
+                                                className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                              >
+                                                Suffix {config.suffix}
+                                              </div>
+                                            );
+                                          }
                                         }
 
                                         // Si no hay configuraciones específicas, no mostrar nada
                                         return labels;
 
-                                        return labels;
                                       })()}
                                     </div>
                                   </td>
@@ -2461,6 +2547,7 @@ const TradingAccountsConfigComponent = () => {
                                           className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
                                           onClick={e => {
                                             e.stopPropagation();
+                                            closeEditForm();
                                             disconnectSlaveAccount(
                                               accountToUse.accountNumber,
                                               masterAccount.accountNumber
@@ -2498,6 +2585,7 @@ const TradingAccountsConfigComponent = () => {
                                           className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                           onClick={e => {
                                             e.stopPropagation();
+                                            closeEditForm();
                                             handleEditAccount(accountToUse);
                                           }}
                                           title="Edit Account"
@@ -2511,6 +2599,7 @@ const TradingAccountsConfigComponent = () => {
                                           className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                           onClick={e => {
                                             e.stopPropagation();
+                                            closeEditForm();
                                             setDisconnectConfirmId(accountToUse.id);
                                           }}
                                           title="Disconnect from Master"
@@ -2527,6 +2616,7 @@ const TradingAccountsConfigComponent = () => {
                                             accountId={accountToUse.id}
                                             onClick={e => {
                                               e.stopPropagation();
+                                              closeEditForm();
                                               handleDeleteAccount(accountToUse.id);
                                             }}
                                             disabled={isDeletingAccount === accountToUse.id}
@@ -2734,10 +2824,35 @@ const TradingAccountsConfigComponent = () => {
                                     </div>
                                   );
                                 }
+                                console.log('@@@@@@',config);
+                                // Prefix (solo si está configurado)
+                                if (config.prefix) {
+                                  labels.push(
+                                    <div
+                                      key="prefix"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                    >
+                                      Prefix {config.prefix}
+                                    </div>
+                                  );
+                                }
+
+                                // Suffix (solo si está configurado)
+                                if (config.suffix) {
+                                  labels.push(
+                                    <div
+                                      key="suffix"
+                                      className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                    >
+                                      Suffix {config.suffix}
+                                    </div>
+                                  );
+                                }
                               }
 
                               return labels;
                             })()}
+
                           </div>
                         </td>
                         <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
@@ -2770,6 +2885,7 @@ const TradingAccountsConfigComponent = () => {
                                 className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
                                 onClick={e => {
                                   e.stopPropagation();
+                                  closeEditForm();
                                   handleEditAccount(orphanSlave);
                                 }}
                                 title="Edit Account"
@@ -2781,6 +2897,7 @@ const TradingAccountsConfigComponent = () => {
                                 accountId={orphanSlave.id}
                                 onClick={e => {
                                   e.stopPropagation();
+                                  closeEditForm();
                                   handleDeleteAccount(orphanSlave.id);
                                 }}
                                 disabled={isDeletingAccount === orphanSlave.id}

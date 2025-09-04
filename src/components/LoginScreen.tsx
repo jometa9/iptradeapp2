@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Eye, EyeOff, Clipboard } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useExternalLink } from '../hooks/useExternalLink';
@@ -11,6 +11,7 @@ import { Input } from './ui/input';
 
 export const LoginScreen: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuth();
   const { openExternalLink } = useExternalLink();
 
@@ -32,6 +33,22 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setApiKey(text);
+      if (error) {
+        clearError();
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard contents: ', err);
+    }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-lg">
@@ -48,15 +65,43 @@ export const LoginScreen: React.FC = () => {
         <CardContent className="space-y-4 max-w-sm mx-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Input
-                id="apikey"
-                type="password"
-                placeholder="Insert your license here"
-                value={apiKey}
-                onChange={handleInputChange}
-                disabled={isLoading}
-                className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white "
-              />
+              <div className="relative">
+                <Input
+                  id="apikey"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Insert your license here"
+                  value={apiKey}
+                  onChange={handleInputChange}
+                  disabled={isLoading}
+                  className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white pr-20"
+                />
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={togglePasswordVisibility}
+                    disabled={isLoading}
+                    className="h-6 w-6 p-0 hover:bg-gray-100"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-3 w-3 text-gray-500" />
+                    ) : (
+                      <Eye className="h-3 w-3 text-gray-500" />
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handlePaste}
+                    disabled={isLoading}
+                    className="h-6 w-6 p-0 hover:bg-gray-100"
+                  >
+                    <Clipboard className="h-3 w-3 text-gray-500" />
+                  </Button>
+                </div>
+              </div>
             </div>
 
             {error && (
