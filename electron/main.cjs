@@ -290,7 +290,9 @@ async function createTray() {
 
       eventSource.onopen = () => {
         // Actualización inicial del menú - se actualizará cuando lleguen los datos
-        tray.setContextMenu(createTrayMenu('OFF'));
+        if (tray) {
+          tray.setContextMenu(createTrayMenu('OFF'));
+        }
       };
 
       eventSource.onmessage = event => {
@@ -301,8 +303,8 @@ async function createTray() {
           if (data.type === 'csv_updated' || data.type === 'initial_data') {
             const copierStatus = data.copierStatus?.globalStatus ? 'ON' : 'OFF';
 
-            // Solo actualizar si el estado cambió
-            if (tray.lastCopierStatus !== copierStatus) {
+            // Solo actualizar si el estado cambió y el tray existe
+            if (tray && tray.lastCopierStatus !== copierStatus) {
               tray.setContextMenu(createTrayMenu(copierStatus));
               tray.lastCopierStatus = copierStatus;
             }
@@ -311,8 +313,10 @@ async function createTray() {
       };
 
       eventSource.onerror = error => {
-        // En caso de error, mostrar estado OFF
-        tray.setContextMenu(createTrayMenu('OFF'));
+        // En caso de error, mostrar estado OFF solo si el tray existe
+        if (tray) {
+          tray.setContextMenu(createTrayMenu('OFF'));
+        }
 
         // Reintentar conexión después de 5 segundos
         setTimeout(() => {

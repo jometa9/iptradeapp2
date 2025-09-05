@@ -1734,10 +1734,15 @@ class CSVManager extends EventEmitter {
       const content = readFileSync(targetFile, 'utf8');
       const lines = content.split('\n').filter(line => line.trim());
 
-      // Solo reemplazar MASTER/SLAVE por PENDING, sin agregar nada más
+      // Solo modificar las líneas que corresponden a la cuenta específica
       const updatedLines = lines.map(line => {
-        // Reemplazar MASTER o SLAVE por PENDING, manteniendo el resto igual
-        return line.replace(/MASTER|SLAVE/g, 'PENDING');
+        // Verificar si esta línea corresponde a la cuenta que queremos convertir
+        if (line.includes(`[${accountId}]`)) {
+          // Solo reemplazar MASTER o SLAVE por PENDING en líneas que contengan el accountId específico
+          return line.replace(/MASTER|SLAVE/g, 'PENDING');
+        }
+        // Mantener las demás líneas sin cambios
+        return line;
       });
 
       // Escribir archivo actualizado

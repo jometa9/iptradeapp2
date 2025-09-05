@@ -768,6 +768,34 @@ router.post('/csv/account/:accountId/status', requireValidSubscription, async (r
     }
 
     const csvManager = (await import('../services/csvManager.js')).default;
+    
+    // Si se está desactivando una cuenta master, primero desactivar todas las slaves conectadas
+    if (!enabled) {
+      try {
+        // Obtener las slaves conectadas a este master
+        const connectedSlaves = csvManager.getConnectedSlaves(accountId);
+        
+        // Desactivar cada slave conectada antes de desactivar el master
+        for (const slave of connectedSlaves) {
+          try {
+            console.log(`🔧 Desactivando slave ${slave.id} conectada al master ${accountId}`);
+            await csvManager.updateAccountStatus(slave.id, false);
+          } catch (slaveError) {
+            console.error(`❌ Error desactivando slave ${slave.id}:`, slaveError);
+            // Continuar con las demás slaves aunque una falle
+          }
+        }
+        
+        if (connectedSlaves.length > 0) {
+          console.log(`✅ Se desactivaron ${connectedSlaves.length} slaves conectadas al master ${accountId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error procesando slaves del master ${accountId}:`, error);
+        // Continuar con la desactivación del master aunque haya errores con las slaves
+      }
+    }
+    
+    // Actualizar el estado de la cuenta (master o slave)
     const success = await csvManager.updateAccountStatus(accountId, enabled);
 
     if (success) {

@@ -1098,72 +1098,62 @@ const TradingAccountsConfigComponent = () => {
   };
 
   const getServerStatus = () => {
-    if (accounts.length === 0) return 'none';
+    // Use serverStats from unified endpoint as the single source of truth
+    const serverStats = unifiedData?.serverStats;
+    
+    if (!serverStats) return 'none';
 
-    // Use connectivity stats from backend if available, otherwise fallback to frontend calculation
-    if (connectivityStats) {
-      const { online, offline, pending, total } = connectivityStats;
+    // Calculate total accounts: masters + slaves + pending
+    const totalAccounts = (serverStats.totalMasterAccounts || 0) + 
+                         (serverStats.totalSlaveAccounts || 0) + 
+                         (serverStats.totalPendingAccounts || 0);
 
-      if (total === 0) return 'none';
+    if (totalAccounts === 0) return 'none';
 
-      // Calculate percentages
-      const pendingPercentage = (pending / total) * 100;
-      const offlinePercentage = (offline / total) * 100;
-      const onlinePercentage = (online / total) * 100;
-
-      // ORANGE: When most accounts are pending (more than 50% pending)
-      if (pendingPercentage > 50) {
-        return 'pending';
-      }
-
-      // GREEN: When all accounts are online and none are pending
-      if (onlinePercentage === 100 && pendingPercentage === 0) {
-        return 'optimal';
-      }
-
-      // RED: When most accounts are offline (more than 50% offline)
-      if (offlinePercentage > 50) {
-        return 'offline';
-      }
-
-      // Default to mixed status for other cases
-      return 'mixed';
-    }
-
-    // Fallback to frontend calculation
-    const onlineCount = accounts.filter(acc => acc.status === 'online').length;
-    const offlineCount = accounts.filter(acc => acc.status === 'offline').length;
-    const pendingCount = accounts.filter(acc => acc.status === 'pending').length;
-    const total = accounts.length;
-
-    if (total === 0) return 'none';
+    const onlineAccounts = serverStats.totalOnlineAccounts || 0;
+    const offlineAccounts = serverStats.totalOfflineAccounts || 0;
 
     // Calculate percentages
-    const pendingPercentage = (pendingCount / total) * 100;
-    const offlinePercentage = (offlineCount / total) * 100;
-    const onlinePercentage = (onlineCount / total) * 100;
+    const onlinePercentage = (onlineAccounts / totalAccounts) * 100;
+    const offlinePercentage = (offlineAccounts / totalAccounts) * 100;
 
-    // ORANGE: When most accounts are pending (more than 50% pending)
-    if (pendingPercentage > 50) {
-      return 'pending';
-    }
-
-    // GREEN: When all accounts are online and none are pending
-    if (onlinePercentage === 100 && pendingPercentage === 0) {
+    // GREEN: 100% online
+    if (onlinePercentage === 100) {
       return 'optimal';
     }
 
-    // RED: When most accounts are offline (more than 50% offline)
+    // RED: More than 50% offline
     if (offlinePercentage > 50) {
       return 'offline';
     }
 
-    // Default to mixed status for other cases
+    // YELLOW: More than 50% online but not 100%
+    if (onlinePercentage > 50) {
+      return 'mixed';
+    }
+
+    // Default case (shouldn't happen with proper data)
     return 'mixed';
   };
 
   const getServerStatusDetails = () => {
-    if (accounts.length === 0) {
+    // Use serverStats from unified endpoint as the single source of truth
+    const serverStats = unifiedData?.serverStats;
+    
+    if (!serverStats) {
+      return {
+        message: 'No server data available',
+        recommendation: 'Check server connection',
+        severity: 'info',
+      };
+    }
+
+    // Calculate total accounts: masters + slaves + pending
+    const totalAccounts = (serverStats.totalMasterAccounts || 0) + 
+                         (serverStats.totalSlaveAccounts || 0) + 
+                         (serverStats.totalPendingAccounts || 0);
+
+    if (totalAccounts === 0) {
       return {
         message: 'No accounts configured',
         recommendation: 'Add trading accounts to get started',
@@ -1171,109 +1161,31 @@ const TradingAccountsConfigComponent = () => {
       };
     }
 
-    // Use connectivity stats from backend if available
-    if (connectivityStats) {
-      const { online, offline, total } = connectivityStats;
+    const onlineAccounts = serverStats.totalOnlineAccounts || 0;
+    const offlineAccounts = serverStats.totalOfflineAccounts || 0;
 
-      if (total === 0) {
-        return {
-          message: 'No relevant accounts found',
-          recommendation: 'Add master or slave accounts to get started',
-          severity: 'info',
-        };
-      }
-
-      const onlinePercentage = Math.round((online / total) * 100);
-      const offlinePercentage = Math.round((offline / total) * 100);
-
-      const status = getServerStatus();
-
-      switch (status) {
-        case 'optimal':
-          return {
-            message: `${onlinePercentage}% of accounts are online - All operational`,
-            recommendation: 'All systems operational - copy trading active',
-            severity: 'success',
-          };
-        case 'offline':
-          return {
-            message: `${offlinePercentage}% of accounts are offline`,
-            recommendation: 'Check network connections and account credentials',
-            severity: 'error',
-          };
-        case 'mixed':
-          return {
-            message: `Mixed status: ${onlinePercentage}% online, ${offlinePercentage}% offline`,
-            recommendation: 'Address offline accounts to improve system performance',
-            severity: 'warning',
-          };
-        default:
-          return {
-            message: 'Unknown status',
-            recommendation: 'Check system configuration',
-            severity: 'info',
-          };
-      }
-    }
-
-    // Fallback to frontend calculation
-    // Usar directamente los stats del servidor
-    const stats = unifiedData?.serverStats;
-    
-    // Si no hay stats, retornar todos en 0
-    if (!stats) {
-      return {
-        message: 'No server stats available',
-        recommendation: 'Check server connection',
-        severity: 'warning'
-      };
-    }
-
-    const mastersCount = stats.totalMasterAccounts;
-    const slavesCount = stats.totalSlaveAccounts;
-    const pendingCount = stats.totalPendingAccounts;
-    const onlineCount = stats.totalOnlineAccounts;
-    const offlineCount = stats.totalOfflineAccounts;
-    const relevantTotal = mastersCount + slavesCount + pendingCount;
-
-    if (relevantTotal === 0) {
-      return {
-        message: 'No relevant accounts found',
-        recommendation: 'Add master or slave accounts to get started',
-        severity: 'info',
-      };
-    }
-
-    const slavesPercentage = Math.round((slavesCount / relevantTotal) * 100);
-    const mastersPercentage = Math.round((mastersCount / relevantTotal) * 100);
-    const offlinePercentage = Math.round((offlineCount / relevantTotal) * 100);
-    const pendingPercentage = Math.round((pendingCount / relevantTotal) * 100);
+    const onlinePercentage = Math.round((onlineAccounts / totalAccounts) * 100);
+    const offlinePercentage = Math.round((offlineAccounts / totalAccounts) * 100);
 
     const status = getServerStatus();
 
     switch (status) {
       case 'optimal':
         return {
-          message: `${mastersPercentage}% masters, ${slavesPercentage}% slaves - All operational`,
+          message: `${onlinePercentage}% online (${onlineAccounts}/${totalAccounts} accounts)`,
           recommendation: 'All systems operational - copy trading active',
           severity: 'success',
         };
       case 'offline':
         return {
-          message: `${offlinePercentage}% of accounts are offline`,
+          message: `${offlinePercentage}% offline (${offlineAccounts}/${totalAccounts} accounts)`,
           recommendation: 'Check network connections and account credentials',
           severity: 'error',
         };
-      case 'pending':
-        return {
-          message: `${pendingPercentage}% of accounts are pending`,
-          recommendation: 'Connect slaves to masters to enable copy trading',
-          severity: 'warning',
-        };
       case 'mixed':
         return {
-          message: `Mixed status: ${mastersPercentage}% masters, ${slavesPercentage}% slaves, ${offlinePercentage}% offline, ${pendingPercentage}% pending`,
-          recommendation: 'Connect slaves to masters and address offline accounts',
+          message: `Mixed status: ${onlinePercentage}% online, ${offlinePercentage}% offline`,
+          recommendation: 'Address offline accounts to improve system performance',
           severity: 'warning',
         };
       default:
@@ -1514,13 +1426,9 @@ const TradingAccountsConfigComponent = () => {
                 ? 'bg-green-50 border-green-200'
                 : getServerStatus() === 'offline'
                   ? 'bg-red-50 border-red-200'
-                  : getServerStatus() === 'pending'
-                    ? 'bg-orange-50 border-orange-200'
-                    : getServerStatus() === 'mixed'
-                      ? 'bg-orange-50 border-orange-200'
-                                        : getServerStatus() === 'mixed'
+                  : getServerStatus() === 'mixed'
                     ? 'bg-yellow-50 border-yellow-200'
-                        : 'bg-gray-50 border-gray-200'
+                    : 'bg-gray-50 border-gray-200'
             }`}
           >
             <div className="flex items-center justify-between p-4 px-6">
@@ -1533,8 +1441,6 @@ const TradingAccountsConfigComponent = () => {
                         return <CheckCircle className="h-4 w-4 text-green-500" />;
                       case 'offline':
                         return <WifiOff className="h-4 w-4 text-red-500" />;
-                      case 'pending':
-                        return <Clock className="h-4 w-4 text-orange-500" />;
                       case 'mixed':
                         return <AlertTriangle className="h-4 w-4 text-orange-500" />;
                       default:
@@ -1546,11 +1452,9 @@ const TradingAccountsConfigComponent = () => {
                       ? 'All Connected'
                       : getServerStatus() === 'offline'
                         ? 'Mostly Offline'
-                        : getServerStatus() === 'pending'
-                          ? 'Not Connected'
-                          : getServerStatus() === 'mixed'
-                            ? 'Mixed Status'
-                              : 'No Accounts'}
+                        : getServerStatus() === 'mixed'
+                          ? 'Mixed Status'
+                          : 'No Accounts'}
                   </div>
                 </div>
 
