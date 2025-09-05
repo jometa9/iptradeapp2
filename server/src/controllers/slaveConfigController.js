@@ -244,6 +244,8 @@ export const getSlaveConfig = async (req, res) => {
 
   // Primero intentar leer la configuración del CSV usando datos del scan
   let csvConfig = null;
+  let accountFound = false;
+  
   try {
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
@@ -259,6 +261,7 @@ export const getSlaveConfig = async (req, res) => {
           accountExists ||
           (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${slaveAccountId}]`))
         ) {
+          accountFound = true;
           const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n');
 
@@ -301,6 +304,13 @@ export const getSlaveConfig = async (req, res) => {
     csvConfig = configs[slaveAccountId] || getDefaultSlaveConfig();
   }
 
+  // Si la cuenta no se encontró en ningún lado, devolver error
+  if (!accountFound && !csvConfig) {
+    return res.status(404).json({
+      error: `Slave account ${slaveAccountId} not found in your accounts`,
+    });
+  }
+
   res.json({
     slaveAccountId,
     config: csvConfig,
@@ -331,6 +341,39 @@ export const setSlaveConfig = async (req, res) => {
   if (!slaveAccountId) {
     return res.status(400).json({
       error: 'slaveAccountId is required',
+    });
+  }
+
+  // Verificar que la cuenta esclava existe (en CSV o en registered_accounts.json)
+  let accountExists = false;
+  try {
+    const csvManager = await import('../services/csvManager.js')
+      .then(m => m.default)
+      .catch(() => null);
+
+    if (csvManager && csvManager.csvFiles) {
+      // Buscar en archivos CSV escaneados
+      for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+        const accountFound = fileData.data.some(account => account.account_id === slaveAccountId);
+        if (accountFound || (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${slaveAccountId}]`))) {
+          accountExists = true;
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error checking if slave account ${slaveAccountId} exists:`, error);
+  }
+
+  // Si no se encontró en CSV, verificar en registered_accounts.json
+  if (!accountExists) {
+    const configs = loadSlaveConfigs();
+    accountExists = configs[slaveAccountId] !== undefined;
+  }
+
+  if (!accountExists) {
+    return res.status(404).json({
+      error: `Slave account ${slaveAccountId} not found in your accounts`,
     });
   }
 

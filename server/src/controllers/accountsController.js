@@ -106,25 +106,34 @@ const checkAccountActivity = async () => {
         fileData.data.forEach(account => {
           const accountId = account.account_id;
           const accountType = account.account_type;
-          const lastActivity = new Date(account.timestamp);
-          const timeSinceActivity = now - lastActivity;
           const currentStatus = account.current_status || account.status;
 
-          // Check if account should be marked as offline
-          if (timeSinceActivity > ACTIVITY_TIMEOUT && currentStatus !== 'offline') {
-            // Update status in CSV file
-            const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
-            fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-            fileModified = true;
-            hasChanges = true;
-          }
-          // Check if account should be marked as online
-          else if (timeSinceActivity <= ACTIVITY_TIMEOUT && currentStatus === 'offline') {
-            // Update status in CSV file
-            const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
-            fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-            fileModified = true;
-            hasChanges = true;
+          // NUEVA LÓGICA: Usar tracking de cambios de timestamp
+          const trackingInfo = csvManager.getTimestampTracking(filePath);
+          
+          if (trackingInfo) {
+            const currentTime = Date.now();
+            const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
+            const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
+            
+            const shouldBeOnline = timeSinceLastChange <= fiveSecondsInMs;
+            
+            // Check if account should be marked as offline
+            if (!shouldBeOnline && currentStatus !== 'offline') {
+              // Update status in CSV file
+              const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
+              fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+              fileModified = true;
+              hasChanges = true;
+            }
+            // Check if account should be marked as online
+            else if (shouldBeOnline && currentStatus === 'offline') {
+              // Update status in CSV file
+              const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
+              fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
+              fileModified = true;
+              hasChanges = true;
+            }
           }
         });
 
@@ -474,7 +483,7 @@ export const getMasterAccount = (req, res) => {
 };
 
 // Get slave account
-export const getSlaveAccount = (req, res) => {
+export const getSlaveAccount = async (req, res) => {
   const { slaveAccountId } = req.params;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
@@ -490,7 +499,44 @@ export const getSlaveAccount = (req, res) => {
 
   // Get user-specific accounts
   const userAccounts = getUserAccounts(apiKey);
-  const account = userAccounts.slaveAccounts[slaveAccountId];
+  let account = userAccounts.slaveAccounts[slaveAccountId];
+
+  // Si no se encuentra en registered_accounts.json, buscar en CSV
+  if (!account) {
+    try {
+      const csvManager = await import('../services/csvManager.js')
+        .then(m => m.default)
+        .catch(() => null);
+
+      if (csvManager && csvManager.csvFiles) {
+        // Buscar en archivos CSV escaneados
+        for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          if (csvAccount) {
+            account = {
+              id: csvAccount.account_id,
+              name: `Account ${csvAccount.account_id}`,
+              platform: csvAccount.platform || 'Unknown',
+              status: csvAccount.status || 'offline',
+              balance: parseFloat(csvAccount.balance) || 0,
+              equity: parseFloat(csvAccount.equity) || 0,
+              margin: parseFloat(csvAccount.margin) || 0,
+              freeMargin: parseFloat(csvAccount.free_margin) || 0,
+              server: csvAccount.server || 'Unknown',
+              currency: csvAccount.currency || 'USD',
+              leverage: csvAccount.leverage || '1:100',
+              company: csvAccount.company || csvAccount.platform || 'Unknown',
+              createdAt: new Date().toISOString(),
+              source: 'csv_detected',
+            };
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error checking CSV for slave account ${slaveAccountId}:`, error);
+    }
+  }
 
   if (!account) {
     return res.status(404).json({
@@ -635,7 +681,7 @@ export const updateMasterAccount = (req, res) => {
 };
 
 // Update slave account
-export const updateSlaveAccount = (req, res) => {
+export const updateSlaveAccount = async (req, res) => {
   const { slaveAccountId } = req.params;
   const { name, description, broker, platform, status, masterAccountId } = req.body;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
@@ -653,7 +699,31 @@ export const updateSlaveAccount = (req, res) => {
   // Get user-specific accounts
   const userAccounts = getUserAccounts(apiKey);
 
-  if (!userAccounts.slaveAccounts[slaveAccountId]) {
+  // Verificar si la cuenta esclava existe (en registered_accounts.json o en CSV)
+  let accountExists = userAccounts.slaveAccounts[slaveAccountId] !== undefined;
+  
+  if (!accountExists) {
+    try {
+      const csvManager = await import('../services/csvManager.js')
+        .then(m => m.default)
+        .catch(() => null);
+
+      if (csvManager && csvManager.csvFiles) {
+        // Buscar en archivos CSV escaneados
+        for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          if (csvAccount) {
+            accountExists = true;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error checking CSV for slave account ${slaveAccountId}:`, error);
+    }
+  }
+
+  if (!accountExists) {
     return res.status(404).json({
       error: `Slave account ${slaveAccountId} not found in your accounts`,
     });
@@ -1258,7 +1328,7 @@ export const deleteMasterAccount = async (req, res) => {
 };
 
 // Delete slave account
-export const deleteSlaveAccount = (req, res) => {
+export const deleteSlaveAccount = async (req, res) => {
   const { slaveAccountId } = req.params;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
@@ -1275,7 +1345,31 @@ export const deleteSlaveAccount = (req, res) => {
   // Get user-specific accounts
   const userAccounts = getUserAccounts(apiKey);
 
-  if (!userAccounts.slaveAccounts[slaveAccountId]) {
+  // Verificar si la cuenta esclava existe (en registered_accounts.json o en CSV)
+  let accountExists = userAccounts.slaveAccounts[slaveAccountId] !== undefined;
+  
+  if (!accountExists) {
+    try {
+      const csvManager = await import('../services/csvManager.js')
+        .then(m => m.default)
+        .catch(() => null);
+
+      if (csvManager && csvManager.csvFiles) {
+        // Buscar en archivos CSV escaneados
+        for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          if (csvAccount) {
+            accountExists = true;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error checking CSV for slave account ${slaveAccountId}:`, error);
+    }
+  }
+
+  if (!accountExists) {
     return res.status(404).json({
       error: `Slave account ${slaveAccountId} not found in your accounts`,
     });
@@ -1376,27 +1470,25 @@ export const getPendingAccounts = async (req, res) => {
         const timestamp = account.timestamp;
         const filePath = account.filePath;
 
-        // TIMESTAMP VALIDATION LOGIC
-        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
-        const accountTimestamp = parseInt(timestamp);
-        const timeDifference = currentTime - accountTimestamp;
-
-        // RULE 1: If more than 1 hour (3600 seconds) has passed, DON'T return the account
-        if (timeDifference > 3600) {
+        // NUEVA LÓGICA: Usar tracking de cambios de timestamp
+        const trackingInfo = csvManager.getTimestampTracking(filePath);
+        
+        if (!trackingInfo) {
+          continue; // No tenemos información de tracking, skip
+        }
+        
+        const currentTime = Date.now();
+        const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
+        const oneHourInMs = 60 * 60 * 1000; // 1 hora en milisegundos
+        const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
+        
+        // RULE 1: Si han pasado más de 1 hora desde la última actualización, no devolver la cuenta
+        if (timeSinceLastChange > oneHourInMs) {
           continue; // Skip this account
         }
-
-        // RULE 2: Respect the original status from CSV, don't override based on timestamp
-        let finalStatus = account.status || 'online';
-
-        // Only apply timestamp-based logic if the account doesn't have a specific status
-        if (!account.status) {
-          if (timeDifference > 3) {
-            finalStatus = 'offline';
-          } else {
-            finalStatus = 'online';
-          }
-        }
+        
+        // RULE 2: Mostrar como offline si han pasado más de 5 segundos desde la última actualización
+        let finalStatus = timeSinceLastChange <= fiveSecondsInMs ? 'online' : 'offline';
 
         const pendingAccount = {
           account_id: accountId,
@@ -1405,6 +1497,7 @@ export const getPendingAccounts = async (req, res) => {
           status: finalStatus,
           timestamp: timestamp,
           filePath: filePath,
+          trackingInfo: trackingInfo, // Información de tracking para debugging
         };
 
         allPendingAccounts.push(pendingAccount);
@@ -2138,25 +2231,27 @@ export const getUnifiedAccountData = async (req, res) => {
 
     for (const account of allAccounts.pendingAccounts || []) {
       const accountTimestamp = parseInt(account.timestamp);
-      const timeDifference = currentTime - accountTimestamp;
+      const filePath = account.filePath;
 
-      // RULE 1: If more than 1 hour (3600 seconds) has passed, DON'T return the account
-      if (timeDifference > 3600) {
+      // NUEVA LÓGICA: Usar tracking de cambios de timestamp
+      const trackingInfo = csvManager.getTimestampTracking(filePath);
+      
+      if (!trackingInfo) {
+        continue; // No tenemos información de tracking, skip
+      }
+      
+      const currentTime = Date.now();
+      const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
+      const oneHourInMs = 60 * 60 * 1000; // 1 hora en milisegundos
+      const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
+      
+      // RULE 1: Si han pasado más de 1 hora desde la última actualización, no devolver la cuenta
+      if (timeSinceLastChange > oneHourInMs) {
         continue; // Skip this account
       }
-
-      // RULE 2: For pending accounts, respect their original status from CSV
-      // Don't override the status based on timestamp difference
-      let finalStatus = account.status || 'online';
-
-      // Only apply timestamp-based logic if the account doesn't have a specific status
-      if (!account.status) {
-        if (timeDifference > 3) {
-          finalStatus = 'offline';
-        } else {
-          finalStatus = 'online';
-        }
-      }
+      
+      // RULE 2: Mostrar como offline si han pasado más de 5 segundos desde la última actualización
+      let finalStatus = timeSinceLastChange <= fiveSecondsInMs ? 'online' : 'offline';
 
       const pendingAccount = {
         account_id: account.account_id,
@@ -2164,8 +2259,8 @@ export const getUnifiedAccountData = async (req, res) => {
         status: finalStatus,
         current_status: finalStatus,
         timestamp: accountTimestamp,
-        timeDifference: timeDifference,
-        filePath: account.filePath,
+        filePath: filePath,
+        trackingInfo: trackingInfo, // Información de tracking para debugging
         lastActivity: new Date(accountTimestamp * 1000).toISOString(),
       };
 

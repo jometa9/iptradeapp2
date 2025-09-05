@@ -26,6 +26,10 @@ class CSVManager extends EventEmitter {
       this.retryDelay = 1000; // Delay base entre reintentos (ms)
       this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
       
+      // Sistema de tracking de cambios de timestamp
+      this.timestampChangeTracking = new Map(); // filePath -> { lastTimestamp, lastChangeTime }
+      this.onlineThreshold = 5; // 5 segundos sin cambios = offline
+      
       this.init();
     }
 
@@ -1064,24 +1068,22 @@ class CSVManager extends EventEmitter {
               currentAccountData.status = values[1].toLowerCase(); // online/offline
               currentAccountData.timestamp = values[2];
 
-              // Para cuentas pending, respetar el estado original del CSV
-              // No sobrescribir el estado basado en timestamp para cuentas convertidas
+              // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
+              const timestampChanged = this.detectTimestampChange(filePath, values[2]);
+              
+              // Determinar estado online/offline basado en la última vez que cambió el timestamp
+              const isOnline = this.isFileOnline(filePath);
+              
+              // Para cuentas pending, usar la nueva lógica de tracking
               if (currentAccountData.account_type === 'pending') {
-                // Solo aplicar lógica de timestamp si el estado original es 'online'
-                // y queremos verificar si realmente sigue online
-                if (values[1].toLowerCase() === 'online') {
-                  const now = Date.now() / 1000;
-                  const pingTime = parseInt(values[2]) || 0;
-                  const timeDiff = now - pingTime;
-
-                  const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos
-
-                  // Solo cambiar a offline si el timestamp indica que no está activo
-                  if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
-                    currentAccountData.status = 'offline';
-                  }
+                // Usar el estado basado en tracking de cambios de timestamp
+                currentAccountData.status = isOnline ? 'online' : 'offline';
+              } else {
+                // Para cuentas master/slave, mantener la lógica original pero también considerar tracking
+                if (values[1].toLowerCase() === 'online' && !isOnline) {
+                  // Si el CSV dice online pero nuestro tracking dice offline, usar offline
+                  currentAccountData.status = 'offline';
                 }
-                // Si el estado original es 'offline', mantenerlo como offline
               }
             }
             break;
@@ -1259,15 +1261,20 @@ class CSVManager extends EventEmitter {
                 currentAccountData.status = values[1].toLowerCase(); // online/offline
                 currentAccountData.timestamp = values[2];
 
-                // Para cuentas pending, calcular si realmente está online basado en timestamp
+                // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
+                const timestampChanged = this.detectTimestampChange(filePath, values[2]);
+                
+                // Determinar estado online/offline basado en la última vez que cambió el timestamp
+                const isOnline = this.isFileOnline(filePath);
+                
+                // Para cuentas pending, usar la nueva lógica de tracking
                 if (currentAccountData.account_type === 'pending') {
-                  const now = Date.now() / 1000;
-                  const pingTime = parseInt(values[2]) || 0;
-                  const timeDiff = now - pingTime;
-
-                  const PENDING_ONLINE_THRESHOLD = 5; // 5 segundos
-
-                  if (timeDiff > PENDING_ONLINE_THRESHOLD || timeDiff < -5) {
+                  // Usar el estado basado en tracking de cambios de timestamp
+                  currentAccountData.status = isOnline ? 'online' : 'offline';
+                } else {
+                  // Para cuentas master/slave, mantener la lógica original pero también considerar tracking
+                  if (values[1].toLowerCase() === 'online' && !isOnline) {
+                    // Si el CSV dice online pero nuestro tracking dice offline, usar offline
                     currentAccountData.status = 'offline';
                   }
                 }
@@ -2243,6 +2250,69 @@ class CSVManager extends EventEmitter {
     }
     
     return false; // Indicar que el archivo no fue eliminado
+  }
+
+  // ===== SISTEMA DE TRACKING DE CAMBIOS DE TIMESTAMP =====
+
+  // Detectar si el timestamp de un archivo ha cambiado
+  detectTimestampChange(filePath, newTimestamp) {
+    const normalizedPath = this.normalizePath(filePath);
+    const currentTime = Date.now();
+    
+    // Obtener el tracking actual para este archivo
+    const currentTracking = this.timestampChangeTracking.get(normalizedPath);
+    
+    if (!currentTracking) {
+      // Primera vez que vemos este archivo
+      this.timestampChangeTracking.set(normalizedPath, {
+        lastTimestamp: newTimestamp,
+        lastChangeTime: currentTime,
+        firstSeen: currentTime
+      });
+      return true; // Considerar como cambio para inicializar
+    }
+    
+    // Verificar si el timestamp ha cambiado
+    if (currentTracking.lastTimestamp !== newTimestamp) {
+      // Timestamp cambió, actualizar tracking
+      this.timestampChangeTracking.set(normalizedPath, {
+        lastTimestamp: newTimestamp,
+        lastChangeTime: currentTime,
+        firstSeen: currentTracking.firstSeen
+      });
+      return true; // Hubo un cambio
+    }
+    
+    return false; // No hubo cambio
+  }
+
+  // Determinar si un archivo está online basado en la última vez que cambió su timestamp
+  isFileOnline(filePath) {
+    const normalizedPath = this.normalizePath(filePath);
+    const currentTime = Date.now();
+    const tracking = this.timestampChangeTracking.get(normalizedPath);
+    
+    if (!tracking) {
+      return false; // No tenemos información sobre este archivo
+    }
+    
+    const timeSinceLastChange = currentTime - tracking.lastChangeTime;
+    return timeSinceLastChange <= (this.onlineThreshold * 1000); // Convertir a milisegundos
+  }
+
+  // Obtener información de tracking para un archivo
+  getTimestampTracking(filePath) {
+    const normalizedPath = this.normalizePath(filePath);
+    return this.timestampChangeTracking.get(normalizedPath);
+  }
+
+  // Limpiar tracking de archivos que ya no existen
+  cleanupTimestampTracking() {
+    for (const [filePath, tracking] of this.timestampChangeTracking.entries()) {
+      if (!existsSync(filePath)) {
+        this.timestampChangeTracking.delete(filePath);
+      }
+    }
   }
 }
 
