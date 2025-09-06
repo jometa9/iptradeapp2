@@ -423,7 +423,8 @@ class CSVManager extends EventEmitter {
               content = buffer.toString('utf8');
             }
 
-            const lines = content.split('\n').filter(line => line.trim());
+            const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+            const lines = sanitizedContent.split('\n').filter(line => line.trim());
 
             // Check if this is the new CSV2 format first
             const csv2Account = this.parseCSV2Format(lines, filePath, currentTime);
@@ -1761,16 +1762,16 @@ class CSVManager extends EventEmitter {
 
       // Leer el archivo completo
       const content = readFileSync(targetFile, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
+      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+      const lines = sanitizedContent.split('\n').filter(line => line.trim());
 
       // Solo modificar las líneas que corresponden a la cuenta específica
       const updatedLines = lines.map(line => {
-        // Verificar si esta línea corresponde a la cuenta que queremos convertir
-        if (line.includes(`[${accountId}]`)) {
-          // Solo reemplazar MASTER o SLAVE por PENDING en líneas que contengan el accountId específico
-          return line.replace(/MASTER|SLAVE/g, 'PENDING');
+        // Solo modificar líneas CONFIG que contengan MASTER o SLAVE
+        if (line.includes('[CONFIG]') && (line.includes('[MASTER]') || line.includes('[SLAVE]'))) {
+          return `[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]`;
         }
-        // Mantener las demás líneas sin cambios
+        // Mantener todas las demás líneas sin cambios (TYPE, STATUS, ORDER)
         return line;
       });
 
@@ -1850,7 +1851,8 @@ class CSVManager extends EventEmitter {
 
       // Leer el archivo completo
       const content = readFileSync(targetFile, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
+      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+      const lines = sanitizedContent.split('\n').filter(line => line.trim());
       
       console.log(`📖 ORIGINAL CSV content for ${accountId}:`);
       console.log(content);
@@ -2039,7 +2041,8 @@ class CSVManager extends EventEmitter {
         try {
           if (existsSync(filePath)) {
             const content = readFileSync(filePath, 'utf8');
-            const lines = content.split('\n');
+            const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+            const lines = sanitizedContent.split('\n');
             const newLines = [];
             let fileModified = false;
 
@@ -2118,7 +2121,8 @@ class CSVManager extends EventEmitter {
 
       // Leer el archivo completo
       const content = readFileSync(targetFile, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
+      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+      const lines = sanitizedContent.split('\n').filter(line => line.trim());
       let currentAccountId = null;
       const updatedLines = [];
 
@@ -2302,6 +2306,13 @@ class CSVManager extends EventEmitter {
     // Obtener el tracking actual para este archivo
     const currentTracking = this.timestampChangeTracking.get(normalizedPath);
     
+    // Debug logging para cTrader
+    if (filePath.includes('CTRADER')) {
+      console.log(`🔍 [CTRADER DEBUG] detectTimestampChange for ${filePath}`);
+      console.log(`   New timestamp: ${newTimestamp}`);
+      console.log(`   Current tracking:`, currentTracking);
+    }
+    
     if (!currentTracking) {
       // Primera vez que vemos este archivo
       this.timestampChangeTracking.set(normalizedPath, {
@@ -2309,6 +2320,9 @@ class CSVManager extends EventEmitter {
         lastChangeTime: currentTime,
         firstSeen: currentTime
       });
+      if (filePath.includes('CTRADER')) {
+        console.log(`   ✅ First time seeing file, marked as changed`);
+      }
       return true; // Considerar como cambio para inicializar
     }
     
@@ -2320,9 +2334,15 @@ class CSVManager extends EventEmitter {
         lastChangeTime: currentTime,
         firstSeen: currentTracking.firstSeen
       });
+      if (filePath.includes('CTRADER')) {
+        console.log(`   ✅ Timestamp changed: ${currentTracking.lastTimestamp} → ${newTimestamp}`);
+      }
       return true; // Hubo un cambio
     }
     
+    if (filePath.includes('CTRADER')) {
+      console.log(`   ❌ No timestamp change detected`);
+    }
     return false; // No hubo cambio
   }
 
@@ -2332,12 +2352,29 @@ class CSVManager extends EventEmitter {
     const currentTime = Date.now();
     const tracking = this.timestampChangeTracking.get(normalizedPath);
     
+    // Debug logging para cTrader
+    if (filePath.includes('CTRADER')) {
+      console.log(`🔍 [CTRADER DEBUG] isFileOnline for ${filePath}`);
+      console.log(`   Tracking info:`, tracking);
+    }
+    
     if (!tracking) {
+      if (filePath.includes('CTRADER')) {
+        console.log(`   ❌ No tracking info found - returning false`);
+      }
       return false; // No tenemos información sobre este archivo
     }
     
     const timeSinceLastChange = currentTime - tracking.lastChangeTime;
-    return timeSinceLastChange <= (this.onlineThreshold * 1000); // Convertir a milisegundos
+    const isOnline = timeSinceLastChange <= (this.onlineThreshold * 1000); // Convertir a milisegundos
+    
+    if (filePath.includes('CTRADER')) {
+      console.log(`   Time since last change: ${timeSinceLastChange}ms`);
+      console.log(`   Online threshold: ${this.onlineThreshold * 1000}ms`);
+      console.log(`   Result: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    }
+    
+    return isOnline;
   }
 
   // Obtener información de tracking para un archivo
@@ -2374,7 +2411,8 @@ class CSVManager extends EventEmitter {
   // Helper para obtener encoding y line endings según plataforma
   getEncodingForPlatform(platform) {
     if (platform === 'CTRADER') {
-      return { encoding: 'utf8', lineEnding: '\n' };
+      // cTrader en Windows usa \r\n line endings
+      return { encoding: 'utf8', lineEnding: '\r\n' };
     } else {
       // MT4/MT5 - usar Windows-1252 (ANSI)
       return { encoding: 'latin1', lineEnding: '\r\n' };
