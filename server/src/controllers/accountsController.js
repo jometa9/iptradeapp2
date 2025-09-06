@@ -926,14 +926,33 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
     }
 
     // Generate new CSV2 format content for master account (WITH SPACES)
-    let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
-    csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []\n`;
+    let csvContent, encoding, lineEnding;
+    
+    // Detectar plataforma y usar encoding/line endings apropiados
+    if (platform === 'CTRADER') {
+      // cTrader usa C# que prefiere UTF-8 con \n
+      lineEnding = '\n';
+      encoding = 'utf8';
+    } else {
+      // MT4/MT5 usan MQL que prefiere Windows-1252 (ANSI)
+      lineEnding = '\r\n';
+      encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
+    }
+    
+    csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]${lineEnding}`;
+    csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]${lineEnding}`;
+    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []${lineEnding}`;
 
     // Write the master account to CSV in new format
     // Ensure we're writing to .csv not .cssv
     const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
-    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
+    // Para MT4/MT5, escribir como buffer para evitar problemas de encoding
+    if (platform === 'CTRADER') {
+      writeFileSync(correctPath, csvContent, encoding);
+    } else {
+      // Escribir directamente con encoding latin1 (Windows-1252/ANSI)
+      writeFileSync(correctPath, csvContent, encoding);
+    }
 
     return true;
   } catch (error) {
@@ -1084,14 +1103,33 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
     } catch (error) {}
 
     // Generate new CSV2 format content for slave account (WITH SPACES)
-    let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]\n`;
-    csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]\n`;
-    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]\n`;
+    let csvContent, encoding, lineEnding;
+    
+    // Detectar plataforma y usar encoding/line endings apropiados
+    if (platform === 'CTRADER') {
+      // cTrader usa C# que prefiere UTF-8 con \n
+      lineEnding = '\n';
+      encoding = 'utf8';
+    } else {
+      // MT4/MT5 usan MQL que prefiere Windows-1252 (ANSI)
+      lineEnding = '\r\n';
+      encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
+    }
+    
+    csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]${lineEnding}`;
+    csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]${lineEnding}`;
+    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]${lineEnding}`;
 
-    // Write the slave account to CSV in new format with Unix line endings
+    // Write the slave account to CSV in new format
     // Ensure we're writing to .csv not .cssv
     const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
-    writeFileSync(correctPath, csvContent.replace(/\r\n/g, '\n'), 'utf8');
+    // Para MT4/MT5, escribir como buffer para evitar problemas de encoding
+    if (platform === 'CTRADER') {
+      writeFileSync(correctPath, csvContent, encoding);
+    } else {
+      // Escribir directamente con encoding latin1 (Windows-1252/ANSI)
+      writeFileSync(correctPath, csvContent, encoding);
+    }
 
     return true;
   } catch (error) {

@@ -12,5 +12,12 @@
     "reverseTrading": false,
     "prefix": "prefix",
     "suffix": "sufix"
+  },
+  "260072071": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false,
+    "prefix": "aa",
+    "suffix": "eeaaa"
   }
 }

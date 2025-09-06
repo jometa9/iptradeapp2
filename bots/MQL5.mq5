@@ -67,7 +67,9 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void InitializeCsv()
 {
-    int handle = FileOpen(csvFileName, FILE_READ|FILE_TXT);
+    // SOLO crear archivo si NO existe - NUNCA sobrescribir
+    // Usar FILE_ANSI + FILE_SHARE para compatibilidad con servidor
+    int handle = FileOpen(csvFileName, FILE_READ|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE)
     {
         // File doesn't exist, create it
@@ -84,13 +86,19 @@ void InitializeCsv()
 //+------------------------------------------------------------------+
 void CreateDefaultCsv()
 {
-    int handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT);
+    // ESCRITURA COMPATIBLE CON SERVIDOR - FILE_ANSI + SHARE
+    int handle = FileOpen(csvFileName, FILE_WRITE|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle != INVALID_HANDLE)
     {
-        long timestamp = TimeGMT(); // UTC timestamp with seconds
-        FileWriteString(handle, "[TYPE] [PENDING] [MT5] [" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "]\n");
-        FileWriteString(handle, "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]\n");
-        FileWriteString(handle, "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]\n");
+        long timestamp = TimeGMT();
+        string line1 = "[TYPE] [PENDING] [MT5] [" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "]";
+        string line2 = "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]";
+        string line3 = "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]";
+        
+        FileWriteString(handle, line1 + "\r\n");
+        FileWriteString(handle, line2 + "\r\n");
+        FileWriteString(handle, line3 + "\r\n");
+        
         FileClose(handle);
         Print("Created default CSV file: ", csvFileName);
     }
@@ -101,48 +109,34 @@ void CreateDefaultCsv()
 //+------------------------------------------------------------------+
 void ReadAndValidateCsv()
 {
-    int handle = FileOpen(csvFileName, FILE_READ|FILE_TXT);
+    // LECTURA COMPATIBLE - FILE_ANSI + SHARE para leer archivos del servidor
+    int handle = FileOpen(csvFileName, FILE_READ|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE) return;
-    
-    Print("=== Reading CSV lines ===");
     
     string line1 = "", line2 = "", line3 = "";
     
-    // Read first three lines
+    // Leer líneas completas como strings
     if(!FileIsEnding(handle)) line1 = FileReadString(handle);
     if(!FileIsEnding(handle)) line2 = FileReadString(handle);
     if(!FileIsEnding(handle)) line3 = FileReadString(handle);
     
-    // Log all lines read
-    Print("Line 1 (TYPE): ", line1);
-    Print("Line 2 (STATUS): ", line2);
-    Print("Line 3 (CONFIG): ", line3);
-    
-    // Read and log any additional lines (orders)
-    int lineCount = 4;
-    while(!FileIsEnding(handle))
-    {
-        string additionalLine = FileReadString(handle);
-        if(additionalLine != "")
-        {
-            Print("Line ", lineCount, " (ORDER): ", additionalLine);
-            lineCount++;
-        }
-    }
-    
     FileClose(handle);
-    Print("=== End CSV reading ===");
     
-    // Validate format
-    if(StringFind(line1, "[TYPE]") == -1 || StringFind(line2, "[STATUS]") == -1 || StringFind(line3, "[CONFIG]") == -1)
+    Print("=== COMPATIBLE CSV READ ===");
+    Print("Line 1: ", line1);
+    Print("Line 2: ", line2);
+    Print("Line 3: ", line3);
+    Print("=== END ===");
+    
+    // Validación básica
+    if(StringFind(line1, "[TYPE]") >= 0 && StringFind(line2, "[STATUS]") >= 0 && StringFind(line3, "[CONFIG]") >= 0)
     {
-        // Invalid format, recreate
-        CreateDefaultCsv();
-        return;
+        ParseConfigLine(line3);
     }
-    
-    // Parse CONFIG line to extract variables
-    ParseConfigLine(line3);
+    else
+    {
+        Print("ADVERTENCIA: Formato CSV inesperado - NO sobrescribiendo");
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -155,15 +149,34 @@ void ParseConfigLine(string configLine)
     
     if(count >= 10)
     {
-        accountType = StringSubstr(parts[1], 1, StringLen(parts[1])-2); // Remove brackets
-        copyTrading = StringSubstr(parts[2], 1, StringLen(parts[2])-2);
-        lotMultiplier = StringToDouble(StringSubstr(parts[3], 1, StringLen(parts[3])-2));
-        forceLot = StringSubstr(parts[4], 1, StringLen(parts[4])-2);
-        reverseTrading = StringSubstr(parts[5], 1, StringLen(parts[5])-2);
-        masterId = StringSubstr(parts[6], 1, StringLen(parts[6])-2);
-        masterCsvPath = StringSubstr(parts[7], 1, StringLen(parts[7])-2);
-        prefix = StringSubstr(parts[8], 1, StringLen(parts[8])-2);
-        suffix = StringSubstr(parts[9], 1, StringLen(parts[9])-2);
+        // Solo actualizar variables globales con valores del CSV para lectura
+        // No sobrescribir - solo leer y actualizar variables globales
+        string csvAccountType = StringSubstr(parts[1], 1, StringLen(parts[1])-2);
+        string csvCopyTrading = StringSubstr(parts[2], 1, StringLen(parts[2])-2);
+        double csvLotMultiplier = StringToDouble(StringSubstr(parts[3], 1, StringLen(parts[3])-2));
+        string csvForceLot = StringSubstr(parts[4], 1, StringLen(parts[4])-2);
+        string csvReverseTrading = StringSubstr(parts[5], 1, StringLen(parts[5])-2);
+        string csvMasterId = StringSubstr(parts[6], 1, StringLen(parts[6])-2);
+        string csvMasterCsvPath = StringSubstr(parts[7], 1, StringLen(parts[7])-2);
+        string csvPrefix = StringSubstr(parts[8], 1, StringLen(parts[8])-2);
+        string csvSuffix = StringSubstr(parts[9], 1, StringLen(parts[9])-2);
+        
+        // Actualizar variables globales solo para lectura (no sobrescribir en CSV)
+        accountType = csvAccountType;
+        copyTrading = csvCopyTrading;
+        lotMultiplier = csvLotMultiplier;
+        forceLot = csvForceLot;
+        reverseTrading = csvReverseTrading;
+        masterId = csvMasterId;
+        masterCsvPath = csvMasterCsvPath;
+        prefix = csvPrefix;
+        suffix = csvSuffix;
+        
+        Print("Variables globales actualizadas desde CSV (solo lectura)");
+        Print("AccountType: ", accountType, ", CopyTrading: ", copyTrading);
+        Print("LotMultiplier: ", lotMultiplier, ", ForceLot: ", forceLot);
+        Print("ReverseTrading: ", reverseTrading, ", MasterId: ", masterId);
+        Print("MasterCsvPath: ", masterCsvPath, ", Prefix: ", prefix, ", Suffix: ", suffix);
     }
 }
 
@@ -172,19 +185,21 @@ void ParseConfigLine(string configLine)
 //+------------------------------------------------------------------+
 void WritePing()
 {
-    // Read all content
-    int handle = FileOpen(csvFileName, FILE_READ|FILE_TXT);
+    if(accountType == "CORRUPTED") return;
+    
+    // Leer archivo completo con FILE_ANSI + SHARE
+    int handle = FileOpen(csvFileName, FILE_READ|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE) return;
     
-    string content = "";
+    string lines[];
+    int lineCount = 0;
     while(!FileIsEnding(handle))
     {
-        content += FileReadString(handle) + "\n";
+        ArrayResize(lines, lineCount + 1);
+        lines[lineCount] = FileReadString(handle);
+        lineCount++;
     }
     FileClose(handle);
-    
-    string lines[];
-    StringSplit(content, "\n", lines);
     
     if(ArraySize(lines) >= 2)
     {
@@ -202,14 +217,14 @@ void WritePing()
             Print("Updated ping timestamp to: ", timestamp, " (Unix UTC0 seconds)");
         }
         
-        // Write back to file
-        handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT);
+        // Escribir de vuelta con FILE_ANSI + SHARE
+        handle = FileOpen(csvFileName, FILE_WRITE|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
         if(handle != INVALID_HANDLE)
         {
-            for(int i = 0; i < ArraySize(lines); i++)
+            for(int i = 0; i < lineCount; i++)
             {
                 if(lines[i] != "")
-                    FileWriteString(handle, lines[i] + "\n");
+                    FileWriteString(handle, lines[i] + "\r\n");
             }
             FileClose(handle);
         }
@@ -221,7 +236,7 @@ void WritePing()
 //+------------------------------------------------------------------+
 void ProcessAccountType()
 {
-    if(accountType == "PENDING") return;
+    if(accountType == "PENDING" || accountType == "CORRUPTED") return;
     
     if(accountType == "MASTER" && copyTrading == "ENABLED")
     {
@@ -240,7 +255,7 @@ void ProcessMasterAccount()
 {
     // Read first 3 lines
     string headerLines[3];
-    int handle = FileOpen(csvFileName, FILE_READ|FILE_TXT);
+    int handle = FileOpen(csvFileName, FILE_READ|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE) return;
     
     for(int i = 0; i < 3 && !FileIsEnding(handle); i++)
@@ -250,13 +265,13 @@ void ProcessMasterAccount()
     FileClose(handle);
     
     // Write header + orders
-    handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT);
+    handle = FileOpen(csvFileName, FILE_WRITE|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE) return;
     
     // Write header lines
     for(int i = 0; i < 3; i++)
     {
-        FileWriteString(handle, headerLines[i] + "\n");
+        FileWriteString(handle, headerLines[i] + "\r\n");
     }
     
     // Write current orders
@@ -299,7 +314,7 @@ void ProcessMasterAccount()
                               DoubleToString(OrderGetDouble(ORDER_TP), _Digits) + "] [" +
                               IntegerToString(openTime) + "]";
             
-            FileWriteString(handle, orderLine + "\n");
+            FileWriteString(handle, orderLine + "\r\n");
         }
     }
     
@@ -338,7 +353,7 @@ void ProcessMasterAccount()
                               DoubleToString(PositionGetDouble(POSITION_TP), _Digits) + "] [" +
                               IntegerToString(openTime) + "]";
             
-            FileWriteString(handle, orderLine + "\n");
+            FileWriteString(handle, orderLine + "\r\n");
         }
     }
     
@@ -355,7 +370,7 @@ void ProcessSlaveAccount()
     Print("=== Reading Master CSV: ", masterCsvPath, " ===");
     
     // Read master CSV orders
-    int handle = FileOpen(masterCsvPath, FILE_READ|FILE_TXT);
+    int handle = FileOpen(masterCsvPath, FILE_READ|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle == INVALID_HANDLE) 
     {
         Print("ERROR: Cannot open master CSV file: ", masterCsvPath);

@@ -1754,7 +1754,12 @@ class CSVManager extends EventEmitter {
 
       // Escribir archivo actualizado
       try {
-        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+        // Detectar plataforma del archivo para usar encoding correcto
+        const platform = this.detectPlatformFromFile(targetFile, updatedLines);
+        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+        // Escribir con encoding específico por plataforma
+        const content = updatedLines.join(lineEnding) + lineEnding;
+        writeFileSync(targetFile, content, encoding);
       } catch (writeError) {
         this.handleFileError(targetFile, writeError, 'writing');
         return false;
@@ -1922,7 +1927,12 @@ class CSVManager extends EventEmitter {
       // Escribir archivo actualizado usando archivo temporal
       const tmpFile = `${targetFile}.tmp`;
       try {
-        writeFileSync(tmpFile, newContent, 'utf8');
+        // Detectar plataforma para usar encoding correcto
+        const platform = this.detectPlatformFromFile(targetFile);
+        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+        const formattedContent = newContent.replace(/\n/g, lineEnding);
+        // Escribir con encoding específico por plataforma
+        writeFileSync(tmpFile, formattedContent, encoding);
         renameSync(tmpFile, targetFile);
       } catch (error) {
         console.error(`❌ Error writing file: ${error.message}`);
@@ -2031,7 +2041,10 @@ class CSVManager extends EventEmitter {
 
             if (fileModified) {
               try {
-                writeFileSync(filePath, newLines.join('\n') + '\n', 'utf8');
+                // Detectar plataforma del archivo para usar encoding correcto
+                const platform = this.detectPlatformFromFile(filePath, newLines);
+                const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+                writeFileSync(filePath, newLines.join(lineEnding) + lineEnding, encoding);
                 updatedFiles++;
                 this.refreshFileData(filePath);
               } catch (writeError) {
@@ -2114,7 +2127,12 @@ class CSVManager extends EventEmitter {
 
       // Escribir archivo actualizado
       try {
-        writeFileSync(targetFile, updatedLines.join('\n') + '\n', 'utf8');
+        // Detectar plataforma del archivo para usar encoding correcto
+        const platform = this.detectPlatformFromFile(targetFile, updatedLines);
+        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+        // Escribir con encoding específico por plataforma
+        const content = updatedLines.join(lineEnding) + lineEnding;
+        writeFileSync(targetFile, content, encoding);
         this.refreshFileData(targetFile);
       } catch (writeError) {
         this.handleFileError(targetFile, writeError, 'writing');
@@ -2312,6 +2330,35 @@ class CSVManager extends EventEmitter {
       if (!existsSync(filePath)) {
         this.timestampChangeTracking.delete(filePath);
       }
+    }
+  }
+
+  // Helper para detectar plataforma desde archivo o contenido
+  detectPlatformFromFile(filePath, lines = null) {
+    // Intentar detectar desde el nombre del archivo
+    if (filePath.includes('IPTRADECSV2')) {
+      // Es un archivo de bot, intentar detectar plataforma desde contenido
+      if (lines && lines.length > 0) {
+        const typeLine = lines.find(line => line.includes('[TYPE]'));
+        if (typeLine) {
+          if (typeLine.includes('[MT4]')) return 'MT4';
+          if (typeLine.includes('[MT5]')) return 'MT5';
+          if (typeLine.includes('[CTRADER]')) return 'CTRADER';
+        }
+      }
+    }
+    
+    // Default a MT5 si no se puede detectar
+    return 'MT5';
+  }
+
+  // Helper para obtener encoding y line endings según plataforma
+  getEncodingForPlatform(platform) {
+    if (platform === 'CTRADER') {
+      return { encoding: 'utf8', lineEnding: '\n' };
+    } else {
+      // MT4/MT5 - usar Windows-1252 (ANSI)
+      return { encoding: 'latin1', lineEnding: '\r\n' };
     }
   }
 }

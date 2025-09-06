@@ -115,7 +115,9 @@ namespace cAlgo.Robots
                 
                 if (lines.Length < 3)
                 {
-                    CreateDefaultCsv();
+                    // Archivo con pocas líneas pero NO sobrescribir - el servidor maneja el CSV
+                    Print("ADVERTENCIA: CSV tiene menos de 3 líneas, pero NO sobrescribiendo archivo existente");
+                    Print("El servidor es responsable del formato del CSV");
                     return;
                 }
 
@@ -135,10 +137,12 @@ namespace cAlgo.Robots
                 
                 Print("=== End CSV reading ===");
 
-                // Validate format
+                // Validate format - NO recrear archivo existente, solo leer lo que hay
                 if (!lines[0].Contains("[TYPE]") || !lines[1].Contains("[STATUS]") || !lines[2].Contains("[CONFIG]"))
                 {
-                    CreateDefaultCsv();
+                    // Formato inesperado pero NO sobrescribir - el servidor maneja el CSV
+                    Print("ADVERTENCIA: Formato CSV inesperado, pero NO sobrescribiendo archivo existente");
+                    Print("El servidor es responsable del formato del CSV");
                     return;
                 }
 
@@ -159,15 +163,34 @@ namespace cAlgo.Robots
                 
                 if (parts.Length >= 10)
                 {
-                    accountType = parts[1].Trim('[', ']');
-                    copyTrading = parts[2].Trim('[', ']');
-                    lotMultiplier = double.Parse(parts[3].Trim('[', ']'));
-                    forceLot = parts[4].Trim('[', ']');
-                    reverseTrading = parts[5].Trim('[', ']');
-                    masterId = parts[6].Trim('[', ']');
-                    masterCsvPath = parts[7].Trim('[', ']');
-                    prefix = parts[8].Trim('[', ']');
-                    suffix = parts[9].Trim('[', ']');
+                    // Solo actualizar variables globales con valores del CSV para lectura
+                    // No sobrescribir - solo leer y actualizar variables globales
+                    string csvAccountType = parts[1].Trim('[', ']');
+                    string csvCopyTrading = parts[2].Trim('[', ']');
+                    double csvLotMultiplier = double.Parse(parts[3].Trim('[', ']'));
+                    string csvForceLot = parts[4].Trim('[', ']');
+                    string csvReverseTrading = parts[5].Trim('[', ']');
+                    string csvMasterId = parts[6].Trim('[', ']');
+                    string csvMasterCsvPath = parts[7].Trim('[', ']');
+                    string csvPrefix = parts[8].Trim('[', ']');
+                    string csvSuffix = parts[9].Trim('[', ']');
+                    
+                    // Actualizar variables globales solo para lectura (no sobrescribir en CSV)
+                    accountType = csvAccountType;
+                    copyTrading = csvCopyTrading;
+                    lotMultiplier = csvLotMultiplier;
+                    forceLot = csvForceLot;
+                    reverseTrading = csvReverseTrading;
+                    masterId = csvMasterId;
+                    masterCsvPath = csvMasterCsvPath;
+                    prefix = csvPrefix;
+                    suffix = csvSuffix;
+                    
+                    Print("Variables globales actualizadas desde CSV (solo lectura)");
+                    Print($"AccountType: {accountType}, CopyTrading: {copyTrading}");
+                    Print($"LotMultiplier: {lotMultiplier}, ForceLot: {forceLot}");
+                    Print($"ReverseTrading: {reverseTrading}, MasterId: {masterId}");
+                    Print($"MasterCsvPath: {masterCsvPath}, Prefix: {prefix}, Suffix: {suffix}");
                 }
             }
             catch (Exception ex)

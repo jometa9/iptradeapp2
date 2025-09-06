@@ -1,6 +1,22 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+// Helper functions para encoding por plataforma
+function detectPlatformFromContent(content) {
+  if (content.includes('[MT4]')) return 'MT4';
+  if (content.includes('[MT5]')) return 'MT5';
+  if (content.includes('[CTRADER]')) return 'CTRADER';
+  return 'MT5'; // Default
+}
+
+function getEncodingForPlatform(platform) {
+  if (platform === 'CTRADER') {
+    return { encoding: 'utf8', lineEnding: '\n' };
+  } else {
+    return { encoding: 'latin1', lineEnding: '\r\n' };
+  }
+}
+
 // Slave configurations file management
 const configBaseDir = join(process.cwd(), 'server', 'config');
 const slaveConfigFilePath = join(configBaseDir, 'slave_configurations.json');
@@ -537,7 +553,12 @@ export const setSlaveConfig = async (req, res) => {
           }
         }
 
-        writeFileSync(targetFile, newContent, 'utf8');
+        // Detectar plataforma para usar encoding correcto
+        const platform = detectPlatformFromContent(newContent);
+        const { encoding, lineEnding } = getEncodingForPlatform(platform);
+        const formattedContent = newContent.replace(/\n/g, lineEnding);
+        // Escribir con encoding específico por plataforma
+        writeFileSync(targetFile, formattedContent, encoding);
       }
     } catch (error) {
       console.error(`❌ Error updating CSV for slave ${slaveAccountId}:`, error);
