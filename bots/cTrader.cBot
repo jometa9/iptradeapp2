@@ -85,7 +85,7 @@ namespace cAlgo.Robots
                 long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var lines = new string[]
                 {
-                    $"[TYPE] [PENDING] [CTRADER] [{Account.Number}]",
+                    $"[TYPE] [CTRADER] [{Account.Number}]",
                     $"[STATUS] [ONLINE] [{timestamp}]",
                     "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]"
                 };

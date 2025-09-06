@@ -91,7 +91,7 @@ void CreateDefaultCsv()
     if(handle != INVALID_HANDLE)
     {
         long timestamp = TimeGMT();
-        string line1 = "[TYPE] [PENDING] [MT5] [" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "]";
+        string line1 = "[TYPE] [MT5] [" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "]";
         string line2 = "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]";
         string line3 = "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]";
         

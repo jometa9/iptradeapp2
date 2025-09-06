@@ -87,7 +87,7 @@ void CreateDefaultCsv()
     if(handle != INVALID_HANDLE)
     {
         long timestamp = TimeGMT(); // UTC timestamp with seconds
-        FileWriteString(handle, "[TYPE] [PENDING] [MT4] [" + IntegerToString(AccountNumber()) + "]\n");
+        FileWriteString(handle, "[TYPE] [MT4] [" + IntegerToString(AccountNumber()) + "]\n");
         FileWriteString(handle, "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]\n");
         FileWriteString(handle, "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]\n");
         FileClose(handle);
