@@ -186,7 +186,7 @@ class CSVManager extends EventEmitter {
     this.stopFileWatching();
   }
 
-  // Parse new CSV2 format: [TYPE][PENDING][MT4][12345] or [TYPE] [PENDING] [MT4] [12345]
+  // Parse new CSV2 format: [TYPE][PLATFORM][ACCOUNT_ID] (removed account type)
   parseCSV2Format(lines, filePath, currentTime) {
     try {
       if (lines.length < 3) return null; // Need at least TYPE, STATUS, CONFIG lines
@@ -200,12 +200,11 @@ class CSVManager extends EventEmitter {
         // Handle both formats: [TYPE] and [TYPE] (with spaces)
         if (line.includes('[TYPE]')) {
           const matches = line.match(/\[([^\]]+)\]/g);
-          if (matches && matches.length >= 4) {
+          if (matches && matches.length >= 3) {
             const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
             typeData = {
-              type: values[1], // PENDING, MASTER, SLAVE
-              platform: values[2], // MT4, MT5, CTRADER
-              accountId: values[3], // Account ID
+              platform: values[1], // Platform (MT4, MT5, CTRADER)
+              accountId: values[2], // Account ID
             };
           }
         } else if (line.includes('[STATUS]')) {
@@ -236,10 +235,16 @@ class CSVManager extends EventEmitter {
 
         // Only include if not older than 1 hour
         if (timeDiff <= 3600) {
+          // Determine platform from file path or config
+          let platform = 'Unknown';
+          if (filePath.includes('MT4')) platform = 'MT4';
+          else if (filePath.includes('MT5')) platform = 'MT5';
+          else if (filePath.includes('CTRADER')) platform = 'CTRADER';
+
           const account = {
             account_id: typeData.accountId,
-            platform: typeData.platform,
-            account_type: typeData.type.toLowerCase(), // Use TYPE as source of truth
+            platform: platform,
+            account_type: configData.configType.toLowerCase(), // Use CONFIG as source of truth
             status: timeDiff <= 5 ? 'online' : 'offline',
             current_status: timeDiff <= 5 ? 'online' : 'offline',
             timestamp: statusData.timestamp,
@@ -248,8 +253,8 @@ class CSVManager extends EventEmitter {
             format: 'csv2',
           };
 
-          // Add config details based on account type (TYPE line is source of truth)
-          if (typeData.type === 'SLAVE' && configData.details.length >= 6) {
+          // Add config details based on account type (CONFIG line is source of truth)
+          if (configData.configType === 'SLAVE' && configData.details.length >= 6) {
             account.config = {
               enabled: configData.details[0] === 'ENABLED',
               lotMultiplier: parseFloat(configData.details[1]) || 1,
@@ -258,7 +263,7 @@ class CSVManager extends EventEmitter {
               masterId: configData.details[4] === 'NULL' ? null : configData.details[4],
               masterCsvPath: configData.details[5] || null,
             };
-          } else if (typeData.type === 'MASTER') {
+          } else if (configData.configType === 'MASTER') {
             account.config = {
               enabled: configData.details[0] === 'ENABLED',
               name: configData.details[1] || `Account ${typeData.accountId}`,
@@ -1049,11 +1054,11 @@ class CSVManager extends EventEmitter {
         switch (lineType) {
           case 'TYPE':
             // Nueva cuenta
-            currentAccountId = values[3]; // [TYPE][MASTER][MT4][12345]
+            currentAccountId = values[2]; // [TYPE][PLATFORM][12345]
             currentAccountData = {
               account_id: currentAccountId,
-              account_type: values[1].toLowerCase(), // master, slave, pending
-              platform: values[2],
+              account_type: 'unknown', // Will be determined from CONFIG line
+              platform: values[1], // Platform from TYPE line
               status: 'offline', // Se actualizará con STATUS line
               timestamp: null,
               config: {},
@@ -1092,12 +1097,13 @@ class CSVManager extends EventEmitter {
             // Parsear configuración según tipo de cuenta
             if (currentAccountData) {
               // Usar CONFIG como fuente de verdad para el tipo de cuenta
-              // Si CONFIG dice MASTER pero TYPE dice PENDING, usar MASTER
               const configType = values[1].toLowerCase();
-              if (configType === 'master' && currentAccountData.account_type === 'pending') {
+              if (configType === 'master') {
                 currentAccountData.account_type = 'master';
-              } else if (configType === 'slave' && currentAccountData.account_type === 'pending') {
+              } else if (configType === 'slave') {
                 currentAccountData.account_type = 'slave';
+              } else if (configType === 'pending') {
+                currentAccountData.account_type = 'pending';
               }
 
               if (currentAccountData.account_type === 'master') {
@@ -1147,6 +1153,14 @@ class CSVManager extends EventEmitter {
             break;
         }
       }
+
+      // Post-processing: Ensure all accounts have a valid account_type
+      accounts.forEach(account => {
+        if (account.account_type === 'unknown') {
+          // If no CONFIG line was found, default to 'pending'
+          account.account_type = 'pending';
+        }
+      });
 
       // Convertir Map a Array para compatibilidad
       return Array.from(accounts.values());
@@ -1242,11 +1256,11 @@ class CSVManager extends EventEmitter {
           switch (lineType) {
             case 'TYPE':
               // Nueva cuenta
-              currentAccountId = values[3]; // [TYPE][MASTER][MT4][12345]
+              currentAccountId = values[2]; // [TYPE][PLATFORM][12345]
               currentAccountData = {
                 account_id: currentAccountId,
-                account_type: values[1].toLowerCase(), // master, slave, pending
-                platform: values[2],
+                account_type: 'unknown', // Will be determined from CONFIG line
+                platform: values[1], // Platform from TYPE line
                 status: 'offline', // Se actualizará con STATUS line
                 timestamp: null,
                 config: {},
@@ -1285,13 +1299,13 @@ class CSVManager extends EventEmitter {
               // Parsear configuración según tipo de cuenta
               if (currentAccountData) {
                 const configType = values[1].toLowerCase();
-                if (configType === 'master' && currentAccountData.account_type === 'pending') {
+                // Update account type based on CONFIG line
+                if (configType === 'master') {
                   currentAccountData.account_type = 'master';
-                } else if (
-                  configType === 'slave' &&
-                  currentAccountData.account_type === 'pending'
-                ) {
+                } else if (configType === 'slave') {
                   currentAccountData.account_type = 'slave';
+                } else if (configType === 'pending') {
+                  currentAccountData.account_type = 'pending';
                 }
 
                               if (currentAccountData.account_type === 'master') {
@@ -1320,6 +1334,14 @@ class CSVManager extends EventEmitter {
               break;
           }
         }
+
+        // Post-processing: Ensure all accounts have a valid account_type
+        accounts.forEach(account => {
+          if (account.account_type === 'unknown') {
+            // If no CONFIG line was found, default to 'pending'
+            account.account_type = 'pending';
+          }
+        });
 
         return Array.from(accounts.values());
       } catch (error) {
@@ -1848,8 +1870,8 @@ class CSVManager extends EventEmitter {
           
           // Extraer el accountId de la línea TYPE
           const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-          if (parts.length >= 4) {
-            currentAccountId = parts[3]; // El accountId está en la cuarta posición
+          if (parts.length >= 3) {
+            currentAccountId = parts[2]; // El accountId está en la tercera posición
             console.log(`📍 Found TYPE line for account: ${currentAccountId}`);
           } else {
             console.log(`⚠️ TYPE line format unexpected: ${parts}`);
@@ -2104,8 +2126,8 @@ class CSVManager extends EventEmitter {
         // Detectar línea TYPE para identificar la cuenta actual
         if (line.includes('[TYPE]')) {
           const matches = line.match(/\[([^\]]+)\]/g);
-          if (matches && matches.length >= 4) {
-            currentAccountId = matches[3].replace(/[\[\]]/g, '').trim();
+          if (matches && matches.length >= 3) {
+            currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
           }
           updatedLines.push(line);
         } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
@@ -2333,23 +2355,20 @@ class CSVManager extends EventEmitter {
     }
   }
 
-  // Helper para detectar plataforma desde archivo o contenido
-  detectPlatformFromFile(filePath, lines = null) {
-    // Intentar detectar desde el nombre del archivo
-    if (filePath.includes('IPTRADECSV2')) {
-      // Es un archivo de bot, intentar detectar plataforma desde contenido
-      if (lines && lines.length > 0) {
-        const typeLine = lines.find(line => line.includes('[TYPE]'));
-        if (typeLine) {
-          if (typeLine.includes('[MT4]')) return 'MT4';
-          if (typeLine.includes('[MT5]')) return 'MT5';
-          if (typeLine.includes('[CTRADER]')) return 'CTRADER';
-        }
-      }
-    }
+  // Helper para determinar plataforma desde el path del archivo
+  determinePlatformFromPath(filePath) {
+    if (filePath.includes('MT4') || filePath.includes('IPTRADECSV2MT4')) return 'MT4';
+    if (filePath.includes('MT5') || filePath.includes('IPTRADECSV2MT5')) return 'MT5';
+    if (filePath.includes('CTRADER') || filePath.includes('IPTRADECSV2CTRADER')) return 'CTRADER';
     
-    // Default a MT5 si no se puede detectar
-    return 'MT5';
+    // Default a MT4 si no se puede detectar
+    return 'MT4';
+  }
+
+  // Helper para detectar plataforma desde archivo o contenido (legacy)
+  detectPlatformFromFile(filePath, lines = null) {
+    // Usar el nuevo método
+    return this.determinePlatformFromPath(filePath);
   }
 
   // Helper para obtener encoding y line endings según plataforma

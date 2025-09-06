@@ -48,9 +48,8 @@ const validateCSVStructure = lines => {
   if (
     !typeValues ||
     typeValues[0] !== 'TYPE' ||
-    !['MASTER', 'PENDING', 'SLAVE'].includes(typeValues[1]) ||
-    !['MT4', 'MT5', 'CTRADER'].includes(typeValues[2]) ||
-    !/^\d+$/.test(typeValues[3])
+    !['MT4', 'MT5', 'CTRADER'].includes(typeValues[1]) ||
+    !/^\d+$/.test(typeValues[2])
   ) {
     return { valid: false, error: 'Invalid TYPE line format' };
   }
@@ -72,11 +71,11 @@ const validateCSVStructure = lines => {
     return { valid: false, error: 'Invalid CONFIG line format' };
   }
 
-  // If account is MASTER, validate ORDER lines (if any)
-  if (typeValues[1] === 'MASTER' && lines.length > 3) {
+  // Validate ORDER lines (if any) - account type will be determined from CONFIG line
+  if (lines.length > 3) {
     for (let i = 3; i < lines.length; i++) {
       const orderValues = validateCSVLine(lines[i]);
-      if (!orderValues || !validateOrderLine(orderValues)) {
+      if (orderValues && orderValues[0] === 'ORDER' && !validateOrderLine(orderValues)) {
         return { valid: false, error: `Invalid ORDER line format at line ${i + 1}` };
       }
     }

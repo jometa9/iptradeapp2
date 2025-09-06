@@ -882,7 +882,7 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
     // Find the TYPE line for the slave account
     const typeLineIndex = lines.findIndex(
       line =>
-        line.includes('[TYPE]') && line.includes('[SLAVE]') && line.includes(`[${slaveAccountId}]`)
+        line.includes('[TYPE]') && line.includes(`[${slaveAccountId}]`)
     );
 
     if (typeLineIndex !== -1) {

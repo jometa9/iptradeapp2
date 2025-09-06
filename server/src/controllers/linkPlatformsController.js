@@ -371,7 +371,7 @@ class LinkPlatformsController {
         const csvPath = path.join(filesPath, csvFileName);
 
         // Create empty CSV file with basic structure
-        const emptyCSVContent = `[TYPE][PENDING][${platformSuffix}][0]
+        const emptyCSVContent = `[TYPE][${platformSuffix}][0]
 [STATUS][OFFLINE][0]
 [CONFIG][PENDING]`;
 

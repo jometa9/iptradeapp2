@@ -939,7 +939,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
       encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
     }
     
-    csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]${lineEnding}`;
+    csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
     csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]${lineEnding}`;
     csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []${lineEnding}`;
 
@@ -1116,7 +1116,7 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
       encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
     }
     
-    csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]${lineEnding}`;
+    csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
     csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]${lineEnding}`;
     csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]${lineEnding}`;
 

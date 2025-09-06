@@ -50,7 +50,7 @@ const generateCSV2Content = async (
 ) => {
   const upperType = accountType.toUpperCase();
 
-  let content = `[TYPE] [${upperType}] [${platform}] [${accountId}]\n`;
+  let content = `[TYPE] [${platform}] [${accountId}]\n`;
   content += `[STATUS] [ONLINE] [${timestamp}]\n`;
 
   if (accountType === 'master') {
@@ -269,15 +269,15 @@ export const updateCSVAccountType = async (req, res) => {
               }
             }
 
-            // Check for [TYPE][MASTER/SLAVE/PENDING][PLATFORM][ACCOUNT_ID] format
+            // Check for [TYPE][PLATFORM][ACCOUNT_ID] format
             if (cleanLine.includes('[TYPE]')) {
               const matches = cleanLine.match(/\[([^\]]+)\]/g);
-              if (matches && matches.length >= 4) {
+              if (matches && matches.length >= 3) {
                 const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
 
-                if (values[3] === accountId) {
+                if (values[2] === accountId) {
                   foundAccount = true;
-                  accountPlatform = values[2] || 'MT4';
+                  accountPlatform = values[1] || 'MT4';
                   break;
                 }
               }
@@ -311,7 +311,7 @@ export const updateCSVAccountType = async (req, res) => {
                 cleanLine.includes('[TYPE]') &&
                 (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
               ) {
-                newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
+                newContent += `[TYPE] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes(`[${accountId}]`) ||
@@ -351,10 +351,9 @@ export const updateCSVAccountType = async (req, res) => {
                 }
               } else if (
                 cleanLine.includes('[TYPE]') &&
-                (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING')) &&
                 (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
               ) {
-                newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
+                newContent += `[TYPE] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
@@ -860,7 +859,7 @@ export const connectPlatforms = async (req, res) => {
     let registeredCount = 0;
     csvManager.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id && row.account_type === 'unknown' && row.status === 'online') {
+        if (row.account_id && row.account_type === 'pending' && row.status === 'online') {
           const accountId = row.account_id;
           const platform = row.platform || 'Unknown';
 
@@ -1006,7 +1005,7 @@ export const registerCSVAsPending = (req, res) => {
     // Procesar todos los archivos CSV
     csvManager.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id && row.account_type === 'unknown' && row.status === 'online') {
+        if (row.account_id && row.account_type === 'pending' && row.status === 'online') {
           const accountId = row.account_id;
           const platform = row.platform || 'Unknown';
 
