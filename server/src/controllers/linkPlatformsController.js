@@ -319,13 +319,31 @@ class LinkPlatformsController {
     result.mql5Folders = cachedPaths.mql5Folders.filter(folder => fs.existsSync(folder));
   }
 
+  // Helper function to get all bot files by extension
+  getBotFilesByExtension(extension) {
+    try {
+      if (!fs.existsSync(this.botsPath)) {
+        return [];
+      }
+      
+      return fs.readdirSync(this.botsPath)
+        .filter(file => file.endsWith(extension))
+        .map(file => ({
+          name: file,
+          path: path.join(this.botsPath, file)
+        }));
+    } catch (error) {
+      console.error(`❌ Error reading bots directory for extension ${extension}:`, error);
+      return [];
+    }
+  }
+
   // Procesar una carpeta MQL individual
   async processMQLFolder(folder, type, result) {
     try {
       const expertPath = path.join(folder, 'Experts');
       const filesPath = path.join(folder, 'Files');
-      const botFileName = `${type}.mq${type === 'MQL4' ? '4' : '5'}`;
-      const botPath = path.join(this.botsPath, botFileName);
+      const extension = type === 'MQL4' ? '.mq4' : '.mq5';
 
       // Ensure Experts folder exists
       if (!fs.existsSync(expertPath)) {
@@ -333,11 +351,16 @@ class LinkPlatformsController {
         result.created++;
       }
 
-      // Always copy bot to ensure latest version
-      const targetBotPath = path.join(expertPath, botFileName);
-      if (fs.existsSync(botPath)) {
-        fs.copyFileSync(botPath, targetBotPath);
-        result.synced++;
+      // Get all bot files with the correct extension
+      const botFiles = this.getBotFilesByExtension(extension);
+      
+      // Copy all bot files to ensure latest versions
+      for (const botFile of botFiles) {
+        if (fs.existsSync(botFile.path)) {
+          const targetBotPath = path.join(expertPath, botFile.name);
+          fs.copyFileSync(botFile.path, targetBotPath);
+          result.synced++;
+        }
       }
 
       // Ensure Files folder exists
@@ -1175,7 +1198,6 @@ class LinkPlatformsController {
         for (const folder of mql4Folders) {
           try {
             const expertsPath = path.join(folder, 'Experts');
-            const botPath = path.join(this.botsPath, 'MQL4.mq4');
             const filesPath = path.join(folder, 'Files');
 
             if (!fs.existsSync(expertsPath)) {
@@ -1183,10 +1205,16 @@ class LinkPlatformsController {
               result.created++;
             }
 
-            const targetBotPath = path.join(expertsPath, 'MQL4.mq4');
-            if (fs.existsSync(botPath)) {
-              fs.copyFileSync(botPath, targetBotPath);
-              result.synced++;
+            // Get all MQL4 bot files (.mq4 extension)
+            const mql4BotFiles = this.getBotFilesByExtension('.mq4');
+            
+            // Copy all MQL4 bot files to ensure latest versions
+            for (const botFile of mql4BotFiles) {
+              if (fs.existsSync(botFile.path)) {
+                const targetBotPath = path.join(expertsPath, botFile.name);
+                fs.copyFileSync(botFile.path, targetBotPath);
+                result.synced++;
+              }
             }
 
             // Ensure Files folder and CSV exist
@@ -1221,7 +1249,6 @@ class LinkPlatformsController {
         for (const folder of mql5Folders) {
           try {
             const expertsPath = path.join(folder, 'Experts');
-            const botPath = path.join(this.botsPath, 'MQL5.mq5');
             const filesPath = path.join(folder, 'Files');
 
             if (!fs.existsSync(expertsPath)) {
@@ -1229,10 +1256,16 @@ class LinkPlatformsController {
               result.created++;
             }
 
-            const targetBotPath = path.join(expertsPath, 'MQL5.mq5');
-            if (fs.existsSync(botPath)) {
-              fs.copyFileSync(botPath, targetBotPath);
-              result.synced++;
+            // Get all MQL5 bot files (.mq5 extension)
+            const mql5BotFiles = this.getBotFilesByExtension('.mq5');
+            
+            // Copy all MQL5 bot files to ensure latest versions
+            for (const botFile of mql5BotFiles) {
+              if (fs.existsSync(botFile.path)) {
+                const targetBotPath = path.join(expertsPath, botFile.name);
+                fs.copyFileSync(botFile.path, targetBotPath);
+                result.synced++;
+              }
             }
 
             // Ensure Files folder and CSV exist
@@ -1281,17 +1314,21 @@ class LinkPlatformsController {
               filesPath = path.join(folder, 'Files');
             }
 
-            const botPath = path.join(this.botsPath, 'cTrader.cBot');
-
             if (!fs.existsSync(expertsPath)) {
               fs.mkdirSync(expertsPath, { recursive: true });
               result.created++;
             }
 
-            const targetBotPath = path.join(expertsPath, 'cTrader.cBot');
-            if (fs.existsSync(botPath)) {
-              fs.copyFileSync(botPath, targetBotPath);
-              result.synced++;
+            // Get all cTrader bot files (.cs extension)
+            const ctraderBotFiles = this.getBotFilesByExtension('.cs');
+            
+            // Copy all cTrader bot files to ensure latest versions
+            for (const botFile of ctraderBotFiles) {
+              if (fs.existsSync(botFile.path)) {
+                const targetBotPath = path.join(expertsPath, botFile.name);
+                fs.copyFileSync(botFile.path, targetBotPath);
+                result.synced++;
+              }
             }
 
             // Ensure Files folder and CSV exist
