@@ -461,12 +461,23 @@ const TradingAccountsConfigComponent = () => {
     const masterAccount = csvAccounts?.masterAccounts?.[masterAccountId];
     if (masterAccount) {
       // El estado enabled viene del config.enabled - solo depender del estado del master
-      return masterAccount.config?.enabled === true;
+      const enabled = masterAccount.config?.enabled === true;
+      console.log(`🔍 [FRONTEND] getMasterEffectiveStatus for ${masterAccountId}:`, {
+        configEnabled: masterAccount.config?.enabled,
+        result: enabled,
+        fullConfig: masterAccount.config
+      });
+      return enabled;
     }
 
     // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
-    return masterStatus?.masterStatus === true;
+    const fallbackResult = masterStatus?.masterStatus === true;
+    console.log(`🔍 [FRONTEND] getMasterEffectiveStatus FALLBACK for ${masterAccountId}:`, {
+      masterStatus: masterStatus?.masterStatus,
+      result: fallbackResult
+    });
+    return fallbackResult;
   };
 
   // Get effective copier status for slave account

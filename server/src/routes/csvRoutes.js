@@ -760,6 +760,8 @@ router.post('/csv/account/:accountId/status', requireValidSubscription, async (r
     const { accountId } = req.params;
     const { enabled } = req.body;
 
+    console.log(`🔍 [ENDPOINT] /csv/account/${accountId}/status called with enabled: ${enabled} (type: ${typeof enabled})`);
+
     if (enabled === undefined) {
       return res.status(400).json({
         success: false,

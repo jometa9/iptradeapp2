@@ -2054,10 +2054,21 @@ class CSVManager extends EventEmitter {
                 if (matches && matches.length >= 2) {
                   const configType = matches[1].replace(/[\[\]]/g, '').trim();
                   
+                  // Log específico para cTrader
+                  if (filePath.includes('CTRADER') || filePath.includes('cAlgo')) {
+                    console.log(`🔍 [updateGlobalStatus] CTRADER file: ${filePath}`);
+                    console.log(`🔧 [updateGlobalStatus] CTRADER CONFIG line: ${line}`);
+                  }
+                  
                    // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
-                   updatedLine = line.replace('[ENABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
-                   updatedLine = updatedLine.replace('[DISABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
+                   const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+                   updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
                    fileModified = true;
+                   
+                   // Log específico para cTrader después del cambio
+                   if (filePath.includes('CTRADER') || filePath.includes('cAlgo')) {
+                     console.log(`✅ [updateGlobalStatus] CTRADER new line: ${updatedLine}`);
+                   }
                 }
               }
 
@@ -2102,68 +2113,103 @@ class CSVManager extends EventEmitter {
     // Actualizar estado de una cuenta específica
   async updateAccountStatus(accountId, enabled) {
     try {
-      // Buscar el archivo CSV correcto para esta cuenta
-      let targetFile = null;
+      // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples)
+      const targetFiles = [];
 
       // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
         fileData.data.forEach(row => {
-          if (row.account_id === accountId) {
-            targetFile = filePath;
+          if (row.account_id === accountId && !targetFiles.includes(filePath)) {
+            targetFiles.push(filePath);
           }
         });
       });
 
-      if (!targetFile) {
-        console.error(`❌ No CSV file found for account ${accountId}`);
+      if (targetFiles.length === 0) {
+        console.error(`❌ No CSV files found for account ${accountId}`);
         return false;
       }
 
-      // Leer el archivo completo
-      const content = readFileSync(targetFile, 'utf8');
-      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
-      const lines = sanitizedContent.split('\n').filter(line => line.trim());
-      let currentAccountId = null;
-      const updatedLines = [];
+      console.log(`🔍 [updateAccountStatus] Found ${targetFiles.length} files for account ${accountId}:`, targetFiles);
 
-      for (const line of lines) {
-        // Detectar línea TYPE para identificar la cuenta actual
-        if (line.includes('[TYPE]')) {
-          const matches = line.match(/\[([^\]]+)\]/g);
-          if (matches && matches.length >= 3) {
-            currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+      let totalFilesUpdated = 0;
+
+      // Procesar cada archivo que contiene esta cuenta
+      for (const targetFile of targetFiles) {
+        try {
+          // Leer el archivo completo
+          const content = readFileSync(targetFile, 'utf8');
+          const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+          const lines = sanitizedContent.split('\n');
+          let currentAccountId = null;
+          const updatedLines = [];
+          let fileModified = false;
+
+          for (const line of lines) {
+            let updatedLine = line;
+            
+            // Detectar línea TYPE para identificar la cuenta actual
+            if (line.includes('[TYPE]')) {
+              const matches = line.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 3) {
+                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+              }
+            } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+              // Actualizar la línea CONFIG para la cuenta específica
+              console.log(`🔧 [updateAccountStatus] Updating CONFIG line for account ${accountId} in ${targetFile}: ${line}`);
+              const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+              
+              // Buscar el patrón específicamente en la posición correcta (tercer campo después de CONFIG y MASTER/SLAVE)
+              const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+              
+              if (configParts.length >= 3) {
+                // Reemplazar específicamente el tercer campo (índice 2) que es el status
+                const currentStatus = configParts[2];
+                console.log(`🔍 [updateAccountStatus] Current status: "${currentStatus}", changing to: "${newStatus}"`);
+                updatedLine = line.replace(`[${currentStatus}]`, `[${newStatus}]`);
+              } else {
+                // Fallback al método anterior
+                updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
+              }
+              
+              console.log(`✅ [updateAccountStatus] New CONFIG line: ${updatedLine}`);
+              fileModified = true;
+            }
+
+            updatedLines.push(updatedLine);
           }
-          updatedLines.push(line);
-        } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-                     // Actualizar la línea CONFIG para la cuenta específica
-           const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-           
-           // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
-           if (parts.length >= 3) {
-             let newLine = line.replace('[ENABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
-             newLine = newLine.replace('[DISABLED]', `[${enabled ? 'ENABLED' : 'DISABLED'}]`);
-             updatedLines.push(newLine);
-           } else {
-             updatedLines.push(line);
-           }
-        } else {
-          updatedLines.push(line);
+
+          // Solo escribir si se modificó el archivo
+          if (fileModified) {
+            // Escribir archivo actualizado
+            try {
+              // Detectar plataforma del archivo para usar encoding correcto
+              const platform = this.detectPlatformFromFile(targetFile, updatedLines);
+              const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+              // Escribir con encoding específico por plataforma
+              const content = updatedLines.join(lineEnding) + lineEnding;
+              writeFileSync(targetFile, content, encoding);
+              console.log(`✅ [updateAccountStatus] Successfully updated file ${targetFile} for account ${accountId}`);
+              this.refreshFileData(targetFile);
+              totalFilesUpdated++;
+            } catch (writeError) {
+              this.handleFileError(targetFile, writeError, 'writing');
+              console.error(`❌ [updateAccountStatus] Failed to write file ${targetFile}`);
+            }
+          } else {
+            console.log(`⚠️ [updateAccountStatus] No CONFIG line found for account ${accountId} in file ${targetFile}`);
+          }
+        } catch (error) {
+          console.error(`❌ [updateAccountStatus] Error processing file ${targetFile}:`, error);
         }
       }
 
-      // Escribir archivo actualizado
-      try {
-        // Detectar plataforma del archivo para usar encoding correcto
-        const platform = this.detectPlatformFromFile(targetFile, updatedLines);
-        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
-        // Escribir con encoding específico por plataforma
-        const content = updatedLines.join(lineEnding) + lineEnding;
-        writeFileSync(targetFile, content, encoding);
-        this.refreshFileData(targetFile);
-      } catch (writeError) {
-        this.handleFileError(targetFile, writeError, 'writing');
+      if (totalFilesUpdated === 0) {
+        console.error(`❌ [updateAccountStatus] No files were successfully updated for account ${accountId}`);
         return false;
       }
+
+      console.log(`✅ [updateAccountStatus] Successfully updated ${totalFilesUpdated}/${targetFiles.length} files for account ${accountId}`);
 
       // Emitir evento de actualización
       this.emit('accountStatusChanged', {
