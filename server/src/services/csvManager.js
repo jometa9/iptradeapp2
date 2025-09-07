@@ -1743,53 +1743,84 @@ class CSVManager extends EventEmitter {
   // Convertir una cuenta configurada a pending
   convertToPending(accountId) {
     try {
-      // Buscar el archivo CSV correcto para esta cuenta
-      let targetFile = null;
+      // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples) - IGUAL QUE updateAccountStatus
+      const targetFiles = [];
 
       // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
         fileData.data.forEach(row => {
-          if (row.account_id === accountId) {
-            targetFile = filePath;
+          if (row.account_id === accountId && !targetFiles.includes(filePath)) {
+            targetFiles.push(filePath);
           }
         });
       });
 
-      if (!targetFile) {
-        console.error(`No CSV file found for account ${accountId}`);
+      if (targetFiles.length === 0) {
+        console.error(`❌ No CSV files found for account ${accountId}`);
         return false;
       }
 
-      // Leer el archivo completo
-      const content = readFileSync(targetFile, 'utf8');
-      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
-      const lines = sanitizedContent.split('\n').filter(line => line.trim());
+      let totalFilesUpdated = 0;
 
-      // Solo modificar las líneas que corresponden a la cuenta específica
-      const updatedLines = lines.map(line => {
-        // Solo modificar líneas CONFIG que contengan MASTER o SLAVE
-        if (line.includes('[CONFIG]') && (line.includes('[MASTER]') || line.includes('[SLAVE]'))) {
-          return `[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]`;
+      // Procesar cada archivo que contiene esta cuenta - IGUAL QUE updateAccountStatus
+      for (const targetFile of targetFiles) {
+        try {
+          // Leer el archivo completo - IGUAL QUE updateAccountStatus
+          const content = readFileSync(targetFile, 'utf8');
+          const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+          const lines = sanitizedContent.split('\n');
+          let currentAccountId = null;
+          const updatedLines = [];
+          let fileModified = false;
+
+          for (const line of lines) {
+            let updatedLine = line;
+            
+            // Detectar línea TYPE para identificar la cuenta actual - IGUAL QUE updateAccountStatus
+            if (line.includes('[TYPE]')) {
+              const matches = line.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 3) {
+                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+              }
+            } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+              // Convertir a PENDING - Solo modificar líneas CONFIG que contengan MASTER o SLAVE
+              if (line.includes('[MASTER]') || line.includes('[SLAVE]')) {
+                updatedLine = `[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]`;
+                fileModified = true;
+              }
+            }
+
+            updatedLines.push(updatedLine);
+          }
+
+          // Solo escribir si se modificó el archivo - IGUAL QUE updateAccountStatus
+          if (fileModified) {
+            // Escribir archivo actualizado
+            try {
+              // Detectar plataforma del archivo para usar encoding correcto - IGUAL QUE updateAccountStatus
+              const platform = this.detectPlatformFromFile(targetFile, updatedLines);
+              const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+              // Escribir con encoding específico por plataforma
+              const content = updatedLines.join(lineEnding) + lineEnding;
+              writeFileSync(targetFile, content, encoding);
+              this.refreshFileData(targetFile);
+              totalFilesUpdated++;
+            } catch (writeError) {
+              this.handleFileError(targetFile, writeError, 'writing');
+              console.error(`❌ [convertToPending] Failed to write file ${targetFile}`);
+            }
+          } else {
+            console.log(`ℹ️ [convertToPending] No changes needed for account ${accountId} in file ${targetFile}`);
+          }
+        } catch (error) {
+          console.error(`❌ [convertToPending] Error processing file ${targetFile}:`, error);
         }
-        // Mantener todas las demás líneas sin cambios (TYPE, STATUS, ORDER)
-        return line;
-      });
-
-      // Escribir archivo actualizado
-      try {
-        // Detectar plataforma del archivo para usar encoding correcto
-        const platform = this.detectPlatformFromFile(targetFile, updatedLines);
-        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
-        // Escribir con encoding específico por plataforma
-        const content = updatedLines.join(lineEnding) + lineEnding;
-        writeFileSync(targetFile, content, encoding);
-      } catch (writeError) {
-        this.handleFileError(targetFile, writeError, 'writing');
-        return false;
       }
 
-      // Refrescar datos en memoria
-      this.refreshFileData(targetFile);
+      if (totalFilesUpdated === 0) {
+        console.error(`❌ [convertToPending] No files were successfully updated for account ${accountId}`);
+        return false;
+      }
 
       // Emitir evento de conversión
       this.emit('accountConverted', {
@@ -1808,135 +1839,137 @@ class CSVManager extends EventEmitter {
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
     try {
-      
-      // Buscar el archivo CSV correcto para esta cuenta
-      let targetFile = null;
+      // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples) - IGUAL QUE updateAccountStatus
+      const targetFiles = [];
 
       // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
         fileData.data.forEach(row => {
-          if (row.account_id === accountId) {
-            targetFile = filePath;
+          if (row.account_id === accountId && !targetFiles.includes(filePath)) {
+            targetFiles.push(filePath);
           }
         });
       });
 
-      // Si no se encuentra en archivos monitoreados, buscar en el sistema de archivos
-      if (!targetFile) {
-        const searchPaths = [process.env.HOME + '/**/*IPTRADECSV2*.csv', '**/*IPTRADECSV2*.csv'];
+      if (targetFiles.length === 0) {
+        console.error(`❌ No CSV files found for account ${accountId}`);
+        return false;
+      }
 
-        for (const searchPath of searchPaths) {
-          try {
-            if (existsSync(searchPath)) {
-              // Verificar si el archivo contiene la cuenta
-              const content = readFileSync(searchPath, 'utf8');
-              if (content.includes(`[${accountId}]`)) {
-                targetFile = searchPath;
-                break;
+      let totalFilesUpdated = 0;
+
+      // Procesar cada archivo que contiene esta cuenta - IGUAL QUE updateAccountStatus
+      for (const targetFile of targetFiles) {
+        try {
+          // Leer el archivo completo - IGUAL QUE updateAccountStatus
+          const content = readFileSync(targetFile, 'utf8');
+          const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
+          const lines = sanitizedContent.split('\n');
+          let currentAccountId = null;
+          const updatedLines = [];
+          let fileModified = false;
+
+          for (const line of lines) {
+            let updatedLine = line;
+            
+            // Detectar línea TYPE para identificar la cuenta actual - IGUAL QUE updateAccountStatus
+            if (line.includes('[TYPE]')) {
+              const matches = line.match(/\[([^\]]+)\]/g);
+              if (matches && matches.length >= 3) {
+                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+              }
+            } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+              // Actualizar la línea CONFIG para la cuenta específica - SIMILAR A updateAccountStatus
+              
+              if (config.type === 'master') {
+                // Para master, actualizar la configuración completa
+                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+                
+                if (configParts.length >= 3) {
+                  const accountType = configParts[1]; // MASTER o SLAVE
+                  const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
+                  
+                  // Obtener prefix/suffix actuales si no se proporcionan nuevos
+                  const currentPrefix = configParts[8] || 'NULL';
+                  const currentSuffix = configParts[9] || 'NULL';
+                  
+                  // Usar nuevos valores si se proporcionan, o mantener los actuales
+                  const prefix = (config.prefix !== undefined) ? (config.prefix || 'NULL') : currentPrefix;
+                  const suffix = (config.suffix !== undefined) ? (config.suffix || 'NULL') : currentSuffix;
+                  
+                  // Reconstruir la línea CONFIG
+                  updatedLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
+                  fileModified = true;
+                } else {
+                  // Si no se pueden parsear los campos, mantener la línea original
+                  updatedLine = line;
+                }
+              } else if (config.type === 'slave') {
+                // Para slave, actualizar toda la configuración
+                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
+                
+                if (configParts.length >= 3) {
+                  const accountType = configParts[1]; // MASTER o SLAVE
+                  const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
+                  
+                  // Usar configuración de slave proporcionada o mantener la actual
+                  const slaveConfig = config.slaveConfig || {};
+                  const lotMultiplier = slaveConfig.lotMultiplier || configParts[3] || '1.0';
+                  const forceLot = slaveConfig.forceLot || configParts[4] || 'NULL';
+                  const reverseTrading = slaveConfig.reverseTrading !== undefined ? (slaveConfig.reverseTrading ? 'TRUE' : 'FALSE') : (configParts[5] || 'FALSE');
+                  const masterId = slaveConfig.masterId || configParts[6] || 'NULL';
+                  const masterCsvPath = slaveConfig.masterCsvPath || configParts[7] || 'NULL';
+                  const prefix = (slaveConfig.prefix !== undefined) ? (slaveConfig.prefix || 'NULL') : (configParts[8] || 'NULL');
+                  const suffix = (slaveConfig.suffix !== undefined) ? (slaveConfig.suffix || 'NULL') : (configParts[9] || 'NULL');
+                  
+                  // Reconstruir la línea CONFIG para slave
+                  updatedLine = `[CONFIG] [${accountType}] [${newStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrading}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
+                  fileModified = true;
+                } else {
+                  // Si no se pueden parsear los campos, mantener la línea original
+                  updatedLine = line;
+                }
               }
             }
-          } catch (error) {
-            // Ignore errors for individual paths
+
+            updatedLines.push(updatedLine);
           }
-        }
-      }
 
-      if (!targetFile) {
-        console.error(`❌ No CSV file found for account ${accountId}`);
-        return false;
-      }
-      
-      const content = readFileSync(targetFile, 'utf8');
-      const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
-      const lines = sanitizedContent.split('\n').filter(line => line.trim());
-
-      // SOLUCIÓN SIMPLE: Reemplazar la línea CONFIG existente
-      const updatedLines = [];
-      let foundConfig = false;
-      let currentAccountId = null;
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Detectar línea TYPE para identificar la cuenta actual
-        if (line.includes('[TYPE]')) {
-          const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-          if (parts.length >= 3) {
-            currentAccountId = parts[2]; // El accountId está en la tercera posición
+          // Solo escribir si se modificó el archivo - IGUAL QUE updateAccountStatus
+          if (fileModified) {
+            // Escribir archivo actualizado
+            try {
+              // Detectar plataforma del archivo para usar encoding correcto - IGUAL QUE updateAccountStatus
+              const platform = this.detectPlatformFromFile(targetFile, updatedLines);
+              const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
+              // Escribir con encoding específico por plataforma
+              const content = updatedLines.join(lineEnding) + lineEnding;
+              writeFileSync(targetFile, content, encoding);
+              this.refreshFileData(targetFile);
+              totalFilesUpdated++;
+            } catch (writeError) {
+              this.handleFileError(targetFile, writeError, 'writing');
+              console.error(`❌ [writeConfig] Failed to write file ${targetFile}`);
+            }
+          } else {
+            console.log(`ℹ️ [writeConfig] No changes needed for account ${accountId} in file ${targetFile}`);
           }
+        } catch (error) {
+          console.error(`❌ [writeConfig] Error processing file ${targetFile}:`, error);
         }
-        
-                 // Si es una línea CONFIG para la cuenta actual, REEMPLAZARLA
-         if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-           
-           if (config.type === 'master') {
-                          // DETECTAR si solo se está cambiando el status (sin prefix/suffix)
-              const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-              
-              if (configParts.length >= 3) {
-                const accountType = configParts[1]; // MASTER o SLAVE
-                const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
-                
-                // Obtener prefix/suffix actuales si no se proporcionan nuevos
-                const currentPrefix = configParts[8] || 'NULL';
-                const currentSuffix = configParts[9] || 'NULL';
-                
-                // Usar nuevos valores si se proporcionan, o mantener los actuales
-                const prefix = (config.prefix !== undefined) ? (config.prefix || 'NULL') : currentPrefix;
-                const suffix = (config.suffix !== undefined) ? (config.suffix || 'NULL') : currentSuffix;
-                
-                // Reconstruir la línea CONFIG
-                const newConfigLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
-                updatedLines.push(newConfigLine);
-              } else {
-                // Si no se pueden parsear los campos, mantener la línea original
-                updatedLines.push(line);
-              }
-           }
-           foundConfig = true;
-           // NO agregar la línea original, solo la nueva
-         } else {
-           // Mantener todas las demás líneas igual
-           updatedLines.push(line);
-         }
       }
-      
-      // Si no encontramos línea CONFIG, agregar una al final
-                             if (!foundConfig) {
-           if (config.type === 'master') {
-             const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
-             const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
-             updatedLines.push(
-               `[CONFIG] [MASTER] [${config.enabled ? 'ENABLED' : 'DISABLED'}] [${config.name || 'Master Account'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`
-             );
-           }
-         }
 
-             // Validar antes de escribir
-       const currentContent = readFileSync(targetFile, 'utf8');
-       const newContent = updatedLines.join('\n') + '\n';
-
-      // Escribir archivo actualizado usando archivo temporal
-      const tmpFile = `${targetFile}.tmp`;
-      try {
-        // Detectar plataforma para usar encoding correcto
-        const platform = this.detectPlatformFromFile(targetFile);
-        const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
-        const formattedContent = newContent.replace(/\n/g, lineEnding);
-        // Escribir con encoding específico por plataforma
-        writeFileSync(tmpFile, formattedContent, encoding);
-        renameSync(tmpFile, targetFile);
-      } catch (error) {
-        console.error(`❌ Error writing file: ${error.message}`);
-        if (existsSync(tmpFile)) {
-          unlinkSync(tmpFile);
-        }
-        this.handleFileError(targetFile, error, 'writing config');
+      if (totalFilesUpdated === 0) {
+        console.error(`❌ [writeConfig] No files were successfully updated for account ${accountId}`);
         return false;
       }
 
-      // Refrescar datos en memoria
-      this.refreshFileData(targetFile);
+      // Emitir evento de configuración actualizada
+      this.emit('configUpdated', {
+        accountId,
+        config,
+        timestamp: new Date().toISOString(),
+      });
 
       return true;
     } catch (error) {

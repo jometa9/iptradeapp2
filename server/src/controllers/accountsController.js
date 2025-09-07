@@ -1506,27 +1506,25 @@ export const getPendingAccounts = async (req, res) => {
         const accountId = account.account_id;
         const platform = account.platform;
         const timestamp = account.timestamp;
-        const filePath = account.filePath;
-
-        // NUEVA LÓGICA: Usar tracking de cambios de timestamp
-        const trackingInfo = csvManager.getTimestampTracking(filePath);
+        const accountTimestamp = parseInt(timestamp);
+        const currentTimeSeconds = Math.floor(Date.now() / 1000);
         
-        if (!trackingInfo) {
-          continue; // No tenemos información de tracking, skip
-        }
+        // Calcular diferencia de tiempo en segundos
+        const timeDiff = currentTimeSeconds - accountTimestamp;
         
-        const currentTime = Date.now();
-        const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
-        const oneHourInMs = 60 * 60 * 1000; // 1 hora en milisegundos
-        const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
-        
-        // RULE 1: Si han pasado más de 1 hora desde la última actualización, no devolver la cuenta
-        if (timeSinceLastChange > oneHourInMs) {
+        // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
+        if (timeDiff > 3600) {
           continue; // Skip this account
         }
         
-        // RULE 2: Mostrar como offline si han pasado más de 5 segundos desde la última actualización
-        let finalStatus = timeSinceLastChange <= fiveSecondsInMs ? 'online' : 'offline';
+        // RULE 2: Determinar status basado en timestamp
+        // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
+        let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
+        
+        // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
+        if (account.status === 'offline' && timeDiff > 5) {
+          finalStatus = 'offline';
+        }
 
         const pendingAccount = {
           account_id: accountId,
@@ -1534,8 +1532,7 @@ export const getPendingAccounts = async (req, res) => {
           account_type: 'pending',
           status: finalStatus,
           timestamp: timestamp,
-          filePath: filePath,
-          trackingInfo: trackingInfo, // Información de tracking para debugging
+          timeDiff: timeDiff, // Para debugging
         };
 
         allPendingAccounts.push(pendingAccount);
@@ -2269,27 +2266,24 @@ export const getUnifiedAccountData = async (req, res) => {
 
     for (const account of allAccounts.pendingAccounts || []) {
       const accountTimestamp = parseInt(account.timestamp);
-      const filePath = account.filePath;
-
-      // NUEVA LÓGICA: Usar tracking de cambios de timestamp
-      const trackingInfo = csvManager.getTimestampTracking(filePath);
+      const currentTimeSeconds = Math.floor(Date.now() / 1000);
       
-      if (!trackingInfo) {
-        continue; // No tenemos información de tracking, skip
-      }
+      // Calcular diferencia de tiempo en segundos
+      const timeDiff = currentTimeSeconds - accountTimestamp;
       
-      const currentTime = Date.now();
-      const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
-      const oneHourInMs = 60 * 60 * 1000; // 1 hora en milisegundos
-      const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
-      
-      // RULE 1: Si han pasado más de 1 hora desde la última actualización, no devolver la cuenta
-      if (timeSinceLastChange > oneHourInMs) {
+      // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
+      if (timeDiff > 3600) {
         continue; // Skip this account
       }
       
-      // RULE 2: Mostrar como offline si han pasado más de 5 segundos desde la última actualización
-      let finalStatus = timeSinceLastChange <= fiveSecondsInMs ? 'online' : 'offline';
+      // RULE 2: Determinar status basado en timestamp
+      // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
+      let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
+      
+      // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
+      if (account.status === 'offline' && timeDiff > 5) {
+        finalStatus = 'offline';
+      }
 
       const pendingAccount = {
         account_id: account.account_id,
@@ -2297,8 +2291,7 @@ export const getUnifiedAccountData = async (req, res) => {
         status: finalStatus,
         current_status: finalStatus,
         timestamp: accountTimestamp,
-        filePath: filePath,
-        trackingInfo: trackingInfo, // Información de tracking para debugging
+        timeDiff: timeDiff, // Para debugging
         lastActivity: new Date(accountTimestamp * 1000).toISOString(),
       };
 

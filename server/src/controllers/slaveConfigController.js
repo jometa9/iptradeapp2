@@ -3,15 +3,15 @@ import { join } from 'path';
 
 // Helper functions para encoding por plataforma
 function detectPlatformFromContent(content) {
+  if (content.includes('[CTRADER]')) return 'CTRADER';
   if (content.includes('[MT4]')) return 'MT4';
   if (content.includes('[MT5]')) return 'MT5';
-  if (content.includes('[CTRADER]')) return 'CTRADER';
   return 'MT5'; // Default
 }
 
 function getEncodingForPlatform(platform) {
   if (platform === 'CTRADER') {
-    return { encoding: 'utf8', lineEnding: '\n' };
+    return { encoding: 'utf8', lineEnding: '\r\n' };
   } else {
     return { encoding: 'latin1', lineEnding: '\r\n' };
   }

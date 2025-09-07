@@ -1,10 +1,31 @@
 {
+  "5096742": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false,
+    "prefix": "",
+    "suffix": "sufix"
+  },
   "11219046": {
     "lotMultiplier": 1,
     "forceLot": null,
     "reverseTrading": false,
     "prefix": "aaaa1111",
     "suffix": ""
+  },
+  "61402130": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false,
+    "prefix": "",
+    "suffix": "sufix"
+  },
+  "85308252": {
+    "lotMultiplier": 1,
+    "forceLot": null,
+    "reverseTrading": false,
+    "prefix": "",
+    "suffix": "sufix"
   },
   "250062001": {
     "lotMultiplier": 1,
