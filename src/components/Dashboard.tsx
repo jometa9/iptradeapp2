@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, Inbox, Link, LogOut, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, HelpCircle, Inbox, Link, LogOut, RefreshCw, RotateCcw } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
@@ -32,6 +32,7 @@ export const Dashboard: React.FC = () => {
     const saved = localStorage.getItem('showIP');
     return saved ? JSON.parse(saved) : true;
   });
+  const [isRestarting, setIsRestarting] = useState<boolean>(false);
   // Removed separate "connect platforms" flow; unified under Link Platforms
   // Estado para controlar si se acaba de iniciar sesión
   // isRecentLogin not used
@@ -104,6 +105,74 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleRestartService = async () => {
+    if (isRestarting) return;
+    
+    try {
+      setIsRestarting(true);
+      
+      console.log('🔄 Starting service restart (preserving session)...');
+      
+      // Llamar al endpoint del servidor para reiniciar el servicio backend
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      
+      try {
+        const response = await fetch(`http://localhost:${serverPort}/api/restart-service`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': secretKey || '',
+          },
+        });
+
+        if (response.ok) {
+          console.log('✅ Backend restart initiated successfully');
+        } else {
+          console.log('⚠️ Backend restart endpoint not available, proceeding with frontend restart');
+        }
+      } catch (error) {
+        console.log('⚠️ Could not connect to backend for restart, proceeding with frontend restart');
+      }
+      
+      // Limpiar solo cachés específicos del frontend, NO datos de autenticación
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key.includes('cache') || 
+            key.includes('temp') || 
+            key.includes('csv_') ||
+            key.startsWith('auto_link_') ||
+            key.includes('hidden_')
+          )) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        console.log('✅ Frontend caches cleared (auth data preserved)');
+      } catch (error) {
+        console.log('⚠️ Cache clearing failed:', error);
+      }
+      
+      // Esperar un momento para que el servidor complete su reinicio
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      console.log('🔄 Reloading application (session preserved)...');
+      
+      // Recargar la página - la autenticación se mantendrá porque no tocamos esos datos
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('❌ Service restart failed:', error);
+      // Fallback: simplemente recargar la página (sin tocar autenticación)
+      window.location.reload();
+    } finally {
+      setIsRestarting(false);
+    }
+  };
+
   // Removed: separate connect platforms handler (unified under linkPlatforms)
 
   return (
@@ -171,6 +240,20 @@ export const Dashboard: React.FC = () => {
                   <Inbox className="w-4 h-4" />
                 </Button>
                 {/* Removed Connect Trading Accounts button; unified under Link Platforms */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  title="Restart Service"
+                  onClick={handleRestartService}
+                  disabled={isRestarting}
+                >
+                  {isRestarting ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

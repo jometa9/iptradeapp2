@@ -760,8 +760,6 @@ router.post('/csv/account/:accountId/status', requireValidSubscription, async (r
     const { accountId } = req.params;
     const { enabled } = req.body;
 
-    console.log(`🔍 [ENDPOINT] /csv/account/${accountId}/status called with enabled: ${enabled} (type: ${typeof enabled})`);
-
     if (enabled === undefined) {
       return res.status(400).json({
         success: false,
@@ -780,19 +778,14 @@ router.post('/csv/account/:accountId/status', requireValidSubscription, async (r
         // Desactivar cada slave conectada antes de desactivar el master
         for (const slave of connectedSlaves) {
           try {
-            console.log(`🔧 Desactivando slave ${slave.id} conectada al master ${accountId}`);
             await csvManager.updateAccountStatus(slave.id, false);
           } catch (slaveError) {
             console.error(`❌ Error desactivando slave ${slave.id}:`, slaveError);
             // Continuar con las demás slaves aunque una falle
           }
         }
-        
-        if (connectedSlaves.length > 0) {
-          console.log(`✅ Se desactivaron ${connectedSlaves.length} slaves conectadas al master ${accountId}`);
-        }
+     
       } catch (error) {
-        console.error(`❌ Error procesando slaves del master ${accountId}:`, error);
         // Continuar con la desactivación del master aunque haya errores con las slaves
       }
     }

@@ -135,9 +135,6 @@ export const TradingAccountsManager: React.FC = () => {
   useEffect(() => {
     if (onSubscriptionChange) {
       onSubscriptionChange((previousSubscription, currentSubscription) => {
-        console.log(`🔄 TradingAccountsManager: Subscription changed from ${previousSubscription} to ${currentSubscription}`);
-        
-        // Refresh account data to apply new subscription limits
         refresh();
       });
     }

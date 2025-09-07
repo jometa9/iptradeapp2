@@ -462,21 +462,13 @@ const TradingAccountsConfigComponent = () => {
     if (masterAccount) {
       // El estado enabled viene del config.enabled - solo depender del estado del master
       const enabled = masterAccount.config?.enabled === true;
-      console.log(`🔍 [FRONTEND] getMasterEffectiveStatus for ${masterAccountId}:`, {
-        configEnabled: masterAccount.config?.enabled,
-        result: enabled,
-        fullConfig: masterAccount.config
-      });
       return enabled;
     }
 
     // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
     const fallbackResult = masterStatus?.masterStatus === true;
-    console.log(`🔍 [FRONTEND] getMasterEffectiveStatus FALLBACK for ${masterAccountId}:`, {
-      masterStatus: masterStatus?.masterStatus,
-      result: fallbackResult
-    });
+   
     return fallbackResult;
   };
 
@@ -563,13 +555,9 @@ const TradingAccountsConfigComponent = () => {
         // Para slaves conectados, usar el id como accountNumber si no existe
         const accountNumber = account.accountNumber || account.id;
 
-        console.log('Editing account:', account);
-        console.log('UnifiedData:', unifiedData?.configuredAccounts?.masterAccounts);
-
         if (account.accountType === 'master') {
           // Si es master account, usar su propia configuración
           const masterConfig = unifiedData?.configuredAccounts?.masterAccounts?.[account.id]?.config;
-          console.log('Master config:', masterConfig);
           
           if (masterConfig) {
             formData = {
@@ -587,8 +575,6 @@ const TradingAccountsConfigComponent = () => {
             const accountNumber = account.accountNumber || account.id;
             slaveConfig = slaveConfigs[accountNumber]?.config || slaveConfigs[account.id]?.config;
           }
-          
-          console.log('Using slave config:', slaveConfig);
           
           if (slaveConfig) {
             formData = {
@@ -2739,7 +2725,6 @@ const TradingAccountsConfigComponent = () => {
                                     </div>
                                   );
                                 }
-                                console.log('@@@@@@',config);
                                 // Prefix (solo si está configurado)
                                 if (config.prefix) {
                                   labels.push(

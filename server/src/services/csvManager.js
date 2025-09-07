@@ -1808,7 +1808,6 @@ class CSVManager extends EventEmitter {
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
     try {
-      console.log(`🔍 writeConfig called for account ${accountId} with config:`, config);
       
       // Buscar el archivo CSV correcto para esta cuenta
       let targetFile = null;
@@ -1847,16 +1846,9 @@ class CSVManager extends EventEmitter {
         return false;
       }
       
-      console.log(`📁 Found CSV file: ${targetFile}`);
-
-      // Leer el archivo completo
       const content = readFileSync(targetFile, 'utf8');
       const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
       const lines = sanitizedContent.split('\n').filter(line => line.trim());
-      
-      console.log(`📖 ORIGINAL CSV content for ${accountId}:`);
-      console.log(content);
-      console.log(`📋 Parsed lines:`, lines);
 
       // SOLUCIÓN SIMPLE: Reemplazar la línea CONFIG existente
       const updatedLines = [];
@@ -1868,31 +1860,18 @@ class CSVManager extends EventEmitter {
         
         // Detectar línea TYPE para identificar la cuenta actual
         if (line.includes('[TYPE]')) {
-          console.log(`🔍 Processing TYPE line: "${line}"`);
-          
-          // Extraer el accountId de la línea TYPE
           const parts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
           if (parts.length >= 3) {
             currentAccountId = parts[2]; // El accountId está en la tercera posición
-            console.log(`📍 Found TYPE line for account: ${currentAccountId}`);
-          } else {
-            console.log(`⚠️ TYPE line format unexpected: ${parts}`);
           }
         }
         
                  // Si es una línea CONFIG para la cuenta actual, REEMPLAZARLA
          if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-           console.log(`🔧 Replacing CONFIG line: "${line}"`);
            
            if (config.type === 'master') {
                           // DETECTAR si solo se está cambiando el status (sin prefix/suffix)
-              console.log(`🔍 Checking if status-only change:`);
-              console.log(`- config.prefix: "${config.prefix}"`);
-              console.log(`- config.suffix: "${config.suffix}"`);
-              
-              // Extraer los campos actuales de la línea CONFIG
               const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-              console.log(`🔍 Original CONFIG parts:`, configParts);
               
               if (configParts.length >= 3) {
                 const accountType = configParts[1]; // MASTER o SLAVE
@@ -1908,11 +1887,9 @@ class CSVManager extends EventEmitter {
                 
                 // Reconstruir la línea CONFIG
                 const newConfigLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
-                console.log(`🔧 New CONFIG line: "${newConfigLine}"`);
                 updatedLines.push(newConfigLine);
               } else {
                 // Si no se pueden parsear los campos, mantener la línea original
-                console.log(`⚠️ Cannot parse CONFIG line, keeping original`);
                 updatedLines.push(line);
               }
            }
@@ -1926,7 +1903,6 @@ class CSVManager extends EventEmitter {
       
       // Si no encontramos línea CONFIG, agregar una al final
                              if (!foundConfig) {
-           console.log(`⚠️ No CONFIG line found, adding new one`);
            if (config.type === 'master') {
              const prefix = config.prefix && config.prefix.length > 0 ? config.prefix : 'NULL';
              const suffix = config.suffix && config.suffix.length > 0 ? config.suffix : 'NULL';
@@ -1939,14 +1915,6 @@ class CSVManager extends EventEmitter {
              // Validar antes de escribir
        const currentContent = readFileSync(targetFile, 'utf8');
        const newContent = updatedLines.join('\n') + '\n';
-
-       console.log(`📄 BEFORE - Original CSV content:`);
-       console.log(currentContent);
-       console.log(`📝 AFTER - New CSV content:`);
-       console.log(newContent);
-       console.log(`🔍 Changes summary:`);
-       console.log(`- Original lines: ${currentContent.split('\n').length}`);
-       console.log(`- New lines: ${newContent.split('\n').length}`);
 
       // Escribir archivo actualizado usando archivo temporal
       const tmpFile = `${targetFile}.tmp`;
@@ -2055,20 +2023,14 @@ class CSVManager extends EventEmitter {
                   const configType = matches[1].replace(/[\[\]]/g, '').trim();
                   
                   // Log específico para cTrader
-                  if (filePath.includes('CTRADER') || filePath.includes('cAlgo')) {
-                    console.log(`🔍 [updateGlobalStatus] CTRADER file: ${filePath}`);
-                    console.log(`🔧 [updateGlobalStatus] CTRADER CONFIG line: ${line}`);
-                  }
-                  
+           
                    // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
                    const newStatus = enabled ? 'ENABLED' : 'DISABLED';
                    updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
                    fileModified = true;
                    
                    // Log específico para cTrader después del cambio
-                   if (filePath.includes('CTRADER') || filePath.includes('cAlgo')) {
-                     console.log(`✅ [updateGlobalStatus] CTRADER new line: ${updatedLine}`);
-                   }
+                 
                 }
               }
 
@@ -2130,7 +2092,6 @@ class CSVManager extends EventEmitter {
         return false;
       }
 
-      console.log(`🔍 [updateAccountStatus] Found ${targetFiles.length} files for account ${accountId}:`, targetFiles);
 
       let totalFilesUpdated = 0;
 
@@ -2156,7 +2117,6 @@ class CSVManager extends EventEmitter {
               }
             } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
               // Actualizar la línea CONFIG para la cuenta específica
-              console.log(`🔧 [updateAccountStatus] Updating CONFIG line for account ${accountId} in ${targetFile}: ${line}`);
               const newStatus = enabled ? 'ENABLED' : 'DISABLED';
               
               // Buscar el patrón específicamente en la posición correcta (tercer campo después de CONFIG y MASTER/SLAVE)
@@ -2165,15 +2125,13 @@ class CSVManager extends EventEmitter {
               if (configParts.length >= 3) {
                 // Reemplazar específicamente el tercer campo (índice 2) que es el status
                 const currentStatus = configParts[2];
-                console.log(`🔍 [updateAccountStatus] Current status: "${currentStatus}", changing to: "${newStatus}"`);
                 updatedLine = line.replace(`[${currentStatus}]`, `[${newStatus}]`);
               } else {
                 // Fallback al método anterior
                 updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
               }
               
-              console.log(`✅ [updateAccountStatus] New CONFIG line: ${updatedLine}`);
-              fileModified = true;
+                fileModified = true;
             }
 
             updatedLines.push(updatedLine);
@@ -2189,7 +2147,6 @@ class CSVManager extends EventEmitter {
               // Escribir con encoding específico por plataforma
               const content = updatedLines.join(lineEnding) + lineEnding;
               writeFileSync(targetFile, content, encoding);
-              console.log(`✅ [updateAccountStatus] Successfully updated file ${targetFile} for account ${accountId}`);
               this.refreshFileData(targetFile);
               totalFilesUpdated++;
             } catch (writeError) {
@@ -2197,7 +2154,6 @@ class CSVManager extends EventEmitter {
               console.error(`❌ [updateAccountStatus] Failed to write file ${targetFile}`);
             }
           } else {
-            console.log(`⚠️ [updateAccountStatus] No CONFIG line found for account ${accountId} in file ${targetFile}`);
           }
         } catch (error) {
           console.error(`❌ [updateAccountStatus] Error processing file ${targetFile}:`, error);
@@ -2209,7 +2165,6 @@ class CSVManager extends EventEmitter {
         return false;
       }
 
-      console.log(`✅ [updateAccountStatus] Successfully updated ${totalFilesUpdated}/${targetFiles.length} files for account ${accountId}`);
 
       // Emitir evento de actualización
       this.emit('accountStatusChanged', {
@@ -2292,12 +2247,10 @@ class CSVManager extends EventEmitter {
   // Eliminar archivo problemático del cache y watching
   removeProblematicFile(filePath) {
     try {
-      console.log(`🗑️ [csvManager] Removing problematic file from cache: ${filePath}`);
       
       // Eliminar del Map de archivos CSV
       if (this.csvFiles.has(filePath)) {
         this.csvFiles.delete(filePath);
-        console.log(`✅ [csvManager] Removed from csvFiles cache: ${filePath}`);
       }
 
       // Eliminar del file watcher si existe
@@ -2306,14 +2259,12 @@ class CSVManager extends EventEmitter {
         if (watcher) {
           watcher.close();
           this.fileWatchers.delete(filePath);
-          console.log(`✅ [csvManager] Removed file watcher: ${filePath}`);
         }
       }
 
       // Actualizar el cache JSON
       this.saveCSVPathsToCache();
       
-      console.log(`✅ [csvManager] Successfully removed problematic file: ${filePath}`);
       return true;
     } catch (error) {
       console.error(`❌ [csvManager] Error removing problematic file ${filePath}:`, error);
@@ -2331,10 +2282,7 @@ class CSVManager extends EventEmitter {
 
   // Manejar error de archivo y eliminar si es de permisos
   handleFileError(filePath, error, operation = 'processing') {
-    console.error(`❌ [csvManager] Error ${operation} file ${filePath}:`, error);
-    
     if (this.isPermissionError(error)) {
-      console.log(`🚫 [csvManager] Permission error detected, removing file from cache: ${filePath}`);
       this.removeProblematicFile(filePath);
       return true; // Indicar que el archivo fue eliminado
     }
@@ -2352,13 +2300,7 @@ class CSVManager extends EventEmitter {
     // Obtener el tracking actual para este archivo
     const currentTracking = this.timestampChangeTracking.get(normalizedPath);
     
-    // Debug logging para cTrader
-    if (filePath.includes('CTRADER')) {
-      console.log(`🔍 [CTRADER DEBUG] detectTimestampChange for ${filePath}`);
-      console.log(`   New timestamp: ${newTimestamp}`);
-      console.log(`   Current tracking:`, currentTracking);
-    }
-    
+
     if (!currentTracking) {
       // Primera vez que vemos este archivo
       this.timestampChangeTracking.set(normalizedPath, {
@@ -2366,9 +2308,7 @@ class CSVManager extends EventEmitter {
         lastChangeTime: currentTime,
         firstSeen: currentTime
       });
-      if (filePath.includes('CTRADER')) {
-        console.log(`   ✅ First time seeing file, marked as changed`);
-      }
+
       return true; // Considerar como cambio para inicializar
     }
     
@@ -2380,15 +2320,10 @@ class CSVManager extends EventEmitter {
         lastChangeTime: currentTime,
         firstSeen: currentTracking.firstSeen
       });
-      if (filePath.includes('CTRADER')) {
-        console.log(`   ✅ Timestamp changed: ${currentTracking.lastTimestamp} → ${newTimestamp}`);
-      }
+
       return true; // Hubo un cambio
     }
     
-    if (filePath.includes('CTRADER')) {
-      console.log(`   ❌ No timestamp change detected`);
-    }
     return false; // No hubo cambio
   }
 
@@ -2398,27 +2333,12 @@ class CSVManager extends EventEmitter {
     const currentTime = Date.now();
     const tracking = this.timestampChangeTracking.get(normalizedPath);
     
-    // Debug logging para cTrader
-    if (filePath.includes('CTRADER')) {
-      console.log(`🔍 [CTRADER DEBUG] isFileOnline for ${filePath}`);
-      console.log(`   Tracking info:`, tracking);
-    }
-    
     if (!tracking) {
-      if (filePath.includes('CTRADER')) {
-        console.log(`   ❌ No tracking info found - returning false`);
-      }
       return false; // No tenemos información sobre este archivo
     }
     
     const timeSinceLastChange = currentTime - tracking.lastChangeTime;
     const isOnline = timeSinceLastChange <= (this.onlineThreshold * 1000); // Convertir a milisegundos
-    
-    if (filePath.includes('CTRADER')) {
-      console.log(`   Time since last change: ${timeSinceLastChange}ms`);
-      console.log(`   Online threshold: ${this.onlineThreshold * 1000}ms`);
-      console.log(`   Result: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
-    }
     
     return isOnline;
   }

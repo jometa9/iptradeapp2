@@ -199,8 +199,6 @@ export const setTradingConfig = async (req, res) => {
   if (saveTradingConfig(configs)) {
     // Also update CSV file with the new configuration
     try {
-      console.log(`🔄 Attempting to update CSV for master ${masterAccountId}`);
-      
       // Import csvManager dynamically to avoid circular imports
       const csvManager = (await import('../services/csvManager.js')).default;
       
@@ -215,10 +213,8 @@ export const setTradingConfig = async (req, res) => {
           suffix: configs[masterAccountId].suffix,
         };
       
-      console.log(`📋 CSV config to write:`, csvConfig);
       
       const result = csvManager.writeConfig(masterAccountId, csvConfig);
-      console.log(`✅ CSV update result:`, result);
       
     } catch (error) {
       console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);

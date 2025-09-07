@@ -92,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // If subscription type changed, notify
         if (oldSubscription && newSubscription && oldSubscription !== newSubscription) {
-          console.log(`🔄 Subscription updated from ${oldSubscription} to ${newSubscription}`);
           if (subscriptionChangeCallback) {
             subscriptionChangeCallback(oldSubscription, newSubscription);
           }
@@ -273,7 +272,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Verify authentication when starting the app
   useEffect(() => {
     const checkAuth = async () => {
-      const storedKey = localStorage.getItem(STORAGE_KEY);
+      // Primero verificar si hay datos preservados de un reinicio
+      const preservedKey = localStorage.getItem('iptrade_restart_preserve_key');
+      const preservedUser = localStorage.getItem('iptrade_restart_preserve_user');
+      
+      let storedKey = localStorage.getItem(STORAGE_KEY);
+      
+      // Si hay datos preservados, restaurarlos
+      if (preservedKey && preservedUser) {
+        try {
+          const userData = JSON.parse(preservedUser);
+          
+          // Restaurar datos de sesión
+          localStorage.setItem(STORAGE_KEY, preservedKey);
+          localStorage.setItem(`${STORAGE_KEY}_user_info`, preservedUser);
+          localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
+          
+          // Limpiar datos temporales
+          localStorage.removeItem('iptrade_restart_preserve_key');
+          localStorage.removeItem('iptrade_restart_preserve_user');
+          
+          // Establecer estado inmediatamente
+          setSecretKey(preservedKey);
+          setUserInfo(userData);
+          setIsAuthenticated(true);
+          
+          // Iniciar polling de suscripción
+          startSubscriptionPolling(preservedKey);
+          
+          setIsLoading(false);
+          return;
+        } catch (error) {
+          // Limpiar datos corruptos
+          localStorage.removeItem('iptrade_restart_preserve_key');
+          localStorage.removeItem('iptrade_restart_preserve_user');
+        }
+      }
+      
+      // Continuar con el flujo normal de autenticación
+      storedKey = localStorage.getItem(STORAGE_KEY);
 
       if (storedKey) {
         // Always validate against server on app startup for security
