@@ -128,8 +128,10 @@ const TradingAccountsConfigComponent = () => {
     data: unifiedData,
     loading: isLoading,
     error,
+    updateGlobalStatus,
     updateMasterStatus,
     updateSlaveConfig,
+    updateAccountStatus,
     refresh: refreshCSVData,
   } = useUnifiedAccountDataContext();
 
@@ -408,23 +410,27 @@ const TradingAccountsConfigComponent = () => {
     }
   }, [error]);
 
-  const [localGlobalStatus, setLocalGlobalStatus] = useState<boolean>(false);
+  // Estado local simplificado - solo para UI
+  const localGlobalStatus = copierStatus?.globalStatus ?? false;
 
-  // Sync global status with server
-  useEffect(() => {
-    if (copierStatus?.globalStatus !== undefined) {
-      setLocalGlobalStatus(copierStatus.globalStatus);
-    }
-  }, [copierStatus?.globalStatus]);
+  // La lógica automática ahora se maneja en useUnifiedAccountData
 
   const handleToggleGlobalStatus = async (enabled: boolean) => {
-    setLocalGlobalStatus(enabled);
+    console.log(`🔄 Manual toggle global status to: ${enabled}`);
+    
     try {
-      await csvFrontendService.updateGlobalStatus(enabled);
+      // Usar la función del contexto unificado que maneja todo automáticamente
+      await updateGlobalStatus(enabled);
+      console.log(`✅ Global status updated successfully to: ${enabled}`);
+      
     } catch (error) {
-      // Silent error handling
-      // Revert on error
-      setLocalGlobalStatus(!enabled);
+      console.error('❌ Error updating global status:', error);
+      
+      toastUtil({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update global status',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -433,10 +439,13 @@ const TradingAccountsConfigComponent = () => {
     setShowGlobalConfirm(false);
   };
 
+  // Ya no necesitamos esta función - la lógica automática está en useUnifiedAccountData
+
   // Toggle master account copier status usando SSE
   const toggleAccountStatus = async (accountId: string, enabled: boolean) => {
     try {
-      await csvFrontendService.updateAccountStatus(accountId, enabled);
+      // Usar la función del contexto unificado que maneja la lógica automática
+      await updateAccountStatus(accountId, enabled);
       toastUtil({
         title: 'Success',
         description: `Account ${accountId} ${enabled ? 'enabled' : 'disabled'}`,
@@ -1403,6 +1412,9 @@ const TradingAccountsConfigComponent = () => {
                   >
                     Global Copier Status
                   </h3>
+                  <p className="text-sm text-gray-500">
+                    {copierStatus?.globalStatusText === 'ON' ? 'Global trading copyn is enabled' : 'Global trading copyn is disabled'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -1435,13 +1447,13 @@ const TradingAccountsConfigComponent = () => {
                   {(() => {
                     switch (getServerStatus()) {
                       case 'optimal':
-                        return <CheckCircle className="h-4 w-4 text-green-500" />;
+                        return <CheckCircle className="h-4 w-4 text-green-600 stroke-2" />;
                       case 'offline':
-                        return <WifiOff className="h-4 w-4 text-red-500" />;
+                        return <WifiOff className="h-4 w-4 text-red-600 stroke-2" />;
                       case 'mixed':
-                        return <AlertTriangle className="h-4 w-4 text-orange-500" />;
+                        return <AlertTriangle className="h-4 w-4 text-orange-600 stroke-2" />;
                       default:
-                        return <Info className="h-4 w-4 text-gray-500" />;
+                        return <Info className="h-4 w-4 text-gray-600 stroke-2" />;
                     }
                   })()}
                   <div className="text-sm font-medium">

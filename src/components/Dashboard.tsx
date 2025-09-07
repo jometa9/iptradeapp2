@@ -223,7 +223,7 @@ export const Dashboard: React.FC = () => {
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-1 text-blue-600">
+                    <div className="flex items-center space-x-1">
                       <Link className="w-4 h-4" />
                     </div>
                   )}

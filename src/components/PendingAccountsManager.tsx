@@ -727,7 +727,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
                 <p className="text-[10px] mt-2 italic">
                   <a
-                    href="https://iptradecopier.com/#guide"
+                    href="https://iptradecopier.com/faqs"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-600 hover:text-gray-800"

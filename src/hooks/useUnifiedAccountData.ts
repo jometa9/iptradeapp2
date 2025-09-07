@@ -112,6 +112,52 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     }
   }, [secretKey]);
 
+  // Función para verificar el estado de todas las cuentas
+  const getAccountsGlobalState = useCallback((configuredAccounts: any) => {
+    if (!configuredAccounts) return { allEnabled: false, allDisabled: false, hasAccounts: false };
+
+    // Verificar que haya al menos una cuenta master
+    const masterAccountIds = Object.keys(configuredAccounts.masterAccounts || {});
+    if (masterAccountIds.length === 0) return { allEnabled: false, allDisabled: false, hasAccounts: false };
+
+    // Recopilar todas las cuentas (masters y slaves)
+    const allAccounts: any[] = [];
+    
+    // Agregar masters
+    masterAccountIds.forEach(masterId => {
+      const masterAccount = configuredAccounts.masterAccounts[masterId];
+      if (masterAccount) {
+        allAccounts.push(masterAccount);
+      }
+    });
+
+    // Agregar slaves conectados
+    Object.values(configuredAccounts.masterAccounts || {}).forEach((master: any) => {
+      if (master?.connectedSlaves) {
+        allAccounts.push(...master.connectedSlaves);
+      }
+    });
+
+    // Agregar slaves desconectados que estén configurados
+    const unconnectedSlaves = configuredAccounts.unconnectedSlaves || [];
+    const configuredUnconnectedSlaves = unconnectedSlaves.filter((slave: any) => 
+      slave?.config && Object.keys(slave.config).length > 0
+    );
+    allAccounts.push(...configuredUnconnectedSlaves);
+
+    // Si no hay cuentas configuradas, no cambiar nada
+    if (allAccounts.length === 0) return { allEnabled: false, allDisabled: false, hasAccounts: false };
+
+    // Verificar estados
+    const enabledAccounts = allAccounts.filter(account => account?.config?.enabled === true);
+    const disabledAccounts = allAccounts.filter(account => account?.config?.enabled === false);
+
+    const allEnabled = enabledAccounts.length === allAccounts.length;
+    const allDisabled = disabledAccounts.length === allAccounts.length;
+
+    return { allEnabled, allDisabled, hasAccounts: true, totalAccounts: allAccounts.length };
+  }, []);
+
   const processUnifiedData = useCallback((rawData: { data?: any }): UnifiedAccountData => {
     const pendingAccounts = (rawData.data as any)?.pendingAccounts || [];
     const configuredAccounts = (rawData.data as any)?.configuredAccounts || {
@@ -119,12 +165,48 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
       slaveAccounts: {},
       unconnectedSlaves: [],
     };
-    const copierStatus = (rawData.data as any)?.copierStatus || {
+    let copierStatus = (rawData.data as any)?.copierStatus || {
       globalStatus: false,
       globalStatusText: 'OFF',
       masterAccounts: {},
       totalMasterAccounts: 0,
     };
+    
+    // Aplicar lógica automática del global status
+    const accountsState = getAccountsGlobalState(configuredAccounts);
+    if (accountsState.hasAccounts) {
+      let shouldUpdateGlobalStatus = false;
+      let newGlobalStatus = copierStatus.globalStatus;
+      
+      // Activar automáticamente si todas las cuentas están habilitadas
+      if (accountsState.allEnabled && !copierStatus.globalStatus) {
+        console.log('🔄 Auto-enabling global copier status: all accounts are enabled');
+        newGlobalStatus = true;
+        shouldUpdateGlobalStatus = true;
+      }
+      
+      // Desactivar automáticamente si todas las cuentas están deshabilitadas
+      if (accountsState.allDisabled && copierStatus.globalStatus) {
+        console.log('🔄 Auto-disabling global copier status: all accounts are disabled');
+        newGlobalStatus = false;
+        shouldUpdateGlobalStatus = true;
+      }
+      
+      if (shouldUpdateGlobalStatus) {
+        // Actualizar el servidor de forma asíncrona sin bloquear el procesamiento
+        csvFrontendService.updateGlobalStatus(newGlobalStatus).catch(error => {
+          console.error('❌ Error auto-updating global status:', error);
+        });
+        
+        // Actualizar el estado local inmediatamente
+        copierStatus = {
+          ...copierStatus,
+          globalStatus: newGlobalStatus,
+          globalStatusText: newGlobalStatus ? 'ON' : 'OFF',
+        };
+      }
+    }
+    
     const serverStats = (rawData.data as any)?.serverStats || {
       totalCSVFiles: 0,
       totalPendingAccounts: 0,
@@ -171,7 +253,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
       serverStats,
       pendingData,
     };
-  }, []);
+  }, [getAccountsGlobalState]);
 
   const loadUnifiedData = useCallback(async () => {
     if (!secretKey) {
