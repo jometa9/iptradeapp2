@@ -7,6 +7,12 @@
 #property version   "1.00"
 #property strict
 
+// Import Windows API functions
+#import "kernel32.dll"
+   bool CopyFileW(string lpExistingFileName, string lpNewFileName, bool bFailIfExists);
+   int GetLastError();
+#import
+
 // Global variables
 string accountType = "PENDING";
 string copyTrading = "DISABLED";
@@ -333,39 +339,170 @@ void ProcessSlaveAccount()
     
     Print("=== Reading Master CSV: ", masterCsvPath, " ===");
     
-    // Read master CSV orders
-    int handle = FileOpen(masterCsvPath, FILE_READ|FILE_TXT);
-    if(handle == INVALID_HANDLE) 
+    // Try multiple read attempts with different flags for better compatibility
+    string csvContent = ReadMasterCsvFile(masterCsvPath);
+    if(csvContent == "")
     {
-        Print("ERROR: Cannot open master CSV file: ", masterCsvPath);
+        Print("ERROR: Cannot read master CSV file: ", masterCsvPath);
         return;
     }
     
-    // Read and log first 3 lines
-    for(int i = 0; i < 3 && !FileIsEnding(handle); i++)
-    {
-        string headerLine = FileReadString(handle);
-        Print("Master Line ", (i+1), ": ", headerLine);
-    }
+    // Split content into lines
+    string lines[];
+    int lineCount = StringSplit(csvContent, "\n", lines);
     
-    // Process order lines
+    Print("Successfully read ", lineCount, " lines from master CSV");
+    
+    // Process lines
     int orderCount = 0;
-    while(!FileIsEnding(handle))
+    for(int i = 0; i < lineCount; i++)
     {
-        string line = FileReadString(handle);
-        if(line != "")
+        string line = lines[i];
+        StringTrimRight(line);
+        StringTrimLeft(line);
+        if(line == "") continue;
+        
+        if(i < 3)
+        {
+            Print("Master Line ", (i+1), ": ", line);
+        }
+        else if(StringFind(line, "[ORDER]") == 0)
         {
             Print("Master Order Line: ", line);
-            if(StringFind(line, "[ORDER]") == 0)
-            {
-                ProcessMasterOrder(line);
-                orderCount++;
-            }
+            ProcessMasterOrder(line);
+            orderCount++;
         }
     }
     
     Print("=== End Master CSV reading. Found ", orderCount, " orders ===");
-    FileClose(handle);
+}
+
+//+------------------------------------------------------------------+
+//| Read master CSV file using Windows API copy                     |
+//+------------------------------------------------------------------+
+string ReadMasterCsvFile(string filePath)
+{
+    Print("Attempting to read master CSV: ", filePath);
+    
+    // Método 1: Usar Windows API para copiar el archivo
+    string tempFileName = "temp_master_" + IntegerToString(AccountNumber()) + "_" + IntegerToString(GetTickCount()) + ".csv";
+    string tempFilePath = TerminalInfoString(TERMINAL_DATA_PATH) + "\\MQL4\\Files\\" + tempFileName;
+    
+    Print("Trying Windows API copy to: ", tempFilePath);
+    
+    // Usar CopyFileW de Windows API
+    bool copyResult = CopyFileW(filePath, tempFilePath, false);
+    
+    if(copyResult)
+    {
+        Print("Windows API copy successful");
+        Sleep(50); // Pequeña pausa para asegurar que la copia termine
+        
+        // Leer el archivo temporal
+        int handle = FileOpen(tempFileName, FILE_READ|FILE_TXT);
+        if(handle != INVALID_HANDLE)
+        {
+            string content = "";
+            string lines[];
+            int lineCount = 0;
+            
+            while(!FileIsEnding(handle))
+            {
+                string line = FileReadString(handle);
+                if(line != "")
+                {
+                    ArrayResize(lines, lineCount + 1);
+                    lines[lineCount] = line;
+                    lineCount++;
+                }
+            }
+            FileClose(handle);
+            
+            // Eliminar archivo temporal
+            FileDelete(tempFileName);
+            
+            // Reconstruir contenido
+            for(int j = 0; j < lineCount; j++)
+            {
+                if(j == 0)
+                    content = lines[j];
+                else
+                    content = content + "\n" + lines[j];
+            }
+            
+            if(StringLen(content) > 0)
+            {
+                Print("Successfully read master CSV via Windows API copy, length: ", StringLen(content), " lines: ", lineCount);
+                return content;
+            }
+        }
+        else
+        {
+            Print("Failed to open temporary file after Windows API copy");
+            FileDelete(tempFileName); // Limpiar en caso de error
+        }
+    }
+    else
+    {
+        int error = GetLastError();
+        Print("Windows API copy failed, error: ", error);
+    }
+    
+    // Método 2: Fallback - lectura directa con múltiples intentos
+    Print("Fallback: trying direct read with multiple modes...");
+    
+    int modes[] = {
+        FILE_READ|FILE_SHARE_READ|FILE_SHARE_WRITE,
+        FILE_READ|FILE_SHARE_READ,
+        FILE_READ
+    };
+    
+    for(int i = 0; i < ArraySize(modes); i++)
+    {
+        int handle = FileOpen(filePath, modes[i]);
+        if(handle != INVALID_HANDLE)
+        {
+            Print("Opened file with mode: ", modes[i]);
+            
+            string content = "";
+            string lines[];
+            int lineCount = 0;
+            
+            while(!FileIsEnding(handle))
+            {
+                string line = FileReadString(handle);
+                if(line != "")
+                {
+                    ArrayResize(lines, lineCount + 1);
+                    lines[lineCount] = line;
+                    lineCount++;
+                }
+            }
+            FileClose(handle);
+            
+            // Reconstruir contenido
+            for(int j = 0; j < lineCount; j++)
+            {
+                if(j == 0)
+                    content = lines[j];
+                else
+                    content = content + "\n" + lines[j];
+            }
+            
+            if(StringLen(content) > 0)
+            {
+                Print("Successfully read master CSV via direct read, length: ", StringLen(content), " lines: ", lineCount);
+                return content;
+            }
+        }
+        else
+        {
+            Print("Failed to open with mode: ", modes[i]);
+        }
+    }
+    
+    Print("All methods failed for: ", filePath);
+    return "";
 }
 
 //+------------------------------------------------------------------+

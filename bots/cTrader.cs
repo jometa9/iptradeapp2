@@ -288,7 +288,11 @@ namespace cAlgo.Robots
                     
                     long openTime = ((DateTimeOffset)DateTime.UtcNow).ToUnixTimeSeconds();
                     
-                    string orderLine = $"[ORDER] [{order.Id}] [{symbol}] [{orderType}] [{order.VolumeInUnits / 100000.0:F2}] [{order.TargetPrice}] [{(order.StopLoss ?? 0)}] [{(order.TakeProfit ?? 0)}] [{openTime}]";
+                    // Get the actual volume in lots for this symbol
+                    var symbolObj = Symbols.GetSymbol(order.SymbolName);
+                    double lots = symbolObj != null ? order.VolumeInUnits / symbolObj.LotSize : order.VolumeInUnits / 100000.0;
+                    
+                    string orderLine = $"[ORDER] [{order.Id}] [{symbol}] [{orderType}] [{lots:F2}] [{order.TargetPrice}] [{(order.StopLoss ?? 0)}] [{(order.TakeProfit ?? 0)}] [{openTime}]";
                     
                     newLines.Add(orderLine);
                 }
@@ -311,7 +315,11 @@ namespace cAlgo.Robots
                     string orderType = position.TradeType == TradeType.Buy ? "BUY" : "SELL";
                     long openTime = ((DateTimeOffset)position.EntryTime).ToUnixTimeSeconds();
                     
-                    string orderLine = $"[ORDER] [{position.Id}] [{symbol}] [{orderType}] [{position.VolumeInUnits / 100000.0:F2}] [{position.EntryPrice}] [{(position.StopLoss ?? 0)}] [{(position.TakeProfit ?? 0)}] [{openTime}]";
+                    // Get the actual volume in lots for this symbol
+                    var symbolObj = Symbols.GetSymbol(position.SymbolName);
+                    double lots = symbolObj != null ? position.VolumeInUnits / symbolObj.LotSize : position.VolumeInUnits / 100000.0;
+                    
+                    string orderLine = $"[ORDER] [{position.Id}] [{symbol}] [{orderType}] [{lots:F2}] [{position.EntryPrice}] [{(position.StopLoss ?? 0)}] [{(position.TakeProfit ?? 0)}] [{openTime}]";
                     
                     newLines.Add(orderLine);
                 }
@@ -452,7 +460,7 @@ namespace cAlgo.Robots
                     var symbolObj = Symbols.GetSymbol(slaveSymbol);
                     if (symbolObj == null) return;
                     
-                    long volumeInUnits = (long)(lots * 100000); // Convert to units
+                    long volumeInUnits = (long)(lots * symbolObj.LotSize); // Convert to units using symbol's lot size
                     
                     switch (orderType)
                     {
