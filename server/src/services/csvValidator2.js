@@ -24,11 +24,9 @@ export const validateLine = line => {
   // Validate based on line type
   switch (lineType) {
     case 'TYPE':
-      if (values.length !== 4) return { valid: false, error: 'TYPE line must have 4 values' };
-      if (!VALID_ACCOUNT_TYPES.includes(values[1]))
-        return { valid: false, error: 'Invalid account type' };
-      if (!VALID_PLATFORMS.includes(values[2])) return { valid: false, error: 'Invalid platform' };
-      if (!/^\d+$/.test(values[3])) return { valid: false, error: 'Invalid account ID' };
+      if (values.length !== 3) return { valid: false, error: 'TYPE line must have 3 values' };
+      if (!VALID_PLATFORMS.includes(values[1])) return { valid: false, error: 'Invalid platform' };
+      if (!/^\d+$/.test(values[2])) return { valid: false, error: 'Invalid account ID' };
       break;
 
     case 'STATUS':
@@ -43,6 +41,20 @@ export const validateLine = line => {
         return { valid: false, error: 'CONFIG line must have at least 2 values' };
       if (!['MASTER', 'SLAVE', 'PENDING'].includes(values[1]))
         return { valid: false, error: 'Invalid config type' };
+      break;
+
+    case 'TRANSLATE':
+      if (values.length < 2)
+        return { valid: false, error: 'TRANSLATE line must have at least 2 values' };
+      // Validate translation pairs or NULL
+      for (let i = 1; i < values.length; i++) {
+        if (values[i] !== 'NULL' && !values[i].includes(':')) {
+          return {
+            valid: false,
+            error: `Invalid translation format in ${values[i]}. Expected format: SYMBOL1:SYMBOL2`,
+          };
+        }
+      }
       break;
 
     case 'ORDER':
@@ -66,8 +78,11 @@ export const validateLine = line => {
 
 // Validate complete CSV structure
 export const validateCSVStructure = lines => {
-  if (!Array.isArray(lines) || lines.length < 3) {
-    return { valid: false, error: 'CSV must have at least TYPE, STATUS, and CONFIG lines' };
+  if (!Array.isArray(lines) || lines.length < 4) {
+    return {
+      valid: false,
+      error: 'CSV must have at least TYPE, STATUS, CONFIG, and TRANSLATE lines',
+    };
   }
 
   // Validate required lines are present and in order
@@ -86,9 +101,20 @@ export const validateCSVStructure = lines => {
     return { valid: false, error: 'Third line must be CONFIG line: ' + configLineResult.error };
   }
 
+  const translateLineResult = validateLine(lines[3]);
+  if (!translateLineResult.valid || translateLineResult.values[0] !== 'TRANSLATE') {
+    return {
+      valid: false,
+      error: 'Fourth line must be TRANSLATE line: ' + translateLineResult.error,
+    };
+  }
+
+  // Get account type from CONFIG line
+  const accountType = configLineResult.values[1];
+
   // For MASTER accounts, validate ORDER lines
-  if (typeLineResult.values[1] === 'MASTER' && lines.length > 3) {
-    for (let i = 3; i < lines.length; i++) {
+  if (accountType === 'MASTER' && lines.length > 4) {
+    for (let i = 4; i < lines.length; i++) {
       const orderLineResult = validateLine(lines[i]);
       if (!orderLineResult.valid || orderLineResult.values[0] !== 'ORDER') {
         const errorMessage = orderLineResult.error || 'Unknown error';

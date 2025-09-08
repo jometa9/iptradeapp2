@@ -29,15 +29,15 @@ const router = express.Router();
  */
 router.post('/restart-service', async (req, res) => {
   try {
-    
     const restartResults = {
       csvWatching: false,
       linkPlatforms: false,
       sseService: false,
       cacheClearing: false,
-      fileSystemCache: false
+      fileSystemCache: false,
+      csvContentCleared: false,
     };
-    
+
     // 1. Limpiar caché de CSV watching si existe
     try {
       const csvWatchingService = require('../services/csvWatchingService');
@@ -45,8 +45,7 @@ router.post('/restart-service', async (req, res) => {
         await csvWatchingService.clearCache();
         restartResults.csvWatching = true;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
 
     // 2. Limpiar caché de link platforms si existe
     try {
@@ -55,8 +54,7 @@ router.post('/restart-service', async (req, res) => {
         await linkPlatformsService.clearCache();
         restartResults.linkPlatforms = true;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
 
     // 3. Reinicializar SSE connections si existe
     try {
@@ -65,33 +63,68 @@ router.post('/restart-service', async (req, res) => {
         await sseService.reinitialize();
         restartResults.sseService = true;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
 
     // 4. Limpiar cachés de archivos del sistema
     try {
       const fs = require('fs');
       const path = require('path');
-      
+
       // Limpiar archivos de caché específicos
       const cacheFiles = [
         'config/auto_link_cache.json',
         'server/config/csv_watching_cache.json',
-        'config/mql_paths_cache.json'
+        'config/mql_paths_cache.json',
       ];
-      
+
       for (const cacheFile of cacheFiles) {
         try {
           const fullPath = path.join(process.cwd(), cacheFile);
           if (fs.existsSync(fullPath)) {
             fs.writeFileSync(fullPath, '{}');
           }
-        } catch (fileError) {
-        }
+        } catch (fileError) {}
       }
-      
+
       restartResults.fileSystemCache = true;
+    } catch (error) {}
+
+    // 4.5. Borrar contenido de archivos CSV cacheados 4 veces
+    try {
+      const fs = require('fs');
+      const path = require('path');
+
+      // Leer las rutas de CSV desde el cache
+      const csvCachePath = path.join(
+        process.cwd(),
+        'server',
+        'server',
+        'config',
+        'csv_watching_cache.json'
+      );
+
+      if (fs.existsSync(csvCachePath)) {
+        const cacheData = JSON.parse(fs.readFileSync(csvCachePath, 'utf8'));
+        const csvFiles = cacheData.csvFiles || [];
+
+        // Repetir 4 veces el borrado del contenido
+        for (let iteration = 1; iteration <= 4; iteration++) {
+          for (const csvFile of csvFiles) {
+            try {
+              if (fs.existsSync(csvFile)) {
+                // Borrar el contenido del archivo escribiendo vacío
+                fs.writeFileSync(csvFile, '');
+              }
+            } catch (fileError) {
+              // Silencioso, continuar con el siguiente
+            }
+          }
+        }
+
+        restartResults.csvContentCleared = true;
+      }
     } catch (error) {
+      // Error silencioso
     }
 
     // 5. Limpiar memoria caché de Node.js
@@ -103,23 +136,21 @@ router.post('/restart-service', async (req, res) => {
         }
       });
       restartResults.cacheClearing = true;
-    } catch (error) {
-    }
+    } catch (error) {}
 
     res.json({
       success: true,
       message: 'Service restarted successfully',
       details: restartResults,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     console.error('❌ Service restart failed:', error);
     res.status(500).json({
       success: false,
       message: 'Service restart failed',
       error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });

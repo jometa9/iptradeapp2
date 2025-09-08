@@ -110,14 +110,14 @@ const checkAccountActivity = async () => {
 
           // NUEVA LÓGICA: Usar tracking de cambios de timestamp
           const trackingInfo = csvManager.getTimestampTracking(filePath);
-          
+
           if (trackingInfo) {
             const currentTime = Date.now();
             const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
             const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
-            
+
             const shouldBeOnline = timeSinceLastChange <= fiveSecondsInMs;
-            
+
             // Check if account should be marked as offline
             if (!shouldBeOnline && currentStatus !== 'offline') {
               // Update status in CSV file
@@ -272,7 +272,8 @@ export const registerMasterAccount = (req, res) => {
 
 // Register new slave account
 export const registerSlaveAccount = (req, res) => {
-  const { slaveAccountId, name, description, broker, platform, masterAccountId } = req.body;
+  const { slaveAccountId, name, description, broker, platform, masterAccountId, translations } =
+    req.body;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
   if (!apiKey) {
@@ -511,7 +512,9 @@ export const getSlaveAccount = async (req, res) => {
       if (csvManager && csvManager.csvFiles) {
         // Buscar en archivos CSV escaneados
         for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          const csvAccount = fileData.data.find(
+            acc => acc.account_id === slaveAccountId && acc.account_type === 'slave'
+          );
           if (csvAccount) {
             account = {
               id: csvAccount.account_id,
@@ -648,7 +651,7 @@ export const updateMasterAccount = (req, res) => {
 
   // Update fields if provided, preserving existing values
   const existingAccount = userAccounts.masterAccounts[masterAccountId];
-  
+
   // Create updated account object with existing values
   userAccounts.masterAccounts[masterAccountId] = {
     ...existingAccount,
@@ -657,9 +660,9 @@ export const updateMasterAccount = (req, res) => {
     broker: broker !== undefined ? broker : existingAccount.broker,
     platform: platform !== undefined ? platform : existingAccount.platform,
     status: status !== undefined ? status : existingAccount.status,
-    prefix: prefix !== undefined ? prefix : (existingAccount.prefix || ''),
-    suffix: suffix !== undefined ? suffix : (existingAccount.suffix || ''),
-    lastUpdated: new Date().toISOString()
+    prefix: prefix !== undefined ? prefix : existingAccount.prefix || '',
+    suffix: suffix !== undefined ? suffix : existingAccount.suffix || '',
+    lastUpdated: new Date().toISOString(),
   };
 
   if (saveUserAccounts(apiKey, userAccounts)) {
@@ -683,7 +686,7 @@ export const updateMasterAccount = (req, res) => {
 // Update slave account
 export const updateSlaveAccount = async (req, res) => {
   const { slaveAccountId } = req.params;
-  const { name, description, broker, platform, status, masterAccountId } = req.body;
+  const { name, description, broker, platform, status, masterAccountId, translations } = req.body;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
   if (!apiKey) {
@@ -701,7 +704,7 @@ export const updateSlaveAccount = async (req, res) => {
 
   // Verificar si la cuenta esclava existe (en registered_accounts.json o en CSV)
   let accountExists = userAccounts.slaveAccounts[slaveAccountId] !== undefined;
-  
+
   if (!accountExists) {
     try {
       const csvManager = await import('../services/csvManager.js')
@@ -711,7 +714,9 @@ export const updateSlaveAccount = async (req, res) => {
       if (csvManager && csvManager.csvFiles) {
         // Buscar en archivos CSV escaneados
         for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          const csvAccount = fileData.data.find(
+            acc => acc.account_id === slaveAccountId && acc.account_type === 'slave'
+          );
           if (csvAccount) {
             accountExists = true;
             break;
@@ -732,7 +737,7 @@ export const updateSlaveAccount = async (req, res) => {
   // Update fields if provided
   // Update fields if provided, preserving existing values
   const existingAccount = userAccounts.slaveAccounts[slaveAccountId];
-  
+
   // Create updated account object with existing values
   userAccounts.slaveAccounts[slaveAccountId] = {
     ...existingAccount,
@@ -743,7 +748,7 @@ export const updateSlaveAccount = async (req, res) => {
     status: status !== undefined ? status : existingAccount.status,
     prefix: existingAccount.prefix || '', // Preserve prefix
     suffix: existingAccount.suffix || '', // Preserve suffix
-    lastUpdated: new Date().toISOString()
+    lastUpdated: new Date().toISOString(),
   };
 
   // Handle master connection if provided
@@ -927,7 +932,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
 
     // Generate new CSV2 format content for master account (WITH SPACES)
     let csvContent, encoding, lineEnding;
-    
+
     // Detectar plataforma y usar encoding/line endings apropiados
     if (platform === 'CTRADER') {
       // cTrader usa C# que prefiere UTF-8 con \n
@@ -938,7 +943,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
       lineEnding = '\r\n';
       encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
     }
-    
+
     csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
     csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]${lineEnding}`;
     csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []${lineEnding}`;
@@ -995,7 +1000,12 @@ const findMasterCSVPath = async masterId => {
 };
 
 // Function to update CSV account to SLAVE using new CSV2 format
-const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = 'NULL') => {
+const updateCSVAccountToSlave = async (
+  accountId,
+  platform = 'MT4',
+  masterId = 'NULL',
+  translations = null
+) => {
   try {
     // Use cached CSV files from csvManager to find the account
     let csvFilePath = null;
@@ -1104,7 +1114,7 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
 
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent, encoding, lineEnding;
-    
+
     // Detectar plataforma y usar encoding/line endings apropiados
     if (platform === 'CTRADER') {
       // cTrader usa C# que prefiere UTF-8 con \n
@@ -1115,10 +1125,20 @@ const updateCSVAccountToSlave = async (accountId, platform = 'MT4', masterId = '
       lineEnding = '\r\n';
       encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
     }
-    
+
     csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
     csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]${lineEnding}`;
     csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]${lineEnding}`;
+
+    // Add TRANSLATE line with translations or NULL
+    if (translations && Object.keys(translations).length > 0) {
+      const translationPairs = Object.entries(translations)
+        .map(([from, to]) => `[${from}:${to}]`)
+        .join(' ');
+      csvContent += `[TRANSLATE] ${translationPairs}${lineEnding}`;
+    } else {
+      csvContent += `[TRANSLATE] [NULL]${lineEnding}`;
+    }
 
     // Write the slave account to CSV in new format
     // Ensure we're writing to .csv not .cssv
@@ -1385,7 +1405,7 @@ export const deleteSlaveAccount = async (req, res) => {
 
   // Verificar si la cuenta esclava existe (en registered_accounts.json o en CSV)
   let accountExists = userAccounts.slaveAccounts[slaveAccountId] !== undefined;
-  
+
   if (!accountExists) {
     try {
       const csvManager = await import('../services/csvManager.js')
@@ -1395,7 +1415,9 @@ export const deleteSlaveAccount = async (req, res) => {
       if (csvManager && csvManager.csvFiles) {
         // Buscar en archivos CSV escaneados
         for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-          const csvAccount = fileData.data.find(acc => acc.account_id === slaveAccountId && acc.account_type === 'slave');
+          const csvAccount = fileData.data.find(
+            acc => acc.account_id === slaveAccountId && acc.account_type === 'slave'
+          );
           if (csvAccount) {
             accountExists = true;
             break;
@@ -1508,19 +1530,19 @@ export const getPendingAccounts = async (req, res) => {
         const timestamp = account.timestamp;
         const accountTimestamp = parseInt(timestamp);
         const currentTimeSeconds = Math.floor(Date.now() / 1000);
-        
+
         // Calcular diferencia de tiempo en segundos
         const timeDiff = currentTimeSeconds - accountTimestamp;
-        
+
         // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
         if (timeDiff > 3600) {
           continue; // Skip this account
         }
-        
+
         // RULE 2: Determinar status basado en timestamp
         // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
         let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
-        
+
         // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
         if (account.status === 'offline' && timeDiff > 5) {
           finalStatus = 'offline';
@@ -1675,7 +1697,7 @@ export const convertPendingToMaster = async (req, res) => {
 // Convert pending account to slave
 export const convertPendingToSlave = async (req, res) => {
   const { accountId } = req.params;
-  const { name, description, broker, platform, masterAccountId } = req.body;
+  const { name, description, broker, platform, masterAccountId, translations } = req.body;
   const apiKey = req.apiKey;
   if (!apiKey) {
     return res
@@ -1736,7 +1758,12 @@ export const convertPendingToSlave = async (req, res) => {
 
       // Update CSV file to reflect the slave account conversion using new CSV2 format
       try {
-        await updateCSVAccountToSlave(accountId, slaveAccount.platform, masterAccountId);
+        await updateCSVAccountToSlave(
+          accountId,
+          slaveAccount.platform,
+          masterAccountId,
+          translations
+        );
       } catch (error) {
         console.error('Error updating CSV for slave conversion:', error);
         // Continue with success response even if CSV update fails
@@ -2267,19 +2294,19 @@ export const getUnifiedAccountData = async (req, res) => {
     for (const account of allAccounts.pendingAccounts || []) {
       const accountTimestamp = parseInt(account.timestamp);
       const currentTimeSeconds = Math.floor(Date.now() / 1000);
-      
+
       // Calcular diferencia de tiempo en segundos
       const timeDiff = currentTimeSeconds - accountTimestamp;
-      
+
       // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
       if (timeDiff > 3600) {
         continue; // Skip this account
       }
-      
+
       // RULE 2: Determinar status basado en timestamp
       // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
       let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
-      
+
       // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
       if (account.status === 'offline' && timeDiff > 5) {
         finalStatus = 'offline';
@@ -2299,20 +2326,20 @@ export const getUnifiedAccountData = async (req, res) => {
       pendingAccountIds.add(account.account_id);
     }
 
-          // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
-      const cleanMasterAccounts = {};
-      const processedMasterIds = new Set();
+    // Clean master accounts - remove invalid IDs like "ENABLED", "DISABLED", etc.
+    const cleanMasterAccounts = {};
+    const processedMasterIds = new Set();
 
-      // Helper function to get config with prefix/suffix
-      const getAccountConfig = (account) => {
-        const config = account.config || {};
-        return {
-          ...config,
-          prefix: config.prefix === 'NULL' || !config.prefix ? '' : config.prefix,
-          suffix: config.suffix === 'NULL' || !config.suffix ? '' : config.suffix,
-        };
+    // Helper function to get config with prefix/suffix
+    const getAccountConfig = account => {
+      const config = account.config || {};
+      return {
+        ...config,
+        prefix: config.prefix === 'NULL' || !config.prefix ? '' : config.prefix,
+        suffix: config.suffix === 'NULL' || !config.suffix ? '' : config.suffix,
       };
-    
+    };
+
     Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
       // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
       const isValidMasterId =
@@ -2333,7 +2360,7 @@ export const getUnifiedAccountData = async (req, res) => {
         const masterAccount = allAccounts.masterAccounts[masterId];
         cleanMasterAccounts[masterId] = {
           ...masterAccount,
-          config: getAccountConfig(masterAccount)
+          config: getAccountConfig(masterAccount),
         };
         processedMasterIds.add(masterId);
       }
@@ -2395,7 +2422,7 @@ export const getUnifiedAccountData = async (req, res) => {
 
       cleanUnconnectedSlaves.push({
         ...slave,
-        config: getAccountConfig(slave)
+        config: getAccountConfig(slave),
       });
       seenSlaveIds.add(slave.id);
     });
@@ -2416,7 +2443,7 @@ export const getUnifiedAccountData = async (req, res) => {
       const slaveAccount = allAccounts.slaveAccounts[slaveId];
       cleanSlaveAccounts[slaveId] = {
         ...slaveAccount,
-        config: getAccountConfig(slaveAccount)
+        config: getAccountConfig(slaveAccount),
       };
     });
 
@@ -2448,7 +2475,11 @@ export const getUnifiedAccountData = async (req, res) => {
         cleanUnconnectedSlaves.filter(acc => acc.status === 'online').length +
         // Connected slaves online
         Object.values(cleanMasterAccounts).reduce(
-          (sum, master) => sum + (master.connectedSlaves ? master.connectedSlaves.filter(slave => slave.status === 'online').length : 0),
+          (sum, master) =>
+            sum +
+            (master.connectedSlaves
+              ? master.connectedSlaves.filter(slave => slave.status === 'online').length
+              : 0),
           0
         ),
 
@@ -2463,12 +2494,19 @@ export const getUnifiedAccountData = async (req, res) => {
         cleanUnconnectedSlaves.filter(acc => acc.status === 'offline').length +
         // Connected slaves offline
         Object.values(cleanMasterAccounts).reduce(
-          (sum, master) => sum + (master.connectedSlaves ? master.connectedSlaves.filter(slave => slave.status === 'offline').length : 0),
+          (sum, master) =>
+            sum +
+            (master.connectedSlaves
+              ? master.connectedSlaves.filter(slave => slave.status === 'offline').length
+              : 0),
           0
         ),
 
       totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
-      totalSlaveAccounts: Object.keys(cleanSlaveAccounts).length + cleanUnconnectedSlaves.length + totalConnectedSlaves,
+      totalSlaveAccounts:
+        Object.keys(cleanSlaveAccounts).length +
+        cleanUnconnectedSlaves.length +
+        totalConnectedSlaves,
       totalUnconnectedSlaves: cleanUnconnectedSlaves.length,
     };
 

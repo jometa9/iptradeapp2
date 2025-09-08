@@ -1,9 +1,19 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFile, readFileSync, statSync, writeFileSync, writeFile, rename, copyFile, unlink, renameSync, unlinkSync } from 'fs';
+import {
+  copyFile,
+  existsSync,
+  mkdirSync,
+  readFile,
+  readFileSync,
+  rename,
+  statSync,
+  unlink,
+  writeFile,
+  writeFileSync,
+} from 'fs';
 import { glob } from 'glob';
 import { join, resolve } from 'path';
 
-import { validateBeforeWrite } from './csvValidator2.js';
 import { detectOrderChanges } from './orderChangeDetector.js';
 
 class CSVManager extends EventEmitter {
@@ -16,137 +26,139 @@ class CSVManager extends EventEmitter {
     this.debounceTimeoutMs = 1000; // Ventana de debounce para agrupar cambios de archivo (1 segundo)
     this.csvDirectory = join(process.cwd(), 'csv_data');
     this.heartbeatInterval = null; // Para el heartbeat de los watchers
-          this.pollingInterval = null; // Para el polling de archivos
-      this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
-      
-      // Sistema de cola para escrituras
-      this.writeQueue = new Map(); // Cola de escrituras por archivo
-      this.writeInProgress = new Set(); // Set de archivos siendo escritos
-      this.maxRetries = 3; // Número máximo de reintentos por operación
-      this.retryDelay = 1000; // Delay base entre reintentos (ms)
-      this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
-      
-      // Sistema de tracking de cambios de timestamp
-      this.timestampChangeTracking = new Map(); // filePath -> { lastTimestamp, lastChangeTime }
-      this.onlineThreshold = 5; // 5 segundos sin cambios = offline
-      
-      this.init();
+    this.pollingInterval = null; // Para el polling de archivos
+    this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
+
+    // Sistema de cola para escrituras
+    this.writeQueue = new Map(); // Cola de escrituras por archivo
+    this.writeInProgress = new Set(); // Set de archivos siendo escritos
+    this.maxRetries = 3; // Número máximo de reintentos por operación
+    this.retryDelay = 1000; // Delay base entre reintentos (ms)
+    this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
+
+    // Sistema de tracking de cambios de timestamp
+    this.timestampChangeTracking = new Map(); // filePath -> { lastTimestamp, lastChangeTime }
+    this.onlineThreshold = 5; // 5 segundos sin cambios = offline
+
+    this.init();
+  }
+
+  // Procesar cola de escrituras
+  async processWriteQueue(filePath) {
+    if (this.writeInProgress.has(filePath)) {
+      return; // Ya hay una escritura en progreso para este archivo
     }
 
-    // Procesar cola de escrituras
-    async processWriteQueue(filePath) {
-      if (this.writeInProgress.has(filePath)) {
-        return; // Ya hay una escritura en progreso para este archivo
-      }
-
-      const queue = this.writeQueue.get(filePath);
-      if (!queue || queue.length === 0) {
-        return; // No hay operaciones pendientes
-      }
-
-      this.writeInProgress.add(filePath);
-
-      try {
-        while (queue.length > 0) {
-          const operation = queue[0]; // Peek la primera operación
-          
-          try {
-            const success = await this.writeFileWithRetry(
-              filePath,
-              operation.content,
-              this.maxRetries,
-              this.retryDelay
-            );
-
-            if (success) {
-              queue.shift(); // Remover la operación completada
-              operation.resolve(true);
-            } else {
-              // Si falló después de todos los reintentos
-              operation.reject(new Error(`Failed to write to ${filePath} after ${this.maxRetries} attempts`));
-              queue.shift(); // Remover la operación fallida
-            }
-          } catch (error) {
-            if (error.code === 'EPERM' || error.code === 'EBUSY') {
-              // Si el archivo está bloqueado, esperar y reintentar
-              await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-              continue;
-            }
-            
-            // Para otros errores, rechazar la operación y continuar con la siguiente
-            operation.reject(error);
-            queue.shift();
-          }
-        }
-      } finally {
-        this.writeInProgress.delete(filePath);
-        this.writeQueue.delete(filePath);
-      }
+    const queue = this.writeQueue.get(filePath);
+    if (!queue || queue.length === 0) {
+      return; // No hay operaciones pendientes
     }
 
-    // Agregar operación a la cola de escrituras
-    async queueFileWrite(filePath, content) {
-      return new Promise((resolve, reject) => {
-        // Inicializar cola si no existe
-        if (!this.writeQueue.has(filePath)) {
-          this.writeQueue.set(filePath, []);
-        }
+    this.writeInProgress.add(filePath);
 
-        // Agregar operación a la cola
-        const queue = this.writeQueue.get(filePath);
-        queue.push({ content, resolve, reject });
+    try {
+      while (queue.length > 0) {
+        const operation = queue[0]; // Peek la primera operación
 
-        // Iniciar procesamiento si no hay una escritura en progreso
-        if (!this.writeInProgress.has(filePath)) {
-          this.processWriteQueue(filePath);
-        }
-      });
-    }
-
-    // Función helper para escribir archivo con reintentos
-    async writeFileWithRetry(filePath, content, maxRetries = 3, retryDelay = 1000) {
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          // Intentar escribir en un archivo temporal primero
-          const tmpPath = `${filePath}.tmp`;
-          await new Promise((resolve, reject) => {
-            writeFile(tmpPath, content, 'utf8', (err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
+          const success = await this.writeFileWithRetry(
+            filePath,
+            operation.content,
+            this.maxRetries,
+            this.retryDelay
+          );
 
-          // Si la escritura temporal fue exitosa, intentar renombrar
-          await new Promise((resolve, reject) => {
-            rename(tmpPath, filePath, (err) => {
-              if (err) {
-                // Si falla el rename, intentar copiar y eliminar
-                copyFile(tmpPath, filePath, (copyErr) => {
-                  if (copyErr) {
-                    reject(copyErr);
-                  } else {
-                    unlink(tmpPath, () => resolve());
-                  }
-                });
-              } else {
-                resolve();
-              }
-            });
-          });
-
-          return true;
+          if (success) {
+            queue.shift(); // Remover la operación completada
+            operation.resolve(true);
+          } else {
+            // Si falló después de todos los reintentos
+            operation.reject(
+              new Error(`Failed to write to ${filePath} after ${this.maxRetries} attempts`)
+            );
+            queue.shift(); // Remover la operación fallida
+          }
         } catch (error) {
           if (error.code === 'EPERM' || error.code === 'EBUSY') {
-            if (attempt < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
-              continue;
-            }
+            // Si el archivo está bloqueado, esperar y reintentar
+            await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+            continue;
           }
-          throw error;
+
+          // Para otros errores, rechazar la operación y continuar con la siguiente
+          operation.reject(error);
+          queue.shift();
         }
       }
-      return false;
+    } finally {
+      this.writeInProgress.delete(filePath);
+      this.writeQueue.delete(filePath);
     }
+  }
+
+  // Agregar operación a la cola de escrituras
+  async queueFileWrite(filePath, content) {
+    return new Promise((resolve, reject) => {
+      // Inicializar cola si no existe
+      if (!this.writeQueue.has(filePath)) {
+        this.writeQueue.set(filePath, []);
+      }
+
+      // Agregar operación a la cola
+      const queue = this.writeQueue.get(filePath);
+      queue.push({ content, resolve, reject });
+
+      // Iniciar procesamiento si no hay una escritura en progreso
+      if (!this.writeInProgress.has(filePath)) {
+        this.processWriteQueue(filePath);
+      }
+    });
+  }
+
+  // Función helper para escribir archivo con reintentos
+  async writeFileWithRetry(filePath, content, maxRetries = 3, retryDelay = 1000) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Intentar escribir en un archivo temporal primero
+        const tmpPath = `${filePath}.tmp`;
+        await new Promise((resolve, reject) => {
+          writeFile(tmpPath, content, 'utf8', err => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+
+        // Si la escritura temporal fue exitosa, intentar renombrar
+        await new Promise((resolve, reject) => {
+          rename(tmpPath, filePath, err => {
+            if (err) {
+              // Si falla el rename, intentar copiar y eliminar
+              copyFile(tmpPath, filePath, copyErr => {
+                if (copyErr) {
+                  reject(copyErr);
+                } else {
+                  unlink(tmpPath, () => resolve());
+                }
+              });
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        return true;
+      } catch (error) {
+        if (error.code === 'EPERM' || error.code === 'EBUSY') {
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+            continue;
+          }
+        }
+        throw error;
+      }
+    }
+    return false;
+  }
 
   init() {
     // Inicializar el estado global del copier
@@ -715,8 +727,6 @@ class CSVManager extends EventEmitter {
     }
   }
 
-
-
   // Add a single CSV file to the manager for watching (async version)
   async addCSVFileAsync(filePath) {
     try {
@@ -1076,10 +1086,10 @@ class CSVManager extends EventEmitter {
 
               // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
               const timestampChanged = this.detectTimestampChange(filePath, values[2]);
-              
+
               // Determinar estado online/offline basado en la última vez que cambió el timestamp
               const isOnline = this.isFileOnline(filePath);
-              
+
               // Para cuentas pending, usar la nueva lógica de tracking
               if (currentAccountData.account_type === 'pending') {
                 // Usar el estado basado en tracking de cambios de timestamp
@@ -1133,6 +1143,21 @@ class CSVManager extends EventEmitter {
                 };
                 // Para compatibilidad con getAllActiveAccounts
                 currentAccountData.master_id = currentAccountData.config.masterId;
+              }
+            }
+            break;
+
+          case 'TRANSLATE':
+            // Parse translation mappings for slave accounts
+            if (currentAccountData) {
+              currentAccountData.translations = {};
+
+              // Parse all translation pairs
+              for (let i = 1; i < values.length; i++) {
+                if (values[i] !== 'NULL' && values[i].includes(':')) {
+                  const [from, to] = values[i].split(':');
+                  currentAccountData.translations[from] = to;
+                }
               }
             }
             break;
@@ -1278,10 +1303,10 @@ class CSVManager extends EventEmitter {
 
                 // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
                 const timestampChanged = this.detectTimestampChange(filePath, values[2]);
-                
+
                 // Determinar estado online/offline basado en la última vez que cambió el timestamp
                 const isOnline = this.isFileOnline(filePath);
-                
+
                 // Para cuentas pending, usar la nueva lógica de tracking
                 if (currentAccountData.account_type === 'pending') {
                   // Usar el estado basado en tracking de cambios de timestamp
@@ -1309,15 +1334,15 @@ class CSVManager extends EventEmitter {
                   currentAccountData.account_type = 'pending';
                 }
 
-                              if (currentAccountData.account_type === 'master') {
-                // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
-                currentAccountData.config = {
-                  masterId: currentAccountId,
-                  enabled: values[2] === 'ENABLED',
-                  name: values[3] || `Account ${currentAccountId}`,
-                  prefix: values[8] === 'NULL' ? '' : values[8],
-                  suffix: values[9] === 'NULL' ? '' : values[9],
-                };
+                if (currentAccountData.account_type === 'master') {
+                  // Para master: [CONFIG] [MASTER] [ENABLED/DISABLED] [NAME] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
+                  currentAccountData.config = {
+                    masterId: currentAccountId,
+                    enabled: values[2] === 'ENABLED',
+                    name: values[3] || `Account ${currentAccountId}`,
+                    prefix: values[8] === 'NULL' ? '' : values[8],
+                    suffix: values[9] === 'NULL' ? '' : values[9],
+                  };
                 } else if (currentAccountData.account_type === 'slave') {
                   // Para slave: [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
                   currentAccountData.config = {
@@ -1775,7 +1800,7 @@ class CSVManager extends EventEmitter {
 
           for (const line of lines) {
             let updatedLine = line;
-            
+
             // Detectar línea TYPE para identificar la cuenta actual - IGUAL QUE updateAccountStatus
             if (line.includes('[TYPE]')) {
               const matches = line.match(/\[([^\]]+)\]/g);
@@ -1810,7 +1835,9 @@ class CSVManager extends EventEmitter {
               console.error(`❌ [convertToPending] Failed to write file ${targetFile}`);
             }
           } else {
-            console.log(`ℹ️ [convertToPending] No changes needed for account ${accountId} in file ${targetFile}`);
+            console.log(
+              `ℹ️ [convertToPending] No changes needed for account ${accountId} in file ${targetFile}`
+            );
           }
         } catch (error) {
           console.error(`❌ [convertToPending] Error processing file ${targetFile}:`, error);
@@ -1818,7 +1845,9 @@ class CSVManager extends EventEmitter {
       }
 
       if (totalFilesUpdated === 0) {
-        console.error(`❌ [convertToPending] No files were successfully updated for account ${accountId}`);
+        console.error(
+          `❌ [convertToPending] No files were successfully updated for account ${accountId}`
+        );
         return false;
       }
 
@@ -1871,7 +1900,7 @@ class CSVManager extends EventEmitter {
 
           for (const line of lines) {
             let updatedLine = line;
-            
+
             // Detectar línea TYPE para identificar la cuenta actual - IGUAL QUE updateAccountStatus
             if (line.includes('[TYPE]')) {
               const matches = line.match(/\[([^\]]+)\]/g);
@@ -1880,23 +1909,28 @@ class CSVManager extends EventEmitter {
               }
             } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
               // Actualizar la línea CONFIG para la cuenta específica - SIMILAR A updateAccountStatus
-              
+
               if (config.type === 'master') {
                 // Para master, actualizar la configuración completa
-                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-                
+                const configParts = line
+                  .split('[')
+                  .map(part => part.replace(']', '').trim())
+                  .filter(part => part);
+
                 if (configParts.length >= 3) {
                   const accountType = configParts[1]; // MASTER o SLAVE
                   const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
-                  
+
                   // Obtener prefix/suffix actuales si no se proporcionan nuevos
                   const currentPrefix = configParts[8] || 'NULL';
                   const currentSuffix = configParts[9] || 'NULL';
-                  
+
                   // Usar nuevos valores si se proporcionan, o mantener los actuales
-                  const prefix = (config.prefix !== undefined) ? (config.prefix || 'NULL') : currentPrefix;
-                  const suffix = (config.suffix !== undefined) ? (config.suffix || 'NULL') : currentSuffix;
-                  
+                  const prefix =
+                    config.prefix !== undefined ? config.prefix || 'NULL' : currentPrefix;
+                  const suffix =
+                    config.suffix !== undefined ? config.suffix || 'NULL' : currentSuffix;
+
                   // Reconstruir la línea CONFIG
                   updatedLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
                   fileModified = true;
@@ -1906,22 +1940,36 @@ class CSVManager extends EventEmitter {
                 }
               } else if (config.type === 'slave') {
                 // Para slave, actualizar toda la configuración
-                const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-                
+                const configParts = line
+                  .split('[')
+                  .map(part => part.replace(']', '').trim())
+                  .filter(part => part);
+
                 if (configParts.length >= 3) {
                   const accountType = configParts[1]; // MASTER o SLAVE
                   const newStatus = config.enabled ? 'ENABLED' : 'DISABLED';
-                  
+
                   // Usar configuración de slave proporcionada o mantener la actual
                   const slaveConfig = config.slaveConfig || {};
                   const lotMultiplier = slaveConfig.lotMultiplier || configParts[3] || '1.0';
                   const forceLot = slaveConfig.forceLot || configParts[4] || 'NULL';
-                  const reverseTrading = slaveConfig.reverseTrading !== undefined ? (slaveConfig.reverseTrading ? 'TRUE' : 'FALSE') : (configParts[5] || 'FALSE');
+                  const reverseTrading =
+                    slaveConfig.reverseTrading !== undefined
+                      ? slaveConfig.reverseTrading
+                        ? 'TRUE'
+                        : 'FALSE'
+                      : configParts[5] || 'FALSE';
                   const masterId = slaveConfig.masterId || configParts[6] || 'NULL';
                   const masterCsvPath = slaveConfig.masterCsvPath || configParts[7] || 'NULL';
-                  const prefix = (slaveConfig.prefix !== undefined) ? (slaveConfig.prefix || 'NULL') : (configParts[8] || 'NULL');
-                  const suffix = (slaveConfig.suffix !== undefined) ? (slaveConfig.suffix || 'NULL') : (configParts[9] || 'NULL');
-                  
+                  const prefix =
+                    slaveConfig.prefix !== undefined
+                      ? slaveConfig.prefix || 'NULL'
+                      : configParts[8] || 'NULL';
+                  const suffix =
+                    slaveConfig.suffix !== undefined
+                      ? slaveConfig.suffix || 'NULL'
+                      : configParts[9] || 'NULL';
+
                   // Reconstruir la línea CONFIG para slave
                   updatedLine = `[CONFIG] [${accountType}] [${newStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrading}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]`;
                   fileModified = true;
@@ -1952,7 +2000,9 @@ class CSVManager extends EventEmitter {
               console.error(`❌ [writeConfig] Failed to write file ${targetFile}`);
             }
           } else {
-            console.log(`ℹ️ [writeConfig] No changes needed for account ${accountId} in file ${targetFile}`);
+            console.log(
+              `ℹ️ [writeConfig] No changes needed for account ${accountId} in file ${targetFile}`
+            );
           }
         } catch (error) {
           console.error(`❌ [writeConfig] Error processing file ${targetFile}:`, error);
@@ -1960,7 +2010,9 @@ class CSVManager extends EventEmitter {
       }
 
       if (totalFilesUpdated === 0) {
-        console.error(`❌ [writeConfig] No files were successfully updated for account ${accountId}`);
+        console.error(
+          `❌ [writeConfig] No files were successfully updated for account ${accountId}`
+        );
         return false;
       }
 
@@ -2054,16 +2106,15 @@ class CSVManager extends EventEmitter {
                 const matches = line.match(/\[([^\]]+)\]/g);
                 if (matches && matches.length >= 2) {
                   const configType = matches[1].replace(/[\[\]]/g, '').trim();
-                  
+
                   // Log específico para cTrader
-           
-                   // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
-                   const newStatus = enabled ? 'ENABLED' : 'DISABLED';
-                   updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
-                   fileModified = true;
-                   
-                   // Log específico para cTrader después del cambio
-                 
+
+                  // Solo cambiar el campo ENABLED/DISABLED, mantener todo lo demás igual
+                  const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+                  updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
+                  fileModified = true;
+
+                  // Log específico para cTrader después del cambio
                 }
               }
 
@@ -2105,7 +2156,7 @@ class CSVManager extends EventEmitter {
     }
   }
 
-    // Actualizar estado de una cuenta específica
+  // Actualizar estado de una cuenta específica
   async updateAccountStatus(accountId, enabled) {
     try {
       // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples)
@@ -2125,7 +2176,6 @@ class CSVManager extends EventEmitter {
         return false;
       }
 
-
       let totalFilesUpdated = 0;
 
       // Procesar cada archivo que contiene esta cuenta
@@ -2141,7 +2191,7 @@ class CSVManager extends EventEmitter {
 
           for (const line of lines) {
             let updatedLine = line;
-            
+
             // Detectar línea TYPE para identificar la cuenta actual
             if (line.includes('[TYPE]')) {
               const matches = line.match(/\[([^\]]+)\]/g);
@@ -2151,10 +2201,13 @@ class CSVManager extends EventEmitter {
             } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
               // Actualizar la línea CONFIG para la cuenta específica
               const newStatus = enabled ? 'ENABLED' : 'DISABLED';
-              
+
               // Buscar el patrón específicamente en la posición correcta (tercer campo después de CONFIG y MASTER/SLAVE)
-              const configParts = line.split('[').map(part => part.replace(']', '').trim()).filter(part => part);
-              
+              const configParts = line
+                .split('[')
+                .map(part => part.replace(']', '').trim())
+                .filter(part => part);
+
               if (configParts.length >= 3) {
                 // Reemplazar específicamente el tercer campo (índice 2) que es el status
                 const currentStatus = configParts[2];
@@ -2163,8 +2216,8 @@ class CSVManager extends EventEmitter {
                 // Fallback al método anterior
                 updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
               }
-              
-                fileModified = true;
+
+              fileModified = true;
             }
 
             updatedLines.push(updatedLine);
@@ -2194,10 +2247,11 @@ class CSVManager extends EventEmitter {
       }
 
       if (totalFilesUpdated === 0) {
-        console.error(`❌ [updateAccountStatus] No files were successfully updated for account ${accountId}`);
+        console.error(
+          `❌ [updateAccountStatus] No files were successfully updated for account ${accountId}`
+        );
         return false;
       }
-
 
       // Emitir evento de actualización
       this.emit('accountStatusChanged', {
@@ -2280,7 +2334,6 @@ class CSVManager extends EventEmitter {
   // Eliminar archivo problemático del cache y watching
   removeProblematicFile(filePath) {
     try {
-      
       // Eliminar del Map de archivos CSV
       if (this.csvFiles.has(filePath)) {
         this.csvFiles.delete(filePath);
@@ -2297,7 +2350,7 @@ class CSVManager extends EventEmitter {
 
       // Actualizar el cache JSON
       this.saveCSVPathsToCache();
-      
+
       return true;
     } catch (error) {
       console.error(`❌ [csvManager] Error removing problematic file ${filePath}:`, error);
@@ -2307,10 +2360,12 @@ class CSVManager extends EventEmitter {
 
   // Verificar si un error es de permisos
   isPermissionError(error) {
-    return error.code === 'EPERM' || 
-           error.code === 'EACCES' || 
-           error.message.includes('operation not permitted') ||
-           error.message.includes('permission denied');
+    return (
+      error.code === 'EPERM' ||
+      error.code === 'EACCES' ||
+      error.message.includes('operation not permitted') ||
+      error.message.includes('permission denied')
+    );
   }
 
   // Manejar error de archivo y eliminar si es de permisos
@@ -2319,7 +2374,7 @@ class CSVManager extends EventEmitter {
       this.removeProblematicFile(filePath);
       return true; // Indicar que el archivo fue eliminado
     }
-    
+
     return false; // Indicar que el archivo no fue eliminado
   }
 
@@ -2329,34 +2384,33 @@ class CSVManager extends EventEmitter {
   detectTimestampChange(filePath, newTimestamp) {
     const normalizedPath = this.normalizePath(filePath);
     const currentTime = Date.now();
-    
+
     // Obtener el tracking actual para este archivo
     const currentTracking = this.timestampChangeTracking.get(normalizedPath);
-    
 
     if (!currentTracking) {
       // Primera vez que vemos este archivo
       this.timestampChangeTracking.set(normalizedPath, {
         lastTimestamp: newTimestamp,
         lastChangeTime: currentTime,
-        firstSeen: currentTime
+        firstSeen: currentTime,
       });
 
       return true; // Considerar como cambio para inicializar
     }
-    
+
     // Verificar si el timestamp ha cambiado
     if (currentTracking.lastTimestamp !== newTimestamp) {
       // Timestamp cambió, actualizar tracking
       this.timestampChangeTracking.set(normalizedPath, {
         lastTimestamp: newTimestamp,
         lastChangeTime: currentTime,
-        firstSeen: currentTracking.firstSeen
+        firstSeen: currentTracking.firstSeen,
       });
 
       return true; // Hubo un cambio
     }
-    
+
     return false; // No hubo cambio
   }
 
@@ -2365,14 +2419,14 @@ class CSVManager extends EventEmitter {
     const normalizedPath = this.normalizePath(filePath);
     const currentTime = Date.now();
     const tracking = this.timestampChangeTracking.get(normalizedPath);
-    
+
     if (!tracking) {
       return false; // No tenemos información sobre este archivo
     }
-    
+
     const timeSinceLastChange = currentTime - tracking.lastChangeTime;
-    const isOnline = timeSinceLastChange <= (this.onlineThreshold * 1000); // Convertir a milisegundos
-    
+    const isOnline = timeSinceLastChange <= this.onlineThreshold * 1000; // Convertir a milisegundos
+
     return isOnline;
   }
 
@@ -2396,7 +2450,7 @@ class CSVManager extends EventEmitter {
     if (filePath.includes('MT4') || filePath.includes('IPTRADECSV2MT4')) return 'MT4';
     if (filePath.includes('MT5') || filePath.includes('IPTRADECSV2MT5')) return 'MT5';
     if (filePath.includes('CTRADER') || filePath.includes('IPTRADECSV2CTRADER')) return 'CTRADER';
-    
+
     // Default a MT4 si no se puede detectar
     return 'MT4';
   }

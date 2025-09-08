@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { Cable, HousePlug, Inbox, Link, PartyPopper, TrafficCone, Unplug } from 'lucide-react';
+import {
+  Cable,
+  HousePlug,
+  Inbox,
+  Link,
+  PartyPopper,
+  Plus,
+  TrafficCone,
+  Unplug,
+  X,
+} from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
@@ -33,6 +43,7 @@ interface ConversionForm {
   reverseTrade: boolean;
   prefix: string;
   suffix: string;
+  translations: Record<string, string>;
 }
 
 type LinkingStep =
@@ -102,6 +113,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     reverseTrade: false,
     prefix: '',
     suffix: '',
+    translations: {} as Record<string, string>,
   });
 
   const scanningMessages = [
@@ -191,13 +203,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   // Obtener límites de suscripción
   const subscriptionLimits = React.useMemo(() => {
     if (!userInfo) return { maxAccounts: null, showLimitsCard: false };
-    
+
     const limits = getSubscriptionLimits(userInfo.subscriptionType);
     const showCard = shouldShowSubscriptionLimitsCard(userInfo, totalConfiguredAccounts);
-    
+
     return {
       maxAccounts: limits.maxAccounts,
-      showLimitsCard: showCard
+      showLimitsCard: showCard,
     };
   }, [userInfo, totalConfiguredAccounts]);
 
@@ -285,7 +297,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   useEffect(() => {
     if (!secretKey) return;
 
-    const handleSSEMessage = (data: { type: string; eventType?: string; message?: string; command?: string; accountId?: string; newType?: string }) => {
+    const handleSSEMessage = (data: {
+      type: string;
+      eventType?: string;
+      message?: string;
+      command?: string;
+      accountId?: string;
+      newType?: string;
+    }) => {
       // Listen for Link Platforms events
       if (data.type === 'linkPlatformsEvent') {
         setLinkingStatus({
@@ -540,6 +559,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         reverseTrade: conversionForm.reverseTrade,
         prefix: conversionForm.prefix,
         suffix: conversionForm.suffix,
+        translations: conversionForm.translations,
       };
 
       const csvUpdateResponse = await fetch(
@@ -710,8 +730,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   onClick={async () => {
                     try {
                       await linkPlatforms();
-                        } catch {
-      // Silent error handling
+                    } catch {
+                      // Silent error handling
                     }
                   }}
                   disabled={isLinking}
@@ -873,8 +893,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       title="Make Master"
                                       disabled={
                                         isConverting ||
-                                        (subscriptionLimits.maxAccounts !== null && 
-                                         totalConfiguredAccounts >= subscriptionLimits.maxAccounts) ||
+                                        (subscriptionLimits.maxAccounts !== null &&
+                                          totalConfiguredAccounts >=
+                                            subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
@@ -890,8 +911,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       title="Make Slave"
                                       disabled={
                                         isConverting ||
-                                        (subscriptionLimits.maxAccounts !== null && 
-                                         totalConfiguredAccounts >= subscriptionLimits.maxAccounts) ||
+                                        (subscriptionLimits.maxAccounts !== null &&
+                                          totalConfiguredAccounts >=
+                                            subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
@@ -917,8 +939,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                               <div className="space-y-4">
                                 {/* Comment Configuration */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className='w-full'>
-                                    <Label htmlFor="prefix" className="">Ticker Symbol Prefix</Label>
+                                  <div className="w-full">
+                                    <Label htmlFor="prefix" className="">
+                                      Ticker Symbol Prefix
+                                    </Label>
                                     <Input
                                       id="prefix"
                                       name="prefix"
@@ -938,8 +962,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     </p>
                                   </div>
 
-                                  <div className='w-full'>
-                                    <Label htmlFor="suffix" className="">Ticker Symbol Suffix</Label>
+                                  <div className="w-full">
+                                    <Label htmlFor="suffix" className="">
+                                      Ticker Symbol Suffix
+                                    </Label>
                                     <Input
                                       id="suffix"
                                       name="suffix"
@@ -986,7 +1012,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   {/* Master Connection Section */}
                                   <div>
                                     <div className="flex items-center justify-between">
-                                      <Label htmlFor="convert-master">Connect to Master Account</Label>
+                                      <Label htmlFor="convert-master">
+                                        Connect to Master Account
+                                      </Label>
                                       <Button
                                         type="button"
                                         variant="ghost"
@@ -1055,7 +1083,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     <Label htmlFor="lotCoefficient">
                                       Lot Multiplier
                                       {(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         if (limits.maxLotSize !== null) {
                                           return ` (Fixed at 1.0 for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
                                         }
@@ -1069,7 +1099,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       max={userInfo?.subscriptionType === 'free' ? '1.00' : '100'}
                                       step="0.01"
                                       disabled={(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         return limits.maxLotSize !== null;
                                       })()}
                                       value={
@@ -1085,10 +1117,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                           const parsedValue = parseFloat(inputValue);
                                           if (!isNaN(parsedValue) && parsedValue > 0) {
                                             value = Math.round(parsedValue * 100) / 100;
-                                            
+
                                             // Aplicar límites según suscripción
-                                            const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
-                                            
+                                            const limits = getSubscriptionLimits(
+                                              userInfo?.subscriptionType || 'free'
+                                            );
+
                                             if (limits.maxLotSize !== null) {
                                               // Plan con límites
                                               if (userInfo?.subscriptionType === 'free') {
@@ -1096,9 +1130,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                 value = 1;
                                                 if (parsedValue !== 1) {
                                                   toast({
-                                                    title: "Lot multiplier restricted",
-                                                    description: "Free plan users cannot modify lot multiplier",
-                                                    variant: "destructive"
+                                                    title: 'Lot multiplier restricted',
+                                                    description:
+                                                      'Free plan users cannot modify lot multiplier',
+                                                    variant: 'destructive',
                                                   });
                                                 }
                                               } else {
@@ -1107,9 +1142,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                 if (value > maxMultiplier) {
                                                   value = maxMultiplier;
                                                   toast({
-                                                    title: "Lot multiplier limit exceeded",
+                                                    title: 'Lot multiplier limit exceeded',
                                                     description: `Your plan limits lot multiplier to ${maxMultiplier}x`,
-                                                    variant: "destructive"
+                                                    variant: 'destructive',
                                                   });
                                                 }
                                               }
@@ -1126,11 +1161,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     />
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                       {(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         if (limits.maxLotSize !== null) {
                                           return `Lot multiplier disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan has lot size restrictions`;
                                         }
-                                        return "Multiplies the lot size from the master account";
+                                        return 'Multiplies the lot size from the master account';
                                       })()}
                                     </p>
                                   </div>
@@ -1138,8 +1175,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
                                 {/* Second Row: Fixed Lot + Reverse Trading */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                  
-                                {/* Third Row: Prefix and Suffix */}
+                                  {/* Third Row: Prefix and Suffix */}
                                   <div>
                                     <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
                                     <Input
@@ -1164,7 +1200,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     <Label htmlFor="forceLot">
                                       Fixed Lot Size
                                       {(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         if (limits.maxLotSize !== null) {
                                           return ` (Limited to ${limits.maxLotSize} for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
                                         }
@@ -1176,7 +1214,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       type="number"
                                       min="0"
                                       max={(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         if (limits.maxLotSize !== null) {
                                           return limits.maxLotSize.toString();
                                         }
@@ -1184,22 +1224,24 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       })()}
                                       step="0.01"
                                       disabled={(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         return limits.maxLotSize !== null;
                                       })()}
-                                      value={
-                                        (() => {
-                                          const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
-                                          if (limits.maxLotSize !== null) {
-                                            // Si hay límite de lot, mostrar el límite máximo
-                                            return limits.maxLotSize.toFixed(2);
-                                          }
-                                          // Si no hay límite, usar la lógica normal
-                                          return conversionForm.forceLot > 0
-                                            ? conversionForm.forceLot.toFixed(2)
-                                            : '0.00';
-                                        })()
-                                      }
+                                      value={(() => {
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
+                                        if (limits.maxLotSize !== null) {
+                                          // Si hay límite de lot, mostrar el límite máximo
+                                          return limits.maxLotSize.toFixed(2);
+                                        }
+                                        // Si no hay límite, usar la lógica normal
+                                        return conversionForm.forceLot > 0
+                                          ? conversionForm.forceLot.toFixed(2)
+                                          : '0.00';
+                                      })()}
                                       onChange={e => {
                                         const inputValue = e.target.value;
                                         let value = 0;
@@ -1208,29 +1250,33 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                           const parsedValue = parseFloat(inputValue);
                                           if (!isNaN(parsedValue)) {
                                             value = Math.round(parsedValue * 100) / 100;
-                                            
+
                                             // Aplicar límites según suscripción
-                                            const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
-                                            
-                                            if (value > 0) { // Solo aplicar límites si se está configurando un lot size fijo
+                                            const limits = getSubscriptionLimits(
+                                              userInfo?.subscriptionType || 'free'
+                                            );
+
+                                            if (value > 0) {
+                                              // Solo aplicar límites si se está configurando un lot size fijo
                                               if (limits.maxLotSize !== null) {
                                                 if (userInfo?.subscriptionType === 'free') {
                                                   // Plan free: forzar lot size a 0.01
                                                   value = 0.01;
                                                   if (parsedValue > 0.01) {
                                                     toast({
-                                                      title: "Lot size restricted",
-                                                      description: "Free plan users are limited to 0.01 lot size",
-                                                      variant: "destructive"
+                                                      title: 'Lot size restricted',
+                                                      description:
+                                                        'Free plan users are limited to 0.01 lot size',
+                                                      variant: 'destructive',
                                                     });
                                                   }
                                                 } else if (value > limits.maxLotSize) {
                                                   // Otros planes con límites
                                                   value = limits.maxLotSize;
                                                   toast({
-                                                    title: "Lot size limit exceeded",
+                                                    title: 'Lot size limit exceeded',
                                                     description: `Your plan limits lot size to ${limits.maxLotSize}`,
-                                                    variant: "destructive"
+                                                    variant: 'destructive',
                                                   });
                                                 }
                                               }
@@ -1247,11 +1293,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     />
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                       {(() => {
-                                        const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                        const limits = getSubscriptionLimits(
+                                          userInfo?.subscriptionType || 'free'
+                                        );
                                         if (limits.maxLotSize !== null) {
                                           return `Fixed lot size disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan limits lot size to ${limits.maxLotSize}`;
                                         }
-                                        return "If set above 0, uses this fixed lot size instead of copying";
+                                        return 'If set above 0, uses this fixed lot size instead of copying';
                                       })()}
                                     </p>
                                   </div>
@@ -1275,31 +1323,113 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       Text to remove at the end of ticker symbols
                                     </p>
                                   </div>
-                                <div>
-                            <Label htmlFor="forceLot">
-                              Reverse trading
-                            </Label>
-                            <Switch
-                                                        id="reverseTrade"
-                                                        checked={conversionForm.reverseTrade}
-                                                        onCheckedChange={checked =>
-                                                          setConversionForm(prev => ({
-                                                            ...prev,
-                                                            reverseTrade: checked,
-                                                          }))
-                                                        }
-                              className='block my-1'
-                            />
-                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                             Reverse the trading direction (buy/sell)
-                            </p>
-                          </div>
+                                  <div>
+                                    <Label htmlFor="forceLot">Reverse trading</Label>
+                                    <Switch
+                                      id="reverseTrade"
+                                      checked={conversionForm.reverseTrade}
+                                      onCheckedChange={checked =>
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          reverseTrade: checked,
+                                        }))
+                                      }
+                                      className="block my-1"
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                      Reverse the trading direction (buy/sell)
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Symbol Translations */}
+                                <div className="mt-4">
+                                  <Label>Symbol Translations</Label>
+                                  <div className="space-y-2">
+                                    {Object.entries(conversionForm.translations).map(
+                                      ([from, to], index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                          <Input
+                                            placeholder="From symbol"
+                                            value={from}
+                                            onChange={e => {
+                                              const newTranslations = {
+                                                ...conversionForm.translations,
+                                              };
+                                              delete newTranslations[from];
+                                              if (e.target.value) {
+                                                newTranslations[e.target.value] = to;
+                                              }
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: newTranslations,
+                                              }));
+                                            }}
+                                            className="bg-white border border-gray-200"
+                                          />
+                                          <span className="text-gray-500">→</span>
+                                          <Input
+                                            placeholder="To symbol"
+                                            value={to}
+                                            onChange={e => {
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: {
+                                                  ...prev.translations,
+                                                  [from]: e.target.value,
+                                                },
+                                              }));
+                                            }}
+                                            className="bg-white border border-gray-200"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                              const newTranslations = {
+                                                ...conversionForm.translations,
+                                              };
+                                              delete newTranslations[from];
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: newTranslations,
+                                              }));
+                                            }}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      )
+                                    )}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          translations: {
+                                            ...prev.translations,
+                                            '': '',
+                                          },
+                                        }));
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Add Translation
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                    Map symbols from master to slave (e.g., US100 → NASDAQ)
+                                  </p>
                                 </div>
                               </div>
                             </form>
                           </div>
                         )}
-                                                                {/* Show limit message if reached */}
+                        {/* Show limit message if reached */}
                       </div>
                     );
                   })}

@@ -261,7 +261,7 @@ export const getSlaveConfig = async (req, res) => {
   // Primero intentar leer la configuración del CSV usando datos del scan
   let csvConfig = null;
   let accountFound = false;
-  
+
   try {
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
@@ -352,6 +352,7 @@ export const setSlaveConfig = async (req, res) => {
     masterCsvPath,
     prefix,
     suffix,
+    translations,
   } = req.body;
 
   if (!slaveAccountId) {
@@ -371,7 +372,10 @@ export const setSlaveConfig = async (req, res) => {
       // Buscar en archivos CSV escaneados
       for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
         const accountFound = fileData.data.some(account => account.account_id === slaveAccountId);
-        if (accountFound || (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${slaveAccountId}]`))) {
+        if (
+          accountFound ||
+          (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${slaveAccountId}]`))
+        ) {
           accountExists = true;
           break;
         }
@@ -468,6 +472,10 @@ export const setSlaveConfig = async (req, res) => {
       masterCsvPath === 'none' || masterCsvPath === '' ? null : masterCsvPath;
   }
 
+  if (translations !== undefined) {
+    configs[slaveAccountId].translations = translations || {};
+  }
+
   configs[slaveAccountId].lastUpdated = new Date().toISOString();
 
   // Save configuration
@@ -545,6 +553,17 @@ export const setSlaveConfig = async (req, res) => {
 
             const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
             newContent += newConfigLine;
+          } else if (cleanLine.includes('[TRANSLATE]')) {
+            // Update TRANSLATE line with current translations
+            const slaveConfig = configs[slaveAccountId];
+            if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
+              const translationPairs = Object.entries(slaveConfig.translations)
+                .map(([from, to]) => `[${from}:${to}]`)
+                .join(' ');
+              newContent += `[TRANSLATE] ${translationPairs}\n`;
+            } else {
+              newContent += `[TRANSLATE] [NULL]\n`;
+            }
           } else if (cleanLine.includes('[STATUS]')) {
             // Actualizar timestamp
             newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
@@ -881,8 +900,7 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
 
     // Find the TYPE line for the slave account
     const typeLineIndex = lines.findIndex(
-      line =>
-        line.includes('[TYPE]') && line.includes(`[${slaveAccountId}]`)
+      line => line.includes('[TYPE]') && line.includes(`[${slaveAccountId}]`)
     );
 
     if (typeLineIndex !== -1) {

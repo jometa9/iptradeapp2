@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  AlertCircle,
   AlertTriangle,
   CheckCircle,
   ChevronDown,
@@ -42,7 +41,6 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
-import { Tooltip } from './ui/tooltip';
 import { useToast } from './ui/use-toast';
 
 interface TradingAccount {
@@ -83,8 +81,6 @@ interface SlaveConfig {
     description?: string;
   };
 }
-
-
 
 const TradingAccountsConfigComponent = () => {
   const { toast: toastUtil } = useToast();
@@ -221,8 +217,8 @@ const TradingAccountsConfigComponent = () => {
           config: master.config || {
             prefix: master.config?.prefix || '',
             suffix: master.config?.suffix || '',
-            enabled: master.config?.enabled || false
-          }
+            enabled: master.config?.enabled || false,
+          },
         });
 
         // También agregar los slaves conectados a la lista principal
@@ -269,14 +265,16 @@ const TradingAccountsConfigComponent = () => {
 
   // Memoize the accounts data with a hash to prevent unnecessary re-renders
   const accountsHash = React.useMemo(() => {
-    return JSON.stringify(accounts.map(acc => ({
-      id: acc.id,
-      status: acc.status,
-      accountType: acc.accountType,
-      platform: acc.platform,
-      totalSlaves: acc.totalSlaves,
-      masterOnline: acc.masterOnline
-    })));
+    return JSON.stringify(
+      accounts.map(acc => ({
+        id: acc.id,
+        status: acc.status,
+        accountType: acc.accountType,
+        platform: acc.platform,
+        totalSlaves: acc.totalSlaves,
+        masterOnline: acc.masterOnline,
+      }))
+    );
   }, [accounts]);
 
   // Connectivity stats from unified data
@@ -285,9 +283,12 @@ const TradingAccountsConfigComponent = () => {
 
     // Usar los datos del serverStats del endpoint unificado
     const serverStats = unifiedData.serverStats;
-    
+
     return {
-      total: serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts + serverStats.totalPendingAccounts,
+      total:
+        serverStats.totalMasterAccounts +
+        serverStats.totalSlaveAccounts +
+        serverStats.totalPendingAccounts,
       online: serverStats.totalOnlineAccounts,
       pending: serverStats.totalPendingAccounts,
       offline: serverStats.totalOfflineAccounts,
@@ -314,6 +315,7 @@ const TradingAccountsConfigComponent = () => {
     prefix: '',
     suffix: '',
     connectedToMaster: 'none',
+    translations: {} as Record<string, string>,
   });
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -417,15 +419,14 @@ const TradingAccountsConfigComponent = () => {
 
   const handleToggleGlobalStatus = async (enabled: boolean) => {
     console.log(`🔄 Manual toggle global status to: ${enabled}`);
-    
+
     try {
       // Usar la función del contexto unificado que maneja todo automáticamente
       await updateGlobalStatus(enabled);
       console.log(`✅ Global status updated successfully to: ${enabled}`);
-      
     } catch (error) {
       console.error('❌ Error updating global status:', error);
-      
+
       toastUtil({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to update global status',
@@ -477,7 +478,7 @@ const TradingAccountsConfigComponent = () => {
     // Fallback al sistema anterior si no encontramos la cuenta en CSV
     const masterStatus = copierStatus.masterAccounts?.[masterAccountId];
     const fallbackResult = masterStatus?.masterStatus === true;
-   
+
     return fallbackResult;
   };
 
@@ -543,48 +544,49 @@ const TradingAccountsConfigComponent = () => {
       setIsAddingAccount(true);
       setEditingAccount(account);
 
-    // Preparar el formulario con los datos básicos de la cuenta
-    let formData = {
-      accountNumber: account.accountNumber,
-      platform: account.platform.toLowerCase(),
-      serverIp: account.server,
-      password: '', // Password not needed for backend operations
-      accountType: account.accountType,
-      status: account.status,
-      lotCoefficient: account.lotCoefficient || 1,
-      forceLot: account.forceLot || 0,
-      reverseTrade: account.reverseTrade || false,
-      prefix: account.prefix || '',
-      suffix: account.suffix || '',
-      connectedToMaster: account.connectedToMaster || 'none',
-    };
+      // Preparar el formulario con los datos básicos de la cuenta
+      let formData = {
+        accountNumber: account.accountNumber,
+        platform: account.platform.toLowerCase(),
+        serverIp: account.server,
+        password: '', // Password not needed for backend operations
+        accountType: account.accountType,
+        status: account.status,
+        lotCoefficient: account.lotCoefficient || 1,
+        forceLot: account.forceLot || 0,
+        reverseTrade: account.reverseTrade || false,
+        prefix: account.prefix || '',
+        suffix: account.suffix || '',
+        connectedToMaster: account.connectedToMaster || 'none',
+      };
 
-          // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
+      // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
       if (account.accountType === 'slave' || account.accountType === 'master') {
         // Para slaves conectados, usar el id como accountNumber si no existe
         const accountNumber = account.accountNumber || account.id;
 
         if (account.accountType === 'master') {
           // Si es master account, usar su propia configuración
-          const masterConfig = unifiedData?.configuredAccounts?.masterAccounts?.[account.id]?.config;
-          
+          const masterConfig =
+            unifiedData?.configuredAccounts?.masterAccounts?.[account.id]?.config;
+
           if (masterConfig) {
             formData = {
               ...formData,
               prefix: masterConfig.prefix || '',
-              suffix: masterConfig.suffix || ''
+              suffix: masterConfig.suffix || '',
             };
           }
         } else if (account.accountType === 'slave') {
           // Si es slave, buscar la configuración en account.config o en slaveConfigs
           let slaveConfig = account.config;
-          
+
           // Si no hay config en account, buscar en slaveConfigs
           if (!slaveConfig) {
             const accountNumber = account.accountNumber || account.id;
             slaveConfig = slaveConfigs[accountNumber]?.config || slaveConfigs[account.id]?.config;
           }
-          
+
           if (slaveConfig) {
             formData = {
               ...formData,
@@ -592,17 +594,17 @@ const TradingAccountsConfigComponent = () => {
               forceLot: slaveConfig.forceLot ?? 0,
               reverseTrade: slaveConfig.reverseTrading ?? false,
               prefix: slaveConfig.prefix || '',
-              suffix: slaveConfig.suffix || ''
+              suffix: slaveConfig.suffix || '',
             };
           }
         }
-    }
+      }
 
-    setFormState(formData);
+      setFormState(formData);
 
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } catch (error) {
       console.error('Error loading slave config:', error);
       toastUtil({
@@ -660,7 +662,7 @@ const TradingAccountsConfigComponent = () => {
       } else if (isSlaveAccount) {
         // Intentar usar el endpoint específico para slave accounts
         success = await csvFrontendService.deleteSlaveAccount(deleteConfirmId);
-        
+
         // Si falla (devuelve false), usar convertToPending como fallback
         if (!success) {
           success = await csvFrontendService.convertToPending(deleteConfirmId);
@@ -671,7 +673,11 @@ const TradingAccountsConfigComponent = () => {
       }
 
       if (success) {
-        const actionText = isMasterAccount ? 'deleted' : (isSlaveAccount ? 'deleted' : 'converted to pending');
+        const actionText = isMasterAccount
+          ? 'deleted'
+          : isSlaveAccount
+            ? 'deleted'
+            : 'converted to pending';
         toast({
           title: 'Account deleted',
           description: `Account ${deleteConfirmId} has been ${actionText}.`,
@@ -685,7 +691,6 @@ const TradingAccountsConfigComponent = () => {
           fetchAccounts();
         }, 100);
       } else {
-
         toast({
           title: 'Error',
           description: `Failed to delete account ${deleteConfirmId}.`,
@@ -699,7 +704,6 @@ const TradingAccountsConfigComponent = () => {
         });
       }
     } catch (error) {
-
       toast({
         title: 'Error',
         description: 'An error occurred while deleting the account.',
@@ -843,6 +847,7 @@ const TradingAccountsConfigComponent = () => {
               masterId: formState.connectedToMaster === 'none' ? null : formState.connectedToMaster,
               prefix: formState.prefix || '',
               suffix: formState.suffix || '',
+              translations: formState.translations || {},
             };
 
             response = await fetch(`http://localhost:${serverPort}/api/slave-config`, {
@@ -853,14 +858,13 @@ const TradingAccountsConfigComponent = () => {
               },
               body: JSON.stringify(slavePayload),
             });
-
-
           } else if (editingAccount.accountType === 'master') {
             // Actualizar configuración de cuenta master - solo usar trading-config endpoint
             const tradingConfigPayload = {
               masterAccountId: accountId,
               lotMultiplier: formState.lotCoefficient,
-              forceLot: formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null,
+              forceLot:
+                formState.forceLot && formState.forceLot > 0 ? Number(formState.forceLot) : null,
               reverseTrading: formState.reverseTrade,
               prefix: formState.prefix || '',
               suffix: formState.suffix || '',
@@ -874,8 +878,6 @@ const TradingAccountsConfigComponent = () => {
               },
               body: JSON.stringify(tradingConfigPayload),
             });
-
-
           }
         } else {
           // Si el tipo de cuenta cambió, usar los endpoints de conversión
@@ -893,8 +895,6 @@ const TradingAccountsConfigComponent = () => {
                 },
               }
             );
-
-
           } else if (formState.accountType === 'master') {
             // Convertir a master - primero convertir a pending, luego a master
             if (editingAccount.accountType !== 'pending') {
@@ -913,8 +913,6 @@ const TradingAccountsConfigComponent = () => {
               if (!pendingResponse.ok) {
                 throw new Error('Failed to convert account to pending first');
               }
-
-
             }
 
             // Ahora convertir a master
@@ -933,8 +931,6 @@ const TradingAccountsConfigComponent = () => {
                 body: JSON.stringify(masterPayload),
               }
             );
-
-
           } else if (formState.accountType === 'slave') {
             // Convertir a slave - primero convertir a pending, luego a slave
             if (editingAccount.accountType !== 'pending') {
@@ -953,8 +949,6 @@ const TradingAccountsConfigComponent = () => {
               if (!pendingResponse.ok) {
                 throw new Error('Failed to convert account to pending first');
               }
-
-
             }
 
             // Ahora convertir a slave
@@ -968,6 +962,7 @@ const TradingAccountsConfigComponent = () => {
                 reverseTrade: formState.reverseTrade,
                 prefix: formState.prefix || '',
                 suffix: formState.suffix || '',
+                translations: formState.translations || {},
               },
             };
 
@@ -982,8 +977,6 @@ const TradingAccountsConfigComponent = () => {
                 body: JSON.stringify(slavePayload),
               }
             );
-
-
           }
         }
       } else {
@@ -1039,6 +1032,7 @@ const TradingAccountsConfigComponent = () => {
               description: 'Auto-configured from frontend',
               prefix: formState.prefix || '',
               suffix: formState.suffix || '',
+              translations: formState.translations || {},
             };
 
             await fetch(`http://localhost:${serverPort}/api/slave-config`, {
@@ -1106,13 +1100,14 @@ const TradingAccountsConfigComponent = () => {
   const getServerStatus = () => {
     // Use serverStats from unified endpoint as the single source of truth
     const serverStats = unifiedData?.serverStats;
-    
+
     if (!serverStats) return 'none';
 
     // Calculate total accounts: masters + slaves + pending
-    const totalAccounts = (serverStats.totalMasterAccounts || 0) + 
-                         (serverStats.totalSlaveAccounts || 0) + 
-                         (serverStats.totalPendingAccounts || 0);
+    const totalAccounts =
+      (serverStats.totalMasterAccounts || 0) +
+      (serverStats.totalSlaveAccounts || 0) +
+      (serverStats.totalPendingAccounts || 0);
 
     if (totalAccounts === 0) return 'none';
 
@@ -1145,7 +1140,7 @@ const TradingAccountsConfigComponent = () => {
   const getServerStatusDetails = () => {
     // Use serverStats from unified endpoint as the single source of truth
     const serverStats = unifiedData?.serverStats;
-    
+
     if (!serverStats) {
       return {
         message: 'No server data available',
@@ -1155,9 +1150,10 @@ const TradingAccountsConfigComponent = () => {
     }
 
     // Calculate total accounts: masters + slaves + pending
-    const totalAccounts = (serverStats.totalMasterAccounts || 0) + 
-                         (serverStats.totalSlaveAccounts || 0) + 
-                         (serverStats.totalPendingAccounts || 0);
+    const totalAccounts =
+      (serverStats.totalMasterAccounts || 0) +
+      (serverStats.totalSlaveAccounts || 0) +
+      (serverStats.totalPendingAccounts || 0);
 
     if (totalAccounts === 0) {
       return {
@@ -1413,16 +1409,15 @@ const TradingAccountsConfigComponent = () => {
                     Global Copier Status
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {copierStatus?.globalStatusText === 'ON' ? 'Global trading copyn is enabled' : 'Global trading copyn is disabled'}
+                    {copierStatus?.globalStatusText === 'ON'
+                      ? 'Global trading copyn is enabled'
+                      : 'Global trading copyn is disabled'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 {!showGlobalConfirm && getStatusBadge(localGlobalStatus)}
-                <Switch
-                  checked={localGlobalStatus}
-                  onCheckedChange={handleToggleGlobalStatus}
-                />
+                <Switch checked={localGlobalStatus} onCheckedChange={handleToggleGlobalStatus} />
               </div>
             </div>
           </div>
@@ -1520,9 +1515,9 @@ const TradingAccountsConfigComponent = () => {
               {/* Total */}
               <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
                 <div className="text-2xl font-bold text-gray-700">
-                  {(unifiedData?.serverStats?.totalMasterAccounts || 0) + 
-                   (unifiedData?.serverStats?.totalSlaveAccounts || 0) + 
-                   (unifiedData?.serverStats?.totalPendingAccounts || 0)}
+                  {(unifiedData?.serverStats?.totalMasterAccounts || 0) +
+                    (unifiedData?.serverStats?.totalSlaveAccounts || 0) +
+                    (unifiedData?.serverStats?.totalPendingAccounts || 0)}
                 </div>
                 <div className="text-xs text-gray-700 text-center">Total</div>
               </div>
@@ -1670,7 +1665,7 @@ const TradingAccountsConfigComponent = () => {
                               />
                               <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                 Text to remove at the beginning of ticker symbols
-                              </p>  
+                              </p>
                             </div>
 
                             <div>
@@ -1772,7 +1767,9 @@ const TradingAccountsConfigComponent = () => {
                             <Label htmlFor="lotCoefficient">
                               Lot Size Multiplier
                               {(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 if (limits.maxLotSize !== null) {
                                   return ` (Fixed at 1.0 for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
                                 }
@@ -1812,18 +1809,22 @@ const TradingAccountsConfigComponent = () => {
                                 });
                               }}
                               disabled={(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 return limits.maxLotSize !== null;
                               })()}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                               {(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 if (limits.maxLotSize !== null) {
                                   return `Lot multiplier disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan has lot size restrictions`;
                                 }
-                                return "Multiplies the lot size from the master account";
+                                return 'Multiplies the lot size from the master account';
                               })()}
                             </p>
                           </div>
@@ -1832,7 +1833,9 @@ const TradingAccountsConfigComponent = () => {
                             <Label htmlFor="forceLot">
                               Fixed Lot Size
                               {(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 if (limits.maxLotSize !== null) {
                                   return ` (Limited to ${limits.maxLotSize} for ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan)`;
                                 }
@@ -1845,26 +1848,28 @@ const TradingAccountsConfigComponent = () => {
                               type="number"
                               min="0"
                               max={(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 if (limits.maxLotSize !== null) {
                                   return limits.maxLotSize.toString();
                                 }
                                 return '100';
                               })()}
                               step="0.01"
-                              value={
-                                (() => {
-                                  const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
-                                  if (limits.maxLotSize !== null) {
-                                    // Si hay límite de lot, mostrar el límite máximo
-                                    return limits.maxLotSize.toFixed(2);
-                                  }
-                                  // Si no hay límite, usar la lógica normal
-                                  return formState.forceLot && formState.forceLot > 0
-                                    ? formState.forceLot.toFixed(2)
-                                    : '0.00';
-                                })()
-                              }
+                              value={(() => {
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
+                                if (limits.maxLotSize !== null) {
+                                  // Si hay límite de lot, mostrar el límite máximo
+                                  return limits.maxLotSize.toFixed(2);
+                                }
+                                // Si no hay límite, usar la lógica normal
+                                return formState.forceLot && formState.forceLot > 0
+                                  ? formState.forceLot.toFixed(2)
+                                  : '0.00';
+                              })()}
                               onChange={e => {
                                 const inputValue = e.target.value;
                                 let value = 0;
@@ -1875,19 +1880,21 @@ const TradingAccountsConfigComponent = () => {
                                   if (!isNaN(parsedValue)) {
                                     // Redondear a 2 decimales para evitar problemas de precisión
                                     value = Math.round(parsedValue * 100) / 100;
-                                    
+
                                     // Aplicar límites de suscripción
                                     if (!canCustomizeLotSizesValue) {
                                       value = value > 0 ? 0.01 : 0;
                                     } else {
                                       // Para planes con límites personalizados
-                                      const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                      const limits = getSubscriptionLimits(
+                                        userInfo?.subscriptionType || 'free'
+                                      );
                                       if (limits.maxLotSize !== null && value > limits.maxLotSize) {
                                         value = limits.maxLotSize;
                                         toastUtil({
-                                          title: "Lot size limit exceeded",
+                                          title: 'Lot size limit exceeded',
                                           description: `Your plan limits lot size to ${limits.maxLotSize}`,
-                                          variant: "destructive"
+                                          variant: 'destructive',
                                         });
                                       }
                                     }
@@ -1896,7 +1903,7 @@ const TradingAccountsConfigComponent = () => {
 
                                 setFormState({
                                   ...formState,
-                                  forceLot: value
+                                  forceLot: value,
                                 });
                               }}
                               disabled={!canCustomizeLotSizesValue}
@@ -1904,62 +1911,61 @@ const TradingAccountsConfigComponent = () => {
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                               {(() => {
-                                const limits = getSubscriptionLimits(userInfo?.subscriptionType || 'free');
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
                                 if (limits.maxLotSize !== null) {
                                   return `Fixed lot size disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan limits lot size to ${limits.maxLotSize}`;
                                 }
-                                return "If set above 0, uses this fixed lot size instead of copying";
+                                return 'If set above 0, uses this fixed lot size instead of copying';
                               })()}
                             </p>
                           </div>
 
-
-                            <div>
-                              <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
-                              <Input
-                                id="prefix"
-                                name="prefix"
-                                type="text"
-                                placeholder="Enter prefix..."
-                                value={formState.prefix || ''}
-                                onChange={e =>
-                                  setFormState({
-                                    ...formState,
-                                    prefix: e.target.value,
-                                  })
-                                }
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                Text to remove at the beginning of ticker symbols
-                              </p>
-                            </div>
-
-                            <div>
-                              <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
-                              <Input
-                                id="suffix"
-                                name="suffix"
-                                type="text"
-                                placeholder="Enter suffix..."
-                                value={formState.suffix || ''}
-                                onChange={e =>
-                                  setFormState({
-                                    ...formState,
-                                    suffix: e.target.value,
-                                  })
-                                }
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                Text to remove at the end of ticker symbols
-                              </p>
-                            </div>
-                            
                           <div>
-                            <Label htmlFor="forceLot">
-                              Reverse trading
-                            </Label>
+                            <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                            <Input
+                              id="prefix"
+                              name="prefix"
+                              type="text"
+                              placeholder="Enter prefix..."
+                              value={formState.prefix || ''}
+                              onChange={e =>
+                                setFormState({
+                                  ...formState,
+                                  prefix: e.target.value,
+                                })
+                              }
+                              className="bg-white border border-gray-200 shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Text to remove at the beginning of ticker symbols
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
+                            <Input
+                              id="suffix"
+                              name="suffix"
+                              type="text"
+                              placeholder="Enter suffix..."
+                              value={formState.suffix || ''}
+                              onChange={e =>
+                                setFormState({
+                                  ...formState,
+                                  suffix: e.target.value,
+                                })
+                              }
+                              className="bg-white border border-gray-200 shadow-sm"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Text to remove at the end of ticker symbols
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label htmlFor="forceLot">Reverse trading</Label>
                             <Switch
                               id="reverseTrade"
                               checked={formState.reverseTrade}
@@ -1969,10 +1975,10 @@ const TradingAccountsConfigComponent = () => {
                                   reverseTrade: checked,
                                 })
                               }
-                              className='block my-1'
+                              className="block my-1"
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                             Reverse the trading direction (buy/sell)
+                              Reverse the trading direction (buy/sell)
                             </p>
                           </div>
                         </>
@@ -2037,791 +2043,802 @@ const TradingAccountsConfigComponent = () => {
             </div>
           ) : (
             (() => {
-          
               return (
-            <div className="mt-4 border rounded-xl border-gray-200 shadow-sm relative overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className=" px-4 py-3 align-middle"></th>
-                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
-                      Status
-                    </th>
-                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">Copy</th>
-                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">Account</th>
-                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
-                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">Platform</th>
-                    <th className="px-4 py-3 text-left text-xs uppercase align-middle">Config</th>
-                    <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-card divide-y divide-gray-200">
-                  {/* Master accounts */}
-                  {accounts
-                    .filter(account => account.accountType === 'master')
-                    .map(masterAccount => {
-                      const connectedSlaves = masterAccount.connectedSlaves || [];
-                      const hasSlaves = connectedSlaves.length > 0;
-                      return (
-                        <React.Fragment key={`master-group-${masterAccount.id}`}>
-                          <tr
-                            className="bg-blue-50 cursor-pointer"
-                            onClick={e => {
-                              if (!(e.target as HTMLElement).closest('.actions-column')) {
-                                toggleMasterCollapse(masterAccount.id);
-                              }
-                            }}
-                          >
-                            <td className="pl-6 py-2 align-middle">
-                              <div className="flex items-center justify-center h-full w-full">
-                                {hasSlaves ? (
-                                  <button
-                                    type="button"
-                                    className="focus:outline-none"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      toggleMasterCollapse(masterAccount.id);
-                                    }}
-                                    aria-label={
-                                      collapsedMasters[masterAccount.id]
-                                        ? 'Expand slaves'
-                                        : 'Collapse slaves'
-                                    }
-                                  >
-                                    {collapsedMasters[masterAccount.id] ? (
-                                      <ChevronRight className="h-4 w-4 text-gray-700" />
+                <div className="mt-4 border rounded-xl border-gray-200 shadow-sm relative overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className=" px-4 py-3 align-middle"></th>
+                        <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
+                          Status
+                        </th>
+                        <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
+                          Copy
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs uppercase align-middle">
+                          Account
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs uppercase align-middle">Type</th>
+                        <th className="px-4 py-3 text-left text-xs uppercase align-middle">
+                          Platform
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs uppercase align-middle">
+                          Config
+                        </th>
+                        <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-card divide-y divide-gray-200">
+                      {/* Master accounts */}
+                      {accounts
+                        .filter(account => account.accountType === 'master')
+                        .map(masterAccount => {
+                          const connectedSlaves = masterAccount.connectedSlaves || [];
+                          const hasSlaves = connectedSlaves.length > 0;
+                          return (
+                            <React.Fragment key={`master-group-${masterAccount.id}`}>
+                              <tr
+                                className="bg-blue-50 cursor-pointer"
+                                onClick={e => {
+                                  if (!(e.target as HTMLElement).closest('.actions-column')) {
+                                    toggleMasterCollapse(masterAccount.id);
+                                  }
+                                }}
+                              >
+                                <td className="pl-6 py-2 align-middle">
+                                  <div className="flex items-center justify-center h-full w-full">
+                                    {hasSlaves ? (
+                                      <button
+                                        type="button"
+                                        className="focus:outline-none"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          toggleMasterCollapse(masterAccount.id);
+                                        }}
+                                        aria-label={
+                                          collapsedMasters[masterAccount.id]
+                                            ? 'Expand slaves'
+                                            : 'Collapse slaves'
+                                        }
+                                      >
+                                        {collapsedMasters[masterAccount.id] ? (
+                                          <ChevronRight className="h-4 w-4 text-gray-700" />
+                                        ) : (
+                                          <ChevronDown className="h-4 w-4 text-gray-700" />
+                                        )}
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className=" py-2 align-middle">
+                                  <div className="flex items-center justify-center h-full w-full">
+                                    <span className="flex items-center justify-center h-5 w-5">
+                                      {getStatusIcon(masterAccount.status)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className=" px-4 py-2 align-middle actions-column">
+                                  <div className="flex items-center justify-center">
+                                    <Switch
+                                      checked={getMasterEffectiveStatus(
+                                        masterAccount.accountNumber
+                                      )}
+                                      onCheckedChange={enabled =>
+                                        toggleAccountStatus(masterAccount.accountNumber, enabled)
+                                      }
+                                      title="Copy trading"
+                                    />
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                                  {masterAccount.accountNumber}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm text-blue-700 align-middle">
+                                  Master
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                                  {getPlatformDisplayName(masterAccount.platform)}
+                                </td>
+                                <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
+                                  <div className="flex gap-2 flex-wrap">
+                                    {/* Badge de slaves conectados */}
+                                    {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
+                                      <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
+                                        {masterAccount.totalSlaves} slave
+                                        {masterAccount.totalSlaves > 1 ? 's' : ''}
+                                      </div>
                                     ) : (
-                                      <ChevronDown className="h-4 w-4 text-gray-700" />
+                                      <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
+                                        No slaves
+                                      </div>
                                     )}
-                                  </button>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className=" py-2 align-middle">
+
+                                    {/* Prefix/Suffix badges */}
+                                    {masterAccount?.config?.prefix && (
+                                      <div className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block">
+                                        Prefix {masterAccount.config.prefix}
+                                      </div>
+                                    )}
+                                    {masterAccount?.config?.suffix && (
+                                      <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block">
+                                        Suffix {masterAccount.config.suffix}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">
+                                  {deleteConfirmId === masterAccount.id ? (
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          confirmDeleteAccount();
+                                        }}
+                                        disabled={isDeletingAccount === masterAccount.id}
+                                        className="bg-red-50 h-9  border border-red-200 text-red-700 hover:bg-red-100"
+                                      >
+                                        {isDeletingAccount === masterAccount.id
+                                          ? 'Deleting...'
+                                          : 'Delete'}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          cancelDeleteAccount();
+                                        }}
+                                        disabled={isDeletingAccount === masterAccount.id}
+                                        className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : disconnectAllConfirmId === masterAccount.id ? (
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          closeEditForm();
+                                          disconnectAllSlaves(masterAccount.accountNumber);
+                                        }}
+                                        disabled={isDisconnecting === masterAccount.id}
+                                      >
+                                        {isDisconnecting === masterAccount.id ? (
+                                          <>
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                            Disconnecting...
+                                          </>
+                                        ) : (
+                                          <>Disconnect</>
+                                        )}
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          cancelDisconnectAction();
+                                        }}
+                                        disabled={isDisconnecting === masterAccount.id}
+                                        className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex space-x-2">
+                                      {(!masterAccount.totalSlaves ||
+                                        masterAccount.totalSlaves === 0) && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            closeEditForm();
+                                            handleEditAccount(masterAccount);
+                                          }}
+                                          title="Edit Account"
+                                          disabled={isDeletingAccount === masterAccount.id}
+                                        >
+                                          <Pencil className="h-4 w-4 text-blue-600" />
+                                        </Button>
+                                      )}
+                                      {(!masterAccount.totalSlaves ||
+                                        masterAccount.totalSlaves === 0) && (
+                                        <DeleteButton
+                                          accountId={masterAccount.id}
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            closeEditForm();
+                                            handleDeleteAccount(masterAccount.id);
+                                          }}
+                                          disabled={isDeletingAccount === masterAccount.id}
+                                          title="Delete Account"
+                                        />
+                                      )}
+                                      {masterAccount.totalSlaves &&
+                                      masterAccount.totalSlaves > 0 ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            closeEditForm();
+                                            setDisconnectAllConfirmId(masterAccount.id);
+                                          }}
+                                          title="Disconnect All Slaves"
+                                          disabled={
+                                            isDeletingAccount === masterAccount.id ||
+                                            isDisconnecting === masterAccount.id
+                                          }
+                                        >
+                                          <Unlink className="h-4 w-4 text-orange-600" />
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+
+                              {/* Slave accounts connected to this master */}
+                              {!collapsedMasters[masterAccount.id] &&
+                                connectedSlaves.map(slaveAccount => {
+                                  // Crear el objeto procesado directamente aquí para tener todos los campos correctos
+                                  const accountToUse = {
+                                    id: slaveAccount.id,
+                                    accountNumber: slaveAccount.accountNumber || slaveAccount.id,
+                                    platform: slaveAccount.platform || 'Unknown',
+                                    server: slaveAccount.server || '',
+                                    password: slaveAccount.password || '',
+                                    accountType: 'slave',
+                                    status: slaveAccount.status || 'offline',
+                                    lotCoefficient: slaveAccount.lotCoefficient || 1,
+                                    forceLot: slaveAccount.forceLot || 0,
+                                    reverseTrade: slaveAccount.reverseTrade || false,
+                                    connectedToMaster: masterAccount.id,
+                                    config: slaveAccount.config,
+                                    masterOnline: slaveAccount.masterOnline || true, // Para slaves conectados, asumir que el master está online
+                                  };
+
+                                  return (
+                                    <tr
+                                      key={accountToUse.id}
+                                      className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
+                                    >
+                                      <td className=" px-2 py-1.5 align-middle"></td>
+                                      <td className=" px-4 py-1.5 align-middle">
+                                        <div className="flex items-center justify-center h-full w-full">
+                                          <span className="flex items-center justify-center h-5 w-5">
+                                            {getStatusIcon(accountToUse.status)}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className=" px-4 py-1.5 align-middle actions-column">
+                                        <div className="flex items-center justify-center">
+                                          <Switch
+                                            checked={getSlaveEffectiveStatus(
+                                              accountToUse.accountNumber,
+                                              masterAccount.accountNumber
+                                            )}
+                                            onCheckedChange={enabled =>
+                                              toggleAccountStatus(
+                                                accountToUse.accountNumber,
+                                                enabled
+                                              )
+                                            }
+                                            title="Copy trading"
+                                          />
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
+                                        <div className="flex items-center gap-2">
+                                          {accountToUse.accountNumber}
+                                          {recentlyDeployedSlaves.has(
+                                            accountToUse.accountNumber
+                                          ) && (
+                                            <div className="flex items-center gap-1">
+                                              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                              <span className="text-xs text-green-600 font-medium">
+                                                New
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-1.5 whitespace-nowrap text-sm text-green-700 align-middle">
+                                        Slave
+                                      </td>
+                                      <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
+                                        {getPlatformDisplayName(accountToUse.platform)}
+                                      </td>
+                                      <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
+                                        <div className="flex gap-2 flex-wrap">
+                                          {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
+                                          {(() => {
+                                            const config = accountToUse.config;
+
+                                            const labels = [];
+
+                                            if (config) {
+                                              // Fixed lot tiene prioridad sobre multiplier
+                                              if (config.forceLot && config.forceLot > 0) {
+                                                labels.push(
+                                                  <div
+                                                    key="forceLot"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                                  >
+                                                    {config.forceLot} Lot
+                                                  </div>
+                                                );
+                                              } else if (config.lotMultiplier) {
+                                                // Solo mostrar multiplier si no hay fixed lot
+                                                labels.push(
+                                                  <div
+                                                    key="lotMultiplier"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                                  >
+                                                    {config.lotMultiplier}x
+                                                  </div>
+                                                );
+                                              }
+
+                                              // Reverse trading (siempre mostrar si está habilitado)
+                                              if (config.reverseTrading) {
+                                                labels.push(
+                                                  <div
+                                                    key="reverseTrading"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                                  >
+                                                    Reverse
+                                                  </div>
+                                                );
+                                              }
+
+                                              // Master ID (mostrar a qué master se conecta)
+                                              if (config.masterId) {
+                                                labels.push(
+                                                  <div
+                                                    key="masterId"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                                  >
+                                                    Listen {config.masterId}
+                                                  </div>
+                                                );
+                                              }
+
+                                              // Prefix (solo si está configurado)
+                                              if (config.prefix) {
+                                                labels.push(
+                                                  <div
+                                                    key="prefix"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                                  >
+                                                    Prefix {config.prefix}
+                                                  </div>
+                                                );
+                                              }
+
+                                              // Suffix (solo si está configurado)
+                                              if (config.suffix) {
+                                                labels.push(
+                                                  <div
+                                                    key="suffix"
+                                                    className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                                  >
+                                                    Suffix {config.suffix}
+                                                  </div>
+                                                );
+                                              }
+                                            }
+
+                                            // Si no hay configuraciones específicas, no mostrar nada
+                                            return labels;
+                                          })()}
+                                        </div>
+                                      </td>
+                                      <td className=" px-4 py-1.5 whitespace-nowrap align-middle actions-column">
+                                        {deleteConfirmId === accountToUse.id ? (
+                                          <div className="flex space-x-2">
+                                            <Button
+                                              size="sm"
+                                              variant="destructive"
+                                              onClick={confirmDeleteAccount}
+                                              disabled={isDeletingAccount === accountToUse.id}
+                                              className="bg-red-50  h-9  border border-red-200 text-red-700 hover:bg-red-100"
+                                            >
+                                              {isDeletingAccount === accountToUse.id
+                                                ? 'Deleting...'
+                                                : 'Delete'}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={cancelDeleteAccount}
+                                              disabled={isDeletingAccount === accountToUse.id}
+                                              className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        ) : disconnectConfirmId === accountToUse.id ? (
+                                          <div className="flex space-x-2">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                closeEditForm();
+                                                disconnectSlaveAccount(
+                                                  accountToUse.accountNumber,
+                                                  masterAccount.accountNumber
+                                                );
+                                              }}
+                                              disabled={isDisconnecting === accountToUse.id}
+                                            >
+                                              {isDisconnecting === accountToUse.id ? (
+                                                <>
+                                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
+                                                  Disconnecting...
+                                                </>
+                                              ) : (
+                                                <>Disconnect</>
+                                              )}
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                cancelDisconnectAction();
+                                              }}
+                                              disabled={isDisconnecting === accountToUse.id}
+                                              className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
+                                            >
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex space-x-2">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                closeEditForm();
+                                                handleEditAccount(accountToUse);
+                                              }}
+                                              title="Edit Account"
+                                              disabled={isDeletingAccount === accountToUse.id}
+                                            >
+                                              <Pencil className="h-4 w-4 text-blue-600" />
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                closeEditForm();
+                                                setDisconnectConfirmId(accountToUse.id);
+                                              }}
+                                              title="Disconnect from Master"
+                                              disabled={
+                                                isDeletingAccount === accountToUse.id ||
+                                                isDisconnecting === accountToUse.id
+                                              }
+                                            >
+                                              <Unlink className="h-4 w-4 text-orange-600" />
+                                            </Button>
+                                            {(!accountToUse.connectedToMaster ||
+                                              accountToUse.connectedToMaster === 'none') && (
+                                              <DeleteButton
+                                                accountId={accountToUse.id}
+                                                onClick={e => {
+                                                  e.stopPropagation();
+                                                  closeEditForm();
+                                                  handleDeleteAccount(accountToUse.id);
+                                                }}
+                                                disabled={isDeletingAccount === accountToUse.id}
+                                                title="Delete Account"
+                                              />
+                                            )}
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </React.Fragment>
+                          );
+                        })}
+
+                      {/* Orphan slave accounts */}
+                      {accounts
+                        .filter(
+                          account =>
+                            account.accountType === 'slave' &&
+                            (!account.connectedToMaster ||
+                              account.connectedToMaster === '' ||
+                              account.connectedToMaster === 'none')
+                        )
+                        .map(orphanSlave => (
+                          <tr key={orphanSlave.id} className="hover:bg-muted/50 bg-gray-50">
+                            <td className="w-8 px-2 py-2 align-middle"></td>
+                            <td className="w-20 px-4 py-2 align-middle">
                               <div className="flex items-center justify-center h-full w-full">
                                 <span className="flex items-center justify-center h-5 w-5">
-                                  {getStatusIcon(masterAccount.status)}
+                                  {getStatusIcon(orphanSlave.status)}
                                 </span>
                               </div>
                             </td>
-                            <td className=" px-4 py-2 align-middle actions-column">
+                            <td className="w-32 px-4 py-2 align-middle">
                               <div className="flex items-center justify-center">
                                 <Switch
-                                  checked={getMasterEffectiveStatus(masterAccount.accountNumber)}
+                                  checked={getSlaveEffectiveStatus(orphanSlave.accountNumber)}
                                   onCheckedChange={enabled =>
-                                    toggleAccountStatus(masterAccount.accountNumber, enabled)
+                                    toggleAccountStatus(orphanSlave.accountNumber, enabled)
                                   }
-
-                                  title='Copy trading'
+                                  title="Copy trading"
                                 />
                               </div>
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                              {masterAccount.accountNumber}
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-blue-700 align-middle">
-                              Master
+                              {orphanSlave.accountNumber}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                              {getPlatformDisplayName(masterAccount.platform)}
+                              <span className="text-orange-600">Slave</span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
+                              {getPlatformDisplayName(orphanSlave.platform)}
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
                               <div className="flex gap-2 flex-wrap">
-                                {/* Badge de slaves conectados */}
-                                {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
-                                  <div className="rounded-full px-2 py-0.5 text-xs bg-blue-100 border border-blue-400 text-blue-800 inline-block">
-                                    {masterAccount.totalSlaves} slave
-                                    {masterAccount.totalSlaves > 1 ? 's' : ''}
-                                  </div>
-                                ) : (
-                                  <div className="rounded-full px-2 border border-gray-200 py-0.5 text-xs bg-white text-gray-800 inline-block">
-                                    No slaves
-                                  </div>
-                                )}
-             
-                                  {/* Prefix/Suffix badges */}
-                                  {masterAccount?.config?.prefix && (
-                                    <div className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block">
-                                      Prefix {masterAccount.config.prefix}
-                                    </div>
-                                  )}
-                                  {masterAccount?.config?.suffix && (
-                                    <div className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block">
-                                     Suffix {masterAccount.config.suffix}
-                                    </div>
-                                  )}
+                                {(() => {
+                                  // Buscar la configuración en los datos del CSV
+                                  let config = null;
+
+                                  // Buscar en unconnectedSlaves
+                                  if (csvAccounts?.unconnectedSlaves) {
+                                    const slave = csvAccounts.unconnectedSlaves.find(
+                                      s =>
+                                        s.id === orphanSlave.accountNumber ||
+                                        s.name === orphanSlave.accountNumber
+                                    );
+                                    if (slave) {
+                                      config = slave.config;
+                                    }
+                                  }
+
+                                  // Si no se encuentra en unconnectedSlaves, buscar en slaveConfigs como fallback
+                                  if (!config) {
+                                    const slaveConfig =
+                                      slaveConfigs[orphanSlave.accountNumber] ||
+                                      slaveConfigs[orphanSlave.id];
+                                    config = slaveConfig?.config;
+                                  }
+
+                                  const labels = [];
+
+                                  if (config) {
+                                    // Fixed lot tiene prioridad sobre multiplier
+                                    if (config.forceLot && config.forceLot > 0) {
+                                      labels.push(
+                                        <div
+                                          key="forceLot"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
+                                        >
+                                          {config.forceLot} Lot
+                                        </div>
+                                      );
+                                    } else if (config.lotMultiplier) {
+                                      // Solo mostrar multiplier si no hay fixed lot
+                                      labels.push(
+                                        <div
+                                          key="lotMultiplier"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                        >
+                                          {config.lotMultiplier}x
+                                        </div>
+                                      );
+                                    }
+
+                                    // Reverse trading (siempre mostrar si está habilitado)
+                                    if (config.reverseTrading) {
+                                      labels.push(
+                                        <div
+                                          key="reverseTrading"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                        >
+                                          Reverse
+                                        </div>
+                                      );
+                                    }
+
+                                    // Max lot size (solo si está configurado)
+                                    if (config.maxLotSize && config.maxLotSize > 0) {
+                                      labels.push(
+                                        <div
+                                          key="maxLotSize"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 border border-orange-400 inline-block"
+                                        >
+                                          Max {config.maxLotSize}
+                                        </div>
+                                      );
+                                    }
+
+                                    // Min lot size (solo si está configurado)
+                                    if (config.minLotSize && config.minLotSize > 0) {
+                                      labels.push(
+                                        <div
+                                          key="minLotSize"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 border border-yellow-400 inline-block"
+                                        >
+                                          Min {config.minLotSize}
+                                        </div>
+                                      );
+                                    }
+
+                                    // Symbol filtering (solo si hay símbolos permitidos o bloqueados)
+                                    if (config.allowedSymbols && config.allowedSymbols.length > 0) {
+                                      labels.push(
+                                        <div
+                                          key="allowedSymbols"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 border border-indigo-400 inline-block"
+                                        >
+                                          {config.allowedSymbols.length} symbols
+                                        </div>
+                                      );
+                                    }
+
+                                    if (config.blockedSymbols && config.blockedSymbols.length > 0) {
+                                      labels.push(
+                                        <div
+                                          key="blockedSymbols"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 border border-red-400 inline-block"
+                                        >
+                                          {config.blockedSymbols.length} blocked
+                                        </div>
+                                      );
+                                    }
+
+                                    // Order type filtering (solo si hay tipos permitidos o bloqueados)
+                                    if (
+                                      config.allowedOrderTypes &&
+                                      config.allowedOrderTypes.length > 0
+                                    ) {
+                                      labels.push(
+                                        <div
+                                          key="allowedOrderTypes"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 border border-teal-400 inline-block"
+                                        >
+                                          {config.allowedOrderTypes.length} order types
+                                        </div>
+                                      );
+                                    }
+
+                                    if (
+                                      config.blockedOrderTypes &&
+                                      config.blockedOrderTypes.length > 0
+                                    ) {
+                                      labels.push(
+                                        <div
+                                          key="blockedOrderTypes"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-pink-100 text-pink-800 border border-pink-400 inline-block"
+                                        >
+                                          {config.blockedOrderTypes.length} blocked types
+                                        </div>
+                                      );
+                                    }
+
+                                    // Trading hours (solo si está habilitado)
+                                    if (config.tradingHours && config.tradingHours.enabled) {
+                                      labels.push(
+                                        <div
+                                          key="tradingHours"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-cyan-100 text-cyan-800 border border-cyan-400 inline-block"
+                                        >
+                                          Trading Hours
+                                        </div>
+                                      );
+                                    }
+                                    // Prefix (solo si está configurado)
+                                    if (config.prefix) {
+                                      labels.push(
+                                        <div
+                                          key="prefix"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
+                                        >
+                                          Prefix {config.prefix}
+                                        </div>
+                                      );
+                                    }
+
+                                    // Suffix (solo si está configurado)
+                                    if (config.suffix) {
+                                      labels.push(
+                                        <div
+                                          key="suffix"
+                                          className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
+                                        >
+                                          Suffix {config.suffix}
+                                        </div>
+                                      );
+                                    }
+                                  }
+
+                                  return labels;
+                                })()}
                               </div>
                             </td>
-                            <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">
-                              {deleteConfirmId === masterAccount.id ? (
+                            <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
+                              {deleteConfirmId === orphanSlave.id ? (
                                 <div className="flex space-x-2">
                                   <Button
                                     size="sm"
                                     variant="destructive"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      confirmDeleteAccount();
-                                    }}
-                                    disabled={isDeletingAccount === masterAccount.id}
-                                    className="bg-red-50 h-9  border border-red-200 text-red-700 hover:bg-red-100"
+                                    onClick={confirmDeleteAccount}
+                                    disabled={isDeletingAccount === orphanSlave.id}
+                                    className="bg-red-50 border h-9 border-red-200 text-red-700 hover:bg-red-100"
                                   >
-                                    {isDeletingAccount === masterAccount.id
+                                    {isDeletingAccount === orphanSlave.id
                                       ? 'Deleting...'
                                       : 'Delete'}
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      cancelDeleteAccount();
-                                    }}
-                                    disabled={isDeletingAccount === masterAccount.id}
+                                    onClick={cancelDeleteAccount}
+                                    disabled={isDeletingAccount === orphanSlave.id}
                                     className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              ) : disconnectAllConfirmId === masterAccount.id ? (
-                                <div className="flex space-x-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      closeEditForm();
-                                      disconnectAllSlaves(masterAccount.accountNumber);
-                                    }}
-                                    disabled={isDisconnecting === masterAccount.id}
-                                  >
-                                    {isDisconnecting === masterAccount.id ? (
-                                      <>
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
-                                        Disconnecting...
-                                      </>
-                                    ) : (
-                                      <>Disconnect</>
-                                    )}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      cancelDisconnectAction();
-                                    }}
-                                    disabled={isDisconnecting === masterAccount.id}
-                                    className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
                                   >
                                     Cancel
                                   </Button>
                                 </div>
                               ) : (
                                 <div className="flex space-x-2">
-                                  {(!masterAccount.totalSlaves ||
-                                    masterAccount.totalSlaves === 0) && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        closeEditForm();
-                                        handleEditAccount(masterAccount);
-                                      }}
-                                      title="Edit Account"
-                                      disabled={isDeletingAccount === masterAccount.id}
-                                    >
-                                      <Pencil className="h-4 w-4 text-blue-600" />
-                                    </Button>
-                                  )}
-                                  {(!masterAccount.totalSlaves ||
-                                    masterAccount.totalSlaves === 0) && (
-                                    <DeleteButton
-                                      accountId={masterAccount.id}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        closeEditForm();
-                                        handleDeleteAccount(masterAccount.id);
-                                      }}
-                                      disabled={isDeletingAccount === masterAccount.id}
-                                      title="Delete Account"
-                                    />
-                                  )}
-                                  {masterAccount.totalSlaves && masterAccount.totalSlaves > 0 ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        closeEditForm();
-                                        setDisconnectAllConfirmId(masterAccount.id);
-                                      }}
-                                      title="Disconnect All Slaves"
-                                      disabled={
-                                        isDeletingAccount === masterAccount.id ||
-                                        isDisconnecting === masterAccount.id
-                                      }
-                                    >
-                                      <Unlink className="h-4 w-4 text-orange-600" />
-                                    </Button>
-                                  ) : null}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      closeEditForm();
+                                      handleEditAccount(orphanSlave);
+                                    }}
+                                    title="Edit Account"
+                                    disabled={isDeletingAccount === orphanSlave.id}
+                                  >
+                                    <Pencil className="h-4 w-4 text-blue-600" />
+                                  </Button>
+                                  <DeleteButton
+                                    accountId={orphanSlave.id}
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      closeEditForm();
+                                      handleDeleteAccount(orphanSlave.id);
+                                    }}
+                                    disabled={isDeletingAccount === orphanSlave.id}
+                                  />
                                 </div>
                               )}
                             </td>
                           </tr>
-
-                          {/* Slave accounts connected to this master */}
-                          {!collapsedMasters[masterAccount.id] &&
-                            connectedSlaves.map(slaveAccount => {
-                              // Crear el objeto procesado directamente aquí para tener todos los campos correctos
-                              const accountToUse = {
-                                id: slaveAccount.id,
-                                accountNumber: slaveAccount.accountNumber || slaveAccount.id,
-                                platform: slaveAccount.platform || 'Unknown',
-                                server: slaveAccount.server || '',
-                                password: slaveAccount.password || '',
-                                accountType: 'slave',
-                                status: slaveAccount.status || 'offline',
-                                lotCoefficient: slaveAccount.lotCoefficient || 1,
-                                forceLot: slaveAccount.forceLot || 0,
-                                reverseTrade: slaveAccount.reverseTrade || false,
-                                connectedToMaster: masterAccount.id,
-                                config: slaveAccount.config,
-                                masterOnline: slaveAccount.masterOnline || true, // Para slaves conectados, asumir que el master está online
-                              };
-
-                              return (
-                                <tr
-                                  key={accountToUse.id}
-                                  className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
-                                >
-                                  <td className=" px-2 py-1.5 align-middle"></td>
-                                  <td className=" px-4 py-1.5 align-middle">
-                                    <div className="flex items-center justify-center h-full w-full">
-                                      <span className="flex items-center justify-center h-5 w-5">
-                                        {getStatusIcon(accountToUse.status)}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className=" px-4 py-1.5 align-middle actions-column">
-                                    <div className="flex items-center justify-center">
-                                      <Switch
-                                        checked={getSlaveEffectiveStatus(
-                                          accountToUse.accountNumber,
-                                          masterAccount.accountNumber
-                                        )}
-                                        onCheckedChange={enabled =>
-                                          toggleAccountStatus(accountToUse.accountNumber, enabled)
-                                        }
-
-                                        title='Copy trading'
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                    <div className="flex items-center gap-2">
-                                      {accountToUse.accountNumber}
-                                      {recentlyDeployedSlaves.has(accountToUse.accountNumber) && (
-                                        <div className="flex items-center gap-1">
-                                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                          <span className="text-xs text-green-600 font-medium">
-                                            New
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm text-green-700 align-middle">
-                                    Slave
-                                  </td>
-                                  <td className="px-4 py-1.5 whitespace-nowrap text-sm align-middle">
-                                    {getPlatformDisplayName(accountToUse.platform)}
-                                  </td>
-                                  <td className="px-4 py-1.5 whitespace-nowrap text-xs align-middle">
-                                    <div className="flex gap-2 flex-wrap">
-                                      {/* Mostrar configuraciones de slave usando la config que ya viene en slaveAccount */}
-                                      {(() => {
-                                        const config = accountToUse.config;
-
-                                        const labels = [];
-
-                                        if (config) {
-                                          // Fixed lot tiene prioridad sobre multiplier
-                                          if (config.forceLot && config.forceLot > 0) {
-                                            labels.push(
-                                              <div
-                                                key="forceLot"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
-                                              >
-                                                {config.forceLot} Lot
-                                              </div>
-                                            );
-                                          } else if (config.lotMultiplier) {
-                                            // Solo mostrar multiplier si no hay fixed lot
-                                            labels.push(
-                                              <div
-                                                key="lotMultiplier"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
-                                              >
-                                                {config.lotMultiplier}x
-                                              </div>
-                                            );
-                                          }
-
-                                          // Reverse trading (siempre mostrar si está habilitado)
-                                          if (config.reverseTrading) {
-                                            labels.push(
-                                              <div
-                                                key="reverseTrading"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
-                                              >
-                                                Reverse
-                                              </div>
-                                            );
-                                          }
-
-                                          // Master ID (mostrar a qué master se conecta)
-                                          if (config.masterId) {
-                                            labels.push(
-                                              <div
-                                                key="masterId"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
-                                              >
-                                                Listen {config.masterId}
-                                              </div>
-                                            );
-                                          }
-
-                                          // Prefix (solo si está configurado)
-                                          if (config.prefix) {
-                                            labels.push(
-                                              <div
-                                                key="prefix"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
-                                              >
-                                                Prefix {config.prefix}
-                                              </div>
-                                            );
-                                          }
-
-                                          // Suffix (solo si está configurado)
-                                          if (config.suffix) {
-                                            labels.push(
-                                              <div
-                                                key="suffix"
-                                                className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
-                                              >
-                                                Suffix {config.suffix}
-                                              </div>
-                                            );
-                                          }
-                                        }
-
-                                        // Si no hay configuraciones específicas, no mostrar nada
-                                        return labels;
-
-                                      })()}
-                                    </div>
-                                  </td>
-                                  <td className=" px-4 py-1.5 whitespace-nowrap align-middle actions-column">
-                                    {deleteConfirmId === accountToUse.id ? (
-                                      <div className="flex space-x-2">
-                                        <Button
-                                          size="sm"
-                                          variant="destructive"
-                                          onClick={confirmDeleteAccount}
-                                          disabled={isDeletingAccount === accountToUse.id}
-                                          className="bg-red-50  h-9  border border-red-200 text-red-700 hover:bg-red-100"
-                                        >
-                                          {isDeletingAccount === accountToUse.id
-                                            ? 'Deleting...'
-                                            : 'Delete'}
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={cancelDeleteAccount}
-                                          disabled={isDeletingAccount === accountToUse.id}
-                                          className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
-                                        >
-                                          Cancel
-                                        </Button>
-                                      </div>
-                                    ) : disconnectConfirmId === accountToUse.id ? (
-                                      <div className="flex space-x-2">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            closeEditForm();
-                                            disconnectSlaveAccount(
-                                              accountToUse.accountNumber,
-                                              masterAccount.accountNumber
-                                            );
-                                          }}
-                                          disabled={isDisconnecting === accountToUse.id}
-                                        >
-                                          {isDisconnecting === accountToUse.id ? (
-                                            <>
-                                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-orange-600 border-t-transparent mr-1" />
-                                              Disconnecting...
-                                            </>
-                                          ) : (
-                                            <>Disconnect</>
-                                          )}
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            cancelDisconnectAction();
-                                          }}
-                                          disabled={isDisconnecting === accountToUse.id}
-                                          className="bg-white border-gray-200 text-gray-700 hover:bg-gray-100"
-                                        >
-                                          Cancel
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <div className="flex space-x-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            closeEditForm();
-                                            handleEditAccount(accountToUse);
-                                          }}
-                                          title="Edit Account"
-                                          disabled={isDeletingAccount === accountToUse.id}
-                                        >
-                                          <Pencil className="h-4 w-4 text-blue-600" />
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            closeEditForm();
-                                            setDisconnectConfirmId(accountToUse.id);
-                                          }}
-                                          title="Disconnect from Master"
-                                          disabled={
-                                            isDeletingAccount === accountToUse.id ||
-                                            isDisconnecting === accountToUse.id
-                                          }
-                                        >
-                                          <Unlink className="h-4 w-4 text-orange-600" />
-                                        </Button>
-                                        {(!accountToUse.connectedToMaster ||
-                                          accountToUse.connectedToMaster === 'none') && (
-                                          <DeleteButton
-                                            accountId={accountToUse.id}
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              closeEditForm();
-                                              handleDeleteAccount(accountToUse.id);
-                                            }}
-                                            disabled={isDeletingAccount === accountToUse.id}
-                                            title="Delete Account"
-                                          />
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                        </React.Fragment>
-                      );
-                    })}
-
-                  {/* Orphan slave accounts */}
-                  {accounts
-                    .filter(
-                      account =>
-                        account.accountType === 'slave' &&
-                        (!account.connectedToMaster ||
-                          account.connectedToMaster === '' ||
-                          account.connectedToMaster === 'none')
-                    )
-                    .map(orphanSlave => (
-                      <tr key={orphanSlave.id} className="hover:bg-muted/50 bg-gray-50">
-                        <td className="w-8 px-2 py-2 align-middle"></td>
-                        <td className="w-20 px-4 py-2 align-middle">
-                          <div className="flex items-center justify-center h-full w-full">
-                            <span className="flex items-center justify-center h-5 w-5">
-                              {getStatusIcon(orphanSlave.status)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="w-32 px-4 py-2 align-middle">
-                          <div className="flex items-center justify-center">
-                            <Switch
-                              checked={getSlaveEffectiveStatus(orphanSlave.accountNumber)}
-                              onCheckedChange={enabled =>
-                                toggleAccountStatus(orphanSlave.accountNumber, enabled)
-                              }
-
-                              title='Copy trading'
-                            />
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {orphanSlave.accountNumber}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          <span className="text-orange-600">Slave</span>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm align-middle">
-                          {getPlatformDisplayName(orphanSlave.platform)}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-xs align-middle">
-                          <div className="flex gap-2 flex-wrap">
-                            {(() => {
-                              // Buscar la configuración en los datos del CSV
-                              let config = null;
-
-                              // Buscar en unconnectedSlaves
-                              if (csvAccounts?.unconnectedSlaves) {
-                                const slave = csvAccounts.unconnectedSlaves.find(
-                                  s =>
-                                    s.id === orphanSlave.accountNumber ||
-                                    s.name === orphanSlave.accountNumber
-                                );
-                                if (slave) {
-                                  config = slave.config;
-                                }
-                              }
-
-                              // Si no se encuentra en unconnectedSlaves, buscar en slaveConfigs como fallback
-                              if (!config) {
-                                const slaveConfig =
-                                  slaveConfigs[orphanSlave.accountNumber] ||
-                                  slaveConfigs[orphanSlave.id];
-                                config = slaveConfig?.config;
-                              }
-
-
-                              const labels = [];
-
-                              if (config) {
-                                // Fixed lot tiene prioridad sobre multiplier
-                                if (config.forceLot && config.forceLot > 0) {
-                                  labels.push(
-                                    <div
-                                      key="forceLot"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-blue-100 text-blue-800 border border-blue-400 inline-block"
-                                    >
-                                      {config.forceLot} Lot
-                                    </div>
-                                  );
-                                } else if (config.lotMultiplier) {
-                                  // Solo mostrar multiplier si no hay fixed lot
-                                  labels.push(
-                                    <div
-                                      key="lotMultiplier"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
-                                    >
-                                      {config.lotMultiplier}x
-                                    </div>
-                                  );
-                                }
-
-                                // Reverse trading (siempre mostrar si está habilitado)
-                                if (config.reverseTrading) {
-                                  labels.push(
-                                    <div
-                                      key="reverseTrading"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
-                                    >
-                                      Reverse
-                                    </div>
-                                  );
-                                }
-
-                                // Max lot size (solo si está configurado)
-                                if (config.maxLotSize && config.maxLotSize > 0) {
-                                  labels.push(
-                                    <div
-                                      key="maxLotSize"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-orange-100 text-orange-800 border border-orange-400 inline-block"
-                                    >
-                                      Max {config.maxLotSize}
-                                    </div>
-                                  );
-                                }
-
-                                // Min lot size (solo si está configurado)
-                                if (config.minLotSize && config.minLotSize > 0) {
-                                  labels.push(
-                                    <div
-                                      key="minLotSize"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 border border-yellow-400 inline-block"
-                                    >
-                                      Min {config.minLotSize}
-                                    </div>
-                                  );
-                                }
-
-                                // Symbol filtering (solo si hay símbolos permitidos o bloqueados)
-                                if (config.allowedSymbols && config.allowedSymbols.length > 0) {
-                                  labels.push(
-                                    <div
-                                      key="allowedSymbols"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 border border-indigo-400 inline-block"
-                                    >
-                                      {config.allowedSymbols.length} symbols
-                                    </div>
-                                  );
-                                }
-
-                                if (config.blockedSymbols && config.blockedSymbols.length > 0) {
-                                  labels.push(
-                                    <div
-                                      key="blockedSymbols"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-red-100 text-red-800 border border-red-400 inline-block"
-                                    >
-                                      {config.blockedSymbols.length} blocked
-                                    </div>
-                                  );
-                                }
-
-                                // Order type filtering (solo si hay tipos permitidos o bloqueados)
-                                if (
-                                  config.allowedOrderTypes &&
-                                  config.allowedOrderTypes.length > 0
-                                ) {
-                                  labels.push(
-                                    <div
-                                      key="allowedOrderTypes"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-teal-100 text-teal-800 border border-teal-400 inline-block"
-                                    >
-                                      {config.allowedOrderTypes.length} order types
-                                    </div>
-                                  );
-                                }
-
-                                if (
-                                  config.blockedOrderTypes &&
-                                  config.blockedOrderTypes.length > 0
-                                ) {
-                                  labels.push(
-                                    <div
-                                      key="blockedOrderTypes"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-pink-100 text-pink-800 border border-pink-400 inline-block"
-                                    >
-                                      {config.blockedOrderTypes.length} blocked types
-                                    </div>
-                                  );
-                                }
-
-                                // Trading hours (solo si está habilitado)
-                                if (config.tradingHours && config.tradingHours.enabled) {
-                                  labels.push(
-                                    <div
-                                      key="tradingHours"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-cyan-100 text-cyan-800 border border-cyan-400 inline-block"
-                                    >
-                                      Trading Hours
-                                    </div>
-                                  );
-                                }
-                                // Prefix (solo si está configurado)
-                                if (config.prefix) {
-                                  labels.push(
-                                    <div
-                                      key="prefix"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-purple-100 text-purple-800 border border-purple-400 inline-block"
-                                    >
-                                      Prefix {config.prefix}
-                                    </div>
-                                  );
-                                }
-
-                                // Suffix (solo si está configurado)
-                                if (config.suffix) {
-                                  labels.push(
-                                    <div
-                                      key="suffix"
-                                      className="rounded-full px-2 py-0.5 text-xs bg-green-100 text-green-800 border border-green-400 inline-block"
-                                    >
-                                      Suffix {config.suffix}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              return labels;
-                            })()}
-
-                          </div>
-                        </td>
-                        <td className="w-32 px-4 py-2 whitespace-nowrap align-middle actions-column">
-                          {deleteConfirmId === orphanSlave.id ? (
-                            <div className="flex space-x-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={confirmDeleteAccount}
-                                disabled={isDeletingAccount === orphanSlave.id}
-                                className="bg-red-50 border h-9 border-red-200 text-red-700 hover:bg-red-100"
-                              >
-                                {isDeletingAccount === orphanSlave.id ? 'Deleting...' : 'Delete'}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={cancelDeleteAccount}
-                                disabled={isDeletingAccount === orphanSlave.id}
-                                className="bg-white h-9 border-gray-200 text-gray-700 hover:bg-gray-100"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  closeEditForm();
-                                  handleEditAccount(orphanSlave);
-                                }}
-                                title="Edit Account"
-                                disabled={isDeletingAccount === orphanSlave.id}
-                              >
-                                <Pencil className="h-4 w-4 text-blue-600" />
-                              </Button>
-                              <DeleteButton
-                                accountId={orphanSlave.id}
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  closeEditForm();
-                                  handleDeleteAccount(orphanSlave.id);
-                                }}
-                                disabled={isDeletingAccount === orphanSlave.id}
-                              />
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               );
             })()
           )}
