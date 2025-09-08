@@ -51,3 +51,93 @@ El flujo del bot es el siguiente:
 
 
 Input / boton en el chart de force pending.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- banio / turn off phone and macs
+- only cursor, and platforms, any more
+- ctrader
+    - copiando y modificando pendings
+    - copiando y modificando ordenes mercado
+- mt5
+    - copiando y modificando pendings
+    - copiando y modificando ordenes mercado
+- mt4
+    - copiando y modificando pendings
+    - copiando y modificando ordenes mercado
+
+
+
+
+
+CTRADER M MT5/4 S
+- abrir ordenes a mercado con todo tipo de cofiguracion
+- abrir ordenes pending con todo tipo de configuracion
+- cerrar ordenes abiertas con tod tipo de variante y configuracion
+
+MT5/4 M CTRADER S
+- abrir ordenes a mercado con todo tipo de cofiguracion
+- abrir ordenes pending con todo tipo de configuracion
+- cerrar ordenes abiertas con tod tipo de variante y configuracion
+
+- buscar un broker con prefix sufix
+
+
+en ordenes quew ya estan abiertas
+- a la hora de abrir en msasnter una orden con reverse tradingy querer modificar el tp y sl en la slaves no se estan copiando, creoq ue es porque el valord el tp de la master debe ser el sl y el valor de sl de la master debe ser el tp
+- 
+

@@ -348,6 +348,9 @@ namespace cAlgo.Robots
                     Print($"Master Line {i + 1}: {lines[i]}");
                 }
                 
+                // Collect all master order tickets
+                var masterTickets = new HashSet<string>();
+                
                 // Skip first 3 lines and process orders
                 int orderCount = 0;
                 for (int i = 3; i < lines.Length; i++)
@@ -357,11 +360,22 @@ namespace cAlgo.Robots
                         Print($"Master Order Line: {lines[i]}");
                         if (lines[i].StartsWith("[ORDER]"))
                         {
+                            // Extract master ticket from order line
+                            var parts = lines[i].Split(' ');
+                            if (parts.Length >= 2)
+                            {
+                                string masterTicket = parts[1].Trim('[', ']');
+                                masterTickets.Add(masterTicket);
+                            }
+                            
                             ProcessMasterOrder(lines[i]);
                             orderCount++;
                         }
                     }
                 }
+                
+                // Close orders that are no longer in master
+                CloseOrphanedOrders(masterTickets);
                 
                 Print($"=== End Master CSV reading. Found {orderCount} orders ===");
             }
@@ -388,11 +402,7 @@ namespace cAlgo.Robots
                 double tp = double.Parse(parts[7].Trim('[', ']'));
                 long timestamp = long.Parse(parts[8].Trim('[', ']'));
                 
-                // Check if order is too old (more than 5 seconds for market orders)
-                if ((orderType == "BUY" || orderType == "SELL") && (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp) > 5)
-                {
-                    return;
-                }
+                // Time validation moved to after order existence check
                 
                 // Apply lot calculation
                 if (forceLot != "NULL")
@@ -407,6 +417,8 @@ namespace cAlgo.Robots
                 // Apply reverse trading
                 if (reverseTrading == "TRUE")
                 {
+                    Print($"Applying reverse trading - Original SL: {sl}, Original TP: {tp}");
+                    
                     switch (orderType)
                     {
                         case "BUY": orderType = "SELL"; break;
@@ -421,6 +433,8 @@ namespace cAlgo.Robots
                     var temp = sl;
                     sl = tp;
                     tp = temp;
+                    
+                    Print($"After reverse trading - New SL: {sl}, New TP: {tp}");
                 }
                 
                 // Apply prefix/suffix for slave
@@ -428,27 +442,91 @@ namespace cAlgo.Robots
                 if (prefix != "NULL") slaveSymbol = prefix + slaveSymbol;
                 if (suffix != "NULL") slaveSymbol = slaveSymbol + suffix;
                 
-                // Check if order already exists
+                // Check if order already exists and if it needs modification
                 bool orderExists = false;
+                bool needsModification = false;
                 
-                // Check positions
+                // Check positions for modification
+                Print($"=== Checking all positions for master ticket: '{masterTicket}' ===");
+                Print($"Total positions: {Positions.Count}");
                 foreach (var position in Positions)
                 {
-                    if (position.Comment != null && position.Comment.Contains(masterTicket))
+                    Print($"Position {position.Id} - Comment: '{position.Comment}' (Length: {position.Comment?.Length ?? 0})");
+                    Print($"Checking position {position.Id} - Comment: '{position.Comment}' vs MasterTicket: '{masterTicket}'");
+                    
+                    if (position.Comment != null && position.Comment == masterTicket)
                     {
                         orderExists = true;
+                        
+                        // Check if position needs SL/TP modification or partial close
+                        double currentSL = position.StopLoss ?? 0;
+                        double currentTP = position.TakeProfit ?? 0;
+                        
+                        // Get current volume in lots
+                        var symbolObj = Symbols.GetSymbol(position.SymbolName);
+                        double currentLots = symbolObj != null ? position.VolumeInUnits / symbolObj.LotSize : position.VolumeInUnits / 100000.0;
+                        double expectedLots = lots; // This already has lot multiplier applied
+                        
+                        Print($"Position {position.Id} found - Current SL: {currentSL}, New SL: {sl}, Current TP: {currentTP}, New TP: {tp}");
+                        Print($"Position {position.Id} - Current Lots: {currentLots:F2}, Expected Lots: {expectedLots:F2}");
+                        
+                        double slDiff = Math.Abs(currentSL - sl);
+                        double tpDiff = Math.Abs(currentTP - tp);
+                        double lotsDiff = Math.Abs(currentLots - expectedLots);
+                        Print($"Position {position.Id} - SL difference: {slDiff}, TP difference: {tpDiff}, Lots difference: {lotsDiff}");
+                        
+                        // Check if partial close is needed
+                        Print($"Checking partial close: currentLots > expectedLots? {currentLots} > {expectedLots} = {currentLots > expectedLots}");
+                        Print($"Lots difference > 0.01? {lotsDiff} > 0.01 = {lotsDiff > 0.01}");
+                        
+                        if (currentLots > expectedLots && lotsDiff > 0.01)
+                        {
+                            double volumeToClose = currentLots - expectedLots;
+                            Print($"Position {position.Id} needs partial close - Volume to close: {volumeToClose:F2} lots");
+                            ClosePartialPosition(position, volumeToClose);
+                        }
+                        else
+                        {
+                            Print($"Position {position.Id} does not need partial close");
+                        }
+                        
+                        // Check if SL/TP modification is needed
+                        if (slDiff > 0.00001 || tpDiff > 0.00001)
+                        {
+                            needsModification = true;
+                            Print($"Position {position.Id} needs SL/TP modification - Current SL: {currentSL}, New SL: {sl}, Current TP: {currentTP}, New TP: {tp}");
+                            ModifyExistingPosition(position, sl, tp);
+                        }
+                        else
+                        {
+                            Print($"Position {position.Id} does not need SL/TP modification");
+                        }
                         break;
                     }
                 }
                 
-                // Check pending orders
+                // Check pending orders for modification
                 if (!orderExists)
                 {
                     foreach (var order in PendingOrders)
                     {
-                        if (order.Comment != null && order.Comment.Contains(masterTicket))
+                        if (order.Comment != null && order.Comment == masterTicket)
                         {
                             orderExists = true;
+                            
+                            // Check if pending order needs modification
+                            double currentPrice = order.TargetPrice;
+                            double currentSL = order.StopLoss ?? 0;
+                            double currentTP = order.TakeProfit ?? 0;
+                            
+                            if (Math.Abs(currentPrice - price) > 0.00001 || 
+                                Math.Abs(currentSL - sl) > 0.00001 || 
+                                Math.Abs(currentTP - tp) > 0.00001)
+                            {
+                                needsModification = true;
+                                Print($"Pending order {order.Id} needs modification - Current Price: {currentPrice}, New Price: {price}");
+                                ModifyExistingPendingOrder(order, price, sl, tp);
+                            }
                             break;
                         }
                     }
@@ -457,6 +535,13 @@ namespace cAlgo.Robots
                 // Open new order if it doesn't exist
                 if (!orderExists)
                 {
+                    // Check if order is too old (more than 5 seconds for market orders)
+                    if ((orderType == "BUY" || orderType == "SELL") && (DateTimeOffset.UtcNow.ToUnixTimeSeconds() - timestamp) > 5)
+                    {
+                        Print($"Order too old, not opening new order. Current time: {DateTimeOffset.UtcNow.ToUnixTimeSeconds()}, Order time: {timestamp}");
+                        return;
+                    }
+                    
                     var symbolObj = Symbols.GetSymbol(slaveSymbol);
                     if (symbolObj == null) return;
                     
@@ -495,10 +580,11 @@ namespace cAlgo.Robots
         {
             try
             {
-                var result = base.ExecuteMarketOrder(tradeType, symbolName, volumeInUnits, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
+                Print($"Executing market order with label: '{label}'");
+                TradeResult result = base.ExecuteMarketOrder(tradeType, symbolName, volumeInUnits, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
                 if (result.IsSuccessful)
                 {
-                    Print($"Market order executed: {result.Position.Id}");
+                    Print($"Market order executed: {result.Position.Id}, Comment: '{result.Position.Comment}'");
                 }
                 else
                 {
@@ -515,7 +601,7 @@ namespace cAlgo.Robots
         {
             try
             {
-                var result = base.PlaceLimitOrder(tradeType, symbolName, volumeInUnits, targetPrice, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
+                TradeResult result = base.PlaceLimitOrder(tradeType, symbolName, volumeInUnits, targetPrice, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
                 if (result.IsSuccessful)
                 {
                     Print($"Limit order placed: {result.PendingOrder.Id}");
@@ -535,7 +621,7 @@ namespace cAlgo.Robots
         {
             try
             {
-                var result = base.PlaceStopOrder(tradeType, symbolName, volumeInUnits, targetPrice, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
+                TradeResult result = base.PlaceStopOrder(tradeType, symbolName, volumeInUnits, targetPrice, label, stopLoss.HasValue ? stopLoss.Value : (double?)null, takeProfit.HasValue ? takeProfit.Value : (double?)null);
                 if (result.IsSuccessful)
                 {
                     Print($"Stop order placed: {result.PendingOrder.Id}");
@@ -548,6 +634,166 @@ namespace cAlgo.Robots
             catch (Exception ex)
             {
                 Print($"Error placing stop order: {ex.Message}");
+            }
+        }
+
+        private void CloseOrphanedOrders(HashSet<string> masterTickets)
+        {
+            try
+            {
+                // Check positions for orphaned orders
+                var positionsToClose = new List<Position>();
+                foreach (var position in Positions)
+                {
+                    if (!string.IsNullOrEmpty(position.Comment))
+                    {
+                        // The comment is the master ticket directly
+                        string masterTicket = position.Comment;
+                        if (!masterTickets.Contains(masterTicket))
+                        {
+                            positionsToClose.Add(position);
+                            Print($"Position {position.Id} will be closed - master order {masterTicket} no longer exists");
+                        }
+                    }
+                }
+                
+                // Check pending orders for orphaned orders
+                var pendingOrdersToCancel = new List<PendingOrder>();
+                foreach (var order in PendingOrders)
+                {
+                    if (!string.IsNullOrEmpty(order.Comment))
+                    {
+                        // The comment is the master ticket directly
+                        string masterTicket = order.Comment;
+                        if (!masterTickets.Contains(masterTicket))
+                        {
+                            pendingOrdersToCancel.Add(order);
+                            Print($"Pending order {order.Id} will be cancelled - master order {masterTicket} no longer exists");
+                        }
+                    }
+                }
+                
+                // Close positions
+                foreach (var position in positionsToClose)
+                {
+                    TradeResult result = ClosePosition(position);
+                    if (result.IsSuccessful)
+                    {
+                        Print($"Successfully closed position {position.Id}");
+                    }
+                    else
+                    {
+                        Print($"Failed to close position {position.Id}: {result.Error}");
+                    }
+                }
+                
+                // Cancel pending orders
+                foreach (var order in pendingOrdersToCancel)
+                {
+                    TradeResult result = CancelPendingOrder(order);
+                    if (result.IsSuccessful)
+                    {
+                        Print($"Successfully cancelled pending order {order.Id}");
+                    }
+                    else
+                    {
+                        Print($"Failed to cancel pending order {order.Id}: {result.Error}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Print($"Error closing orphaned orders: {ex.Message}");
+            }
+        }
+        
+        private string ExtractMasterTicketFromComment(string comment)
+        {
+            try
+            {
+                // The comment is the master ticket directly
+                return comment ?? "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private void ModifyExistingPosition(Position position, double newStopLoss, double newTakeProfit)
+        {
+            try
+            {
+                // Convert 0 to null for cTrader API
+                double? sl = (newStopLoss > 0.00001) ? newStopLoss : (double?)null;
+                double? tp = (newTakeProfit > 0.00001) ? newTakeProfit : (double?)null;
+                
+                Print($"Attempting to modify position {position.Id} - SL: {sl}, TP: {tp}");
+                
+                TradeResult result = ModifyPosition(position, sl, tp);
+                if (result.IsSuccessful)
+                {
+                    Print($"Successfully modified position {position.Id} - SL: {sl}, TP: {tp}");
+                }
+                else
+                {
+                    Print($"Failed to modify position {position.Id}: {result.Error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Print($"Error modifying position: {ex.Message}");
+            }
+        }
+        
+        private void ModifyExistingPendingOrder(PendingOrder order, double newPrice, double newStopLoss, double newTakeProfit)
+        {
+            try
+            {
+                double? sl = newStopLoss > 0 ? newStopLoss : (double?)null;
+                double? tp = newTakeProfit > 0 ? newTakeProfit : (double?)null;
+                
+                TradeResult result = ModifyPendingOrder(order, newPrice, sl, tp);
+                if (result.IsSuccessful)
+                {
+                    Print($"Successfully modified pending order {order.Id} - Price: {newPrice}, SL: {newStopLoss}, TP: {newTakeProfit}");
+                }
+                else
+                {
+                    Print($"Failed to modify pending order {order.Id}: {result.Error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Print($"Error modifying pending order: {ex.Message}");
+            }
+        }
+
+        private void ClosePartialPosition(Position position, double volumeToClose)
+        {
+            try
+            {
+                var symbolObj = Symbols.GetSymbol(position.SymbolName);
+                long volumeInUnitsToClose = (long)(volumeToClose * (symbolObj?.LotSize ?? 100000));
+                
+                Print($"Attempting to close {volumeToClose:F2} lots ({volumeInUnitsToClose} units) of position {position.Id}");
+                Print($"Position current volume: {position.VolumeInUnits} units");
+                
+                // Use ClosePosition with partial volume instead
+                TradeResult result = ClosePosition(position, volumeInUnitsToClose);
+                
+                if (result.IsSuccessful)
+                {
+                    Print($"Successfully closed {volumeToClose:F2} lots of position {position.Id}");
+                }
+                else
+                {
+                    Print($"Failed to close partial position {position.Id}: {result.Error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Print($"Error closing partial position: {ex.Message}");
             }
         }
 

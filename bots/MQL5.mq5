@@ -389,6 +389,10 @@ void ProcessSlaveAccount()
     
     Print("Successfully read ", lineCount, " lines from master CSV");
     
+    // Collect all master order tickets
+    string masterTickets[];
+    int masterTicketCount = 0;
+    
     // Process lines
     int orderCount = 0;
     for(int i = 0; i < lineCount; i++)
@@ -405,10 +409,25 @@ void ProcessSlaveAccount()
         else if(StringFind(line, "[ORDER]") == 0)
         {
             Print("Master Order Line: ", line);
+            
+            // Extract master ticket from order line
+            string parts[];
+            StringSplit(line, " ", parts);
+            if(ArraySize(parts) >= 2)
+            {
+                string masterTicket = StringSubstr(parts[1], 1, StringLen(parts[1])-2);
+                ArrayResize(masterTickets, masterTicketCount + 1);
+                masterTickets[masterTicketCount] = masterTicket;
+                masterTicketCount++;
+            }
+            
             ProcessMasterOrder(line);
             orderCount++;
         }
     }
+    
+    // Close orders that are no longer in master
+    CloseOrphanedOrders(masterTickets, masterTicketCount);
     
     Print("=== End Master CSV reading. Found ", orderCount, " orders ===");
 }
@@ -564,11 +583,7 @@ void ProcessMasterOrder(string orderLine)
     double tp = StringToDouble(StringSubstr(parts[7], 1, StringLen(parts[7])-2));
     long timestamp = StringToInteger(StringSubstr(parts[8], 1, StringLen(parts[8])-2));
     
-    // Check if order is too old (more than 5 seconds for market orders)
-    if((orderType == "BUY" || orderType == "SELL") && (TimeGMT() - timestamp) > 5) // More than 5 seconds
-    {
-        return;
-    }
+    // Time validation moved to after order existence check
     
     // Apply lot calculation
     if(forceLot != "NULL")
@@ -601,36 +616,139 @@ void ProcessMasterOrder(string orderLine)
     if(prefix != "NULL") slaveSymbol = prefix + slaveSymbol;
     if(suffix != "NULL") slaveSymbol = slaveSymbol + suffix;
     
-    // Check if order already exists
+    // Check if order already exists and if it needs modification
     bool orderExists = false;
     
-    // Check positions
+    // Check positions for modification
+    Print("=== Checking all positions for master ticket: '", masterTicket, "' ===");
+    Print("Total positions: ", PositionsTotal());
     for(int i = 0; i < PositionsTotal(); i++)
     {
         ulong ticket = PositionGetTicket(i);
         if(ticket > 0)
         {
             string comment = PositionGetString(POSITION_COMMENT);
-            if(StringFind(comment, masterTicket) >= 0)
+            Print("Position ", ticket, " - Comment: '", comment, "' (Length: ", StringLen(comment), ")");
+            Print("Checking position ", ticket, " - Comment: '", comment, "' vs MasterTicket: '", masterTicket, "'");
+            
+            if(comment == masterTicket)
             {
                 orderExists = true;
+                
+                Print("Position ", ticket, " found matching master ticket");
+                
+                // Check if position needs SL/TP modification and partial close
+                double currentSL = PositionGetDouble(POSITION_SL);
+                double currentTP = PositionGetDouble(POSITION_TP);
+                double currentLots = PositionGetDouble(POSITION_VOLUME);
+                double expectedLots = lots; // This already has lot multiplier applied
+                
+                Print("Position ", ticket, " - Current SL: ", currentSL, ", New SL: ", sl, ", Current TP: ", currentTP, ", New TP: ", tp);
+                Print("Position ", ticket, " - Current Lots: ", currentLots, ", Expected Lots: ", expectedLots);
+                
+                double slDiff = MathAbs(currentSL - sl);
+                double tpDiff = MathAbs(currentTP - tp);
+                double lotsDiff = MathAbs(currentLots - expectedLots);
+                Print("Position ", ticket, " - SL difference: ", slDiff, ", TP difference: ", tpDiff, ", Lots difference: ", lotsDiff);
+                
+                // Check if partial close is needed
+                Print("Checking partial close: currentLots > expectedLots? ", currentLots, " > ", expectedLots, " = ", (currentLots > expectedLots));
+                Print("Lots difference > 0.01? ", lotsDiff, " > 0.01 = ", (lotsDiff > 0.01));
+                
+                if(currentLots > expectedLots && lotsDiff > 0.01)
+                {
+                    double volumeToClose = currentLots - expectedLots;
+                    Print("Position ", ticket, " needs partial close - Volume to close: ", volumeToClose, " lots");
+                    ClosePartialPosition(ticket, volumeToClose);
+                }
+                else
+                {
+                    Print("Position ", ticket, " does not need partial close");
+                }
+                
+                // Check if SL/TP modification is needed
+                if(slDiff > 0.00001 || tpDiff > 0.00001)
+                {
+                    Print("Position ", ticket, " needs SL/TP modification - Current SL: ", currentSL, ", New SL: ", sl);
+                    
+                    MqlTradeRequest request;
+                    MqlTradeResult result;
+                    ZeroMemory(request);
+                    ZeroMemory(result);
+                    
+                    request.action = TRADE_ACTION_SLTP;
+                    request.position = ticket;
+                    request.symbol = PositionGetString(POSITION_SYMBOL);
+                    request.sl = sl;
+                    request.tp = tp;
+                    
+                    if(OrderSend(request, result))
+                    {
+                        Print("Successfully modified position ", ticket);
+                    }
+                    else
+                    {
+                        Print("Failed to modify position ", ticket, " Error: ", result.retcode);
+                    }
+                }
                 break;
             }
         }
     }
     
-    // Check pending orders
+    // Check pending orders for modification
     if(!orderExists)
     {
+        Print("=== Checking all pending orders for master ticket: '", masterTicket, "' ===");
         for(int i = 0; i < OrdersTotal(); i++)
         {
             ulong ticket = OrderGetTicket(i);
             if(ticket > 0)
             {
                 string comment = OrderGetString(ORDER_COMMENT);
-                if(StringFind(comment, masterTicket) >= 0)
+                Print("Pending order ", ticket, " - Comment: '", comment, "' (Length: ", StringLen(comment), ")");
+                Print("Checking pending order ", ticket, " - Comment: '", comment, "' vs MasterTicket: '", masterTicket, "'");
+                
+                if(comment == masterTicket)
                 {
                     orderExists = true;
+                    
+                    Print("Pending order ", ticket, " found matching master ticket");
+                    
+                    // Check if pending order needs modification
+                    double currentPrice = OrderGetDouble(ORDER_PRICE_OPEN);
+                    double currentSL = OrderGetDouble(ORDER_SL);
+                    double currentTP = OrderGetDouble(ORDER_TP);
+                    
+                    Print("Pending order ", ticket, " - Current Price: ", currentPrice, ", New Price: ", price);
+                    Print("Pending order ", ticket, " - Current SL: ", currentSL, ", New SL: ", sl, ", Current TP: ", currentTP, ", New TP: ", tp);
+                    
+                    if(MathAbs(currentPrice - price) > 0.00001 || 
+                       MathAbs(currentSL - sl) > 0.00001 || 
+                       MathAbs(currentTP - tp) > 0.00001)
+                    {
+                        Print("Pending order ", ticket, " needs modification - Current Price: ", currentPrice, ", New Price: ", price);
+                        
+                        MqlTradeRequest request;
+                        MqlTradeResult result;
+                        ZeroMemory(request);
+                        ZeroMemory(result);
+                        
+                        request.action = TRADE_ACTION_MODIFY;
+                        request.order = ticket;
+                        request.price = price;
+                        request.sl = sl;
+                        request.tp = tp;
+                        
+                        if(OrderSend(request, result))
+                        {
+                            Print("Successfully modified pending order ", ticket);
+                        }
+                        else
+                        {
+                            Print("Failed to modify pending order ", ticket, " Error: ", result.retcode);
+                        }
+                    }
                     break;
                 }
             }
@@ -640,6 +758,15 @@ void ProcessMasterOrder(string orderLine)
     // Open new order if it doesn't exist
     if(!orderExists)
     {
+        // Check if order is too old (more than 5 seconds for market orders)
+        if((orderType == "BUY" || orderType == "SELL") && (TimeGMT() - timestamp) > 5)
+        {
+            Print("Order too old, not opening new order. Current time: ", TimeGMT(), ", Order time: ", timestamp);
+            return;
+        }
+        
+        Print("Executing order with comment: '", masterTicket, "'");
+        
         if(orderType == "BUY")
         {
             trade.Buy(lots, slaveSymbol, 0, sl, tp, masterTicket);
@@ -689,4 +816,226 @@ int StringSplit(string str, string separator, string &result[])
     }
     
     return count;
+}
+
+//+------------------------------------------------------------------+
+//| Close orphaned orders that no longer exist in master            |
+//+------------------------------------------------------------------+
+void CloseOrphanedOrders(string &masterTickets[], int masterTicketCount)
+{
+    Print("=== Checking for orphaned orders ===");
+    Print("Master tickets count: ", masterTicketCount);
+    
+    // Print all master tickets
+    for(int j = 0; j < masterTicketCount; j++)
+    {
+        Print("Master ticket [", j, "]: '", masterTickets[j], "'");
+    }
+    
+    // Check all current positions
+    Print("Total positions to check: ", PositionsTotal());
+    for(int i = PositionsTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = PositionGetTicket(i);
+        if(ticket > 0)
+        {
+            string positionComment = PositionGetString(POSITION_COMMENT);
+            Print("Position ", ticket, " - Comment: '", positionComment, "' (Length: ", StringLen(positionComment), ")");
+            
+            if(positionComment != "")
+            {
+                // Check if this position's comment (master ticket) still exists in master
+                bool masterExists = false;
+                for(int j = 0; j < masterTicketCount; j++)
+                {
+                    if(masterTickets[j] == positionComment)
+                    {
+                        masterExists = true;
+                        Print("Position ", ticket, " found matching master ticket: ", positionComment);
+                        break;
+                    }
+                }
+                
+                // If master order no longer exists, close this position
+                if(!masterExists)
+                {
+                    Print("Closing orphaned position: ", ticket, " (master ticket: ", positionComment, ")");
+                    
+                    // Get position data from current iteration (position is already selected by PositionGetTicket)
+                    string symbol = PositionGetString(POSITION_SYMBOL);
+                    double volume = PositionGetDouble(POSITION_VOLUME);
+                    ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+                    
+                    MqlTradeRequest request;
+                    MqlTradeResult result;
+                    ZeroMemory(request);
+                    ZeroMemory(result);
+                    
+                    request.action = TRADE_ACTION_DEAL;
+                    request.position = ticket;
+                    request.symbol = symbol;
+                    request.volume = volume;
+                    request.price = (posType == POSITION_TYPE_BUY) ? 
+                                   SymbolInfoDouble(symbol, SYMBOL_BID) : 
+                                   SymbolInfoDouble(symbol, SYMBOL_ASK);
+                    request.type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+                    request.deviation = 10;
+                    request.comment = "Close orphaned";
+                    
+                    // Get the filling mode allowed by the symbol
+                    int filling = (int)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+                    if((filling & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
+                        request.type_filling = ORDER_FILLING_FOK;
+                    else if((filling & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
+                        request.type_filling = ORDER_FILLING_IOC;
+                    else
+                        request.type_filling = ORDER_FILLING_RETURN;
+                    
+                    if(OrderSend(request, result))
+                    {
+                        Print("Successfully closed position ", ticket);
+                    }
+                    else
+                    {
+                        Print("Failed to close position ", ticket, " Error: ", result.retcode);
+                    }
+                }
+                else
+                {
+                    Print("Position ", ticket, " still has master ticket in CSV, keeping open");
+                }
+            }
+            else
+            {
+                Print("Position ", ticket, " has no comment, skipping");
+            }
+        }
+    }
+    
+    // Check all pending orders
+    for(int i = OrdersTotal() - 1; i >= 0; i--)
+    {
+        ulong ticket = OrderGetTicket(i);
+        if(ticket > 0)
+        {
+            string orderComment = OrderGetString(ORDER_COMMENT);
+            if(orderComment != "")
+            {
+                // Check if this order's comment (master ticket) still exists in master
+                bool masterExists = false;
+                for(int j = 0; j < masterTicketCount; j++)
+                {
+                    if(masterTickets[j] == orderComment)
+                    {
+                        masterExists = true;
+                        break;
+                    }
+                }
+                
+                // If master order no longer exists, delete this pending order
+                if(!masterExists)
+                {
+                    Print("Deleting orphaned pending order: ", ticket, " (master ticket: ", orderComment, ")");
+                    
+                    MqlTradeRequest request;
+                    MqlTradeResult result;
+                    ZeroMemory(request);
+                    ZeroMemory(result);
+                    
+                    request.action = TRADE_ACTION_REMOVE;
+                    request.order = ticket;
+                    
+                    if(OrderSend(request, result))
+                    {
+                        Print("Successfully deleted pending order ", ticket);
+                    }
+                    else
+                    {
+                        Print("Failed to delete pending order ", ticket, " Error: ", result.retcode);
+                    }
+                }
+                else
+                {
+                    Print("Pending order ", ticket, " still has master ticket in CSV, keeping open");
+                }
+            }
+        }
+    }
+    
+    Print("=== End orphaned orders check ===");
+}
+
+//+------------------------------------------------------------------+
+//| Close partial position                                           |
+//+------------------------------------------------------------------+
+void ClosePartialPosition(ulong ticket, double volumeToClose)
+{
+    Print("Attempting to close ", volumeToClose, " lots of position ", ticket);
+    
+    // Get position info by index, not by ticket selection
+    for(int i = 0; i < PositionsTotal(); i++)
+    {
+        if(PositionGetTicket(i) == ticket)
+        {
+            string symbol = PositionGetString(POSITION_SYMBOL);
+            double currentVolume = PositionGetDouble(POSITION_VOLUME);
+            ENUM_POSITION_TYPE posType = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+            
+            Print("Found position - Symbol: ", symbol, ", Current volume: ", currentVolume, ", Volume to close: ", volumeToClose);
+            
+            if(volumeToClose >= currentVolume)
+            {
+                Print("Volume to close >= current volume, closing entire position");
+                volumeToClose = currentVolume;
+            }
+            
+            // Use global CTrade for partial close in MT5
+            trade.SetDeviationInPoints(100);
+            
+            if(trade.PositionClosePartial(ticket, volumeToClose))
+            {
+                Print("Successfully closed ", volumeToClose, " lots of position ", ticket);
+            }
+            else
+            {
+                // Fallback to manual method if CTrade fails
+                MqlTradeRequest request;
+                MqlTradeResult result;
+                ZeroMemory(request);
+                ZeroMemory(result);
+                
+                request.action = TRADE_ACTION_DEAL;
+                request.position = ticket;
+                request.symbol = symbol;
+                request.volume = volumeToClose;
+                request.price = (posType == POSITION_TYPE_BUY) ? 
+                               SymbolInfoDouble(symbol, SYMBOL_BID) : 
+                               SymbolInfoDouble(symbol, SYMBOL_ASK);
+                request.type = (posType == POSITION_TYPE_BUY) ? ORDER_TYPE_SELL : ORDER_TYPE_BUY;
+                request.deviation = 100;
+                
+                // Get the filling mode allowed by the symbol
+                int filling = (int)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+                if(filling == SYMBOL_FILLING_FOK)
+                    request.type_filling = ORDER_FILLING_FOK;
+                else if(filling == SYMBOL_FILLING_IOC)
+                    request.type_filling = ORDER_FILLING_IOC;
+                else
+                    request.type_filling = ORDER_FILLING_RETURN;
+                
+                if(OrderSend(request, result))
+                {
+                    Print("Successfully closed ", volumeToClose, " lots of position ", ticket, " - Deal: ", result.deal);
+                }
+                else
+                {
+                    Print("Failed to close partial position ", ticket, " Error: ", result.retcode);
+                    Print("Error description: ", result.comment);
+                }
+            }
+            return;
+        }
+    }
+    
+    Print("Position ", ticket, " not found for partial close");
 }

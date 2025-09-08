@@ -353,6 +353,10 @@ void ProcessSlaveAccount()
     
     Print("Successfully read ", lineCount, " lines from master CSV");
     
+    // Collect all master order tickets
+    string masterTickets[];
+    int masterTicketCount = 0;
+    
     // Process lines
     int orderCount = 0;
     for(int i = 0; i < lineCount; i++)
@@ -369,10 +373,25 @@ void ProcessSlaveAccount()
         else if(StringFind(line, "[ORDER]") == 0)
         {
             Print("Master Order Line: ", line);
+            
+            // Extract master ticket from order line
+            string parts[];
+            StringSplit(line, " ", parts);
+            if(ArraySize(parts) >= 2)
+            {
+                string masterTicket = StringSubstr(parts[1], 1, StringLen(parts[1])-2);
+                ArrayResize(masterTickets, masterTicketCount + 1);
+                masterTickets[masterTicketCount] = masterTicket;
+                masterTicketCount++;
+            }
+            
             ProcessMasterOrder(line);
             orderCount++;
         }
     }
+    
+    // Close orders that are no longer in master
+    CloseOrphanedOrders(masterTickets, masterTicketCount);
     
     Print("=== End Master CSV reading. Found ", orderCount, " orders ===");
 }
@@ -510,10 +529,16 @@ string ReadMasterCsvFile(string filePath)
 //+------------------------------------------------------------------+
 void ProcessMasterOrder(string orderLine)
 {
+    Print("=== PROCESSING MASTER ORDER: ", orderLine, " ===");
+    
     string parts[];
     StringSplit(orderLine, ' ', parts);
     
-    if(ArraySize(parts) < 9) return;
+    if(ArraySize(parts) < 9) 
+    {
+        Print("ERROR: Order line has less than 9 parts, skipping");
+        return;
+    }
     
     // Extract order data
     string masterTicket = StringSubstr(parts[1], 1, StringLen(parts[1])-2);
@@ -524,12 +549,6 @@ void ProcessMasterOrder(string orderLine)
     double sl = StrToDouble(StringSubstr(parts[6], 1, StringLen(parts[6])-2));
     double tp = StrToDouble(StringSubstr(parts[7], 1, StringLen(parts[7])-2));
     long timestamp = StrToInteger(StringSubstr(parts[8], 1, StringLen(parts[8])-2));
-    
-    // Check if order is too old (more than 5 seconds for market orders)
-    if((orderType == "BUY" || orderType == "SELL") && (TimeGMT() - timestamp) > 5) // More than 5 seconds
-    {
-        return;
-    }
     
     // Apply lot calculation
     if(forceLot != "NULL")
@@ -562,16 +581,95 @@ void ProcessMasterOrder(string orderLine)
     if(prefix != "NULL") slaveSymbol = prefix + slaveSymbol;
     if(suffix != "NULL") slaveSymbol = slaveSymbol + suffix;
     
-    // Check if order already exists
+    // Check if order already exists and if it needs modification
+    Print("=== Checking all orders for master ticket: '", masterTicket, "' ===");
+    Print("Total orders: ", OrdersTotal());
     bool orderExists = false;
     for(int i = 0; i < OrdersTotal(); i++)
     {
         if(OrderSelect(i, SELECT_BY_POS))
         {
-            if(StringFind(OrderComment(), masterTicket) >= 0)
+            Print("Order ", OrderTicket(), " - Comment: '", OrderComment(), "' (Length: ", StringLen(OrderComment()), ")");
+            Print("Checking order ", OrderTicket(), " - Comment: '", OrderComment(), "' vs MasterTicket: '", masterTicket, "'");
+            
+            if(OrderComment() == masterTicket)
             {
                 orderExists = true;
-                // Could add order modification logic here
+                
+                Print("Order ", OrderTicket(), " found matching master ticket");
+                
+                // Check if order needs modification
+                bool needsModification = false;
+                
+                if(OrderType() == OP_BUY || OrderType() == OP_SELL)
+                {
+                    // Check position SL/TP modification and partial close
+                    double currentSL = OrderStopLoss();
+                    double currentTP = OrderTakeProfit();
+                    double currentLots = OrderLots();
+                    double expectedLots = lots; // This already has lot multiplier applied
+                    
+                    Print("Position ", OrderTicket(), " - Current SL: ", currentSL, ", New SL: ", sl, ", Current TP: ", currentTP, ", New TP: ", tp);
+                    Print("Position ", OrderTicket(), " - Current Lots: ", currentLots, ", Expected Lots: ", expectedLots);
+                    
+                    double slDiff = MathAbs(currentSL - sl);
+                    double tpDiff = MathAbs(currentTP - tp);
+                    double lotsDiff = MathAbs(currentLots - expectedLots);
+                    Print("Position ", OrderTicket(), " - SL difference: ", slDiff, ", TP difference: ", tpDiff, ", Lots difference: ", lotsDiff);
+                    
+                    // Check if partial close is needed
+                    Print("Checking partial close: currentLots > expectedLots? ", currentLots, " > ", expectedLots, " = ", (currentLots > expectedLots));
+                    Print("Lots difference > 0.01? ", lotsDiff, " > 0.01 = ", (lotsDiff > 0.01));
+                    
+                    if(currentLots > expectedLots && lotsDiff > 0.01)
+                    {
+                        double volumeToClose = currentLots - expectedLots;
+                        Print("Position ", OrderTicket(), " needs partial close - Volume to close: ", volumeToClose, " lots");
+                        ClosePartialPosition(OrderTicket(), volumeToClose, OrderType());
+                    }
+                    else
+                    {
+                        Print("Position ", OrderTicket(), " does not need partial close");
+                    }
+                    
+                    // Check if SL/TP modification is needed
+                    if(slDiff > 0.00001 || tpDiff > 0.00001)
+                    {
+                        needsModification = true;
+                        Print("Position ", OrderTicket(), " needs SL/TP modification - Current SL: ", currentSL, ", New SL: ", sl);
+                        
+                        bool result = OrderModify(OrderTicket(), OrderOpenPrice(), sl, tp, 0, clrBlue);
+                        if(result)
+                        {
+                            Print("Successfully modified position ", OrderTicket());
+                        }
+                        else
+                        {
+                            Print("Failed to modify position ", OrderTicket(), " Error: ", GetLastError());
+                        }
+                    }
+                }
+                else
+                {
+                    // Check pending order modification (price, SL, TP)
+                    if(MathAbs(OrderOpenPrice() - price) > 0.00001 || 
+                       MathAbs(OrderStopLoss() - sl) > 0.00001 || 
+                       MathAbs(OrderTakeProfit() - tp) > 0.00001)
+                    {
+                        needsModification = true;
+                        Print("Pending order ", OrderTicket(), " needs modification - Current Price: ", OrderOpenPrice(), ", New Price: ", price);
+                        
+                        bool result = OrderModify(OrderTicket(), price, sl, tp, 0, clrBlue);
+                        if(result)
+                        {
+                            Print("Successfully modified pending order ", OrderTicket());
+                        }
+                        else
+                        {
+                            Print("Failed to modify pending order ", OrderTicket(), " Error: ", GetLastError());
+                        }
+                    }
+                }
                 break;
             }
         }
@@ -580,6 +678,13 @@ void ProcessMasterOrder(string orderLine)
     // Open new order if it doesn't exist
     if(!orderExists)
     {
+        // Check if order is too old (more than 5 seconds for market orders)
+        if((orderType == "BUY" || orderType == "SELL") && (TimeGMT() - timestamp) > 5)
+        {
+            Print("Order too old, not opening new order. Current time: ", TimeGMT(), ", Order time: ", timestamp);
+            return;
+        }
+        
         int cmd = -1;
         if(orderType == "BUY") cmd = OP_BUY;
         else if(orderType == "SELL") cmd = OP_SELL;
@@ -590,6 +695,7 @@ void ProcessMasterOrder(string orderLine)
         
         if(cmd >= 0)
         {
+            Print("Executing order with comment: '", masterTicket, "'");
             OrderSend(slaveSymbol, cmd, lots, price, 3, sl, tp, masterTicket, 0, 0, clrNONE);
         }
     }
@@ -617,4 +723,136 @@ int StringSplit(string str, string separator, string &result[])
     }
     
     return count;
+}
+
+//+------------------------------------------------------------------+
+//| Close orphaned orders that no longer exist in master            |
+//+------------------------------------------------------------------+
+void CloseOrphanedOrders(string &masterTickets[], int masterTicketCount)
+{
+    Print("=== Checking for orphaned orders ===");
+    
+    // Check all current orders
+    for(int i = OrdersTotal() - 1; i >= 0; i--)
+    {
+        if(OrderSelect(i, SELECT_BY_POS))
+        {
+            string orderComment = OrderComment();
+            if(orderComment != "")
+            {
+                // Check if this order's comment (master ticket) still exists in master
+                bool masterExists = false;
+                for(int j = 0; j < masterTicketCount; j++)
+                {
+                    if(masterTickets[j] == orderComment)
+                    {
+                        masterExists = true;
+                        break;
+                    }
+                }
+                
+                // If master order no longer exists, close this order
+                if(!masterExists)
+                {
+                    Print("Closing orphaned order: ", OrderTicket(), " (master ticket: ", orderComment, ")");
+                    
+                    if(OrderType() == OP_BUY || OrderType() == OP_SELL)
+                    {
+                        // Close market position
+                        double closePrice = (OrderType() == OP_BUY) ? Bid : Ask;
+                        bool result = OrderClose(OrderTicket(), OrderLots(), closePrice, 3, clrRed);
+                        if(result)
+                        {
+                            Print("Successfully closed position ", OrderTicket());
+                        }
+                        else
+                        {
+                            Print("Failed to close position ", OrderTicket(), " Error: ", GetLastError());
+                        }
+                    }
+                    else
+                    {
+                        // Delete pending order
+                        bool result = OrderDelete(OrderTicket());
+                        if(result)
+                        {
+                            Print("Successfully deleted pending order ", OrderTicket());
+                        }
+                        else
+                        {
+                            Print("Failed to delete pending order ", OrderTicket(), " Error: ", GetLastError());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Print("=== End orphaned orders check ===");
+}
+
+//+------------------------------------------------------------------+
+//| Close partial position                                           |
+//+------------------------------------------------------------------+
+void ClosePartialPosition(int ticket, double volumeToClose, int orderType)
+{
+    Print("Attempting to close ", volumeToClose, " lots of position ", ticket);
+    
+    // Select the order first
+    if(OrderSelect(ticket, SELECT_BY_TICKET))
+    {
+        double currentLots = OrderLots();
+        Print("Current position lots: ", currentLots, ", trying to close: ", volumeToClose);
+        
+        if(volumeToClose >= currentLots)
+        {
+            Print("Volume to close >= current lots, closing entire position");
+            volumeToClose = currentLots;
+        }
+        
+        // Get symbol info
+        string symbol = OrderSymbol();
+        double minLot = MarketInfo(symbol, MODE_MINLOT);
+        double lotStep = MarketInfo(symbol, MODE_LOTSTEP);
+        
+        // Normalize the volume to close according to lot step
+        volumeToClose = MathFloor(volumeToClose / lotStep) * lotStep;
+        volumeToClose = NormalizeDouble(volumeToClose, 2);
+        
+        Print("Symbol: ", symbol, ", Min lot: ", minLot, ", Lot step: ", lotStep);
+        Print("Normalized volume to close: ", volumeToClose);
+        
+        // Ensure we're not trying to close less than minimum lot
+        if(volumeToClose < minLot)
+        {
+            Print("Volume to close is less than minimum lot, skipping partial close");
+            return;
+        }
+        
+        // Ensure remaining volume is also valid
+        double remainingVolume = currentLots - volumeToClose;
+        if(remainingVolume < minLot && remainingVolume > 0)
+        {
+            Print("Remaining volume would be less than minimum lot, closing entire position");
+            volumeToClose = currentLots;
+        }
+        
+        double closePrice = (orderType == OP_BUY) ? Bid : Ask;
+        
+        bool result = OrderClose(ticket, volumeToClose, closePrice, 30, clrRed);
+        
+        if(result)
+        {
+            Print("Successfully closed ", volumeToClose, " lots of position ", ticket);
+        }
+        else
+        {
+            int error = GetLastError();
+            Print("Failed to close partial position ", ticket, " Error: ", error);
+        }
+    }
+    else
+    {
+        Print("Failed to select order ", ticket, " for partial close");
+    }
 }
