@@ -327,6 +327,16 @@ export const updateCSVAccountType = async (req, res) => {
                   const suffix = masterConfig?.suffix ? masterConfig.suffix : 'NULL';
 
                   newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
+                  
+                  // Add TRANSLATE line for master accounts
+                  if (masterConfig?.translations && Object.keys(masterConfig.translations).length > 0) {
+                    const translationPairs = Object.entries(masterConfig.translations)
+                      .map(([from, to]) => `[${from}:${to}]`)
+                      .join(' ');
+                    newContent += `[TRANSLATE] ${translationPairs}\n`;
+                  } else {
+                    newContent += `[TRANSLATE] [NULL]\n`;
+                  }
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -348,6 +358,16 @@ export const updateCSVAccountType = async (req, res) => {
                   }
 
                   newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
+                  
+                  // Add TRANSLATE line for slave accounts
+                  if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
+                    const translationPairs = Object.entries(slaveConfig.translations)
+                      .map(([from, to]) => `[${from}:${to}]`)
+                      .join(' ');
+                    newContent += `[TRANSLATE] ${translationPairs}\n`;
+                  } else {
+                    newContent += `[TRANSLATE] [NULL]\n`;
+                  }
                 }
               } else if (
                 cleanLine.includes('[TYPE]') &&
@@ -365,6 +385,16 @@ export const updateCSVAccountType = async (req, res) => {
                   const prefix = masterConfig?.prefix ? masterConfig.prefix : 'NULL';
                   const suffix = masterConfig?.suffix ? masterConfig.suffix : 'NULL';
                   newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
+                  
+                  // Add TRANSLATE line for master accounts
+                  if (masterConfig?.translations && Object.keys(masterConfig.translations).length > 0) {
+                    const translationPairs = Object.entries(masterConfig.translations)
+                      .map(([from, to]) => `[${from}:${to}]`)
+                      .join(' ');
+                    newContent += `[TRANSLATE] ${translationPairs}\n`;
+                  } else {
+                    newContent += `[TRANSLATE] [NULL]\n`;
+                  }
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
                   const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
@@ -386,6 +416,16 @@ export const updateCSVAccountType = async (req, res) => {
                   }
 
                   newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
+                  
+                  // Add TRANSLATE line for slave accounts
+                  if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
+                    const translationPairs = Object.entries(slaveConfig.translations)
+                      .map(([from, to]) => `[${from}:${to}]`)
+                      .join(' ');
+                    newContent += `[TRANSLATE] ${translationPairs}\n`;
+                  } else {
+                    newContent += `[TRANSLATE] [NULL]\n`;
+                  }
                 }
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
@@ -566,6 +606,7 @@ export const updateCSVAccountType = async (req, res) => {
             reverseTrade: slaveConfig?.reverseTrade || false,
             prefix: slaveConfig?.prefix || '',
             suffix: slaveConfig?.suffix || '',
+            translations: slaveConfig?.translations || {},
           });
 
           accountMoved = true;
@@ -604,6 +645,7 @@ export const updateCSVAccountType = async (req, res) => {
             reverseTrade: slaveConfig?.reverseTrade || false,
             prefix: slaveConfig?.prefix || '',
             suffix: slaveConfig?.suffix || '',
+            translations: slaveConfig?.translations || {},
           });
 
           accountMoved = true;

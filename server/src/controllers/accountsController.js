@@ -627,7 +627,7 @@ export const getAllAccounts = async (req, res) => {
 // Update master account
 export const updateMasterAccount = (req, res) => {
   const { masterAccountId } = req.params;
-  const { name, description, broker, platform, status, prefix, suffix } = req.body;
+  const { name, description, broker, platform, status, prefix, suffix, translations } = req.body;
   const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
 
   if (!apiKey) {
@@ -662,6 +662,7 @@ export const updateMasterAccount = (req, res) => {
     status: status !== undefined ? status : existingAccount.status,
     prefix: prefix !== undefined ? prefix : existingAccount.prefix || '',
     suffix: suffix !== undefined ? suffix : existingAccount.suffix || '',
+    translations: translations !== undefined ? translations : existingAccount.translations || {},
     lastUpdated: new Date().toISOString(),
   };
 
@@ -1539,14 +1540,9 @@ export const getPendingAccounts = async (req, res) => {
           continue; // Skip this account
         }
 
-        // RULE 2: Determinar status basado en timestamp
-        // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
-        let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
-
-        // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
-        if (account.status === 'offline' && timeDiff > 5) {
-          finalStatus = 'offline';
-        }
+        // RULE 2: Determinar status basado en el tracking de cambios de timestamp
+        const isOnline = csvManager.isFileOnline(account.filePath);
+        let finalStatus = isOnline ? 'online' : 'offline';
 
         const pendingAccount = {
           account_id: accountId,
@@ -2292,7 +2288,17 @@ export const getUnifiedAccountData = async (req, res) => {
     const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
 
     for (const account of allAccounts.pendingAccounts || []) {
-      const accountTimestamp = parseInt(account.timestamp);
+      // Ensure timestamp is a valid number
+      let accountTimestamp = 0;
+      try {
+        accountTimestamp = parseInt(account.timestamp);
+        if (isNaN(accountTimestamp) || accountTimestamp <= 0) {
+          accountTimestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
+        }
+      } catch (error) {
+        accountTimestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
+      }
+
       const currentTimeSeconds = Math.floor(Date.now() / 1000);
 
       // Calcular diferencia de tiempo en segundos
@@ -2303,14 +2309,9 @@ export const getUnifiedAccountData = async (req, res) => {
         continue; // Skip this account
       }
 
-      // RULE 2: Determinar status basado en timestamp
-      // Si el timestamp es muy viejo (más de 5 segundos), marcar como offline
-      let finalStatus = timeDiff <= 5 ? 'online' : 'offline';
-
-      // RULE 3: Si está marcado como offline en el CSV y han pasado más de 5 segundos, mantener offline
-      if (account.status === 'offline' && timeDiff > 5) {
-        finalStatus = 'offline';
-      }
+      // RULE 2: Determinar status basado en el tracking de cambios de timestamp
+      const isOnline = csvManager.isFileOnline(account.filePath);
+      let finalStatus = isOnline ? 'online' : 'offline';
 
       const pendingAccount = {
         account_id: account.account_id,
@@ -2319,7 +2320,14 @@ export const getUnifiedAccountData = async (req, res) => {
         current_status: finalStatus,
         timestamp: accountTimestamp,
         timeDiff: timeDiff, // Para debugging
-        lastActivity: new Date(accountTimestamp * 1000).toISOString(),
+        lastActivity: (() => {
+          try {
+            const date = new Date(accountTimestamp * 1000);
+            return date.toISOString();
+          } catch (error) {
+            return new Date().toISOString(); // Fallback to current time
+          }
+        })(),
       };
 
       allPendingAccounts.push(pendingAccount);

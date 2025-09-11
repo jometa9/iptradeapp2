@@ -142,6 +142,10 @@ export const createSlaveConfigWithSettings = (slaveAccountId, settings) => {
     baseConfig.suffix = String(settings.suffix || '');
   }
 
+  if (settings.translations !== undefined) {
+    baseConfig.translations = settings.translations || {};
+  }
+
   // Update description to indicate it was converted from pending
   baseConfig.description = 'Account converted from pending with custom settings';
   baseConfig.lastUpdated = new Date().toISOString();
@@ -553,9 +557,8 @@ export const setSlaveConfig = async (req, res) => {
 
             const newConfigLine = `[CONFIG] [SLAVE] [${enabled}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
             newContent += newConfigLine;
-          } else if (cleanLine.includes('[TRANSLATE]')) {
-            // Update TRANSLATE line with current translations
-            const slaveConfig = configs[slaveAccountId];
+
+            // Always add TRANSLATE line after CONFIG line
             if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
               const translationPairs = Object.entries(slaveConfig.translations)
                 .map(([from, to]) => `[${from}:${to}]`)
@@ -564,9 +567,19 @@ export const setSlaveConfig = async (req, res) => {
             } else {
               newContent += `[TRANSLATE] [NULL]\n`;
             }
+          } else if (cleanLine.includes('[TRANSLATE]')) {
+            // Skip existing TRANSLATE line as we already added it after CONFIG
+            continue;
           } else if (cleanLine.includes('[STATUS]')) {
-            // Actualizar timestamp
-            newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+            // Preserve existing timestamp and status
+            const statusMatch = cleanLine.match(/\[STATUS\]\s*\[(ONLINE|OFFLINE)\]\s*\[(\d+)\]/);
+            if (statusMatch) {
+              const [, status, timestamp] = statusMatch;
+              newContent += `[STATUS] [${status}] [${timestamp}]\n`;
+            } else {
+              // Fallback to current line if we can't parse it
+              newContent += line + '\n';
+            }
           } else {
             newContent += line + '\n';
           }

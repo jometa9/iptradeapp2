@@ -201,11 +201,39 @@ class CSVManager extends EventEmitter {
   // Parse new CSV2 format: [TYPE][PLATFORM][ACCOUNT_ID] (removed account type)
   parseCSV2Format(lines, filePath, currentTime) {
     try {
-      if (lines.length < 3) return null; // Need at least TYPE, STATUS, CONFIG lines
+      // Si no tiene las 3 líneas básicas, retornamos la cuenta como offline
+      if (lines.length < 3) {
+        // Intentar extraer al menos el TYPE para identificar la cuenta
+        for (const line of lines) {
+          if (line.includes('[TYPE]')) {
+            const matches = line.match(/\[([^\]]+)\]/g);
+            if (matches && matches.length >= 3) {
+              const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
+              return {
+                account_id: values[2],
+                platform: values[1],
+                account_type: 'pending',
+                status: 'offline',
+                current_status: 'offline',
+                timestamp: 0,
+                timeDiff: Infinity,
+                filePath: filePath,
+                format: 'csv2',
+                config: {
+                  enabled: false,
+                  translations: {}
+                }
+              };
+            }
+          }
+        }
+        return null;
+      }
 
       let typeData = null;
       let statusData = null;
       let configData = null;
+      let translateData = null;
 
       // Parse each line looking for the CSV2 format
       for (const line of lines) {
@@ -237,16 +265,55 @@ class CSVManager extends EventEmitter {
               details: values.slice(2), // Additional config details
             };
           }
+        } else if (line.includes('[TRANSLATE]')) {
+          const matches = line.match(/\[([^\]]+:[^\]]+)\]/g);
+          if (matches) {
+            translateData = {};
+            matches.forEach(match => {
+              const [from, to] = match.replace(/[\[\]]/g, '').split(':').map(s => s.trim());
+              if (from && to && from !== 'NULL') {
+                translateData[from] = to;
+              }
+            });
+          }
         }
       }
 
-      // Process all account types (PENDING, MASTER, SLAVE)
-      if (typeData && statusData && configData) {
-        const accountTime = statusData.timestamp * 1000; // Convert to milliseconds
-        const timeDiff = (currentTime - accountTime) / 1000; // Difference in seconds
+      // Si no tenemos todas las líneas necesarias, retornar la cuenta como offline
+      if (!typeData || !statusData || !configData) {
+        if (typeData) {
+          return {
+            account_id: typeData.accountId,
+            platform: typeData.platform,
+            account_type: 'pending',
+            status: 'offline',
+            current_status: 'offline',
+            timestamp: 0,
+            timeDiff: Infinity,
+            filePath: filePath,
+            format: 'csv2',
+            config: {
+              enabled: false,
+              translations: translateData || {}
+            }
+          };
+        }
+        return null;
+      }
 
-        // Only include if not older than 1 hour
-        if (timeDiff <= 3600) {
+      // Process account with all required lines
+      {
+        const hasValidStatus = !isNaN(statusData.timestamp) && statusData.timestamp > 0;
+        const accountTime = hasValidStatus ? statusData.timestamp * 1000 : 0;
+        const timeDiff = hasValidStatus ? (currentTime - accountTime) / 1000 : Infinity;
+
+        // Track timestamp changes only if we have valid status
+        if (hasValidStatus) {
+          this.checkTimestampChanged(filePath, statusData.timestamp);
+        }
+
+        // Process the account
+        {
           // Determine platform from file path or config
           let platform = 'Unknown';
           if (filePath.includes('MT4')) platform = 'MT4';
@@ -256,29 +323,39 @@ class CSVManager extends EventEmitter {
           const account = {
             account_id: typeData.accountId,
             platform: platform,
-            account_type: configData.configType.toLowerCase(), // Use CONFIG as source of truth
-            status: timeDiff <= 5 ? 'online' : 'offline',
-            current_status: timeDiff <= 5 ? 'online' : 'offline',
-            timestamp: statusData.timestamp,
+            account_type: configData ? configData.configType.toLowerCase() : 'pending', // Default to pending if no CONFIG
+            status: hasValidStatus ? (this.isFileOnline(filePath) ? 'online' : 'offline') : 'offline',
+            current_status: hasValidStatus ? (this.isFileOnline(filePath) ? 'online' : 'offline') : 'offline',
+            timestamp: hasValidStatus ? statusData.timestamp : 0,
             timeDiff: timeDiff,
             filePath: filePath,
             format: 'csv2',
           };
 
-          // Add config details based on account type (CONFIG line is source of truth)
-          if (configData.configType === 'SLAVE' && configData.details.length >= 6) {
+          // Add config details based on account type
+          if (configData) {
+            if (configData.configType === 'SLAVE' && configData.details.length >= 6) {
+              account.config = {
+                enabled: configData.details[0] === 'ENABLED',
+                lotMultiplier: parseFloat(configData.details[1]) || 1,
+                forceLot: configData.details[2] === 'NULL' ? null : parseFloat(configData.details[2]),
+                reverseTrading: configData.details[3] === 'TRUE',
+                masterId: configData.details[4] === 'NULL' ? null : configData.details[4],
+                masterCsvPath: configData.details[5] || null,
+                translations: translateData || {},
+              };
+            } else if (configData.configType === 'MASTER') {
+              account.config = {
+                enabled: configData.details[0] === 'ENABLED',
+                name: configData.details[1] || `Account ${typeData.accountId}`,
+                translations: translateData || {},
+              };
+            }
+          } else {
+            // Default config for accounts without CONFIG line
             account.config = {
-              enabled: configData.details[0] === 'ENABLED',
-              lotMultiplier: parseFloat(configData.details[1]) || 1,
-              forceLot: configData.details[2] === 'NULL' ? null : parseFloat(configData.details[2]),
-              reverseTrading: configData.details[3] === 'TRUE',
-              masterId: configData.details[4] === 'NULL' ? null : configData.details[4],
-              masterCsvPath: configData.details[5] || null,
-            };
-          } else if (configData.configType === 'MASTER') {
-            account.config = {
-              enabled: configData.details[0] === 'ENABLED',
-              name: configData.details[1] || `Account ${typeData.accountId}`,
+              enabled: false,
+              translations: translateData || {},
             };
           }
 
@@ -1400,16 +1477,22 @@ class CSVManager extends EventEmitter {
     const processedAccountIds = new Set();
 
     // Función helper para calcular estado online/offline
-    const calculateStatus = timestamp => {
+    const calculateStatus = (filePath, timestamp) => {
       if (!timestamp) return { status: 'offline', timeSinceLastPing: null };
 
-      const now = Date.now() / 1000;
-      const pingTime = parseInt(timestamp) || 0;
-      const timeSinceLastPing = now - pingTime;
-      const absTimeDiff = Math.abs(timeSinceLastPing);
-      const status = absTimeDiff <= 5 ? 'online' : 'offline';
+      // Usar el sistema de tracking de timestamps
+      const isOnline = this.isFileOnline(filePath);
+      const tracking = this.timestampChangeTracking.get(this.normalizePath(filePath));
+      
+      let timeSinceLastPing = null;
+      if (tracking) {
+        timeSinceLastPing = (Date.now() - tracking.lastChangeTime) / 1000;
+      }
 
-      return { status, timeSinceLastPing };
+      return { 
+        status: isOnline ? 'online' : 'offline',
+        timeSinceLastPing
+      };
     };
 
     // Re-parsear archivos de forma asíncrona para evitar errores EBUSY
@@ -1438,7 +1521,10 @@ class CSVManager extends EventEmitter {
           const accountId = row.account_id;
           const accountType = row.account_type;
           const platform = row.platform || this.extractPlatformFromPath(filePath);
-          const { status, timeSinceLastPing } = calculateStatus(row.timestamp);
+          // Track timestamp changes for online/offline detection
+          this.checkTimestampChanged(filePath, row.timestamp);
+
+          const { status, timeSinceLastPing } = calculateStatus(filePath, row.timestamp);
 
           // Skip if this account ID has already been processed
           if (processedAccountIds.has(accountId)) {
@@ -2420,8 +2506,9 @@ class CSVManager extends EventEmitter {
     const currentTime = Date.now();
     const tracking = this.timestampChangeTracking.get(normalizedPath);
 
-    if (!tracking) {
-      return false; // No tenemos información sobre este archivo
+    // Si no hay tracking o el último timestamp es 0 o inválido, consideramos offline
+    if (!tracking || !tracking.lastTimestamp || tracking.lastTimestamp <= 0) {
+      return false;
     }
 
     const timeSinceLastChange = currentTime - tracking.lastChangeTime;
@@ -2434,6 +2521,12 @@ class CSVManager extends EventEmitter {
   getTimestampTracking(filePath) {
     const normalizedPath = this.normalizePath(filePath);
     return this.timestampChangeTracking.get(normalizedPath);
+  }
+
+  // Check and track timestamp changes
+  checkTimestampChanged(filePath, timestamp) {
+    if (!timestamp) return false;
+    return this.detectTimestampChange(filePath, timestamp);
   }
 
   // Limpiar tracking de archivos que ya no existen

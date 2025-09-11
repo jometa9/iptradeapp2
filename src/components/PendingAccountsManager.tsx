@@ -1346,7 +1346,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                 <div className="mt-4">
                                   <Label>Symbol Translations</Label>
                                   <div className="space-y-2">
-                                    {Object.entries(conversionForm.translations).map(
+                                    {Object.entries(conversionForm.translations || {}).map(
                                       ([from, to], index) => (
                                         <div key={index} className="flex items-center gap-2">
                                           <Input
@@ -1354,7 +1354,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             value={from}
                                             onChange={e => {
                                               const newTranslations = {
-                                                ...conversionForm.translations,
+                                                ...(conversionForm.translations || {}),
                                               };
                                               delete newTranslations[from];
                                               if (e.target.value) {
@@ -1375,7 +1375,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                               setConversionForm(prev => ({
                                                 ...prev,
                                                 translations: {
-                                                  ...prev.translations,
+                                                  ...(prev.translations || {}),
                                                   [from]: e.target.value,
                                                 },
                                               }));
@@ -1388,7 +1388,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             size="sm"
                                             onClick={() => {
                                               const newTranslations = {
-                                                ...conversionForm.translations,
+                                                ...(conversionForm.translations || {}),
                                               };
                                               delete newTranslations[from];
                                               setConversionForm(prev => ({
@@ -1410,7 +1410,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                         setConversionForm(prev => ({
                                           ...prev,
                                           translations: {
-                                            ...prev.translations,
+                                            ...(prev.translations || {}),
                                             '': '',
                                           },
                                         }));

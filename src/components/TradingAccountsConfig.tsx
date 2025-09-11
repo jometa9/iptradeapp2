@@ -9,6 +9,7 @@ import {
   HousePlug,
   Info,
   Pencil,
+  Plus,
   Power,
   PowerOff,
   SaveIcon,
@@ -18,6 +19,7 @@ import {
   Unlink,
   Unplug,
   WifiOff,
+  X,
   XCircle,
 } from 'lucide-react';
 
@@ -558,6 +560,7 @@ const TradingAccountsConfigComponent = () => {
         prefix: account.prefix || '',
         suffix: account.suffix || '',
         connectedToMaster: account.connectedToMaster || 'none',
+        translations: account.translations || {},
       };
 
       // Si es una cuenta slave o master, usar la configuración que ya viene en los datos CSV
@@ -575,6 +578,7 @@ const TradingAccountsConfigComponent = () => {
               ...formData,
               prefix: masterConfig.prefix || '',
               suffix: masterConfig.suffix || '',
+              translations: masterConfig.translations || {},
             };
           }
         } else if (account.accountType === 'slave') {
@@ -595,6 +599,7 @@ const TradingAccountsConfigComponent = () => {
               reverseTrade: slaveConfig.reverseTrading ?? false,
               prefix: slaveConfig.prefix || '',
               suffix: slaveConfig.suffix || '',
+              translations: slaveConfig.translations || {},
             };
           }
         }
@@ -1689,6 +1694,91 @@ const TradingAccountsConfigComponent = () => {
                               </p>
                             </div>
                           </div>
+
+                          {/* Symbol Translations for Masters */}
+                          <div className="mt-4">
+                            <Label>Symbol Translations</Label>
+                            <div className="space-y-2">
+                              {Object.entries(formState.translations || {}).map(
+                                ([from, to], index) => (
+                                  <div key={index} className="flex items-center gap-2">
+                                    <Input
+                                      placeholder="From symbol"
+                                      value={from}
+                                      onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        if (e.target.value) {
+                                          newTranslations[e.target.value] = to;
+                                        }
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <span className="text-gray-500">→</span>
+                                    <Input
+                                      placeholder="To symbol"
+                                      value={to}
+                                      onChange={e => {
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: {
+                                            ...(prev.translations || {}),
+                                            [from]: e.target.value,
+                                          },
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setFormState(prev => ({
+                                    ...prev,
+                                    translations: {
+                                      ...(prev.translations || {}),
+                                      '': '',
+                                    },
+                                  }));
+                                }}
+                                className="w-full"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Translation Pair
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Map symbols from one format to another (e.g., EURUSD → EURUSD.m)
+                            </p>
+                          </div>
                         </>
                       )}
 
@@ -1979,6 +2069,226 @@ const TradingAccountsConfigComponent = () => {
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                               Reverse the trading direction (buy/sell)
+                            </p>
+                          </div>
+
+                          {/* Symbol Translations for Slaves */}
+                          <div className="mt-4">
+                            <Label>Symbol Translations</Label>
+                            <div className="space-y-2">
+                              {Object.entries(formState.translations || {}).map(
+                                ([from, to], index) => (
+                                  <div key={index} className="flex items-center gap-2">
+                                    <Input
+                                      placeholder="From symbol"
+                                      value={from}
+                                      onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        if (e.target.value) {
+                                          newTranslations[e.target.value] = to;
+                                        }
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <span className="text-gray-500">→</span>
+                                    <Input
+                                      placeholder="To symbol"
+                                      value={to}
+                                      onChange={e => {
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: {
+                                            ...(prev.translations || {}),
+                                            [from]: e.target.value,
+                                          },
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setFormState(prev => ({
+                                    ...prev,
+                                    translations: {
+                                      ...(prev.translations || {}),
+                                      '': '',
+                                    },
+                                  }));
+                                }}
+                                className="w-full"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Translation Pair
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Map symbols from one format to another (e.g., EURUSD → EURUSD.m)
+                            </p>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Configuration fields for Pending accounts - prefix/suffix and translations */}
+                      {formState.accountType === 'pending' && editingAccount && (
+                        <>
+                          {/* Prefix and Suffix Fields for Pending */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
+                              <Input
+                                id="prefix"
+                                name="prefix"
+                                type="text"
+                                placeholder="Enter prefix..."
+                                value={formState.prefix ?? ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    prefix: e.target.value || '',
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the beginning of ticker symbols
+                              </p>
+                            </div>
+
+                            <div>
+                              <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
+                              <Input
+                                id="suffix"
+                                name="suffix"
+                                type="text"
+                                placeholder="Enter suffix..."
+                                value={formState.suffix ?? ''}
+                                onChange={e =>
+                                  setFormState({
+                                    ...formState,
+                                    suffix: e.target.value || '',
+                                  })
+                                }
+                                className="bg-white border border-gray-200 shadow-sm"
+                              />
+                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                Text to remove at the end of ticker symbols
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Symbol Translations */}
+                          <div className="mt-4">
+                            <Label>Symbol Translations</Label>
+                            <div className="space-y-2">
+                              {Object.entries(formState.translations || {}).map(
+                                ([from, to], index) => (
+                                  <div key={index} className="flex items-center gap-2">
+                                    <Input
+                                      placeholder="From symbol"
+                                      value={from}
+                                      onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        if (e.target.value) {
+                                          newTranslations[e.target.value] = to;
+                                        }
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <span className="text-gray-500">→</span>
+                                    <Input
+                                      placeholder="To symbol"
+                                      value={to}
+                                      onChange={e => {
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: {
+                                            ...(prev.translations || {}),
+                                            [from]: e.target.value,
+                                          },
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setFormState(prev => ({
+                                    ...prev,
+                                    translations: {
+                                      ...(prev.translations || {}),
+                                      '': '',
+                                    },
+                                  }));
+                                }}
+                                className="w-full"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Translation Pair
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Map symbols from one format to another (e.g., EURUSD → EURUSD.m)
                             </p>
                           </div>
                         </>
