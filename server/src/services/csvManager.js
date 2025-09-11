@@ -1477,8 +1477,8 @@ class CSVManager extends EventEmitter {
     const processedAccountIds = new Set();
 
     // Función helper para calcular estado online/offline
-    const calculateStatus = (filePath, timestamp) => {
-      if (!timestamp) return { status: 'offline', timeSinceLastPing: null };
+    const calculateStatus = (filePath, timestamp, accountType) => {
+      if (!timestamp) return { status: 'offline', timeSinceLastPing: null, shouldSkip: false };
 
       // Usar el sistema de tracking de timestamps
       const isOnline = this.isFileOnline(filePath);
@@ -1489,9 +1489,13 @@ class CSVManager extends EventEmitter {
         timeSinceLastPing = (Date.now() - tracking.lastChangeTime) / 1000;
       }
 
+      // Para cuentas pending, verificar si han pasado más de 1 hora
+      const shouldSkip = accountType === 'pending' && timeSinceLastPing && timeSinceLastPing > 3600;
+
       return { 
         status: isOnline ? 'online' : 'offline',
-        timeSinceLastPing
+        timeSinceLastPing,
+        shouldSkip
       };
     };
 

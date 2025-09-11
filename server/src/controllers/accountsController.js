@@ -1529,20 +1529,15 @@ export const getPendingAccounts = async (req, res) => {
         const accountId = account.account_id;
         const platform = account.platform;
         const timestamp = account.timestamp;
-        const accountTimestamp = parseInt(timestamp);
-        const currentTimeSeconds = Math.floor(Date.now() / 1000);
-
-        // Calcular diferencia de tiempo en segundos
-        const timeDiff = currentTimeSeconds - accountTimestamp;
-
-        // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
-        if (timeDiff > 3600) {
-          continue; // Skip this account
+        // Calcular estado usando el sistema de tracking
+        const statusInfo = csvManager.calculateStatus(account.filePath, timestamp, 'pending');
+        
+        // Si es una cuenta pending y ha estado offline por más de 1 hora, no la incluimos
+        if (statusInfo.shouldSkip) {
+          continue;
         }
-
-        // RULE 2: Determinar status basado en el tracking de cambios de timestamp
-        const isOnline = csvManager.isFileOnline(account.filePath);
-        let finalStatus = isOnline ? 'online' : 'offline';
+        
+        let finalStatus = statusInfo.status;
 
         const pendingAccount = {
           account_id: accountId,
@@ -2125,19 +2120,12 @@ export const getConnectivityStats = (req, res) => {
           .filter(([, masterId]) => masterId === accountId)
           .map(([slaveId]) => slaveId);
 
-        // First check if account is offline due to inactivity
-        // Prioritize recent activity over stored status
-        const timeSinceActivity = account.lastActivity
-          ? now - new Date(account.lastActivity)
-          : null;
-        const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
+        // Usar el sistema de tracking de timestamps para determinar estado online/offline
+        const isOnline = csvManager.isFileOnline(account.filePath);
+        const isOffline = !isOnline;
 
-        // Update account status in database if it has recent activity
-        if (
-          timeSinceActivity &&
-          timeSinceActivity < ACTIVITY_TIMEOUT &&
-          account.status === 'offline'
-        ) {
+        // Actualizar estado en la base de datos si es necesario
+        if (isOnline && account.status === 'offline') {
           account.status = 'active';
           userHasChanges = true;
         }
@@ -2181,19 +2169,12 @@ export const getConnectivityStats = (req, res) => {
         // Check if slave is connected to a master (real synchronization)
         const connectedToMaster = userAccounts.connections && userAccounts.connections[accountId];
 
-        // First check if account is offline due to inactivity
-        // Prioritize recent activity over stored status
-        const timeSinceActivity = account.lastActivity
-          ? now - new Date(account.lastActivity)
-          : null;
-        const isOffline = timeSinceActivity && timeSinceActivity > ACTIVITY_TIMEOUT;
+        // Usar el sistema de tracking de timestamps para determinar estado online/offline
+        const isOnline = csvManager.isFileOnline(account.filePath);
+        const isOffline = !isOnline;
 
-        // Update account status in database if it has recent activity
-        if (
-          timeSinceActivity &&
-          timeSinceActivity < ACTIVITY_TIMEOUT &&
-          account.status === 'offline'
-        ) {
+        // Actualizar estado en la base de datos si es necesario
+        if (isOnline && account.status === 'offline') {
           account.status = 'active';
           userHasChanges = true;
         }
@@ -2288,30 +2269,15 @@ export const getUnifiedAccountData = async (req, res) => {
     const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
 
     for (const account of allAccounts.pendingAccounts || []) {
-      // Ensure timestamp is a valid number
-      let accountTimestamp = 0;
-      try {
-        accountTimestamp = parseInt(account.timestamp);
-        if (isNaN(accountTimestamp) || accountTimestamp <= 0) {
-          accountTimestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
-        }
-      } catch (error) {
-        accountTimestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
+      // Calcular estado usando el sistema de tracking
+      const statusInfo = csvManager.calculateStatus(account.filePath, account.timestamp, 'pending');
+      
+      // Si es una cuenta pending y ha estado offline por más de 1 hora, no la incluimos
+      if (statusInfo.shouldSkip) {
+        continue;
       }
-
-      const currentTimeSeconds = Math.floor(Date.now() / 1000);
-
-      // Calcular diferencia de tiempo en segundos
-      const timeDiff = currentTimeSeconds - accountTimestamp;
-
-      // RULE 1: Si han pasado más de 1 hora (3600 segundos), no devolver la cuenta
-      if (timeDiff > 3600) {
-        continue; // Skip this account
-      }
-
-      // RULE 2: Determinar status basado en el tracking de cambios de timestamp
-      const isOnline = csvManager.isFileOnline(account.filePath);
-      let finalStatus = isOnline ? 'online' : 'offline';
+      
+      let finalStatus = statusInfo.status;
 
       const pendingAccount = {
         account_id: account.account_id,

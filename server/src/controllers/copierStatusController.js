@@ -290,7 +290,9 @@ export const getAllStatuses = (req, res) => {
     const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
     // Default to false if no config exists (new accounts should be disabled by default)
     const defaultMasterStatus = masterStatus === true;
-    const accountStatus = accountData ? accountData.status : 'offline';
+    // Usar el sistema de tracking de timestamps para determinar estado
+    const isOnline = accountData && accountData.filePath ? csvManager.isFileOnline(accountData.filePath) : false;
+    const accountStatus = isOnline ? 'online' : 'offline';
 
     masterAccountsWithEffectiveStatus[masterAccountId] = {
       masterStatus: defaultMasterStatus,
