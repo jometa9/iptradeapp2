@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { glob } from 'glob';
-import { join, resolve } from 'path';
+import path from 'path';
 
 import { detectOrderChanges } from './orderChangeDetector.js';
 
@@ -24,7 +24,7 @@ class CSVManager extends EventEmitter {
     this.scanTimer = null; // Timer para escaneo periódico (deshabilitado por defecto)
     this.debounceTimers = new Map(); // Debounce por archivo para eventos de watch
     this.debounceTimeoutMs = 1000; // Ventana de debounce para agrupar cambios de archivo (1 segundo)
-    this.csvDirectory = join(process.cwd(), 'csv_data');
+    this.csvDirectory = path.join(process.cwd(), 'csv_data');
     this.heartbeatInterval = null; // Para el heartbeat de los watchers
     this.pollingInterval = null; // Para el polling de archivos
     this.pendingEvaluationInterval = null; // Para re-evaluar cuentas pendientes
@@ -39,6 +39,7 @@ class CSVManager extends EventEmitter {
     // Sistema de tracking de cambios de timestamp
     this.timestampChangeTracking = new Map(); // filePath -> { lastTimestamp, lastChangeTime }
     this.onlineThreshold = 5; // 5 segundos sin cambios = offline
+    this.trackingCacheFile = path.join(process.cwd(), 'config', 'ping_tracking_cache.json');
 
     this.init();
   }
@@ -168,6 +169,9 @@ class CSVManager extends EventEmitter {
     if (!existsSync(this.csvDirectory)) {
       mkdirSync(this.csvDirectory, { recursive: true });
     }
+
+    // Cargar tracking de pings desde cache
+    this.loadPingTrackingCache();
 
     // Cargar rutas desde cache si existen (como fallback)
     const cachedPaths = this.loadCSVPathsFromCache();
@@ -664,7 +668,7 @@ class CSVManager extends EventEmitter {
   // Guardar rutas encontradas en cache
   saveCSVPathsToCache() {
     try {
-      const cachePath = join(
+      const cachePath = path.join(
         process.cwd(),
         'server',
         'server',
@@ -672,7 +676,7 @@ class CSVManager extends EventEmitter {
         'csv_watching_cache.json'
       );
       const csvFiles = Array.from(this.csvFiles.keys());
-      const cacheDir = join(process.cwd(), 'server', 'server', 'config');
+      const cacheDir = path.join(process.cwd(), 'server', 'server', 'config');
 
       if (!existsSync(cacheDir)) {
         require('fs').mkdirSync(cacheDir, { recursive: true });
@@ -700,7 +704,7 @@ class CSVManager extends EventEmitter {
   // Cargar rutas desde cache
   loadCSVPathsFromCache() {
     try {
-      const cachePath = join(
+      const cachePath = path.join(
         process.cwd(),
         'server',
         'server',
@@ -713,7 +717,7 @@ class CSVManager extends EventEmitter {
         return cacheData.csvFiles;
       } else {
         // Si no existe, crear un cache vacío
-        const cacheDir = join(process.cwd(), 'server', 'server', 'config');
+        const cacheDir = path.join(process.cwd(), 'server', 'server', 'config');
         if (!existsSync(cacheDir)) {
           mkdirSync(cacheDir, { recursive: true });
         }
@@ -739,7 +743,7 @@ class CSVManager extends EventEmitter {
   async scanCSVFiles() {
     try {
       // Cargar configuración de ubicaciones
-      const configPath = join(process.cwd(), 'server', 'config', 'csv_locations.json');
+      const configPath = path.join(process.cwd(), 'server', 'config', 'csv_locations.json');
       let config = {
         csvLocations: [],
         searchPatterns: [
@@ -775,7 +779,7 @@ class CSVManager extends EventEmitter {
       // También buscar en ubicaciones específicas
       for (const location of config.csvLocations) {
         if (existsSync(location)) {
-          const locationPattern = join(location, '**/*IPTRADECSV2*.csv');
+          const locationPattern = path.join(location, '**/*IPTRADECSV2*.csv');
           const files = await glob(locationPattern, {
             ignore: ['node_modules/**', '.git/**'],
             absolute: true,
@@ -893,7 +897,7 @@ class CSVManager extends EventEmitter {
 
   // Normalize path to avoid duplicates with different formats
   normalizePath(filePath) {
-    return resolve(filePath);
+    return path.resolve(filePath);
   }
 
   // Check if a path is a duplicate of an existing one
@@ -909,8 +913,8 @@ class CSVManager extends EventEmitter {
   // Check if two paths point to the same file
   pathsAreEquivalent(path1, path2) {
     try {
-      const resolved1 = resolve(path1);
-      const resolved2 = resolve(path2);
+      const resolved1 = path.resolve(path1);
+      const resolved2 = path.resolve(path2);
       return resolved1 === resolved2;
     } catch (error) {
       // If path resolution fails, compare as strings
@@ -1464,6 +1468,42 @@ class CSVManager extends EventEmitter {
     }
   }
 
+  // Calculate account status based on timestamp and tracking
+  calculateStatus(filePath, timestamp, accountType) {
+    if (!timestamp) return { status: 'offline', timeSinceLastPing: null, shouldSkip: accountType === 'pending' };
+
+    // Use timestamp tracking system
+    const isOnline = this.isFileOnline(filePath);
+    const tracking = this.timestampChangeTracking.get(this.normalizePath(filePath));
+    
+    // Calculate time since last ping based on when we detected the timestamp change
+    let timeSinceLastActivity = null;
+    if (tracking && tracking.lastChangeTime) {
+      // Use when we detected the change, not the CSV timestamp itself
+      timeSinceLastActivity = (Date.now() - tracking.lastChangeTime) / 1000;
+    } else {
+      // Fallback to account timestamp if no tracking data
+      const currentTime = Math.floor(Date.now() / 1000);
+      timeSinceLastActivity = currentTime - timestamp;
+    }
+    
+    // Log time since last ping for debugging
+    if (timeSinceLastActivity !== null) {
+      const hours = Math.floor(timeSinceLastActivity / 3600);
+      const minutes = Math.floor((timeSinceLastActivity % 3600) / 60);
+      const seconds = Math.floor(timeSinceLastActivity % 60);
+      console.log(`[CSV] Account ${accountType} - Time since last ping: ${hours}h ${minutes}m ${seconds}s (${timeSinceLastActivity}s total)`);
+    }
+    
+    const shouldSkip = accountType === 'pending' && timeSinceLastActivity > 3600;
+
+    return { 
+      status: isOnline ? 'online' : 'offline',
+      timeSinceLastPing: timeSinceLastActivity,
+      shouldSkip
+    };
+  }
+
   // Obtener todas las cuentas activas - FORZAR REFRESH DE TODOS LOS ARCHIVOS
   async getAllActiveAccounts() {
     const accounts = {
@@ -1475,29 +1515,6 @@ class CSVManager extends EventEmitter {
 
     // Track processed account IDs to prevent duplicates across account types
     const processedAccountIds = new Set();
-
-    // Función helper para calcular estado online/offline
-    const calculateStatus = (filePath, timestamp, accountType) => {
-      if (!timestamp) return { status: 'offline', timeSinceLastPing: null, shouldSkip: false };
-
-      // Usar el sistema de tracking de timestamps
-      const isOnline = this.isFileOnline(filePath);
-      const tracking = this.timestampChangeTracking.get(this.normalizePath(filePath));
-      
-      let timeSinceLastPing = null;
-      if (tracking) {
-        timeSinceLastPing = (Date.now() - tracking.lastChangeTime) / 1000;
-      }
-
-      // Para cuentas pending, verificar si han pasado más de 1 hora
-      const shouldSkip = accountType === 'pending' && timeSinceLastPing && timeSinceLastPing > 3600;
-
-      return { 
-        status: isOnline ? 'online' : 'offline',
-        timeSinceLastPing,
-        shouldSkip
-      };
-    };
 
     // Re-parsear archivos de forma asíncrona para evitar errores EBUSY
     const refreshPromises = [];
@@ -1528,7 +1545,7 @@ class CSVManager extends EventEmitter {
           // Track timestamp changes for online/offline detection
           this.checkTimestampChanged(filePath, row.timestamp);
 
-          const { status, timeSinceLastPing } = calculateStatus(filePath, row.timestamp);
+          const { status, timeSinceLastPing } = this.calculateStatus(filePath, row.timestamp, accountType);
 
           // Skip if this account ID has already been processed
           if (processedAccountIds.has(accountId)) {
@@ -1537,8 +1554,12 @@ class CSVManager extends EventEmitter {
 
           // Incluir cuentas pending
           if (accountType === 'pending') {
-            // Incluir todas las cuentas pending que estén en el archivo CSV
-            // El filtrado por tiempo se hace en el frontend si es necesario
+            // Aplicar filtro de tiempo: solo incluir cuentas que no hayan estado offline por más de 1 hora
+            const { shouldSkip } = this.calculateStatus(filePath, row.timestamp, accountType);
+            if (shouldSkip) {
+              return; // Skip this account
+            }
+            
             accounts.pendingAccounts.push({
               account_id: accountId,
               platform: platform,
@@ -1748,8 +1769,8 @@ class CSVManager extends EventEmitter {
   // Inicializar el estado global del copier
   initGlobalCopierStatus() {
     try {
-      const configPath = join(process.cwd(), 'config', 'copier_status.json');
-      const configDir = join(process.cwd(), 'config');
+      const configPath = path.join(process.cwd(), 'config', 'copier_status.json');
+      const configDir = path.join(process.cwd(), 'config');
 
       // Crear directorio config si no existe
       if (!existsSync(configDir)) {
@@ -1779,7 +1800,7 @@ class CSVManager extends EventEmitter {
   // Verificar si el copier global está habilitado
   isGlobalCopierEnabled() {
     try {
-      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      const configPath = path.join(process.cwd(), 'config', 'copier_status.json');
       if (existsSync(configPath)) {
         const config = JSON.parse(readFileSync(configPath, 'utf8'));
         return config.globalStatus === true;
@@ -2161,14 +2182,14 @@ class CSVManager extends EventEmitter {
   async updateGlobalStatus(enabled) {
     try {
       // 1. Actualizar el archivo de configuración global
-      const configPath = join(process.cwd(), 'config', 'copier_status.json');
+      const configPath = path.join(process.cwd(), 'config', 'copier_status.json');
       const config = {
         globalStatus: enabled,
         timestamp: new Date().toISOString(),
       };
 
       // Asegurar que el directorio existe
-      const configDir = join(process.cwd(), 'config');
+      const configDir = path.join(process.cwd(), 'config');
       if (!existsSync(configDir)) {
         mkdirSync(configDir, { recursive: true });
       }
@@ -2474,6 +2495,14 @@ class CSVManager extends EventEmitter {
   detectTimestampChange(filePath, newTimestamp) {
     const normalizedPath = this.normalizePath(filePath);
     const currentTime = Date.now();
+    
+    // Convertir timestamp a número si viene como string
+    const numericTimestamp = typeof newTimestamp === 'string' ? parseInt(newTimestamp) : newTimestamp;
+    
+    // Debug: verificar si el timestamp es válido
+    if (numericTimestamp > 2000000000) { // Timestamp en el futuro (año 2033+)
+      console.log(`[CSV] WARNING: Timestamp ${numericTimestamp} seems to be in the future for file ${filePath}`);
+    }
 
     // Obtener el tracking actual para este archivo
     const currentTracking = this.timestampChangeTracking.get(normalizedPath);
@@ -2481,22 +2510,28 @@ class CSVManager extends EventEmitter {
     if (!currentTracking) {
       // Primera vez que vemos este archivo
       this.timestampChangeTracking.set(normalizedPath, {
-        lastTimestamp: newTimestamp,
+        lastTimestamp: numericTimestamp,
         lastChangeTime: currentTime,
         firstSeen: currentTime,
       });
+
+      // Guardar cache automáticamente cuando se inicializa
+      this.savePingTrackingCache();
 
       return true; // Considerar como cambio para inicializar
     }
 
     // Verificar si el timestamp ha cambiado
-    if (currentTracking.lastTimestamp !== newTimestamp) {
+    if (currentTracking.lastTimestamp !== numericTimestamp) {
       // Timestamp cambió, actualizar tracking
       this.timestampChangeTracking.set(normalizedPath, {
-        lastTimestamp: newTimestamp,
+        lastTimestamp: numericTimestamp,
         lastChangeTime: currentTime,
         firstSeen: currentTracking.firstSeen,
       });
+
+      // Guardar cache automáticamente cuando hay cambios
+      this.savePingTrackingCache();
 
       return true; // Hubo un cambio
     }
@@ -2566,6 +2601,89 @@ class CSVManager extends EventEmitter {
     } else {
       // MT4/MT5 - usar Windows-1252 (ANSI)
       return { encoding: 'latin1', lineEnding: '\r\n' };
+    }
+  }
+
+  // Cargar tracking de pings desde archivo JSON
+  loadPingTrackingCache() {
+    try {
+      if (existsSync(this.trackingCacheFile)) {
+        const data = readFileSync(this.trackingCacheFile, 'utf8');
+        const cache = JSON.parse(data);
+        
+        // Convertir el objeto a Map
+        this.timestampChangeTracking = new Map();
+        if (cache.tracking) {
+          for (const [filePath, trackingData] of Object.entries(cache.tracking)) {
+            this.timestampChangeTracking.set(filePath, trackingData);
+          }
+        }
+        
+        console.log(`[CSV] Loaded ping tracking cache with ${this.timestampChangeTracking.size} entries`);
+      } else {
+        console.log(`[CSV] Ping tracking cache file not found, starting fresh`);
+        this.timestampChangeTracking = new Map();
+      }
+    } catch (error) {
+      console.error('[CSV] Error loading ping tracking cache:', error);
+      this.timestampChangeTracking = new Map();
+    }
+  }
+
+  // Asegurar que el archivo de cache existe
+  ensurePingTrackingCacheExists() {
+    try {
+      // Crear directorio si no existe
+      const configDir = path.dirname(this.trackingCacheFile);
+      if (!existsSync(configDir)) {
+        mkdirSync(configDir, { recursive: true });
+      }
+
+      // Si el archivo no existe, crearlo vacío
+      if (!existsSync(this.trackingCacheFile)) {
+        const initialCache = {
+          timestamp: new Date().toISOString(),
+          version: '1.0',
+          tracking: {}
+        };
+        writeFileSync(this.trackingCacheFile, JSON.stringify(initialCache, null, 2), 'utf8');
+        console.log(`[CSV] Created ping tracking cache file: ${this.trackingCacheFile}`);
+      }
+    } catch (error) {
+      console.error('[CSV] Error ensuring ping tracking cache exists:', error);
+    }
+  }
+
+  // Guardar tracking de pings a archivo JSON
+  savePingTrackingCache() {
+    try {
+      console.log(`[CSV] DEBUG: Saving to file: ${this.trackingCacheFile}`);
+      
+      // Crear directorio si no existe
+      const configDir = path.dirname(this.trackingCacheFile);
+      if (!existsSync(configDir)) {
+        mkdirSync(configDir, { recursive: true });
+      }
+
+      // Convertir Map a objeto
+      const trackingObj = {};
+      for (const [filePath, trackingData] of this.timestampChangeTracking.entries()) {
+        trackingObj[filePath] = trackingData;
+      }
+
+      console.log(`[CSV] DEBUG: timestampChangeTracking has ${this.timestampChangeTracking.size} entries`);
+      console.log(`[CSV] DEBUG: trackingObj has ${Object.keys(trackingObj).length} entries`);
+
+      const cache = {
+        timestamp: new Date().toISOString(),
+        version: '1.0',
+        tracking: trackingObj
+      };
+
+      writeFileSync(this.trackingCacheFile, JSON.stringify(cache, null, 2), 'utf8');
+      console.log(`[CSV] Saved ping tracking cache with ${Object.keys(trackingObj).length} entries`);
+    } catch (error) {
+      console.error('[CSV] Error saving ping tracking cache:', error);
     }
   }
 }

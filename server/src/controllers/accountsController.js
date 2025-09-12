@@ -1529,6 +1529,7 @@ export const getPendingAccounts = async (req, res) => {
         const accountId = account.account_id;
         const platform = account.platform;
         const timestamp = account.timestamp;
+        const timeDiff = currentTime - timestamp;
         // Calcular estado usando el sistema de tracking
         const statusInfo = csvManager.calculateStatus(account.filePath, timestamp, 'pending');
         
@@ -2269,26 +2270,27 @@ export const getUnifiedAccountData = async (req, res) => {
     const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
 
     for (const account of allAccounts.pendingAccounts || []) {
-      // Calcular estado usando el sistema de tracking
+      // Calculate status using the tracking system
       const statusInfo = csvManager.calculateStatus(account.filePath, account.timestamp, 'pending');
       
-      // Si es una cuenta pending y ha estado offline por más de 1 hora, no la incluimos
+      // Skip if it's a pending account and has been offline for more than 1 hour
       if (statusInfo.shouldSkip) {
         continue;
       }
       
       let finalStatus = statusInfo.status;
+      const timeDiff = currentTime - account.timestamp;
 
       const pendingAccount = {
         account_id: account.account_id,
         platform: account.platform,
         status: finalStatus,
         current_status: finalStatus,
-        timestamp: accountTimestamp,
+        timestamp: account.timestamp,
         timeDiff: timeDiff, // Para debugging
         lastActivity: (() => {
           try {
-            const date = new Date(accountTimestamp * 1000);
+            const date = new Date(account.timestamp * 1000);
             return date.toISOString();
           } catch (error) {
             return new Date().toISOString(); // Fallback to current time
@@ -2332,8 +2334,14 @@ export const getUnifiedAccountData = async (req, res) => {
         }
 
         const masterAccount = allAccounts.masterAccounts[masterId];
+        
+        // Calculate status using the tracking system for master accounts
+        const statusInfo = csvManager.calculateStatus(masterAccount.filePath, masterAccount.timestamp, 'master');
+        
         cleanMasterAccounts[masterId] = {
           ...masterAccount,
+          status: statusInfo.status,
+          current_status: statusInfo.status,
           config: getAccountConfig(masterAccount),
         };
         processedMasterIds.add(masterId);
@@ -2394,8 +2402,13 @@ export const getUnifiedAccountData = async (req, res) => {
         slave.config.masterId = null;
       }
 
+      // Calculate status using the tracking system for slave accounts
+      const statusInfo = csvManager.calculateStatus(slave.filePath, slave.timestamp, 'slave');
+      
       cleanUnconnectedSlaves.push({
         ...slave,
+        status: statusInfo.status,
+        current_status: statusInfo.status,
         config: getAccountConfig(slave),
       });
       seenSlaveIds.add(slave.id);
@@ -2415,8 +2428,14 @@ export const getUnifiedAccountData = async (req, res) => {
       }
 
       const slaveAccount = allAccounts.slaveAccounts[slaveId];
+      
+      // Calculate status using the tracking system for slave accounts
+      const statusInfo = csvManager.calculateStatus(slaveAccount.filePath, slaveAccount.timestamp, 'slave');
+      
       cleanSlaveAccounts[slaveId] = {
         ...slaveAccount,
+        status: statusInfo.status,
+        current_status: statusInfo.status,
         config: getAccountConfig(slaveAccount),
       };
     });
