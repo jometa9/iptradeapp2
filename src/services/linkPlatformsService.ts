@@ -6,6 +6,7 @@ export interface LinkPlatformsResult {
   result: {
     mql4Folders: string[];
     mql5Folders: string[];
+    ninjaTraderFolders?: string[];
     created: number;
     synced: number;
     errors: string[];

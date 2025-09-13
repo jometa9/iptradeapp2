@@ -73,7 +73,7 @@ export const LoginScreen: React.FC = () => {
                   value={apiKey}
                   onChange={handleInputChange}
                   disabled={isLoading}
-                  className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white pr-20"
+                  className="transition-colors border-gray-200 focus:border-blue-500 focus:ring-blue-500 bg-white pr-20 text-gray-400 font-mono"
                 />
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex space-x-1">
                   <Button

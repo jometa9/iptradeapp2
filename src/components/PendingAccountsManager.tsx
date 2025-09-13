@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
 import {
+  ArrowBigRight,
   Cable,
   HousePlug,
   Inbox,
@@ -8,8 +9,8 @@ import {
   PartyPopper,
   Plus,
   TrafficCone,
+  Trash,
   Unplug,
-  X,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -1348,7 +1349,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   <div className="space-y-2">
                                     {Object.entries(conversionForm.translations || {}).map(
                                       ([from, to], index) => (
-                                        <div key={index} className="flex items-center gap-2">
+                                        <div key={index} className="flex items-center justify-between gap-2">
                                           <Input
                                             placeholder="From symbol"
                                             value={from}
@@ -1367,7 +1368,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             }}
                                             className="bg-white border border-gray-200"
                                           />
-                                          <span className="text-gray-500">→</span>
+                                          <ArrowBigRight className="h-12 w-12 text-gray-500"/>
                                           <Input
                                             placeholder="To symbol"
                                             value={to}
@@ -1382,23 +1383,26 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             }}
                                             className="bg-white border border-gray-200"
                                           />
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                              const newTranslations = {
-                                                ...(conversionForm.translations || {}),
-                                              };
-                                              delete newTranslations[from];
-                                              setConversionForm(prev => ({
-                                                ...prev,
-                                                translations: newTranslations,
-                                              }));
-                                            }}
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
+                                             <Button
+      variant="outline"
+      size="sm"
+      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+      onClick={() => {
+        const newTranslations = {
+          ...(conversionForm.translations || {}),
+        };
+        delete newTranslations[from];
+        setConversionForm(prev => ({
+          ...prev,
+          translations: newTranslations,
+        }));
+      }}
+      
+    >
+      <Trash className="h-4 w-4 text-red-600" />
+    </Button>
+                             
+                                            
                                         </div>
                                       )
                                     )}
@@ -1415,7 +1419,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                           },
                                         }));
                                       }}
-                                      className="w-full"
+                                      className="w-full bg-white text-blue-800 border border-gray-200"
                                     >
                                       <Plus className="h-4 w-4 mr-2" />
                                       Add Translation

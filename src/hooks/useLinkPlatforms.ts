@@ -164,7 +164,7 @@ export const useLinkPlatforms = () => {
 
             if (
               data.newInstallations &&
-              (data.newInstallations.mql4 > 0 || data.newInstallations.mql5 > 0)
+              (data.newInstallations.mql4 > 0 || data.newInstallations.mql5 > 0 || data.newInstallations.ninjaTrader > 0)
             ) {
             } else {
             }

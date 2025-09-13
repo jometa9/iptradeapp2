@@ -1048,3 +1048,72 @@ export const registerCSVAsPending = (req, res) => {
     res.status(500).json({ error: 'Failed to register CSV accounts' });
   }
 };
+
+// Install bot on platform
+export const installBot = async (req, res) => {
+  try {
+    const { platform } = req.body;
+    
+    if (!platform) {
+      return res.status(400).json({ error: 'Platform is required' });
+    }
+
+    // Import linkPlatformsController
+    const linkPlatformsController = (await import('./linkPlatformsController.js')).default;
+    
+    let result;
+    let message;
+
+    switch (platform.toLowerCase()) {
+      case 'mt4':
+      case 'mt5':
+      case 'ctrader':
+        // Use existing link platforms functionality
+        result = await linkPlatformsController.findAndSyncMQLFolders();
+        message = `Bot installed for ${platform.toUpperCase()}. Found ${result.mql4Folders.length + result.mql5Folders.length} installations.`;
+        break;
+        
+      case 'ninjatrader':
+        // Use new NinjaTrader functionality (Windows only)
+        result = await linkPlatformsController.findAndSyncMQLFolders();
+        message = `Bot installed for NinjaTrader (Windows only). Found ${result.ninjaTraderFolders?.length || 0} installations.`;
+        break;
+        
+      default:
+        return res.status(400).json({ error: `Unsupported platform: ${platform}` });
+    }
+
+    res.json({
+      success: true,
+      message,
+      result: {
+        platform,
+        installations: result.ninjaTraderFolders?.length || result.mql4Folders.length + result.mql5Folders.length,
+        synced: result.synced,
+        created: result.created,
+        errors: result.errors
+      }
+    });
+  } catch (error) {
+    console.error('Error installing bot:', error);
+    res.status(500).json({ error: 'Failed to install bot', details: error.message });
+  }
+};
+
+// Run install script for platform
+export const runInstallScript = async (req, res) => {
+  try {
+    const { platform } = req.body;
+    
+    if (!platform) {
+      return res.status(400).json({ error: 'Platform is required' });
+    }
+
+    // For now, this is the same as installBot
+    // In the future, this could run specific installation scripts
+    return await installBot(req, res);
+  } catch (error) {
+    console.error('Error running install script:', error);
+    res.status(500).json({ error: 'Failed to run install script', details: error.message });
+  }
+};

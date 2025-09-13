@@ -10,7 +10,9 @@ import {
 import {
   connectPlatforms,
   deletePendingFromCSV,
+  installBot,
   registerCSVAsPending,
+  runInstallScript,
   scanPendingAccounts,
   scanPlatformAccounts,
   updateCSVAccountType,
@@ -525,7 +527,7 @@ router.get('/csv/connectivity/stats', requireValidSubscription, getConnectivityS
  *       200:
  *         description: Bot installed
  */
-// router.post('/csv/install-bot', requireValidSubscription, installBot);
+router.post('/csv/install-bot', requireValidSubscription, installBot);
 
 /**
  * @swagger
@@ -546,7 +548,7 @@ router.get('/csv/connectivity/stats', requireValidSubscription, getConnectivityS
  *       200:
  *         description: Install script executed
  */
-// router.post('/csv/run-install-script', requireValidSubscription, runInstallScript);
+router.post('/csv/run-install-script', requireValidSubscription, runInstallScript);
 
 /**
  * @swagger

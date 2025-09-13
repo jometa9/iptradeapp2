@@ -116,14 +116,11 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
   const getAccountsGlobalState = useCallback((configuredAccounts: any) => {
     if (!configuredAccounts) return { allEnabled: false, allDisabled: false, hasAccounts: false };
 
-    // Verificar que haya al menos una cuenta master
-    const masterAccountIds = Object.keys(configuredAccounts.masterAccounts || {});
-    if (masterAccountIds.length === 0) return { allEnabled: false, allDisabled: false, hasAccounts: false };
-
     // Recopilar todas las cuentas (masters y slaves)
     const allAccounts: any[] = [];
     
     // Agregar masters
+    const masterAccountIds = Object.keys(configuredAccounts.masterAccounts || {});
     masterAccountIds.forEach(masterId => {
       const masterAccount = configuredAccounts.masterAccounts[masterId];
       if (masterAccount) {
@@ -265,9 +262,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     try {
       setError(null);
       
-      const startTime = Date.now();
       const rawData = await csvFrontendService.getUnifiedAccountData();
-      const processingTime = Date.now() - startTime;
       
       const processedData = processUnifiedData(rawData);
       

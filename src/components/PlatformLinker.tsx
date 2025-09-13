@@ -48,7 +48,7 @@ const SUPPORTED_PLATFORMS: Platform[] = [
   {
     id: 'ninjatrader',
     name: 'NinjaTrader',
-    description: 'Install bot for NinjaTrader accounts',
+    description: 'Install bot for NinjaTrader accounts (Windows only)',
     status: 'not-installed',
     accounts: 0,
   },

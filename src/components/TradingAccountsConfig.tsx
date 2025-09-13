@@ -2,6 +2,7 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   AlertTriangle,
+  ArrowBigRight,
   CheckCircle,
   ChevronDown,
   ChevronRight,
@@ -1972,26 +1973,8 @@ const TradingAccountsConfigComponent = () => {
                             </p>
                           </div>
 
-                          <div>
-                            <Label htmlFor="forceLot">Reverse trading</Label>
-                            <Switch
-                              id="reverseTrade"
-                              checked={formState.reverseTrade}
-                              onCheckedChange={checked =>
-                                setFormState({
-                                  ...formState,
-                                  reverseTrade: checked,
-                                })
-                              }
-                              className="block my-1"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                              Reverse the trading direction (buy/sell)
-                            </p>
-                          </div>
-
                           {/* Symbol Translations for Slaves */}
-                          <div className="mt-4">
+                          <div className=" col-span-full">
                             <Label>Symbol Translations</Label>
                             <div className="space-y-2">
                               {Object.entries(formState.translations || {}).map(
@@ -2015,8 +1998,8 @@ const TradingAccountsConfigComponent = () => {
                                       }}
                                       className="bg-white border border-gray-200"
                                     />
-                                    <span className="text-gray-500">→</span>
-                                    <Input
+                                          <ArrowBigRight className="h-12 w-12 text-gray-500"/>
+                                          <Input
                                       placeholder="To symbol"
                                       value={to}
                                       onChange={e => {
@@ -2030,24 +2013,25 @@ const TradingAccountsConfigComponent = () => {
                                       }}
                                       className="bg-white border border-gray-200"
                                     />
+     
                                     <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        const newTranslations = {
-                                          ...(formState.translations || {}),
-                                        };
-                                        delete newTranslations[from];
-                                        setFormState(prev => ({
-                                          ...prev,
-                                          translations: newTranslations,
-                                        }));
-                                      }}
-                                      className="text-red-500 hover:text-red-700"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
+      variant="outline"
+      size="sm"
+      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+      onClick={() => {
+        const newTranslations = {
+          ...(formState.translations || {}),
+        };
+        delete newTranslations[from];
+        setFormState(prev => ({
+          ...prev,
+          translations: newTranslations,
+        }));
+      }}
+      
+    >
+      <Trash className="h-4 w-4 text-red-600" />
+    </Button>
                                   </div>
                                 )
                               )}
@@ -2064,7 +2048,8 @@ const TradingAccountsConfigComponent = () => {
                                     },
                                   }));
                                 }}
-                                className="w-full"
+                                className="w-full bg-white text-blue-800 border border-gray-200"
+
                               >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Translation Pair
@@ -2072,6 +2057,25 @@ const TradingAccountsConfigComponent = () => {
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                               Map symbols from one format to another (e.g., EURUSD → EURUSD.m)
+                            </p>
+                          </div>
+
+                          {/* Reverse Trading Input */}
+                          <div className="">
+                            <Label htmlFor="reverseTrade">Reverse trading</Label>
+                            <Switch
+                              id="reverseTrade"
+                              checked={formState.reverseTrade}
+                              onCheckedChange={checked =>
+                                setFormState({
+                                  ...formState,
+                                  reverseTrade: checked,
+                                })
+                              }
+                              className="block my-1"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Reverse the trading direction (buy/sell)
                             </p>
                           </div>
                         </>

@@ -202,8 +202,9 @@ class LinkPlatformsController {
     // Verificar que el cache tenga paths válidos (no esté vacío)
     const hasMQL4Paths = this.cachedPaths.mql4Folders && this.cachedPaths.mql4Folders.length > 0;
     const hasMQL5Paths = this.cachedPaths.mql5Folders && this.cachedPaths.mql5Folders.length > 0;
+    const hasNinjaTraderPaths = this.cachedPaths.ninjaTraderFolders && this.cachedPaths.ninjaTraderFolders.length > 0;
 
-    if (!hasMQL4Paths && !hasMQL5Paths) {
+    if (!hasMQL4Paths && !hasMQL5Paths && !hasNinjaTraderPaths) {
       return false;
     }
 
@@ -433,6 +434,7 @@ class LinkPlatformsController {
 
       result.mql4Folders.push(...driveResult.mql4Folders);
       result.mql5Folders.push(...driveResult.mql5Folders);
+      result.ninjaTraderFolders = driveResult.ninjaTraderFolders || [];
 
       result.created += driveResult.created;
       result.synced += driveResult.synced;
@@ -448,6 +450,7 @@ class LinkPlatformsController {
     const pathsToCache = {
       mql4Folders: result.mql4Folders,
       mql5Folders: result.mql5Folders,
+      ninjaTraderFolders: result.ninjaTraderFolders || [],
     };
     this.cachedPaths = pathsToCache;
     this.lastScanTime = new Date();
@@ -475,12 +478,13 @@ class LinkPlatformsController {
   // Realizar búsqueda en background para nuevas instalaciones (SIN afectar frontend)
   async performBackgroundScan() {
     try {
-      const newPaths = { mql4Folders: [], mql5Folders: [] };
+      const newPaths = { mql4Folders: [], mql5Folders: [], ninjaTraderFolders: [] };
 
       try {
         const driveResult = await this.scanDrive('', true); // Solo buscar, no procesar
         newPaths.mql4Folders.push(...driveResult.mql4Folders);
         newPaths.mql5Folders.push(...driveResult.mql5Folders);
+        newPaths.ninjaTraderFolders = driveResult.ninjaTraderFolders || [];
       } catch (error) {
         console.error(`❌ Background scan error:`, error);
       }
@@ -488,15 +492,18 @@ class LinkPlatformsController {
       // Comparar con cache actual
       const currentMQL4 = this.cachedPaths?.mql4Folders || [];
       const currentMQL5 = this.cachedPaths?.mql5Folders || [];
+      const currentNinjaTrader = this.cachedPaths?.ninjaTraderFolders || [];
 
       const newMQL4 = newPaths.mql4Folders.filter(path => !currentMQL4.includes(path));
       const newMQL5 = newPaths.mql5Folders.filter(path => !currentMQL5.includes(path));
+      const newNinjaTrader = newPaths.ninjaTraderFolders.filter(path => !currentNinjaTrader.includes(path));
 
-      if (newMQL4.length > 0 || newMQL5.length > 0) {
+      if (newMQL4.length > 0 || newMQL5.length > 0 || newNinjaTrader.length > 0) {
         // Procesar nuevas rutas SIN cambiar estado de linking
         const backgroundResult = {
           mql4Folders: newMQL4,
           mql5Folders: newMQL5,
+          ninjaTraderFolders: newNinjaTrader,
           created: 0,
           synced: 0,
           errors: [],
@@ -510,11 +517,15 @@ class LinkPlatformsController {
         for (const folder of newMQL5) {
           await this.processMQLFolder(folder, 'MQL5', backgroundResult);
         }
+        for (const folder of newNinjaTrader) {
+          await this.processNinjaTraderFolder(folder, backgroundResult);
+        }
 
         // Actualizar cache
         const updatedPaths = {
           mql4Folders: [...currentMQL4, ...newMQL4],
           mql5Folders: [...currentMQL5, ...newMQL5],
+          ninjaTraderFolders: [...currentNinjaTrader, ...newNinjaTrader],
         };
         this.cachedPaths = updatedPaths;
         this.lastScanTime = new Date();
@@ -527,17 +538,18 @@ class LinkPlatformsController {
 
         // Emitir evento especial de background (opcional - para logs del frontend)
         this.emitBackgroundScanEvent('completed', {
-          message: `Background scan found and synced ${newMQL4.length + newMQL5.length} new installations`,
+          message: `Background scan found and synced ${newMQL4.length + newMQL5.length + newNinjaTrader.length} new installations`,
           newInstallations: {
             mql4: newMQL4.length,
             mql5: newMQL5.length,
+            ninjaTrader: newNinjaTrader.length,
             synced: backgroundResult.synced,
           },
         });
       } else {
         this.emitBackgroundScanEvent('completed', {
           message: 'Background scan completed - no new installations found',
-          newInstallations: { mql4: 0, mql5: 0, synced: 0 },
+          newInstallations: { mql4: 0, mql5: 0, ninjaTrader: 0, synced: 0 },
         });
       }
     } catch (error) {
@@ -1165,6 +1177,7 @@ class LinkPlatformsController {
       mql4Folders: [],
       mql5Folders: [],
       ctraderFolders: [],
+      ninjaTraderFolders: [],
       created: 0,
       synced: 0,
       errors: [],
@@ -1173,18 +1186,20 @@ class LinkPlatformsController {
     };
 
     try {
-      // Buscar MQL4, MQL5 y cTrader en UNA SOLA PASADA para máxima eficiencia
+      // Buscar MQL4, MQL5, cTrader y NinjaTrader (solo Windows) en UNA SOLA PASADA para máxima eficiencia
       const { mql4Folders, mql5Folders, ctraderFolders } = await this.findBothMQLFolders();
+      const ninjaTraderFolders = await this.findNinjaTraderFolders();
 
       // Solo agregar carpetas al resultado
       result.mql4Folders = mql4Folders;
       result.mql5Folders = mql5Folders;
       result.ctraderFolders = ctraderFolders;
+      result.ninjaTraderFolders = ninjaTraderFolders;
 
       // Emitir evento de inicio de sincronización
       if (
         !searchOnly &&
-        (mql4Folders.length > 0 || mql5Folders.length > 0 || ctraderFolders.length > 0)
+        (mql4Folders.length > 0 || mql5Folders.length > 0 || ctraderFolders.length > 0 || ninjaTraderFolders.length > 0)
       ) {
         csvManager.emit('linkPlatformsEvent', {
           type: 'syncing',
@@ -1354,6 +1369,17 @@ class LinkPlatformsController {
           }
         }
       }
+
+      // Procesar carpetas NinjaTrader solo si no es búsqueda únicamente (solo Windows)
+      if (!searchOnly) {
+        for (const folder of ninjaTraderFolders) {
+          try {
+            await this.processNinjaTraderFolder(folder, result);
+          } catch (error) {
+            result.errors.push(`Error processing NinjaTrader folder ${folder}: ${error.message}`);
+          }
+        }
+      }
     } catch (error) {
       result.errors.push(`Error scanning drive ${drivePath}: ${error.message}`);
     }
@@ -1373,6 +1399,17 @@ class LinkPlatformsController {
       default:
         console.warn('⚠️ Unknown OS, using Linux fallback');
         return await this.findBothMQLFoldersLinux();
+    }
+  }
+
+  // Búsqueda específica para NinjaTrader 8 (solo Windows)
+  async findNinjaTraderFolders() {
+    // NinjaTrader solo está soportado en Windows
+    if (this.operatingSystem === 'windows') {
+      return await this.findNinjaTraderFoldersWindows();
+    } else {
+      console.log('ℹ️ NinjaTrader detection skipped - only supported on Windows');
+      return [];
     }
   }
 
@@ -1565,6 +1602,169 @@ class LinkPlatformsController {
 
       // Para otros errores, también retornar resultado vacío para evitar que el proceso falle
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
+    }
+  }
+
+  // Búsqueda específica para NinjaTrader en Windows
+  async findNinjaTraderFoldersWindows() {
+    try {
+      const homeDir = os.homedir();
+      const documentsPath = path.join(homeDir, 'Documents');
+      
+      // Rutas típicas de NinjaTrader 8 en Windows
+      const ninjaTraderPaths = [
+        path.join(documentsPath, 'NinjaTrader 8'),
+        path.join(documentsPath, 'NinjaTrader'),
+        path.join(homeDir, 'AppData', 'Local', 'NinjaTrader 8'),
+        path.join(homeDir, 'AppData', 'Roaming', 'NinjaTrader 8'),
+      ];
+
+      const foundFolders = [];
+
+      // Verificar rutas específicas
+      for (const ninjaPath of ninjaTraderPaths) {
+        if (fs.existsSync(ninjaPath)) {
+          foundFolders.push(ninjaPath);
+        }
+      }
+
+      // También buscar usando PowerShell para encontrar instalaciones en otras ubicaciones
+      const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
+    Where-Object { $_.Name -like "*NinjaTrader*" -and $_.Name -notlike "*cache*" -and $_.Name -notlike "*temp*" } |
+    Select-Object -ExpandProperty FullName
+}`;
+
+      let stdout = '';
+      try {
+        const result = await execAsync(command, {
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 30000,
+          shell: 'powershell.exe',
+        });
+        stdout = result.stdout;
+      } catch (error) {
+        if (error.stdout) {
+          stdout = error.stdout;
+        }
+      }
+
+      const allFolders = stdout
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.includes('cache') && !line.includes('temp'));
+
+      // Agregar carpetas encontradas por PowerShell
+      foundFolders.push(...allFolders);
+
+      // Remover duplicados y filtrar solo carpetas válidas
+      const uniqueFolders = [...new Set(foundFolders)].filter(folder => {
+        try {
+          return fs.existsSync(folder) && fs.statSync(folder).isDirectory();
+        } catch (error) {
+          return false;
+        }
+      });
+
+      console.log(`🔍 Found ${uniqueFolders.length} NinjaTrader folders: ${uniqueFolders.join(', ')}`);
+      return uniqueFolders;
+    } catch (error) {
+      console.error(`❌ Error in Windows NinjaTrader search: ${error.message}`);
+      return [];
+    }
+  }
+
+
+  // Procesar una carpeta NinjaTrader individual (solo Windows)
+  async processNinjaTraderFolder(folder, result) {
+    try {
+      // Verificar que estamos en Windows
+      if (this.operatingSystem !== 'windows') {
+        console.log('ℹ️ NinjaTrader processing skipped - only supported on Windows');
+        return;
+      }
+
+      // Determinar la estructura correcta basada en el nombre de la carpeta
+      const folderName = path.basename(folder).toUpperCase();
+      let customPath, filesPath;
+
+      if (folderName.includes('NINJATRADER 8') || folderName.includes('NINJATRADER8')) {
+        // NinjaTrader 8 structure: Documents/NinjaTrader 8/bin/Custom and Documents/NinjaTrader 8/Files
+        customPath = path.join(folder, 'bin', 'Custom');
+        filesPath = path.join(folder, 'Files');
+      } else {
+        // Default NinjaTrader structure: NinjaTrader/bin/Custom and NinjaTrader/Files
+        customPath = path.join(folder, 'bin', 'Custom');
+        filesPath = path.join(folder, 'Files');
+      }
+
+      // Ensure Custom folder exists for bot installation
+      if (!fs.existsSync(customPath)) {
+        fs.mkdirSync(customPath, { recursive: true });
+        result.created++;
+      }
+
+      // Get all NinjaTrader bot files (.zip extension)
+      const ninjaTraderBotFiles = this.getBotFilesByExtension('.zip');
+      
+      // Copy all NinjaTrader bot files to ensure latest versions
+      for (const botFile of ninjaTraderBotFiles) {
+        if (fs.existsSync(botFile.path)) {
+          const targetBotPath = path.join(customPath, botFile.name);
+          fs.copyFileSync(botFile.path, targetBotPath);
+          result.synced++;
+        }
+      }
+
+      // Ensure Files folder exists for CSV files
+      if (!fs.existsSync(filesPath)) {
+        fs.mkdirSync(filesPath, { recursive: true });
+        result.created++;
+      }
+
+      // Look for existing CSV files with IPTRADECSV2 pattern
+      const csvFiles = fs
+        .readdirSync(filesPath)
+        .filter(file => file.includes('IPTRADECSV2') && file.endsWith('.csv'));
+
+      if (csvFiles.length > 0) {
+        // Found existing CSV files
+        csvFiles.forEach(csvFile => {
+          const csvPath = path.join(filesPath, csvFile);
+          result.csvFiles.push(csvPath);
+
+          // Register the CSV file in csvManager for watching
+          try {
+            csvManager.addCSVFile(csvPath);
+          } catch (error) {
+            console.error(`❌ Error registering CSV file for watching: ${error.message}`);
+          }
+        });
+      } else {
+        // Create new CSV file with NinjaTrader-specific name
+        const csvFileName = `IPTRADECSV2NINJA.csv`;
+        const csvPath = path.join(filesPath, csvFileName);
+
+        // Create empty CSV file with basic structure
+        const emptyCSVContent = `[TYPE][NINJATRADER][0]
+[STATUS][OFFLINE][0]
+[CONFIG][PENDING]`;
+
+        fs.writeFileSync(csvPath, emptyCSVContent, 'utf8');
+        result.csvFiles.push(csvPath);
+        result.filesCreated++;
+
+        // Register the new CSV file in csvManager for watching
+        try {
+          csvManager.addCSVFile(csvPath);
+        } catch (error) {
+          console.error(`❌ Error registering CSV file for watching: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      result.errors.push(`Error processing NinjaTrader folder ${folder}: ${error.message}`);
+      console.error(`❌ Error processing NinjaTrader folder:`, error);
     }
   }
 
