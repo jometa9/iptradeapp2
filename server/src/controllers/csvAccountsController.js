@@ -366,16 +366,16 @@ export const updateCSVAccountType = async (req, res) => {
                   newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
                   
                   // Add TRANSLATE line for slave accounts
-                  if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
-                    const translationPairs = Object.entries(slaveConfig.translations)
-                      .map(([from, to]) => `[${from}:${to}]`)
-                      .join(' ');
+                  const translationPairs = Object.entries(slaveConfig?.translations || {})
+                    .map(([from, to]) => `[${from}:${to}]`)
+                    .join(' ');
+                  
+                  if (translationPairs.length > 0) {
                     newContent += `[TRANSLATE] ${translationPairs}\n`;
-                    translateLineAdded = true;
                   } else {
                     newContent += `[TRANSLATE] [NULL]\n`;
-                    translateLineAdded = true;
                   }
+                  translateLineAdded = true;
                 }
               } else if (cleanLine.includes('[TRANSLATE]')) {
                 // Skip existing TRANSLATE line as we already added it after CONFIG

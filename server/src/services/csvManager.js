@@ -1136,12 +1136,17 @@ class CSVManager extends EventEmitter {
       let currentAccountData = null;
 
       for (const line of lines) {
+        console.log(`🔍 [CSV] Processing line: "${line}"`);
         // Extraer valores entre corchetes
         const matches = line.match(/\[([^\]]*)\]/g);
-        if (!matches || matches.length < 2) continue;
+        if (!matches || matches.length < 2) {
+          console.log(`🔍 [CSV] Skipping line - no matches or < 2 matches:`, matches);
+          continue;
+        }
 
         const values = matches.map(m => m.replace(/[\[\]]/g, ''));
         const lineType = values[0];
+        console.log(`🔍 [CSV] Line type: "${lineType}", values:`, values);
 
         switch (lineType) {
           case 'TYPE':
@@ -1171,12 +1176,12 @@ class CSVManager extends EventEmitter {
               // Determinar estado online/offline basado en la última vez que cambió el timestamp
               const isOnline = this.isFileOnline(filePath);
 
-              // Para cuentas pending, usar la nueva lógica de tracking
-              if (currentAccountData.account_type === 'pending') {
+              // Para cuentas pending y slave, usar la nueva lógica de tracking
+              if (currentAccountData.account_type === 'pending' || currentAccountData.account_type === 'slave') {
                 // Usar el estado basado en tracking de cambios de timestamp
                 currentAccountData.status = isOnline ? 'online' : 'offline';
               } else {
-                // Para cuentas master/slave, mantener la lógica original pero también considerar tracking
+                // Para cuentas master, mantener la lógica original pero también considerar tracking
                 if (values[1].toLowerCase() === 'online' && !isOnline) {
                   // Si el CSV dice online pero nuestro tracking dice offline, usar offline
                   currentAccountData.status = 'offline';
@@ -1230,16 +1235,24 @@ class CSVManager extends EventEmitter {
 
           case 'TRANSLATE':
             // Parse translation mappings for slave accounts
+            console.log(`🔍 [TRANSLATE] Processing line: ${line}`);
+            console.log(`🔍 [TRANSLATE] Values:`, values);
             if (currentAccountData) {
               currentAccountData.translations = {};
+              console.log(`🔍 [TRANSLATE] Current account: ${currentAccountData.account_id}, type: ${currentAccountData.account_type}`);
 
               // Parse all translation pairs
               for (let i = 1; i < values.length; i++) {
+                console.log(`🔍 [TRANSLATE] Processing value ${i}: "${values[i]}"`);
                 if (values[i] !== 'NULL' && values[i].includes(':')) {
                   const [from, to] = values[i].split(':');
+                  console.log(`🔍 [TRANSLATE] Parsed translation: "${from}" -> "${to}"`);
                   currentAccountData.translations[from] = to;
                 }
               }
+              console.log(`🔍 [TRANSLATE] Final translations:`, currentAccountData.translations);
+            } else {
+              console.log(`🔍 [TRANSLATE] No currentAccountData found!`);
             }
             break;
 
@@ -1261,16 +1274,32 @@ class CSVManager extends EventEmitter {
         }
       }
 
-      // Post-processing: Ensure all accounts have a valid account_type
+      // Post-processing: Ensure all accounts have a valid account_type and translations
       accounts.forEach(account => {
         if (account.account_type === 'unknown') {
           // If no CONFIG line was found, default to 'pending'
           account.account_type = 'pending';
         }
+
+        // Add translations to config for slave accounts
+        if (account.account_type === 'slave' && account.translations) {
+          console.log(`🔍 [POST-PROCESS] Adding translations to config for slave ${account.account_id}:`, account.translations);
+          account.config.translations = account.translations;
+          console.log(`🔍 [POST-PROCESS] Final config.translations:`, account.config.translations);
+        } else if (account.account_type === 'slave') {
+          console.log(`🔍 [POST-PROCESS] Slave ${account.account_id} has no translations:`, account.translations);
+        }
       });
 
       // Convertir Map a Array para compatibilidad
-      return Array.from(accounts.values());
+      const result = Array.from(accounts.values());
+      console.log(`🔍 [CSV] Final accounts result:`, result.map(acc => ({
+        id: acc.account_id,
+        type: acc.account_type,
+        translations: acc.translations,
+        configTranslations: acc.config?.translations
+      })));
+      return result;
     } catch (error) {
       console.error(`Error parsing CSV file ${filePath}:`, error);
       return [];
@@ -1388,12 +1417,12 @@ class CSVManager extends EventEmitter {
                 // Determinar estado online/offline basado en la última vez que cambió el timestamp
                 const isOnline = this.isFileOnline(filePath);
 
-                // Para cuentas pending, usar la nueva lógica de tracking
-                if (currentAccountData.account_type === 'pending') {
+                // Para cuentas pending y slave, usar la nueva lógica de tracking
+                if (currentAccountData.account_type === 'pending' || currentAccountData.account_type === 'slave') {
                   // Usar el estado basado en tracking de cambios de timestamp
                   currentAccountData.status = isOnline ? 'online' : 'offline';
                 } else {
-                  // Para cuentas master/slave, mantener la lógica original pero también considerar tracking
+                  // Para cuentas master, mantener la lógica original pero también considerar tracking
                   if (values[1].toLowerCase() === 'online' && !isOnline) {
                     // Si el CSV dice online pero nuestro tracking dice offline, usar offline
                     currentAccountData.status = 'offline';
@@ -1439,14 +1468,34 @@ class CSVManager extends EventEmitter {
                 }
               }
               break;
+
+            case 'TRANSLATE':
+              // Parse translation mappings for slave accounts
+              if (currentAccountData) {
+                const translations = {};
+                for (let i = 1; i < values.length; i++) {
+                  const value = values[i];
+                  if (value !== 'NULL' && value.includes(':')) {
+                    const [from, to] = value.split(':');
+                    translations[from] = to;
+                  }
+                }
+                currentAccountData.translations = translations;
+              }
+              break;
           }
         }
 
-        // Post-processing: Ensure all accounts have a valid account_type
+        // Post-processing: Ensure all accounts have a valid account_type and translations
         accounts.forEach(account => {
           if (account.account_type === 'unknown') {
             // If no CONFIG line was found, default to 'pending'
             account.account_type = 'pending';
+          }
+
+          // Add translations to config for slave accounts
+          if (account.account_type === 'slave' && account.translations) {
+            account.config.translations = account.translations;
           }
         });
 
@@ -1475,6 +1524,18 @@ class CSVManager extends EventEmitter {
     // Use timestamp tracking system
     const isOnline = this.isFileOnline(filePath);
     const tracking = this.timestampChangeTracking.get(this.normalizePath(filePath));
+    
+    // Debug logging for slave accounts
+    if (accountType === 'slave') {
+      console.log(`🔍 [calculateStatus] Slave account ${filePath}:`, {
+        isOnline,
+        tracking: tracking ? {
+          lastTimestamp: tracking.lastTimestamp,
+          lastChangeTime: tracking.lastChangeTime,
+          timeSinceChange: tracking.lastChangeTime ? (Date.now() - tracking.lastChangeTime) / 1000 : null
+        } : null
+      });
+    }
     
     // Calculate time since last ping based on when we detected the timestamp change
     let timeSinceLastActivity = null;
@@ -1522,6 +1583,15 @@ class CSVManager extends EventEmitter {
       refreshPromises.push(
         this.parseCSVFileAsync(filePath)
           .then(freshData => {
+            console.log(`🔍 [getAllActiveAccounts] Refreshing file ${filePath} with ${freshData.length} accounts`);
+            freshData.forEach(acc => {
+              if (acc.account_id === '85308252') {
+                console.log(`🔍 [getAllActiveAccounts] Fresh data for 85308252:`, {
+                  translations: acc.translations,
+                  configTranslations: acc.config?.translations
+                });
+              }
+            });
             fileData.data = freshData;
           })
           .catch(error => {
@@ -1542,10 +1612,27 @@ class CSVManager extends EventEmitter {
           const accountId = row.account_id;
           const accountType = row.account_type;
           const platform = row.platform || this.extractPlatformFromPath(filePath);
+          
+          // Debug: Log translations for slave accounts
+          if (accountType === 'slave' && accountId === '85308252') {
+            console.log(`🔍 [getAllActiveAccounts] Processing slave ${accountId}:`, {
+              translations: row.translations,
+              configTranslations: row.config?.translations
+            });
+          }
+          
           // Track timestamp changes for online/offline detection
           this.checkTimestampChanged(filePath, row.timestamp);
 
           const { status, timeSinceLastPing } = this.calculateStatus(filePath, row.timestamp, accountType);
+
+          // Debug: Log status calculation for slave accounts
+          if (accountType === 'slave' && accountId === '85308252') {
+            console.log(`🔍 [getAllActiveAccounts] calculateStatus result for ${accountId}:`, {
+              status,
+              timeSinceLastPing
+            });
+          }
 
           // Skip if this account ID has already been processed
           if (processedAccountIds.has(accountId)) {
@@ -1568,6 +1655,7 @@ class CSVManager extends EventEmitter {
               timestamp: row.timestamp,
               timeSinceLastPing: timeSinceLastPing,
               config: row.config || {},
+              translations: row.translations || {}, // Agregar traducciones
               filePath: filePath, // Para debug
             });
             processedAccountIds.add(accountId);
@@ -1626,6 +1714,7 @@ class CSVManager extends EventEmitter {
                 timeSinceLastPing: timeSinceLastPing,
                 masterOnline: true,
                 config: row.config || {},
+                translations: row.translations || {}, // Agregar traducciones
               });
 
               accounts.masterAccounts[masterId].totalSlaves++;
@@ -1638,6 +1727,7 @@ class CSVManager extends EventEmitter {
                 status: status,
                 timeSinceLastPing: timeSinceLastPing,
                 config: row.config || {},
+                translations: row.translations || {}, // Agregar traducciones
               });
             }
             processedAccountIds.add(accountId);
@@ -2511,7 +2601,7 @@ class CSVManager extends EventEmitter {
       // Primera vez que vemos este archivo
       this.timestampChangeTracking.set(normalizedPath, {
         lastTimestamp: numericTimestamp,
-        lastChangeTime: currentTime,
+        lastChangeTime: numericTimestamp * 1000, // Convertir timestamp a milisegundos
         firstSeen: currentTime,
       });
 
@@ -2526,7 +2616,7 @@ class CSVManager extends EventEmitter {
       // Timestamp cambió, actualizar tracking
       this.timestampChangeTracking.set(normalizedPath, {
         lastTimestamp: numericTimestamp,
-        lastChangeTime: currentTime,
+        lastChangeTime: numericTimestamp * 1000, // Convertir timestamp a milisegundos
         firstSeen: currentTracking.firstSeen,
       });
 

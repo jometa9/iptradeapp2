@@ -285,6 +285,8 @@ export const getSlaveConfig = async (req, res) => {
           const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n');
 
+          let translations = {};
+          
           for (const line of lines) {
             const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
 
@@ -305,10 +307,26 @@ export const getSlaveConfig = async (req, res) => {
                   description: '',
                   lastUpdated: new Date().toISOString(),
                 };
-
-                break;
+              }
+            } else if (cleanLine.includes('[TRANSLATE]')) {
+              // Parse translation mappings
+              const matches = cleanLine.match(/\[([^\]]*)\]/g);
+              if (matches && matches.length > 1) {
+                translations = {};
+                for (let i = 1; i < matches.length; i++) {
+                  const value = matches[i].replace(/[\[\]]/g, '');
+                  if (value !== 'NULL' && value.includes(':')) {
+                    const [from, to] = value.split(':');
+                    translations[from] = to;
+                  }
+                }
               }
             }
+          }
+          
+          // Add translations to csvConfig if found
+          if (csvConfig) {
+            csvConfig.translations = translations;
           }
           break;
         }
@@ -559,10 +577,11 @@ export const setSlaveConfig = async (req, res) => {
             newContent += newConfigLine;
 
             // Always add TRANSLATE line after CONFIG line
-            if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
-              const translationPairs = Object.entries(slaveConfig.translations)
-                .map(([from, to]) => `[${from}:${to}]`)
-                .join(' ');
+            const translationPairs = Object.entries(slaveConfig?.translations || {})
+              .map(([from, to]) => `[${from}:${to}]`)
+              .join(' ');
+            
+            if (translationPairs.length > 0) {
               newContent += `[TRANSLATE] ${translationPairs}\n`;
             } else {
               newContent += `[TRANSLATE] [NULL]\n`;

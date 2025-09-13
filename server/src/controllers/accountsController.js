@@ -1132,10 +1132,11 @@ const updateCSVAccountToSlave = async (
     csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]${lineEnding}`;
 
     // Add TRANSLATE line with translations or NULL
-    if (translations && Object.keys(translations).length > 0) {
-      const translationPairs = Object.entries(translations)
-        .map(([from, to]) => `[${from}:${to}]`)
-        .join(' ');
+    const translationPairs = Object.entries(translations || {})
+      .map(([from, to]) => `[${from}:${to}]`)
+      .join(' ');
+    
+    if (translationPairs.length > 0) {
       csvContent += `[TRANSLATE] ${translationPairs}${lineEnding}`;
     } else {
       csvContent += `[TRANSLATE] [NULL]${lineEnding}`;
@@ -2306,14 +2307,25 @@ export const getUnifiedAccountData = async (req, res) => {
     const cleanMasterAccounts = {};
     const processedMasterIds = new Set();
 
-    // Helper function to get config with prefix/suffix
+    // Helper function to get config with prefix/suffix and translations from CSV
     const getAccountConfig = account => {
       const config = account.config || {};
-      return {
+      console.log(`🔍 [getAccountConfig] Processing account ${account.account_id || account.id}`);
+      console.log(`🔍 [getAccountConfig] Account translations:`, account.translations);
+      console.log(`🔍 [getAccountConfig] Config translations:`, config.translations);
+      
+      // Get translations directly from the account object (now properly included)
+      const translations = account.translations || {};
+
+      const result = {
         ...config,
         prefix: config.prefix === 'NULL' || !config.prefix ? '' : config.prefix,
         suffix: config.suffix === 'NULL' || !config.suffix ? '' : config.suffix,
+        translations: translations,
       };
+      
+      console.log(`🔍 [getAccountConfig] Final result for ${account.account_id || account.id}:`, result);
+      return result;
     };
 
     Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
@@ -2402,13 +2414,12 @@ export const getUnifiedAccountData = async (req, res) => {
         slave.config.masterId = null;
       }
 
-      // Calculate status using the tracking system for slave accounts
-      const statusInfo = csvManager.calculateStatus(slave.filePath, slave.timestamp, 'slave');
-      
+      // Use the status already calculated by getAllActiveAccounts
+      // No need to recalculate - it's already correct
       cleanUnconnectedSlaves.push({
         ...slave,
-        status: statusInfo.status,
-        current_status: statusInfo.status,
+        status: slave.status,           // Use the status from getAllActiveAccounts
+        current_status: slave.status,   // Use the status from getAllActiveAccounts
         config: getAccountConfig(slave),
       });
       seenSlaveIds.add(slave.id);
@@ -2429,13 +2440,12 @@ export const getUnifiedAccountData = async (req, res) => {
 
       const slaveAccount = allAccounts.slaveAccounts[slaveId];
       
-      // Calculate status using the tracking system for slave accounts
-      const statusInfo = csvManager.calculateStatus(slaveAccount.filePath, slaveAccount.timestamp, 'slave');
-      
+      // Use the status already calculated by getAllActiveAccounts
+      // No need to recalculate - it's already correct
       cleanSlaveAccounts[slaveId] = {
         ...slaveAccount,
-        status: statusInfo.status,
-        current_status: statusInfo.status,
+        status: slaveAccount.status,           // Use the status from getAllActiveAccounts
+        current_status: slaveAccount.status,   // Use the status from getAllActiveAccounts
         config: getAccountConfig(slaveAccount),
       };
     });
