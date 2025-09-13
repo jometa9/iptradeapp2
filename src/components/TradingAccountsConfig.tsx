@@ -2749,6 +2749,20 @@ const TradingAccountsConfigComponent = () => {
                                                   </div>
                                                 );
                                               }
+
+                                              // Translates (mostrar cada translate como un badge separado)
+                                              if (config.translations && Object.keys(config.translations).length > 0) {
+                                                Object.entries(config.translations).forEach(([from, to]) => {
+                                                  labels.push(
+                                                    <div
+                                                      key={`translate-${from}-${to}`}
+                                                      className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
+                                                    >
+                                                      {String(from)} to {String(to)}
+                                                    </div>
+                                                  );
+                                                });
+                                              }
                                             }
 
                                             // Si no hay configuraciones específicas, no mostrar nada
@@ -3085,6 +3099,20 @@ const TradingAccountsConfigComponent = () => {
                                           Suffix {config.suffix}
                                         </div>
                                       );
+                                    }
+
+                                    // Translates (mostrar cada translate como un badge separado)
+                                    if (config.translations && Object.keys(config.translations).length > 0) {
+                                      Object.entries(config.translations).forEach(([from, to]) => {
+                                        labels.push(
+                                          <div
+                                            key={`translate-${from}-${to}`}
+                                            className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
+                                          >
+                                            {String(from)} to {String(to)}
+                                          </div>
+                                        );
+                                      });
                                     }
                                   }
 
