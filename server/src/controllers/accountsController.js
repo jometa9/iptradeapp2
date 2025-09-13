@@ -2271,22 +2271,22 @@ export const getUnifiedAccountData = async (req, res) => {
     const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
 
     for (const account of allAccounts.pendingAccounts || []) {
-      // Calculate status using the tracking system
-      const statusInfo = csvManager.calculateStatus(account.filePath, account.timestamp, 'pending');
+      // Use the status already calculated by getAllActiveAccounts
+      // No need to recalculate - it's already correct
       
       // Skip if it's a pending account and has been offline for more than 1 hour
-      if (statusInfo.shouldSkip) {
+      // We can check this using the timeSinceLastPing from getAllActiveAccounts
+      if (account.timeSinceLastPing > 3600) { // 1 hour in seconds
         continue;
       }
       
-      let finalStatus = statusInfo.status;
       const timeDiff = currentTime - account.timestamp;
 
       const pendingAccount = {
         account_id: account.account_id,
         platform: account.platform,
-        status: finalStatus,
-        current_status: finalStatus,
+        status: account.status,           // Use the status from getAllActiveAccounts
+        current_status: account.status,   // Use the status from getAllActiveAccounts
         timestamp: account.timestamp,
         timeDiff: timeDiff, // Para debugging
         lastActivity: (() => {
@@ -2347,13 +2347,12 @@ export const getUnifiedAccountData = async (req, res) => {
 
         const masterAccount = allAccounts.masterAccounts[masterId];
         
-        // Calculate status using the tracking system for master accounts
-        const statusInfo = csvManager.calculateStatus(masterAccount.filePath, masterAccount.timestamp, 'master');
-        
+        // Use the status already calculated by getAllActiveAccounts
+        // No need to recalculate - it's already correct
         cleanMasterAccounts[masterId] = {
           ...masterAccount,
-          status: statusInfo.status,
-          current_status: statusInfo.status,
+          status: masterAccount.status,           // Use the status from getAllActiveAccounts
+          current_status: masterAccount.status,   // Use the status from getAllActiveAccounts
           config: getAccountConfig(masterAccount),
         };
         processedMasterIds.add(masterId);
