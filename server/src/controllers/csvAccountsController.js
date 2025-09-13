@@ -303,6 +303,8 @@ export const updateCSVAccountType = async (req, res) => {
             const currentTimestamp = Math.floor(Date.now() / 1000);
 
             let newContent = '';
+            let translateLineAdded = false; // Track if we've added the TRANSLATE line
+            
             for (const line of lines) {
               const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
 
@@ -316,7 +318,9 @@ export const updateCSVAccountType = async (req, res) => {
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes(`[${accountId}]`) ||
                   cleanLine.includes(accountId) ||
-                  cleanLine.includes(`Account ${accountId}`))
+                  cleanLine.includes(`Account ${accountId}`) ||
+                  cleanLine.includes('[PENDING]') ||
+                  cleanLine.includes('PENDING'))
               ) {
                 // Preserve the current ENABLED/DISABLED status
                 const enabledMatch = cleanLine.match(/\[(ENABLED|DISABLED)\]/);
@@ -334,8 +338,10 @@ export const updateCSVAccountType = async (req, res) => {
                       .map(([from, to]) => `[${from}:${to}]`)
                       .join(' ');
                     newContent += `[TRANSLATE] ${translationPairs}\n`;
+                    translateLineAdded = true;
                   } else {
                     newContent += `[TRANSLATE] [NULL]\n`;
+                    translateLineAdded = true;
                   }
                 } else if (newType === 'slave') {
                   // Generate slave config with provided settings
@@ -365,68 +371,15 @@ export const updateCSVAccountType = async (req, res) => {
                       .map(([from, to]) => `[${from}:${to}]`)
                       .join(' ');
                     newContent += `[TRANSLATE] ${translationPairs}\n`;
+                    translateLineAdded = true;
                   } else {
                     newContent += `[TRANSLATE] [NULL]\n`;
+                    translateLineAdded = true;
                   }
                 }
-              } else if (
-                cleanLine.includes('[TYPE]') &&
-                (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
-              ) {
-                newContent += `[TYPE] [${accountPlatform}] [${accountId}]\n`;
-              } else if (
-                cleanLine.includes('[CONFIG]') &&
-                (cleanLine.includes('[PENDING]') || cleanLine.includes('PENDING'))
-              ) {
-                // For PENDING accounts, default to DISABLED since they're not configured yet
-                const currentStatus = 'DISABLED';
-
-                if (newType === 'master') {
-                  const prefix = masterConfig?.prefix ? masterConfig.prefix : 'NULL';
-                  const suffix = masterConfig?.suffix ? masterConfig.suffix : 'NULL';
-                  newContent += `[CONFIG] [MASTER] [${currentStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
-                  
-                  // Add TRANSLATE line for master accounts
-                  if (masterConfig?.translations && Object.keys(masterConfig.translations).length > 0) {
-                    const translationPairs = Object.entries(masterConfig.translations)
-                      .map(([from, to]) => `[${from}:${to}]`)
-                      .join(' ');
-                    newContent += `[TRANSLATE] ${translationPairs}\n`;
-                  } else {
-                    newContent += `[TRANSLATE] [NULL]\n`;
-                  }
-                } else if (newType === 'slave') {
-                  // Generate slave config with provided settings
-                  const lotMultiplier = slaveConfig?.lotCoefficient || 1.0;
-                  const forceLot = slaveConfig?.forceLot ? slaveConfig.forceLot : 'NULL';
-                  const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
-                  const masterId = slaveConfig?.masterAccountId || 'NULL';
-                  const prefix = slaveConfig?.prefix ? slaveConfig.prefix : 'NULL';
-                  const suffix = slaveConfig?.suffix ? slaveConfig.suffix : 'NULL';
-
-                  // Get master CSV path if masterId is available
-                  let masterCsvPath = 'NULL';
-                  if (masterId && masterId !== 'NULL') {
-                    try {
-                      masterCsvPath = (await findMasterCSVPath(masterId)) || 'NULL';
-                    } catch (error) {
-                      console.error(`Error finding master CSV path for ${masterId}:`, error);
-                      masterCsvPath = 'NULL';
-                    }
-                  }
-
-                  newContent += `[CONFIG] [SLAVE] [${currentStatus}] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [${masterId}] [${masterCsvPath}] [${prefix}] [${suffix}]\n`;
-                  
-                  // Add TRANSLATE line for slave accounts
-                  if (slaveConfig?.translations && Object.keys(slaveConfig.translations).length > 0) {
-                    const translationPairs = Object.entries(slaveConfig.translations)
-                      .map(([from, to]) => `[${from}:${to}]`)
-                      .join(' ');
-                    newContent += `[TRANSLATE] ${translationPairs}\n`;
-                  } else {
-                    newContent += `[TRANSLATE] [NULL]\n`;
-                  }
-                }
+              } else if (cleanLine.includes('[TRANSLATE]')) {
+                // Skip existing TRANSLATE line as we already added it after CONFIG
+                continue;
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
                 newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
