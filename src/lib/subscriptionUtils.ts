@@ -138,7 +138,7 @@ export const getLotSizeMessage = (userInfo: UserInfo): string => {
   const limits = getSubscriptionLimits(userInfo.subscriptionType);
 
   if (limits.maxLotSize === null) {
-    return 'Custom lot sizes available.';
+    return '';
   }
 
   return `Lot size limited to ${limits.maxLotSize}.`;
@@ -166,9 +166,40 @@ export const shouldShowSubscriptionLimitsCard = (
   }
 
   // Mostrar cuando:
-  // 1. Alcancen el límite de cuentas
+  // 1. Alcancen o excedan el límite de cuentas
   // 2. Tengan límite de lot size
   return currentAccountCount >= limits.maxAccounts || limits.maxLotSize !== null;
+};
+
+// Check if user should see subscription limits card with detailed account info
+export const shouldShowSubscriptionLimitsCardDetailed = (
+  userInfo: UserInfo,
+  configuredAccounts: number = 0,
+  totalAccounts: number = 0
+): boolean => {
+  if (!userInfo) {
+    return false;
+  }
+
+  const limits = getSubscriptionLimits(userInfo.subscriptionType);
+
+  // Usuarios free siempre ven la tarjeta
+  if (userInfo.subscriptionType === 'free') {
+    return true;
+  }
+
+  // Si no hay límite de cuentas (unlimited, managed_vps), no mostrar tarjeta
+  if (limits.maxAccounts === null) {
+    return false;
+  }
+
+  // Mostrar cuando:
+  // 1. Cuentas configuradas alcancen o excedan el límite
+  // 2. Total de cuentas exceda el límite (incluyendo unconnected slaves)
+  // 3. Tengan límite de lot size
+  return configuredAccounts >= limits.maxAccounts || 
+         totalAccounts > limits.maxAccounts || 
+         limits.maxLotSize !== null;
 };
 
 export type { LotValidation, SubscriptionLimits, UserInfo };

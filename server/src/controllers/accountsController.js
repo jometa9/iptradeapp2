@@ -2538,6 +2538,7 @@ export const getUnifiedAccountData = async (req, res) => {
         Object.keys(cleanSlaveAccounts).length +
         cleanUnconnectedSlaves.length +
         totalConnectedSlaves,
+      totalConnectedSlaves: totalConnectedSlaves,
       totalUnconnectedSlaves: cleanUnconnectedSlaves.length,
     };
 

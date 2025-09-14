@@ -10,6 +10,7 @@ import {
   getSubscriptionLimits,
   isUnlimitedPlan,
   shouldShowSubscriptionLimitsCard,
+  shouldShowSubscriptionLimitsCardDetailed,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
 import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
@@ -34,10 +35,11 @@ import { toast } from './ui/use-toast';
 // Componente para mostrar límites de suscripción
 const SubscriptionLimitsCard: React.FC<{
   userInfo: any;
+  totalConfiguredAccounts: number;
   totalAccounts: number;
   canAddMoreAccounts: boolean;
-}> = ({ userInfo, totalAccounts, canAddMoreAccounts }) => {
-  const showCard = shouldShowSubscriptionLimitsCard(userInfo, totalAccounts);
+}> = ({ userInfo, totalConfiguredAccounts, totalAccounts, canAddMoreAccounts }) => {
+  const showCard = shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts);
 
   if (!showCard) return null;
 
@@ -144,28 +146,23 @@ export const TradingAccountsManager: React.FC = () => {
   // Extract data from unified response
   const accounts = unifiedData?.configuredAccounts || { masterAccounts: {}, unconnectedSlaves: [] };
   const serverStats = unifiedData?.serverStats || {
+    totalCSVFiles: 0,
+    totalPendingAccounts: 0,
+    totalOnlineAccounts: 0,
+    totalOfflineAccounts: 0,
     totalMasterAccounts: 0,
     totalSlaveAccounts: 0,
+    totalConnectedSlaves: 0,
     totalUnconnectedSlaves: 0,
   };
 
   // Calculate total accounts for limit checking
+  const totalConfiguredAccounts = serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
   const totalAccounts = serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts;
 
   // Check if user can create more accounts
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Unknown';
-
-  // Function to check if subscription limits card should be shown
-  const shouldShowSubscriptionLimitsCard = (user: any, currentAccounts: number) => {
-    if (!user) return false;
-    
-    const limits = getSubscriptionLimits(user.subscriptionType);
-    if (limits.maxAccounts === null) {
-      return false; // Unlimited plan
-    }
-    return currentAccounts >= limits.maxAccounts;
-  };
 
   // Data is loaded automatically by the unified hook
   // No need for manual loading
@@ -405,6 +402,7 @@ export const TradingAccountsManager: React.FC = () => {
        {userInfo && (
          <SubscriptionLimitsCard 
            userInfo={userInfo} 
+           totalConfiguredAccounts={totalConfiguredAccounts}
            totalAccounts={totalAccounts} 
            canAddMoreAccounts={canAddMoreAccounts}
          />
@@ -467,6 +465,7 @@ export const TradingAccountsManager: React.FC = () => {
                         onChange={e =>
                           setMasterForm({ ...masterForm, masterAccountId: e.target.value })
                         }
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -476,6 +475,7 @@ export const TradingAccountsManager: React.FC = () => {
                         placeholder="Ex: Main EURUSD Account"
                         value={masterForm.name}
                         onChange={e => setMasterForm({ ...masterForm, name: e.target.value })}
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -483,6 +483,7 @@ export const TradingAccountsManager: React.FC = () => {
                       <Select
                         value={masterForm.platform}
                         onValueChange={value => setMasterForm({ ...masterForm, platform: value })}
+                        disabled={!canAddMoreAccounts}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a platform" />
@@ -503,6 +504,7 @@ export const TradingAccountsManager: React.FC = () => {
                         placeholder="Ex: IC Markets"
                         value={masterForm.broker}
                         onChange={e => setMasterForm({ ...masterForm, broker: e.target.value })}
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -514,6 +516,7 @@ export const TradingAccountsManager: React.FC = () => {
                         onChange={e =>
                           setMasterForm({ ...masterForm, description: e.target.value })
                         }
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                   </div>
@@ -568,6 +571,7 @@ export const TradingAccountsManager: React.FC = () => {
                         onChange={e =>
                           setSlaveForm({ ...slaveForm, slaveAccountId: e.target.value })
                         }
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -577,6 +581,7 @@ export const TradingAccountsManager: React.FC = () => {
                         placeholder="Ex: Follower Account 1"
                         value={slaveForm.name}
                         onChange={e => setSlaveForm({ ...slaveForm, name: e.target.value })}
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -584,6 +589,7 @@ export const TradingAccountsManager: React.FC = () => {
                       <Select
                         value={slaveForm.platform}
                         onValueChange={value => setSlaveForm({ ...slaveForm, platform: value })}
+                        disabled={!canAddMoreAccounts}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a platform" />
@@ -604,6 +610,7 @@ export const TradingAccountsManager: React.FC = () => {
                         placeholder="Ex: IC Markets"
                         value={slaveForm.broker}
                         onChange={e => setSlaveForm({ ...slaveForm, broker: e.target.value })}
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                     <div>
@@ -613,6 +620,7 @@ export const TradingAccountsManager: React.FC = () => {
                         onValueChange={value =>
                           setSlaveForm({ ...slaveForm, masterAccountId: value })
                         }
+                        disabled={!canAddMoreAccounts}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a master" />
@@ -635,6 +643,7 @@ export const TradingAccountsManager: React.FC = () => {
                         placeholder="Optional account description"
                         value={slaveForm.description}
                         onChange={e => setSlaveForm({ ...slaveForm, description: e.target.value })}
+                        disabled={!canAddMoreAccounts}
                       />
                     </div>
                   </div>
