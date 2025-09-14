@@ -1376,11 +1376,11 @@ const TradingAccountsConfigComponent = () => {
       {/* Subscription Info Card para planes con límites */}
       {userInfo && shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts) && (
         <Card
-          className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3 mb-3"
+          className="border-yellow-200 bg-yellow-50 flex items-center p-4  gap-3 mb-3"
           style={fadeInDownAnimation}
         >
-          <AlertTriangle className="w-6 h-6 text-yellow-900" />
-          <div className="gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-900" />
+          <div className="gap-3 ">
             <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
             <p className="text-sm mt-1.5 text-yellow-800">
               {getAccountLimitMessage(userInfo, totalAccounts)} {getLotSizeMessage(userInfo)}

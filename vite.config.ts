@@ -39,5 +39,12 @@ export default defineConfig({
         '**/node_modules/**',
       ],
     },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:30',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 })
