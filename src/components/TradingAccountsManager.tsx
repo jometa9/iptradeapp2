@@ -100,6 +100,7 @@ const PLATFORMS = [
   { value: 'cTrader', label: 'cTrader' },
   { value: 'TradingView', label: 'TradingView' },
   { value: 'NinjaTrader', label: 'NinjaTrader' },
+  { value: 'NT8', label: 'NinjaTrader 8' },
   { value: 'Other', label: 'Other Platform' },
 ];
 
@@ -376,6 +377,7 @@ export const TradingAccountsManager: React.FC = () => {
       case 'TRADINGVIEW':
         return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'NINJATRADER':
+      case 'NT8':
         return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';

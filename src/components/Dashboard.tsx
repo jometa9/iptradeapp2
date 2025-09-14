@@ -207,7 +207,8 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center">
                 <div className="hidden sm:flex items-center">
                   <div className="flex items-center text-sm text-gray-600 px-3">
-                    {userInfo?.name || 'User'}
+                    {/*{userInfo?.name || 'User'}*/}
+                    Hiroshi Tamura
                   </div>
                 </div>
                 <Button

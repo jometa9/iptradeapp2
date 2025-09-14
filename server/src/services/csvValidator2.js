@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 
 // Constants for validation
 const VALID_ACCOUNT_TYPES = ['MASTER', 'SLAVE', 'PENDING'];
-const VALID_PLATFORMS = ['MT4', 'MT5', 'CTRADER'];
+const VALID_PLATFORMS = ['MT4', 'MT5', 'CTRADER', 'NT8'];
 const VALID_ORDER_TYPES = ['BUY', 'SELL', 'BUYLIMIT', 'SELLLIMIT', 'BUYSTOP', 'SELLSTOP'];
 
 // Validate a single line in CSV2 format

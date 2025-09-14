@@ -65,7 +65,7 @@ export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
 };
 
 // Define supported platforms
-const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'Other'];
+const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'NT8', 'Other'];
 
 // Activity monitoring configuration
 const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
@@ -264,7 +264,7 @@ export const registerMasterAccount = (req, res) => {
         linkPlatformsController.findAndSyncMQLFoldersManual();
       } else {
       }
-    } catch {}
+    } catch { }
   } else {
     res.status(500).json({ error: 'Failed to register master account' });
   }
@@ -355,7 +355,7 @@ export const registerSlaveAccount = (req, res) => {
         linkPlatformsController.findAndSyncMQLFoldersManual();
       } else {
       }
-    } catch {}
+    } catch { }
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
   }
@@ -678,7 +678,7 @@ export const updateMasterAccount = (req, res) => {
         linkPlatformsController.findAndSyncMQLFoldersManual();
       } else {
       }
-    } catch {}
+    } catch { }
   } else {
     res.status(500).json({ error: 'Failed to update master account' });
   }
@@ -782,7 +782,7 @@ export const updateSlaveAccount = async (req, res) => {
         linkPlatformsController.findAndSyncMQLFoldersManual();
       } else {
       }
-    } catch {}
+    } catch { }
   } else {
     res.status(500).json({ error: 'Failed to update slave account' });
   }
@@ -829,7 +829,7 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
               break;
             }
           }
-        } catch (error) {}
+        } catch (error) { }
 
         break;
       }
@@ -924,7 +924,7 @@ const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
           break;
         }
       }
-    } catch (error) {}
+    } catch (error) { }
 
     // If we couldn't find the timestamp, use current time as fallback
     if (currentTimestamp === null) {
@@ -1046,7 +1046,7 @@ const updateCSVAccountToSlave = async (
           }
         }
       }
-    } catch (error) {}
+    } catch (error) { }
 
     // If we couldn't find the timestamp, use current time as fallback
     if (currentTimestamp === null) {
@@ -1111,7 +1111,7 @@ const updateCSVAccountToSlave = async (
           }
         }
       }
-    } catch (error) {}
+    } catch (error) { }
 
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent, encoding, lineEnding;
@@ -1135,7 +1135,7 @@ const updateCSVAccountToSlave = async (
     const translationPairs = Object.entries(translations || {})
       .map(([from, to]) => `[${from}:${to}]`)
       .join(' ');
-    
+
     if (translationPairs.length > 0) {
       csvContent += `[TRANSLATE] ${translationPairs}${lineEnding}`;
     } else {
@@ -1448,7 +1448,7 @@ export const deleteSlaveAccount = async (req, res) => {
     // STEP 2: Convert slave account to PENDING in CSV
     // Use the same method as master accounts to convert to pending
     writeAccountToCSVAsPending(slaveAccountId, platform)
-      .then(csvWritten => {})
+      .then(csvWritten => { })
       .catch(error => {
         console.error(`Error converting slave ${slaveAccountId} to pending:`, error);
       });
@@ -1495,6 +1495,10 @@ export const getSupportedPlatforms = (req, res) => {
           platformInfo.label = 'NinjaTrader';
           platformInfo.description = 'Professional futures and forex trading platform';
           break;
+        case 'NT8':
+          platformInfo.label = 'NinjaTrader 8';
+          platformInfo.description = 'Professional futures and forex trading platform (Version 8)';
+          break;
         case 'Other':
           platformInfo.label = 'Other Platform';
           platformInfo.description = 'Other trading platform not listed above';
@@ -1533,12 +1537,12 @@ export const getPendingAccounts = async (req, res) => {
         const timeDiff = currentTime - timestamp;
         // Calcular estado usando el sistema de tracking
         const statusInfo = csvManager.calculateStatus(account.filePath, timestamp, 'pending');
-        
+
         // Si es una cuenta pending y ha estado offline por más de 1 hora, no la incluimos
         if (statusInfo.shouldSkip) {
           continue;
         }
-        
+
         let finalStatus = statusInfo.status;
 
         const pendingAccount = {
@@ -1552,7 +1556,7 @@ export const getPendingAccounts = async (req, res) => {
 
         allPendingAccounts.push(pendingAccount);
       }
-    } catch (error) {}
+    } catch (error) { }
 
     const pendingAccountsArray = allPendingAccounts;
 
@@ -1677,7 +1681,7 @@ export const convertPendingToMaster = async (req, res) => {
           linkPlatformsController.findAndSyncMQLFoldersManual();
         } else {
         }
-      } catch {}
+      } catch { }
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }
@@ -1789,7 +1793,7 @@ export const convertPendingToSlave = async (req, res) => {
           linkPlatformsController.findAndSyncMQLFoldersManual();
         } else {
         }
-      } catch {}
+      } catch { }
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }
@@ -1866,9 +1870,9 @@ export const getAllAccountsForAdmin = (req, res) => {
         // Find connected slaves for this master
         const connectedSlaves = config.connections
           ? Object.entries(config.connections)
-              .filter(([, masterId]) => masterId === accountId)
-              .map(([slaveId]) => config.slaveAccounts && config.slaveAccounts[slaveId])
-              .filter(Boolean)
+            .filter(([, masterId]) => masterId === accountId)
+            .map(([slaveId]) => config.slaveAccounts && config.slaveAccounts[slaveId])
+            .filter(Boolean)
           : [];
 
         response.masterAccounts[accountId] = {
@@ -1944,8 +1948,8 @@ export const getAccountActivityStats = (req, res) => {
         // Check if master has connected slaves (real synchronization)
         const connectedSlaves = config.connections
           ? Object.entries(config.connections)
-              .filter(([, masterId]) => masterId === accountId)
-              .map(([slaveId]) => slaveId)
+            .filter(([, masterId]) => masterId === accountId)
+            .map(([slaveId]) => slaveId)
           : [];
 
         // Master is synchronized if it has at least one connected slave
@@ -2259,6 +2263,27 @@ export const getConnectivityStats = (req, res) => {
 export const getUnifiedAccountData = async (req, res) => {
   try {
     const startTime = Date.now();
+    const useMockData = true;
+
+    if (useMockData) {
+      const mockConfigPath = join(process.cwd(), 'server', 'config', 'mock_config.json');
+      let mockData = null;
+
+      try {
+        if (existsSync(mockConfigPath)) {
+          const mockConfig = JSON.parse(readFileSync(mockConfigPath, 'utf8'));
+          mockData = mockConfig.mockData;
+        }
+      } catch (error) {
+        console.log('Mock config not found or invalid, using real data');
+      }
+
+      // If mock data is enabled, return mock response
+      if (useMockData && mockData) {
+        console.log('🎭 [MOCK] Returning mock data for unified account endpoint');
+        return res.json(mockData);
+      }
+    }
 
     // SINGLE CSV READ: Get all data from csvManager in one call (reads all CSV files once)
     const allAccounts = await csvManager.getAllActiveAccounts();
@@ -2273,13 +2298,13 @@ export const getUnifiedAccountData = async (req, res) => {
     for (const account of allAccounts.pendingAccounts || []) {
       // Use the status already calculated by getAllActiveAccounts
       // No need to recalculate - it's already correct
-      
+
       // Skip if it's a pending account and has been offline for more than 1 hour
       // We can check this using the timeSinceLastPing from getAllActiveAccounts
       if (account.timeSinceLastPing > 3600) { // 1 hour in seconds
         continue;
       }
-      
+
       const timeDiff = currentTime - account.timestamp;
 
       const pendingAccount = {
@@ -2313,7 +2338,7 @@ export const getUnifiedAccountData = async (req, res) => {
       console.log(`🔍 [getAccountConfig] Processing account ${account.account_id || account.id}`);
       console.log(`🔍 [getAccountConfig] Account translations:`, account.translations);
       console.log(`🔍 [getAccountConfig] Config translations:`, config.translations);
-      
+
       // Get translations directly from the account object (now properly included)
       const translations = account.translations || {};
 
@@ -2323,7 +2348,7 @@ export const getUnifiedAccountData = async (req, res) => {
         suffix: config.suffix === 'NULL' || !config.suffix ? '' : config.suffix,
         translations: translations,
       };
-      
+
       console.log(`🔍 [getAccountConfig] Final result for ${account.account_id || account.id}:`, result);
       return result;
     };
@@ -2346,7 +2371,7 @@ export const getUnifiedAccountData = async (req, res) => {
         }
 
         const masterAccount = allAccounts.masterAccounts[masterId];
-        
+
         // Use the status already calculated by getAllActiveAccounts
         // No need to recalculate - it's already correct
         cleanMasterAccounts[masterId] = {
@@ -2438,7 +2463,7 @@ export const getUnifiedAccountData = async (req, res) => {
       }
 
       const slaveAccount = allAccounts.slaveAccounts[slaveId];
-      
+
       // Use the status already calculated by getAllActiveAccounts
       // No need to recalculate - it's already correct
       cleanSlaveAccounts[slaveId] = {

@@ -15,6 +15,7 @@ export function getPlatformDisplayName(platform: string): string {
     cTrader: 'cTrader',
     TradingView: 'TradingView',
     NinjaTrader: 'NinjaTrader',
+    NT8: 'NinjaTrader 8',
     Other: 'Other Platform',
     mt4: 'MetaTrader 4',
     mt5: 'MetaTrader 5',
