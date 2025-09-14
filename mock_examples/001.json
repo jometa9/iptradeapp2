@@ -1,213 +1,203 @@
 {
-    "useMockData": true,
-    "mockData": {
-      "success": true,
-      "data": {
-          "pendingAccounts": [
+  "useMockData": true,
+  "mockData": {
+    "success": true,
+    "data": {
+      "pendingAccounts": [
+        {
+          "account_id": "85308252",
+          "platform": "MT4",
+          "status": "online",
+          "current_status": "online",
+          "timestamp": "1757851552",
+          "timeDiff": 1,
+          "lastActivity": "2025-09-14T12:05:52.000Z"
+        },
+        {
+          "account_id": "61402130",
+          "platform": "MT5",
+          "status": "online",
+          "current_status": "online",
+          "timestamp": "1757851552",
+          "timeDiff": 1,
+          "lastActivity": "2025-09-14T12:05:52.000Z"
+        },
+        {
+          "account_id": "5096742",
+          "platform": "CTRADER",
+          "status": "online",
+          "current_status": "online",
+          "timestamp": "1757851552",
+          "timeDiff": 1,
+          "lastActivity": "2025-09-14T12:05:52.000Z"
+        },
+        {
+          "account_id": "260072071",
+          "platform": "NT8",
+          "status": "online",
+          "current_status": "online",
+          "timestamp": "1757851552",
+          "timeDiff": 1,
+          "lastActivity": "2025-09-14T12:05:52.000Z"
+        }
+      ],
+      "configuredAccounts": {
+        "masterAccounts": {
+          "15308252": {
+            "id": "15308252",
+            "name": "15308252",
+            "platform": "MT5",
+            "status": "online",
+            "lastPing": "1757851607",
+            "timeSinceLastPing": 1.287,
+            "config": {
+              "masterId": "85308252",
+              "enabled": true,
+              "name": "85308252",
+              "prefix": "prefix",
+              "suffix": "sufix",
+              "translations": {}
+            },
+            "connectedSlaves": [
               {
-                  "account_id": "85308252",
-                  "platform": "MT4",
-                  "status": "online",
-                  "current_status": "online",
-                  "timestamp": "1757851552",
-                  "timeDiff": 1,
-                  "lastActivity": "2025-09-14T12:05:52.000Z"
+                "id": "61102139",
+                "name": "61102139",
+                "platform": "MT4",
+                "status": "online",
+                "timeSinceLastPing": 1.287,
+                "masterOnline": true,
+                "config": {
+                  "enabled": true,
+                  "lotMultiplier": 1,
+                  "forceLot": null,
+                  "reverseTrading": false,
+                  "masterId": "15308252",
+                  "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
+                  "prefix": "fx_",
+                  "suffix": ".m",
+                  "translations": {}
+                },
+                "translations": {}
               },
               {
-                  "account_id": "61402130",
-                  "platform": "MT5",
-                  "status": "online",
-                  "current_status": "online",
-                  "timestamp": "1757851552",
-                  "timeDiff": 1,
-                  "lastActivity": "2025-09-14T12:05:52.000Z"
-              },
-              {
-                  "account_id": "5096742",
-                  "platform": "CTRADER",
-                  "status": "online",
-                  "current_status": "online",
-                  "timestamp": "1757851552",
-                  "timeDiff": 1,
-                  "lastActivity": "2025-09-14T12:05:52.000Z"
-              },
-              {
-                  "account_id": "260072071",
-                  "platform": "NT8",
-                  "status": "online",
-                  "current_status": "online",
-                  "timestamp": "1757851552",
-                  "timeDiff": 1,
-                  "lastActivity": "2025-09-14T12:05:52.000Z"
-              }
-          ],
-          "configuredAccounts": {
-              "masterAccounts": {
-                  "15308252": {
-                      "id": "15308252",
-                      "name": "15308252",
-                      "platform": "MT5",
-                      "status": "online",
-                      "lastPing": "1757851607",
-                      "timeSinceLastPing": 1.287,
-                      "config": {
-                          "masterId": "85308252",
-                          "enabled": true,
-                          "name": "85308252",
-                          "prefix": "prefix",
-                          "suffix": "sufix",
-                          "translations": {}
-                      },
-                      "connectedSlaves": [
-                          {
-                              "id": "61102139",
-                              "name": "61102139",
-                              "platform": "MT4",
-                              "status": "online",
-                              "timeSinceLastPing": 1.287,
-                              "masterOnline": true,
-                              "config": {
-                                  "enabled": true,
-                                  "lotMultiplier": 1,
-                                  "forceLot": null,
-                                  "reverseTrading": false,
-                                  "masterId": "15308252",
-                                  "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
-                                  "prefix": "fx_",
-                                  "suffix": ".m",
-                                  "translations": {
-                                  }
-                              },
-                              "translations": {
-                              }
-                          },
-                          {
-                            "id": "9108257",
-                            "name": "9108257",
-                            "platform": "NT8",
-                            "status": "online",
-                            "timeSinceLastPing": 1.287,
-                            "masterOnline": true,
-                            "config": {
-                                "enabled": true,
-                                "lotMultiplier": 0.5,
-                                "forceLot": null,
-                                "reverseTrading": false,
-                                "masterId": "15308252",
-                                "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
-                                "prefix": "",
-                                "suffix": "",
-                                "translations": {
-                                    "US500": "ES",
-                                    "US30": "YM"
-                                }
-                            },
-                            "translations": {
-                                 "US500": "ES",
-                                    "US30": "YM"
-                            }
-                          },
-                          {
-                            "id": "10002140",
-                            "name": "10002140",
-                            "platform": "CTRADER",
-                            "status": "online",
-                            "timeSinceLastPing": 1.287,
-                            "masterOnline": true,
-                            "config": {
-                                "enabled": true,
-                                "lotMultiplier": 1,
-                                "forceLot": 2.34,
-                                "reverseTrading": true,
-                                "masterId": "15308252",
-                                "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
-                                "prefix": "",
-                                "suffix": "",
-                                "translations": {
-                                }
-                            },
-                            "translations": {
-                            }
-                        }
-                      ],
-                      "totalSlaves": 1,
-                      "current_status": "online"
-                  },
-                  "40235860": {
-                    "id": "40235860",
-                    "name": "40235860",
-                    "platform": "CTRADER",
-                    "status": "online",
-                    "lastPing": "1757851607",
-                    "timeSinceLastPing": 1.287,
-                    "config": {
-                        "masterId": "40235860",
-                        "enabled": false,
-                        "name": "40235860",
-                        "prefix": "",
-                        "suffix": "",
-                        "translations": {}
-                    },
-                    "connectedSlaves": [
-                       
-                    ],
-                    "totalSlaves": 0,
-                    "current_status": "online"
+                "id": "9108257",
+                "name": "9108257",
+                "platform": "NT8",
+                "status": "online",
+                "timeSinceLastPing": 1.287,
+                "masterOnline": true,
+                "config": {
+                  "enabled": true,
+                  "lotMultiplier": 0.5,
+                  "forceLot": null,
+                  "reverseTrading": false,
+                  "masterId": "15308252",
+                  "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
+                  "prefix": "",
+                  "suffix": "",
+                  "translations": {
+                    "US500": "ES",
+                    "US30": "YM"
+                  }
+                },
+                "translations": {
+                  "US500": "ES",
+                  "US30": "YM"
                 }
               },
-              "slaveAccounts": {},
-                "unconnectedSlaves": [
-                  {
-                      "id": "61402130",
-                      "name": "61402130",
-                      "platform": "MT5",
-                      "status": "online",
-                      "timeSinceLastPing": 1.275,
-                      "config": {
-                          "enabled": false,
-                          "lotMultiplier": 1,
-                          "forceLot": null,
-                          "reverseTrading": false,
-                          "masterId": null,
-                          "masterCsvPath": null,
-                          "prefix": "",
-                          "suffix": "",
-                          "translations": {
-                          }
-                      },
-                      "translations": {
-                      },
-                      "current_status": "online"
-                  }
-              ]
+              {
+                "id": "10002140",
+                "name": "10002140",
+                "platform": "CTRADER",
+                "status": "online",
+                "timeSinceLastPing": 1.287,
+                "masterOnline": true,
+                "config": {
+                  "enabled": true,
+                  "lotMultiplier": 1,
+                  "forceLot": 2.34,
+                  "reverseTrading": true,
+                  "masterId": "15308252",
+                  "masterCsvPath": "C:\\Users\\Joaquin\\AppData\\Roaming\\MetaQuotes\\Terminal\\C3FD2256B12E3E1C0D69DACD60237E94\\MQL4\\Files\\IPTRADECSV285308252.csv",
+                  "prefix": "",
+                  "suffix": "",
+                  "translations": {}
+                },
+                "translations": {}
+              }
+            ],
+            "totalSlaves": 1,
+            "current_status": "online"
           },
-          "copierStatus": {
-              "globalStatus": true,
-              "globalStatusText": "ON",
-              "masterAccounts": {
-                  "85308252": {
-                      "masterStatus": true,
-                      "effectiveStatus": true,
-                      "status": "online"
-                  }
-              },
-              "totalMasterAccounts": 1
-          },
-          "serverStats": {
-              "totalCSVFiles": 10,
-              "totalPendingAccounts": 4,
-              "totalOnlineAccounts": 10,
-              "totalOfflineAccounts": 0,
-              "totalMasterAccounts": 2,
-              "totalSlaveAccounts": 4,
-              "totalUnconnectedSlaves": 1
+          "40235860": {
+            "id": "40235860",
+            "name": "40235860",
+            "platform": "CTRADER",
+            "status": "online",
+            "lastPing": "1757851607",
+            "timeSinceLastPing": 1.287,
+            "config": {
+              "masterId": "40235860",
+              "enabled": false,
+              "name": "40235860",
+              "prefix": "",
+              "suffix": "",
+              "translations": {}
+            },
+            "connectedSlaves": [],
+            "totalSlaves": 0,
+            "current_status": "online"
           }
+        },
+        "slaveAccounts": {},
+        "unconnectedSlaves": [
+          {
+            "id": "61402130",
+            "name": "61402130",
+            "platform": "MT5",
+            "status": "online",
+            "timeSinceLastPing": 1.275,
+            "config": {
+              "enabled": false,
+              "lotMultiplier": 1,
+              "forceLot": null,
+              "reverseTrading": false,
+              "masterId": null,
+              "masterCsvPath": null,
+              "prefix": "",
+              "suffix": "",
+              "translations": {}
+            },
+            "translations": {},
+            "current_status": "online"
+          }
+        ]
       },
-      "timestamp": "2025-09-14T12:06:48.287Z",
-      "processingTimeMs": 20,
-      "csvFilesAccessed": 8,
-      "singleReadOperation": true
+      "copierStatus": {
+        "globalStatus": true,
+        "globalStatusText": "ON",
+        "masterAccounts": {
+          "85308252": {
+            "masterStatus": true,
+            "effectiveStatus": true,
+            "status": "online"
+          }
+        },
+        "totalMasterAccounts": 1
+      },
+      "serverStats": {
+        "totalCSVFiles": 10,
+        "totalPendingAccounts": 4,
+        "totalOnlineAccounts": 10,
+        "totalOfflineAccounts": 0,
+        "totalMasterAccounts": 2,
+        "totalSlaveAccounts": 4,
+        "totalUnconnectedSlaves": 1
+      }
+    },
+    "timestamp": "2025-09-14T12:06:48.287Z",
+    "processingTimeMs": 20,
+    "csvFilesAccessed": 8,
+    "singleReadOperation": true
   }
-  }
-  
-  
+}
