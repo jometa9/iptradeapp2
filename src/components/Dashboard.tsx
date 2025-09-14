@@ -107,15 +107,15 @@ export const Dashboard: React.FC = () => {
 
   const handleRestartService = async () => {
     if (isRestarting) return;
-    
+
     try {
       setIsRestarting(true);
-      
+
       console.log('🔄 Starting service restart (preserving session)...');
-      
+
       // Llamar al endpoint del servidor para reiniciar el servicio backend
       const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-      
+
       try {
         const response = await fetch(`http://localhost:${serverPort}/api/restart-service`, {
           method: 'POST',
@@ -128,42 +128,46 @@ export const Dashboard: React.FC = () => {
         if (response.ok) {
           console.log('✅ Backend restart initiated successfully');
         } else {
-          console.log('⚠️ Backend restart endpoint not available, proceeding with frontend restart');
+          console.log(
+            '⚠️ Backend restart endpoint not available, proceeding with frontend restart'
+          );
         }
       } catch (error) {
-        console.log('⚠️ Could not connect to backend for restart, proceeding with frontend restart');
+        console.log(
+          '⚠️ Could not connect to backend for restart, proceeding with frontend restart'
+        );
       }
-      
+
       // Limpiar solo cachés específicos del frontend, NO datos de autenticación
       try {
         const keysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && (
-            key.includes('cache') || 
-            key.includes('temp') || 
-            key.includes('csv_') ||
-            key.startsWith('auto_link_') ||
-            key.includes('hidden_')
-          )) {
+          if (
+            key &&
+            (key.includes('cache') ||
+              key.includes('temp') ||
+              key.includes('csv_') ||
+              key.startsWith('auto_link_') ||
+              key.includes('hidden_'))
+          ) {
             keysToRemove.push(key);
           }
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
-        
+
         console.log('✅ Frontend caches cleared (auth data preserved)');
       } catch (error) {
         console.log('⚠️ Cache clearing failed:', error);
       }
-      
+
       // Esperar un momento para que el servidor complete su reinicio
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       console.log('🔄 Reloading application (session preserved)...');
-      
+
       // Recargar la página - la autenticación se mantendrá porque no tocamos esos datos
       window.location.reload();
-      
     } catch (error) {
       console.error('❌ Service restart failed:', error);
       // Fallback: simplemente recargar la página (sin tocar autenticación)
@@ -207,8 +211,7 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center">
                 <div className="hidden sm:flex items-center">
                   <div className="flex items-center text-sm text-gray-600 px-3">
-                    {/*{userInfo?.name || 'User'}*/}
-                    Hiroshi Tamura
+                    {userInfo?.name || 'User'}
                   </div>
                 </div>
                 <Button
