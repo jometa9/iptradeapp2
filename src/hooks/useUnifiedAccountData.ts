@@ -55,6 +55,7 @@ interface ServerStats {
   totalOfflineAccounts: number;
   totalMasterAccounts: number;
   totalSlaveAccounts: number;
+  totalConnectedSlaves: number;
   totalUnconnectedSlaves: number;
 }
 

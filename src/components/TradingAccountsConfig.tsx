@@ -33,7 +33,7 @@ import {
   getLotSizeMessage,
   getPlanDisplayName,
   getSubscriptionLimits,
-  shouldShowSubscriptionLimitsCard,
+  shouldShowSubscriptionLimitsCardDetailed,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
 import csvFrontendService from '../services/csvFrontendService';
@@ -280,12 +280,21 @@ const TradingAccountsConfigComponent = () => {
     );
   }, [accounts]);
 
+  // Get serverStats at component level
+  const serverStats = unifiedData?.serverStats || {
+    totalCSVFiles: 0,
+    totalPendingAccounts: 0,
+    totalOnlineAccounts: 0,
+    totalOfflineAccounts: 0,
+    totalMasterAccounts: 0,
+    totalSlaveAccounts: 0,
+    totalConnectedSlaves: 0,
+    totalUnconnectedSlaves: 0,
+  };
+
   // Connectivity stats from unified data
   const connectivityStats = React.useMemo(() => {
     if (!unifiedData?.serverStats) return null;
-
-    // Usar los datos del serverStats del endpoint unificado
-    const serverStats = unifiedData.serverStats;
 
     return {
       total:
@@ -298,10 +307,12 @@ const TradingAccountsConfigComponent = () => {
       slaves: { total: serverStats.totalSlaveAccounts },
       masters: { total: serverStats.totalMasterAccounts },
     };
-  }, [unifiedData?.serverStats]);
+  }, [serverStats]);
 
   // Derived values for subscription limits
-  const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, accounts.length) : false;
+  const totalConfiguredAccounts = serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
+  const totalAccounts = serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts;
+  const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
   const canCustomizeLotSizesValue = userInfo ? canCustomizeLotSizes(userInfo) : false;
 
@@ -1363,16 +1374,16 @@ const TradingAccountsConfigComponent = () => {
       {/* Debug logs removed */}
 
       {/* Subscription Info Card para planes con límites */}
-      {userInfo && shouldShowSubscriptionLimitsCard(userInfo, accounts.length) && (
+      {userInfo && shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts) && (
         <Card
-          className="border-yellow-400 bg-yellow-50 flex items-center p-4 gap-3 mb-3"
+          className="border-yellow-200 bg-yellow-50 flex items-center p-4  gap-3 mb-3"
           style={fadeInDownAnimation}
         >
-          <AlertTriangle className="w-6 h-6 text-yellow-900" />
-          <div className="gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-900" />
+          <div className="gap-3 ">
             <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
             <p className="text-sm mt-1.5 text-yellow-800">
-              {getAccountLimitMessage(userInfo, accounts.length)} {getLotSizeMessage(userInfo)}
+              {getAccountLimitMessage(userInfo, totalAccounts)} {getLotSizeMessage(userInfo)}
             </p>
           </div>
         </Card>
@@ -1866,6 +1877,12 @@ const TradingAccountsConfigComponent = () => {
                                 return '100';
                               })()}
                               step="0.01"
+                              disabled={(() => {
+                                const limits = getSubscriptionLimits(
+                                  userInfo?.subscriptionType || 'free'
+                                );
+                                return limits.maxLotSize !== null;
+                              })()}
                               value={(() => {
                                 const limits = getSubscriptionLimits(
                                   userInfo?.subscriptionType || 'free'
@@ -1915,7 +1932,6 @@ const TradingAccountsConfigComponent = () => {
                                   forceLot: value,
                                 });
                               }}
-                              disabled={!canCustomizeLotSizesValue}
                               className="bg-white border border-gray-200 shadow-sm"
                             />
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">

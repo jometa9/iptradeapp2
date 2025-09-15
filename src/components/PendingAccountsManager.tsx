@@ -21,7 +21,7 @@ import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import {
   getPlanDisplayName,
   getSubscriptionLimits,
-  shouldShowSubscriptionLimitsCard,
+  shouldShowSubscriptionLimitsCardDetailed,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
 import { SSEService } from '../services/sseService';
@@ -202,9 +202,15 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     });
   }, [csvAccounts]);
 
-  // Obtener total de cuentas configuradas (masters + slaves) para el usuario
+  // Obtener total de cuentas configuradas (masters + connected slaves) para el usuario
   const totalConfiguredAccounts = React.useMemo(() => {
     // Usar serverStats del hook unificado para consistencia
+    if (!unifiedData?.serverStats) return 0;
+    return unifiedData.serverStats.totalMasterAccounts + (unifiedData.serverStats.totalConnectedSlaves || 0);
+  }, [unifiedData?.serverStats]);
+
+  // Obtener total de cuentas (masters + all slaves)
+  const totalAccounts = React.useMemo(() => {
     if (!unifiedData?.serverStats) return 0;
     return unifiedData.serverStats.totalMasterAccounts + unifiedData.serverStats.totalSlaveAccounts;
   }, [unifiedData?.serverStats]);
@@ -214,13 +220,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     if (!userInfo) return { maxAccounts: null, showLimitsCard: false };
 
     const limits = getSubscriptionLimits(userInfo.subscriptionType);
-    const showCard = shouldShowSubscriptionLimitsCard(userInfo, totalConfiguredAccounts);
+    const showCard = shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts);
 
     return {
       maxAccounts: limits.maxAccounts,
       showLimitsCard: showCard,
     };
-  }, [userInfo, totalConfiguredAccounts]);
+  }, [userInfo, totalConfiguredAccounts, totalAccounts]);
 
   // Helper function to get linking status message and icon
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
@@ -675,6 +681,18 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     Converting...
                   </Badge>
                 )}
+                {/* Account Limit Badge */}
+                {userInfo && subscriptionLimits.maxAccounts !== null && totalAccounts >= subscriptionLimits.maxAccounts && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-red-50 text-red-800 border border-red-300 mt-0.5"
+                  >
+                    {totalAccounts > subscriptionLimits.maxAccounts 
+                      ? `Limit exceeded (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade plan`
+                      : `Limit reached (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade to add more`
+                    }
+                  </Badge>
+                )}
                 {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   (isCollapsed || pendingCount > 0) && (
@@ -850,7 +868,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   variant="outline"
                                   className="bg-white h-9 rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
                                   onClick={() => convertToMaster(account.account_id)}
-                                  disabled={isConverting}
+                                  disabled={
+                                    isConverting ||
+                                    (subscriptionLimits.maxAccounts !== null &&
+                                      totalAccounts >= subscriptionLimits.maxAccounts)
+                                  }
                                 >
                                   {isConverting ? (
                                     <>
@@ -883,7 +905,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   variant="outline"
                                   className="bg-white h-9 rounded-lg border-green-200 text-green-700 hover:bg-gray-50"
                                   onClick={convertAccount}
-                                  disabled={isConverting}
+                                  disabled={
+                                    isConverting ||
+                                    (subscriptionLimits.maxAccounts !== null &&
+                                      totalAccounts >= subscriptionLimits.maxAccounts)
+                                  }
                                 >
                                   {isConverting ? (
                                     <>
@@ -926,7 +952,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       disabled={
                                         isConverting ||
                                         (subscriptionLimits.maxAccounts !== null &&
-                                          totalConfiguredAccounts >=
+                                          totalAccounts >=
                                             subscriptionLimits.maxAccounts) ||
                                         false
                                       }
@@ -944,7 +970,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       disabled={
                                         isConverting ||
                                         (subscriptionLimits.maxAccounts !== null &&
-                                          totalConfiguredAccounts >=
+                                          totalAccounts >=
                                             subscriptionLimits.maxAccounts) ||
                                         false
                                       }

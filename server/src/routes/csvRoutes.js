@@ -30,15 +30,26 @@ const activeConnectionsByIP = new Map();
 router.get('/csv/events', requireValidSubscription, (req, res) => {
   const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
 
-  // PROTECCIÓN: Solo una conexión por IP
+  // PROTECCIÓN: Solo una conexión por IP - pero permitir reconexión
   if (activeConnectionsByIP.has(clientIP)) {
-    res.status(429).json({ error: 'Only one SSE connection per IP allowed' });
+    const existingConnectionId = activeConnectionsByIP.get(clientIP);
+    console.log(`🔄 [SSE] Client ${clientIP} attempting reconnection (existing: ${existingConnectionId})`);
+    
+    // Permitir reconexión después de un breve delay
+    res.status(429).json({ 
+      error: 'Connection already exists for this IP', 
+      retryAfter: 2,
+      message: 'Please wait 2 seconds before reconnecting' 
+    });
     return;
   }
 
   activeSSEConnections++;
   const connectionId = activeSSEConnections;
   activeConnectionsByIP.set(clientIP, connectionId);
+  
+  console.log(`✅ [SSE] New connection established: ${clientIP} (ID: ${connectionId}, Total: ${activeSSEConnections})`);
+  
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -247,6 +258,8 @@ router.get('/csv/events', requireValidSubscription, (req, res) => {
         csvManager.off('backgroundScanEvent', handleBackgroundScanEvent);
         csvManager.off('accountConverted', handleAccountConverted);
         csvManager.off('accountDeleted', handleAccountDeleted);
+        
+        console.log(`❌ [SSE] Connection closed: ${clientIP} (ID: ${connectionId}, Remaining: ${activeSSEConnections})`);
       });
     })
     .catch(error => {

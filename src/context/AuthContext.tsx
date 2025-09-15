@@ -238,8 +238,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Clear backend data if we have an API key
     if (currentSecretKey) {
       try {
+        const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
         const response = await fetch(
-          `/api/clear-user-data?apiKey=${encodeURIComponent(currentSecretKey)}`,
+          `${baseUrl}/api/clear-user-data?apiKey=${encodeURIComponent(currentSecretKey)}`,
           {
             method: 'POST',
             headers: {
