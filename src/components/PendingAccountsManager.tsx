@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import {
   ArrowBigRight,
+  Bot,
   Cable,
   HousePlug,
   Inbox,
@@ -65,22 +66,29 @@ interface LinkingStatus {
 
 interface PendingAccountsManagerProps {
   isLinking?: boolean; // Optional prop to override hook state
-  linkPlatforms?: () => Promise<void>; // Function from parent component
+  linkPlatforms?: (source: 'link' | 'bot') => Promise<void>; // Function from parent component
+  linkingSource?: 'link' | 'bot' | null; // Source of the linking action
 }
 
 export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   isLinking: propIsLinking,
   linkPlatforms: propLinkPlatforms,
+  linkingSource: propLinkingSource,
 }) => {
   const { secretKey, userInfo } = useAuth();
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
-  const { isLinking: hookIsLinking, linkPlatforms: hookLinkPlatforms } = useLinkPlatforms();
+  const {
+    isLinking: hookIsLinking,
+    linkPlatforms: hookLinkPlatforms,
+    linkingSource: hookLinkingSource,
+  } = useLinkPlatforms();
 
   // Use prop if provided, otherwise fall back to hook
   const linkPlatforms = propLinkPlatforms || hookLinkPlatforms;
 
   // Use prop if provided, otherwise fall back to hook
   const isLinking = propIsLinking !== undefined ? propIsLinking : hookIsLinking;
+  const linkingSource = propLinkingSource !== undefined ? propLinkingSource : hookLinkingSource;
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
@@ -432,6 +440,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         reverseTrade: false,
         prefix: '',
         suffix: '',
+        translations: {},
       });
     }
   };
@@ -721,30 +730,52 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                       <li>Link your platforms to detect them:</li>
                       <li>1. Execute Link Platforms process</li>
                       <li>2. Add the IPTRADE Bot to the chart</li>
-                      <li>3. Wait for the accounts to appear here</li>
+                      <li>3. Execute Find bots process</li>
+                      <li>4. Wait for the accounts to appear here</li>
                     </div>
                   )}
                 </ul>
                 {/* boton que ejecute lo mismo que link platforms */}
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      await linkPlatforms();
-                    } catch {
-                      // Silent error handling
-                    }
-                  }}
-                  disabled={isLinking}
-                  className={`bg-white mb-1 h-9 pl-3 rounded-full border shadow-lg text-blue-700  hover:bg-blue-50 ${
-                    isLinking
-                      ? 'border-gray-200  cursor-not-allowed text-gray-700'
-                      : 'border-blue-200 cursor-pointer link-platforms-shine'
-                  }  hover:shadow-lg transition-all duration-300`}
-                >
-                  <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
-                  {isLinking ? 'Linking...' : 'Link Platforms'}
-                </Button>
+                <div className="flex items-center justify-center gap-2 mx-auto">
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await linkPlatforms('link');
+                      } catch {
+                        // Silent error handling
+                      }
+                    }}
+                    disabled={isLinking}
+                    className={`bg-white mb-1 h-9 pl-3 rounded-full border shadow-lg text-blue-700  hover:bg-blue-50 ${
+                      isLinking
+                        ? 'border-gray-200  cursor-not-allowed text-gray-700'
+                        : 'border-blue-200 cursor-pointer link-platforms-shine'
+                    }  hover:shadow-lg transition-all duration-300`}
+                  >
+                    <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
+                    {isLinking && linkingSource === 'link' ? 'Linking...' : 'Link Platforms'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await linkPlatforms('bot');
+                      } catch {
+                        // Silent error handling
+                      }
+                    }}
+                    disabled={isLinking}
+                    className={`bg-white mb-1 h-9 pl-3 rounded-full border shadow-lg text-green-700  hover:bg-green-50 ${
+                      isLinking
+                        ? 'border-gray-200  cursor-not-allowed text-gray-700'
+                        : 'border-green-200 cursor-pointer link-platforms-shine'
+                    }  hover:shadow-lg transition-all duration-300`}
+                  >
+                    <Bot className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
+                    {isLinking && linkingSource === 'bot' ? 'Finding...' : 'Find bots'}
+                  </Button>
+                </div>
 
                 <p className="text-[10px] mt-2 italic">
                   <a
@@ -1349,7 +1380,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   <div className="space-y-2">
                                     {Object.entries(conversionForm.translations || {}).map(
                                       ([from, to], index) => (
-                                        <div key={index} className="flex items-center justify-between gap-2">
+                                        <div
+                                          key={index}
+                                          className="flex items-center justify-between gap-2"
+                                        >
                                           <Input
                                             placeholder="From symbol"
                                             value={from}
@@ -1368,7 +1402,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             }}
                                             className="bg-white border border-gray-200"
                                           />
-                                          <ArrowBigRight className="h-12 w-12 text-gray-500"/>
+                                          <ArrowBigRight className="h-12 w-12 text-gray-500" />
                                           <Input
                                             placeholder="To symbol"
                                             value={to}
@@ -1383,26 +1417,23 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                             }}
                                             className="bg-white border border-gray-200"
                                           />
-                                             <Button
-      variant="outline"
-      size="sm"
-      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
-      onClick={() => {
-        const newTranslations = {
-          ...(conversionForm.translations || {}),
-        };
-        delete newTranslations[from];
-        setConversionForm(prev => ({
-          ...prev,
-          translations: newTranslations,
-        }));
-      }}
-      
-    >
-      <Trash className="h-4 w-4 text-red-600" />
-    </Button>
-                             
-                                            
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+                                            onClick={() => {
+                                              const newTranslations = {
+                                                ...(conversionForm.translations || {}),
+                                              };
+                                              delete newTranslations[from];
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: newTranslations,
+                                              }));
+                                            }}
+                                          >
+                                            <Trash className="h-4 w-4 text-red-600" />
+                                          </Button>
                                         </div>
                                       )
                                     )}

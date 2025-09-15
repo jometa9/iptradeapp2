@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 
-import { Eye, EyeOff, HelpCircle, Inbox, Link, LogOut, RefreshCw, RotateCcw } from 'lucide-react';
+import {
+  Bot,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  Inbox,
+  Link,
+  LogOut,
+  RefreshCw,
+  RotateCcw,
+} from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
@@ -18,7 +28,7 @@ import { Button } from './ui/button';
 export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
-  const { linkPlatforms, isLinking, clearAutoLinkCache } = useLinkPlatforms();
+  const { linkPlatforms, isLinking, linkingSource } = useLinkPlatforms();
 
   // Get visibility state from UnifiedAccountDataContext
   const { isHidden, isBlinking, toggleHidden } = useUnifiedAccountDataContext();
@@ -78,7 +88,7 @@ export const Dashboard: React.FC = () => {
   const handleLogout = async () => {
     try {
       await logout();
-    } catch (error) {
+    } catch {
       // Silent error handling
     }
   };
@@ -96,11 +106,11 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleLinkPlatforms = async () => {
+  const handleLinkPlatforms = async (source: 'link' | 'bot') => {
     try {
-      await linkPlatforms();
+      await linkPlatforms(source);
       // Silent processing
-    } catch (error) {
+    } catch {
       // Silent error handling
     }
   };
@@ -132,7 +142,7 @@ export const Dashboard: React.FC = () => {
             '⚠️ Backend restart endpoint not available, proceeding with frontend restart'
           );
         }
-      } catch (error) {
+      } catch {
         console.log(
           '⚠️ Could not connect to backend for restart, proceeding with frontend restart'
         );
@@ -219,16 +229,34 @@ export const Dashboard: React.FC = () => {
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
                   title={`Link Platforms`}
-                  onClick={handleLinkPlatforms}
+                  onClick={() => handleLinkPlatforms('link')}
                   disabled={isLinking}
                 >
-                  {isLinking ? (
+                  {isLinking && linkingSource === 'link' ? (
                     <div className="flex items-center space-x-1">
                       <RefreshCw className="w-4 h-4 animate-spin" />
                     </div>
                   ) : (
                     <div className="flex items-center space-x-1">
                       <Link className="w-4 h-4" />
+                    </div>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-gray-900"
+                  title={`Find bots`}
+                  onClick={() => handleLinkPlatforms('bot')}
+                  disabled={isLinking}
+                >
+                  {isLinking && linkingSource === 'bot' ? (
+                    <div className="flex items-center space-x-1">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-1">
+                      <Bot className="w-4 h-4" />
                     </div>
                   )}
                 </Button>
@@ -288,7 +316,13 @@ export const Dashboard: React.FC = () => {
 
           {/* Pending Accounts - Hidden when isHidden is true */}
           {!isHidden && (
-            <PendingAccountsManager isLinking={isLinking} linkPlatforms={linkPlatforms} />
+            <PendingAccountsManager
+              isLinking={isLinking}
+              linkPlatforms={async (source: 'link' | 'bot') => {
+                await linkPlatforms(source);
+              }}
+              linkingSource={linkingSource}
+            />
           )}
 
           {/* Main Trading Configuration */}

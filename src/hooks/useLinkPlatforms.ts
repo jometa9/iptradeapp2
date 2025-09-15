@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import type { LinkPlatformsResult } from '../services/linkPlatformsService';
 import { linkPlatformsService } from '../services/linkPlatformsService';
 import { SSEService } from '../services/sseService';
+
 // Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 
 export const useLinkPlatforms = () => {
   const { secretKey } = useAuth();
   const [isLinking, setIsLinking] = useState(false);
+  const [linkingSource, setLinkingSource] = useState<'link' | 'bot' | null>(null);
   const [lastResult, setLastResult] = useState<LinkPlatformsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listenerIdRef = useRef<string | null>(null);
@@ -16,8 +18,15 @@ export const useLinkPlatforms = () => {
   // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
   // Track isLinking state changes
-  const setIsLinkingWithLog = (newValue: boolean, reason: string) => {
+  const setIsLinkingWithLog = (
+    newValue: boolean,
+    reason: string,
+    source?: 'link' | 'bot' | null
+  ) => {
     setIsLinking(newValue);
+    if (newValue === false || source !== undefined) {
+      setLinkingSource(source || null);
+    }
   };
 
   // Check if Link Platforms is currently running on server
@@ -49,7 +58,7 @@ export const useLinkPlatforms = () => {
     }
   };
 
-  const linkPlatforms = async () => {
+  const linkPlatforms = async (source: 'link' | 'bot' = 'link') => {
     if (!secretKey) {
       setError('Authentication required');
       return;
@@ -61,7 +70,7 @@ export const useLinkPlatforms = () => {
       return;
     }
 
-    setIsLinkingWithLog(true, 'manual button click');
+    setIsLinkingWithLog(true, 'manual button click', source);
     setError(null);
 
     try {
@@ -164,7 +173,9 @@ export const useLinkPlatforms = () => {
 
             if (
               data.newInstallations &&
-              (data.newInstallations.mql4 > 0 || data.newInstallations.mql5 > 0 || data.newInstallations.ninjaTrader > 0)
+              (data.newInstallations.mql4 > 0 ||
+                data.newInstallations.mql5 > 0 ||
+                data.newInstallations.ninjaTrader > 0)
             ) {
             } else {
             }
@@ -220,6 +231,7 @@ export const useLinkPlatforms = () => {
   return {
     linkPlatforms,
     isLinking,
+    linkingSource,
     lastResult,
     error,
     clearError: () => setError(null),
