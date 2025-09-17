@@ -206,7 +206,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const totalConfiguredAccounts = React.useMemo(() => {
     // Usar serverStats del hook unificado para consistencia
     if (!unifiedData?.serverStats) return 0;
-    return unifiedData.serverStats.totalMasterAccounts + (unifiedData.serverStats.totalConnectedSlaves || 0);
+    return (
+      unifiedData.serverStats.totalMasterAccounts +
+      (unifiedData.serverStats.totalConnectedSlaves || 0)
+    );
   }, [unifiedData?.serverStats]);
 
   // Obtener total de cuentas (masters + all slaves)
@@ -220,7 +223,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     if (!userInfo) return { maxAccounts: null, showLimitsCard: false };
 
     const limits = getSubscriptionLimits(userInfo.subscriptionType);
-    const showCard = shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts);
+    const showCard = shouldShowSubscriptionLimitsCardDetailed(
+      userInfo,
+      totalConfiguredAccounts,
+      totalAccounts
+    );
 
     return {
       maxAccounts: limits.maxAccounts,
@@ -682,17 +689,18 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   </Badge>
                 )}
                 {/* Account Limit Badge */}
-                {userInfo && subscriptionLimits.maxAccounts !== null && totalAccounts >= subscriptionLimits.maxAccounts && (
-                  <Badge
-                    variant="secondary"
-                    className="bg-red-50 text-red-800 border border-red-300 mt-0.5"
-                  >
-                    {totalAccounts > subscriptionLimits.maxAccounts 
-                      ? `Limit exceeded (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade plan`
-                      : `Limit reached (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade to add more`
-                    }
-                  </Badge>
-                )}
+                {userInfo &&
+                  subscriptionLimits.maxAccounts !== null &&
+                  totalAccounts >= subscriptionLimits.maxAccounts && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-red-50 text-red-800 border border-red-300 mt-0.5"
+                    >
+                      {totalAccounts > subscriptionLimits.maxAccounts
+                        ? `Limit exceeded (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade plan`
+                        : `Limit reached (${totalAccounts}/${subscriptionLimits.maxAccounts}) - Upgrade to add more`}
+                    </Badge>
+                  )}
                 {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   (isCollapsed || pendingCount > 0) && (
@@ -742,7 +750,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   {linkingStatus.isActive &&
                   linkingStatus.step !== 'idle' &&
                   linkingStatus.step !== 'completed' ? (
-                    <>Please wait...</>
+                    <div>
+                      <li>Wait, after the process is completed yo can:</li>
+                      <li>1. Add the IPTRADE Bot to the chart</li>
+                      <li>2. Execute Find bots process</li>
+                      <li>3. Wait for the accounts to appear here</li>
+                    </div>
                   ) : (
                     <div>
                       <li>Link your platforms to detect them:</li>
@@ -952,8 +965,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       disabled={
                                         isConverting ||
                                         (subscriptionLimits.maxAccounts !== null &&
-                                          totalAccounts >=
-                                            subscriptionLimits.maxAccounts) ||
+                                          totalAccounts >= subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
@@ -970,8 +982,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       disabled={
                                         isConverting ||
                                         (subscriptionLimits.maxAccounts !== null &&
-                                          totalAccounts >=
-                                            subscriptionLimits.maxAccounts) ||
+                                          totalAccounts >= subscriptionLimits.maxAccounts) ||
                                         false
                                       }
                                     >
