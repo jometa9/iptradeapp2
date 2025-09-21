@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { EventSource } = require('eventsource');
+const { SUPPORTED_LANGUAGES, isLanguageSupported } = require('./languageConfig');
 
 // Función para manejar permisos de macOS de manera eficiente
 async function requestMacOSPermissions() {
@@ -153,6 +154,124 @@ ipcMain.handle('get-window-config', () => {
     hasFrame: isMacOS,
     hasMenuBar: !isMacOS, // En macOS se muestra, en otros se oculta
   };
+});
+
+// Handler para detectar el idioma del sistema operativo
+ipcMain.handle('detect-system-language', async () => {
+  try {
+    const os = require('os');
+    const { spawn } = require('child_process');
+
+    let systemLocale = 'en-US';
+    const platform = process.platform;
+
+    // Detectar idioma según la plataforma
+    if (platform === 'win32') {
+      // Windows: usar PowerShell para obtener el idioma del sistema
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const powershell = spawn('powershell', [
+            '-Command',
+            'Get-Culture | Select-Object -ExpandProperty Name',
+          ]);
+
+          let output = '';
+          powershell.stdout.on('data', data => {
+            output += data.toString();
+          });
+
+          powershell.on('close', code => {
+            if (code === 0 && output.trim()) {
+              resolve(output.trim());
+            } else {
+              resolve('en-US');
+            }
+          });
+
+          powershell.on('error', () => {
+            resolve('en-US');
+          });
+        });
+        systemLocale = result;
+      } catch (error) {
+        console.warn('Error detecting Windows language:', error);
+        systemLocale = 'en-US';
+      }
+    } else if (platform === 'darwin') {
+      // macOS: usar defaults para obtener el idioma del sistema
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const defaults = spawn('defaults', ['read', '-g', 'AppleLocale']);
+
+          let output = '';
+          defaults.stdout.on('data', data => {
+            output += data.toString();
+          });
+
+          defaults.on('close', code => {
+            if (code === 0 && output.trim()) {
+              resolve(output.trim());
+            } else {
+              resolve('en_US');
+            }
+          });
+
+          defaults.on('error', () => {
+            resolve('en_US');
+          });
+        });
+        systemLocale = result;
+      } catch (error) {
+        console.warn('Error detecting macOS language:', error);
+        systemLocale = 'en_US';
+      }
+    } else {
+      // Linux: usar variables de entorno
+      systemLocale =
+        process.env.LANG || process.env.LC_ALL || process.env.LC_CTYPE || 'en_US.UTF-8';
+    }
+
+    // Normalizar el locale
+    const normalizedLocale = systemLocale.replace(/[._]/g, '-');
+    const parts = normalizedLocale.split('-');
+    const language = parts[0]?.toLowerCase() || 'en';
+    const country = parts[1]?.toUpperCase() || 'US';
+
+    // Verificar si el idioma es soportado
+    const isSupported = isLanguageSupported(language);
+
+    // Si no es soportado, usar inglés como fallback
+    const finalLanguage = isSupported ? language : 'en';
+    const finalCountry = isSupported ? country : 'US';
+    const finalLocale = `${finalLanguage}-${finalCountry}`;
+
+    return {
+      language: finalLanguage,
+      country: finalCountry,
+      locale: finalLocale,
+      isSupported: isSupported,
+      originalLocale: systemLocale,
+    };
+  } catch (error) {
+    console.error('Error detecting system language:', error);
+    return {
+      language: 'en',
+      country: 'US',
+      locale: 'en-US',
+      isSupported: true,
+      originalLocale: 'en-US',
+    };
+  }
+});
+
+// Handler para obtener idiomas soportados
+ipcMain.handle('get-supported-languages', () => {
+  return SUPPORTED_LANGUAGES;
+});
+
+// Handler para verificar si un idioma es soportado
+ipcMain.handle('is-language-supported', (event, language) => {
+  return isLanguageSupported(language);
 });
 
 async function startServer() {

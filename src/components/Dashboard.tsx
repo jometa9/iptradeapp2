@@ -19,6 +19,8 @@ import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
 // Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
+import { useTranslation } from '../hooks/useTranslation';
+import { LanguageToggleButton } from './LanguageToggleButton';
 import { PendingAccountsManager } from './PendingAccountsManager';
 import { TradingAccountsConfig } from './TradingAccountsConfig';
 import { UpdateCard } from './UpdateCard';
@@ -29,6 +31,7 @@ export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
   const { linkPlatforms, isLinking, linkingSource } = useLinkPlatforms();
+  const { t } = useTranslation();
 
   // Get visibility state from UnifiedAccountDataContext
   const { isHidden, isBlinking, toggleHidden } = useUnifiedAccountDataContext();
@@ -36,7 +39,7 @@ export const Dashboard: React.FC = () => {
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
 
-  const [userIP, setUserIP] = useState<string>('Loading...');
+  const [userIP, setUserIP] = useState<string>(t('common.loading'));
   // Inicializar showIP desde localStorage
   const [showIP, setShowIP] = useState<boolean>(() => {
     const saved = localStorage.getItem('showIP');
@@ -56,7 +59,7 @@ export const Dashboard: React.FC = () => {
       const data = await response.json();
       setUserIP(data.ip);
     } catch {
-      setUserIP('Unknown');
+      setUserIP(t('common.unknown'));
     }
   };
 
@@ -100,7 +103,7 @@ export const Dashboard: React.FC = () => {
 
   const handleCopyIP = async () => {
     try {
-      await navigator.clipboard.writeText(userIP || 'Unknown');
+      await navigator.clipboard.writeText(userIP || t('common.unknownIP'));
     } catch {
       // Silent fail - no notification to user
     }
@@ -203,16 +206,16 @@ export const Dashboard: React.FC = () => {
 
               {/* User IP in the center */}
               <div className="flex items-center space-x-2 text-sm text-gray-400">
-                <span>IP</span>
-                <span className="select-none" onClick={handleCopyIP} title="Click to copy IP">
-                  {showIP ? userIP || 'Unknown' : '••••••••'}
+                <span>{t('dashboard.ipAddress')}</span>
+                <span className="select-none" onClick={handleCopyIP} title={t('dashboard.copyIP')}>
+                  {showIP ? userIP || t('common.unknown') : '••••••••'}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowIP(!showIP)}
                   className="text-gray-400 p-1 h-auto"
-                  title={showIP ? 'Hide IP' : 'Show IP'}
+                  title={showIP ? t('dashboard.hideIP') : t('dashboard.showIP')}
                 >
                   {showIP ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 </Button>
@@ -221,14 +224,14 @@ export const Dashboard: React.FC = () => {
               <div className="flex items-center">
                 <div className="hidden sm:flex items-center">
                   <div className="flex items-center text-sm text-gray-600 px-3">
-                    {userInfo?.name || 'User'}
+                    {userInfo?.name || t('dashboard.user')}
                   </div>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title={`Link Platforms`}
+                  title={t('dashboard.linkPlatforms')}
                   onClick={() => handleLinkPlatforms('link')}
                   disabled={isLinking}
                 >
@@ -246,7 +249,7 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title={`Find bots`}
+                  title={t('dashboard.findBots')}
                   onClick={() => handleLinkPlatforms('bot')}
                   disabled={isLinking}
                 >
@@ -266,7 +269,11 @@ export const Dashboard: React.FC = () => {
                   className={`font-bold text-md transition-all duration-50 ease-in-out ${
                     isHidden ? (isBlinking ? 'text-orange-400' : 'text-gray-400') : 'text-gray-600'
                   }`}
-                  title={isHidden ? 'Show Pending Accounts' : 'Hide Pending Accounts'}
+                  title={
+                    isHidden
+                      ? t('dashboard.showPendingAccounts')
+                      : t('dashboard.hidePendingAccounts')
+                  }
                   onClick={toggleHidden}
                 >
                   <Inbox className="w-4 h-4" />
@@ -276,7 +283,7 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title="Restart Service"
+                  title={t('dashboard.restartService')}
                   onClick={handleRestartService}
                   disabled={isRestarting}
                 >
@@ -290,18 +297,20 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title="Help"
+                  title={t('dashboard.help')}
                   onClick={handleHelp}
                 >
                   <HelpCircle className="w-4 h-4" />
                 </Button>
+
+                <LanguageToggleButton />
 
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleLogout}
                   className="text-gray-600 hover:text-gray-900 mr-0 pr-0"
-                  title="Logout"
+                  title={t('dashboard.logout')}
                 >
                   <LogOut className="w-4 h-4" />
                 </Button>

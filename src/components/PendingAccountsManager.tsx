@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
+import { useTranslation } from '../hooks/useTranslation';
 import {
   getPlanDisplayName,
   getSubscriptionLimits,
@@ -76,6 +77,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   linkingSource: propLinkingSource,
 }) => {
   const { secretKey, userInfo } = useAuth();
+  const { t } = useTranslation();
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
   const {
     isLinking: hookIsLinking,
@@ -126,22 +128,22 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   });
 
   const scanningMessages = [
-    'Searching for new platforms...',
-    'Your pending accounts are being processed...',
-    'Checking bot installation...',
-    'Linking new platforms...',
-    'Verifying new platform connections...',
-    'Scanning for new trading terminals...',
-    'The good traders have strong patience...',
-    'Establishing new secure connections...',
-    'Please be patient...',
-    'Configuring new platform integration...',
-    'To be continued...',
-    'Finalizing new platform setup...',
-    'Almost there...',
-    'A lot of work to do...',
-    'Too much files in the way...',
-    'Yes, I know it takes time...',
+    t('pendingAccounts.searching'),
+    t('pendingAccounts.processing'),
+    t('pendingAccounts.checking'),
+    t('pendingAccounts.linking'),
+    t('pendingAccounts.verifying'),
+    t('pendingAccounts.scanning'),
+    t('pendingAccounts.patience'),
+    t('pendingAccounts.connecting'),
+    t('pendingAccounts.pleaseWait'),
+    t('pendingAccounts.configuring'),
+    t('pendingAccounts.toBeContinued'),
+    t('pendingAccounts.finalizing'),
+    t('pendingAccounts.almostThere'),
+    t('pendingAccounts.lotOfWork'),
+    t('pendingAccounts.tooManyFiles'),
+    t('pendingAccounts.takesTime'),
   ];
 
   // State for rotating message
@@ -542,8 +544,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
       // Mostrar mensaje de éxito
       toast({
-        title: 'Master Account Created Successfully',
-        description: `Account ${accountId} has been converted to master.${configText}`,
+        title: t('pendingAccounts.masterAccountCreated'),
+        description: `${t('pendingAccounts.accountConvertedToMaster')}${configText}`,
       });
 
       // Refrescar la lista de master accounts
@@ -551,7 +553,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     } catch (err) {
       toast({
         title: 'Error',
-        description: err instanceof Error ? err.message : 'Error converting account to master',
+        description:
+          err instanceof Error ? err.message : t('pendingAccounts.errorConvertingToMaster'),
         variant: 'destructive',
       });
     } finally {
@@ -635,8 +638,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
           : '';
 
       toast({
-        title: 'Slave Account Created Successfully',
-        description: `Account ${expandedAccountId} has been converted to slave with your specified settings.${configText}`,
+        title: t('pendingAccounts.slaveAccountCreated'),
+        description: `${t('pendingAccounts.accountConvertedToSlave')}${configText}`,
       });
 
       // Cerrar el formulario
@@ -644,7 +647,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     } catch (err) {
       toast({
         title: 'Error',
-        description: err instanceof Error ? err.message : 'Error converting account',
+        description:
+          err instanceof Error ? err.message : t('pendingAccounts.errorConvertingAccount'),
         variant: 'destructive',
       });
     } finally {
@@ -785,7 +789,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     }  hover:shadow-lg transition-all duration-300`}
                   >
                     <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
-                    {isLinking && linkingSource === 'link' ? 'Linking...' : 'Link Platforms'}
+                    {isLinking && linkingSource === 'link'
+                      ? t('pendingAccounts.linking')
+                      : t('pendingAccounts.linkPlatforms')}
                   </Button>
                   <Button
                     variant="outline"
@@ -804,7 +810,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                     }  hover:shadow-lg transition-all duration-300`}
                   >
                     <Bot className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
-                    {isLinking && linkingSource === 'bot' ? 'Finding...' : 'Find bots'}
+                    {isLinking && linkingSource === 'bot'
+                      ? t('pendingAccounts.finding')
+                      : t('pendingAccounts.findBots')}
                   </Button>
                 </div>
 
@@ -858,7 +866,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   : 'bg-red-50 text-red-800 border-red-300'
                               }
                             >
-                              {isOnline ? 'Pending Online' : 'Pending Offline'}
+                              {isOnline
+                                ? t('pendingAccounts.pendingOnline')
+                                : t('pendingAccounts.pendingOffline')}
                             </Badge>
                             <Badge
                               variant="outline"
@@ -1143,8 +1153,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     </Select>
                                     <p className="text-xs text-muted-foreground mt-1 text-gray-500">
                                       {masterAccounts.length === 0
-                                        ? 'No master accounts available. Convert a pending account to master first.'
-                                        : 'Set the master account to connect to'}
+                                        ? t('pendingAccounts.noMasterAccounts')
+                                        : t('pendingAccounts.setMasterAccount')}
                                     </p>
                                   </div>
 
@@ -1199,9 +1209,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                 value = 1;
                                                 if (parsedValue !== 1) {
                                                   toast({
-                                                    title: 'Lot multiplier restricted',
-                                                    description:
-                                                      'Free plan users cannot modify lot multiplier',
+                                                    title: t(
+                                                      'pendingAccounts.lotMultiplierRestricted'
+                                                    ),
+                                                    description: t(
+                                                      'pendingAccounts.freePlanCannotModify'
+                                                    ),
                                                     variant: 'destructive',
                                                   });
                                                 }
@@ -1211,8 +1224,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                 if (value > maxMultiplier) {
                                                   value = maxMultiplier;
                                                   toast({
-                                                    title: 'Lot multiplier limit exceeded',
-                                                    description: `Your plan limits lot multiplier to ${maxMultiplier}x`,
+                                                    title: t(
+                                                      'pendingAccounts.lotMultiplierLimitExceeded'
+                                                    ),
+                                                    description: `${t('pendingAccounts.planLimitsMultiplier')} ${maxMultiplier}x`,
                                                     variant: 'destructive',
                                                   });
                                                 }
@@ -1236,7 +1251,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                         if (limits.maxLotSize !== null) {
                                           return `Lot multiplier disabled - ${getPlanDisplayName(userInfo?.subscriptionType || 'free')} plan has lot size restrictions`;
                                         }
-                                        return 'Multiplies the lot size from the master account';
+                                        return t('pendingAccounts.multipliesLotSize');
                                       })()}
                                     </p>
                                   </div>
@@ -1333,9 +1348,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                   value = 0.01;
                                                   if (parsedValue > 0.01) {
                                                     toast({
-                                                      title: 'Lot size restricted',
-                                                      description:
-                                                        'Free plan users are limited to 0.01 lot size',
+                                                      title: t('pendingAccounts.lotSizeRestricted'),
+                                                      description: t(
+                                                        'pendingAccounts.freePlanLimitedLotSize'
+                                                      ),
                                                       variant: 'destructive',
                                                     });
                                                   }
@@ -1343,8 +1359,10 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                   // Otros planes con límites
                                                   value = limits.maxLotSize;
                                                   toast({
-                                                    title: 'Lot size limit exceeded',
-                                                    description: `Your plan limits lot size to ${limits.maxLotSize}`,
+                                                    title: t(
+                                                      'pendingAccounts.lotSizeLimitExceeded'
+                                                    ),
+                                                    description: `${t('pendingAccounts.planLimitsLotSize')} ${limits.maxLotSize}`,
                                                     variant: 'destructive',
                                                   });
                                                 }

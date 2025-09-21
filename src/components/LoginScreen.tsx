@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 
-import { AlertCircle, Loader2, Eye, EyeOff, Clipboard } from 'lucide-react';
+import { AlertCircle, Clipboard, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useExternalLink } from '../hooks/useExternalLink';
+import { useTranslation } from '../hooks/useTranslation';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -14,6 +15,7 @@ export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuth();
   const { openExternalLink } = useExternalLink();
+  const { t } = useTranslation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,9 +57,11 @@ export const LoginScreen: React.FC = () => {
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
           <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
           <div>
-            <CardTitle className="text-2xl font-bold text-gray-900">Welcome to IPTRADE</CardTitle>
+            <CardTitle className="text-2xl font-bold text-gray-900">
+              {t('auth.welcome')} IPTRADE
+            </CardTitle>
             <CardDescription className="text-gray-600 mt-2">
-              Enter your license key to log in
+              {t('auth.enterLicenseKey')}
             </CardDescription>
           </div>
         </CardHeader>
@@ -68,8 +72,8 @@ export const LoginScreen: React.FC = () => {
               <div className="relative">
                 <Input
                   id="apikey"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Insert your license here"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={t('auth.licensePlaceholder')}
                   value={apiKey}
                   onChange={handleInputChange}
                   disabled={isLoading}
@@ -119,10 +123,10 @@ export const LoginScreen: React.FC = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Validating license...
+                  {t('auth.validatingLicense')}
                 </>
               ) : (
-                'Connect'
+                t('auth.connect')
               )}
             </Button>
           </form>
@@ -136,7 +140,7 @@ export const LoginScreen: React.FC = () => {
                 openExternalLink('https://iptradecopier.com/dashboard');
               }}
             >
-              Find my license key
+              {t('auth.findLicenseKey')}
             </a>
           </CardDescription>
         </CardContent>

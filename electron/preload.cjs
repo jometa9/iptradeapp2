@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API para obtener la configuración de la ventana
   getWindowConfig: () => ipcRenderer.invoke('get-window-config'),
 
+  // APIs para detección de idioma
+  detectSystemLanguage: () => ipcRenderer.invoke('detect-system-language'),
+  getSupportedLanguages: () => ipcRenderer.invoke('get-supported-languages'),
+  isLanguageSupported: language => ipcRenderer.invoke('is-language-supported', language),
+
   // Listeners para eventos de actualización
   onUpdateAvailable: callback => {
     ipcRenderer.on('update-available', (event, info) => callback(info));
