@@ -1,4 +1,14 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Tray, Menu, nativeImage } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  Tray,
+  Menu,
+  nativeImage,
+  protocol,
+} = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -194,37 +204,48 @@ async function startServer() {
 }
 
 async function createAdaptiveIcon() {
-  const size = 64;
-  const canvas = require('canvas').createCanvas(size, size);
-  const ctx = canvas.getContext('2d');
+  try {
+    // Intentar usar canvas si está disponible
+    const canvas = require('canvas').createCanvas(64, 64);
+    const ctx = canvas.getContext('2d');
 
-  // Habilitar suavizado para mejor calidad
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+    // Habilitar suavizado para mejor calidad
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
-  // Crear un icono monocromático para template (solo negro)
-  // Fondo transparente
+    // Crear un icono monocromático para template (solo negro)
+    // Fondo transparente
   ctx.clearRect(0, 0, size, size);
 
-  // Solo texto "IP" en negro (se invertirá automáticamente)
-  ctx.fillStyle = '#000000';
+    // Solo texto "IP" en negro (se invertirá automáticamente)
+    ctx.fillStyle = '#000000';
   ctx.font = 'bold 54px Arial'; // Fuente más grande ya que no hay borde
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
   ctx.fillText('IP', size / 2, size / 2);
 
-  const buffer = canvas.toBuffer('image/png');
-  const icon = nativeImage.createFromBuffer(buffer);
+    const buffer = canvas.toBuffer('image/png');
+    const icon = nativeImage.createFromBuffer(buffer);
 
-  // Redimensionar a 16x16 con alta calidad
-  const resizedIcon = icon.resize({ width: 16, height: 16, quality: 'best' });
+    // Redimensionar a 16x16 con alta calidad
+    const resizedIcon = icon.resize({ width: 16, height: 16, quality: 'best' });
 
-  // En macOS, marcar como template para adaptación automática
-  if (process.platform === 'darwin') {
-    resizedIcon.setTemplateImage(true);
+    // En macOS, marcar como template para adaptación automática
+    if (process.platform === 'darwin') {
+      resizedIcon.setTemplateImage(true);
+    }
+
+    return resizedIcon;
+  } catch (error) {
+    // Fallback: usar ícono estático si canvas no está disponible
+    const iconPath = path.join(__dirname, '../public/tray-icon.png');
+    if (fs.existsSync(iconPath)) {
+      return nativeImage.createFromPath(iconPath);
+    }
+    // Último fallback: usar el ícono principal
+    const mainIconPath = path.join(__dirname, '../public/iconShadow025.png');
+    return nativeImage.createFromPath(mainIconPath);
   }
-
-  return resizedIcon;
 }
 
 async function createTray() {
@@ -363,6 +384,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
       devTools: isDev, // Solo habilitar DevTools en desarrollo
+      webSecurity: false, // Permitir cargar recursos locales
     },
   };
 

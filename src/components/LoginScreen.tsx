@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import { AlertCircle, Loader2, Eye, EyeOff, Clipboard } from 'lucide-react';
+import { AlertCircle, Clipboard, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useExternalLink } from '../hooks/useExternalLink';
@@ -53,7 +53,7 @@ export const LoginScreen: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-lg">
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
-          <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
+          <img src="./iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900">Welcome to IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
@@ -68,7 +68,7 @@ export const LoginScreen: React.FC = () => {
               <div className="relative">
                 <Input
                   id="apikey"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Insert your license here"
                   value={apiKey}
                   onChange={handleInputChange}

@@ -7,7 +7,7 @@ export const LoadingScreen: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md">
         <CardHeader className="text-center space-y-4 flex flex-col items-center">
-          <img src="/iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
+          <img src="./iconShadow025.png" alt="IPTRADE" className="w-16 h-16 text-blue-600" />
           <div>
             <CardTitle className="text-2xl font-bold text-gray-900">IPTRADE</CardTitle>
             <CardDescription className="text-gray-600 mt-2">
