@@ -1580,19 +1580,6 @@ class CSVManager extends EventEmitter {
               }
               break;
 
-            case 'STATUS':
-              // Actualizar status - sin timestamp
-              if (currentAccountData) {
-                currentAccountData.status = values[1].toLowerCase(); // online/offline
-                
-                // Set status based on account type
-                if (currentAccountData.account_type === 'pending') {
-                  currentAccountData.status = 'pending';
-                } else {
-                  currentAccountData.status = 'active';
-                }
-              }
-              break;
 
             case 'CONFIG':
               // Parsear configuración según tipo de cuenta
