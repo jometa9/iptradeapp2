@@ -1709,31 +1709,90 @@ class LinkPlatformsController {
   async findBothMQLFoldersWindows() {
     try {
       console.log('🔍 Searching for platform folders by exact name across all drives...');
+      console.log('🚫 Excluding system directories: Windows, Program Files, System Volume Information, etc.');
 
-      // Comando PowerShell simplificado - busca SOLO por nombres exactos de carpetas
+      // Comando PowerShell optimizado - busca carpetas excluyendo directorios del sistema
       const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
     $drive = $_.Root
     Write-Host "Scanning drive: $drive"
     
-    # Buscar MQL4
-    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL4" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+    # Definir exclusiones para mejorar rendimiento
+    $excludePaths = @(
+        "Windows", "Program Files", "Program Files (x86)", "System Volume Information", 
+        "$Recycle.Bin", "ProgramData", "pagefile.sys", "hiberfil.sys", "swapfile.sys",
+        "Users\\*\\AppData\\Local\\Temp", "Users\\*\\AppData\\Local\\Microsoft",
+        "Users\\*\\AppData\\Roaming\\Microsoft", "node_modules", ".git"
+    )
+    
+    # Buscar MQL4 (excluyendo carpetas del sistema)
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL4" -ErrorAction SilentlyContinue | Where-Object {
+        $fullPath = Join-Path $drive $_
+        $shouldExclude = $false
+        foreach ($exclude in $excludePaths) {
+            if ($fullPath -like "*$exclude*") {
+                $shouldExclude = $true
+                break
+            }
+        }
+        -not $shouldExclude
+    } | ForEach-Object {
         Join-Path $drive $_
     }
     
-    # Buscar MQL5  
-    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL5" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+    # Buscar MQL5 (excluyendo carpetas del sistema)
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL5" -ErrorAction SilentlyContinue | Where-Object {
+        $fullPath = Join-Path $drive $_
+        $shouldExclude = $false
+        foreach ($exclude in $excludePaths) {
+            if ($fullPath -like "*$exclude*") {
+                $shouldExclude = $true
+                break
+            }
+        }
+        -not $shouldExclude
+    } | ForEach-Object {
         Join-Path $drive $_
     }
     
     ${this.cTraderEnabled ? `
-    # Buscar cTrader folders si está habilitado
-    Get-ChildItem -Path $drive -Recurse -Directory -Name "cTrader" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+    # Buscar cTrader folders si está habilitado (excluyendo carpetas del sistema)
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "cTrader" -ErrorAction SilentlyContinue | Where-Object {
+        $fullPath = Join-Path $drive $_
+        $shouldExclude = $false
+        foreach ($exclude in $excludePaths) {
+            if ($fullPath -like "*$exclude*") {
+                $shouldExclude = $true
+                break
+            }
+        }
+        -not $shouldExclude
+    } | ForEach-Object {
         Join-Path $drive $_
     }
-    Get-ChildItem -Path $drive -Recurse -Directory -Name "cAlgo" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "cAlgo" -ErrorAction SilentlyContinue | Where-Object {
+        $fullPath = Join-Path $drive $_
+        $shouldExclude = $false
+        foreach ($exclude in $excludePaths) {
+            if ($fullPath -like "*$exclude*") {
+                $shouldExclude = $true
+                break
+            }
+        }
+        -not $shouldExclude
+    } | ForEach-Object {
         Join-Path $drive $_
     }
-    Get-ChildItem -Path $drive -Recurse -Directory -Name "Spotware" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "Spotware" -ErrorAction SilentlyContinue | Where-Object {
+        $fullPath = Join-Path $drive $_
+        $shouldExclude = $false
+        foreach ($exclude in $excludePaths) {
+            if ($fullPath -like "*$exclude*") {
+                $shouldExclude = $true
+                break
+            }
+        }
+        -not $shouldExclude
+    } | ForEach-Object {
         Join-Path $drive $_
     }` : ''}
 }`;
