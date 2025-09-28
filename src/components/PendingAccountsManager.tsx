@@ -4,6 +4,8 @@ import {
   ArrowBigRight,
   Bot,
   Cable,
+  EyeOff,
+  HardDriveDownload,
   HousePlug,
   Inbox,
   Link,
@@ -68,12 +70,28 @@ interface PendingAccountsManagerProps {
   isLinking?: boolean; // Optional prop to override hook state
   linkPlatforms?: (source: 'link' | 'bot') => Promise<void>; // Function from parent component
   linkingSource?: 'link' | 'bot' | null; // Source of the linking action
+  progress?: {
+    message: string;
+    progress?: {
+      current: number;
+      total: number;
+      percentage: number;
+    };
+    details?: {
+      mql4Platforms?: number;
+      mql5Platforms?: number;
+      ninjaTraderPlatforms?: number;
+      filesSynced?: number;
+      csvFilesFound?: number;
+    };
+  } | null;
 }
 
 export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   isLinking: propIsLinking,
   linkPlatforms: propLinkPlatforms,
   linkingSource: propLinkingSource,
+  progress: propProgress,
 }) => {
   const { secretKey, userInfo } = useAuth();
   const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
@@ -93,6 +111,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   const [isConverting, setIsConverting] = useState(false);
   const [isRefreshingMasters, setIsRefreshingMasters] = useState(false);
   const [confirmingMasterId, setConfirmingMasterId] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState<string | null>(null);
 
   // Estado para cuentas en proceso de conversión (se ocultan por 30 segundos)
   const [convertingAccounts, setConvertingAccounts] = useState<Set<string>>(new Set());
@@ -125,61 +145,11 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     translations: {} as Record<string, string>,
   });
 
-  const scanningMessages = [
-    'Searching for new platforms...',
-    'Your pending accounts are being processed...',
-    'Checking bot installation...',
-    'Linking new platforms...',
-    'Verifying new platform connections...',
-    'Scanning for new trading terminals...',
-    'The good traders have strong patience...',
-    'Establishing new secure connections...',
-    'Please be patient...',
-    'Configuring new platform integration...',
-    'To be continued...',
-    'Finalizing new platform setup...',
-    'Almost there...',
-    'A lot of work to do...',
-    'Too much files in the way...',
-    'Yes, I know it takes time...',
-  ];
-
-  // State for rotating message
-  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
-  const [isRotating, setIsRotating] = useState(false);
-
-  // Effect for rotating messages when link platform process is active
-  useEffect(() => {
-    if (
-      linkingStatus.isActive &&
-      linkingStatus.step !== 'idle' &&
-      linkingStatus.step !== 'completed' &&
-      linkingStatus.step !== 'error'
-    ) {
-      setIsRotating(true);
-      setCurrentMessageIndex(0);
-
-      const interval = setInterval(() => {
-        setCurrentMessageIndex(prevIndex => (prevIndex + 1) % scanningMessages.length);
-      }, 5000);
-
-      return () => {
-        clearInterval(interval);
-        setIsRotating(false);
-      };
-    } else {
-      setIsRotating(false);
-    }
-  }, [linkingStatus.step, linkingStatus.isActive, scanningMessages.length]);
-
-  // Debug initial state removed
-
-  // Usar el hook para pending accounts
-  // Use unified hook for all account data
   const {
     data: unifiedData,
     error: pendingError,
     refresh: refreshData,
+    toggleHidden,
   } = useUnifiedAccountDataContext();
 
   // Extract data from unified response - use directly without local state
@@ -197,7 +167,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         broker: masterData.broker || 'Unknown',
         platform: masterData.platform || 'Unknown',
         registeredAt: masterData.registeredAt || new Date().toISOString(),
-        status: masterData.status || 'offline',
+        status: masterData.status || 'active',
       };
     });
   }, [csvAccounts]);
@@ -237,52 +207,74 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
 
   // Helper function to get linking status message and icon
   const getLinkingStatusDisplay = (status: LinkingStatus) => {
-    const statusMap = {
-      idle: { message: '', isLoading: false },
-      starting: {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : 'Scanning for link platforms process...',
+    // Si estamos ejecutando link bots, mostrar mensaje específico hardcodeado
+    if (isLinking && linkingSource === 'bot') {
+      return {
+        message: 'Finding IPTRADE bots running...',
         isLoading: true,
+        progress: propProgress?.progress || null,
+        details: propProgress?.details || null,
+      };
+    }
+
+    // Si estamos ejecutando link platforms, mostrar mensaje específico hardcodeado
+    if (isLinking && linkingSource === 'link') {
+      return {
+        message: 'Installing IPTRADE bots on your platforms...',
+        isLoading: true,
+        progress: propProgress?.progress || null,
+        details: propProgress?.details || null,
+      };
+    }
+
+    const statusMap = {
+      idle: { message: '', isLoading: false, progress: null, details: null },
+      starting: {
+        message: 'Installing IPTRADE bot on your platforms...',
+        isLoading: true,
+        progress: null,
+        details: null,
       },
       started: {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : 'Link Platforms process started...',
+        message: 'Installing IPTRADE bot on your platforms...',
         isLoading: true,
+        progress: null,
+        details: null,
       },
       finding: {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : 'Scanning for installations...',
+        message: 'Installing IPTRADE bot on your platforms...',
         isLoading: true,
+        progress: null,
+        details: null,
       },
       scanning: {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : 'Scanning for installations...',
+        message: 'Installing IPTRADE bot on your platforms...',
         isLoading: true,
+        progress: null,
+        details: null,
       },
       syncing: {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : 'Syncing trading platforms...',
+        message: 'Installing IPTRADE bot on your platforms...',
         isLoading: true,
+        progress: null,
+        details: null,
       },
       completed: {
         message: getAutoLinkSkippedByCache() ? '' : 'Success! Platforms linked successfully',
         isLoading: false,
+        progress: null,
+        details: null,
       },
-      error: { message: 'Error linking accounts. Please try again.', isLoading: false },
+      error: { message: 'Error linking accounts. Please try again.', isLoading: false, progress: null, details: null },
     };
 
     // Return the status from the map, or a fallback if the step is not recognized
     return (
       statusMap[status.step] || {
-        message: isRotating
-          ? scanningMessages[currentMessageIndex]
-          : status.message || 'Processing...',
+        message: status.message || 'Processing...',
         isLoading: true,
+        progress: null,
+        details: null,
       }
     );
   };
@@ -464,6 +456,73 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
     setIsConverting(false);
     setConfirmingMasterId(null);
   };
+
+  // Handle delete account
+  const handleDeleteAccount = (accountId: string) => {
+    setConfirmingDeleteId(accountId);
+    // Close any open forms
+    setExpandedAccountId(null);
+    setConfirmingMasterId(null);
+  };
+
+  // Cancel delete account
+  const cancelDeleteAccount = () => {
+    setConfirmingDeleteId(null);
+  };
+
+  // Confirm delete account
+  const confirmDeleteAccount = async () => {
+    if (!confirmingDeleteId) return;
+
+    try {
+      setIsDeletingAccount(confirmingDeleteId);
+
+      const response = await fetch(`${baseUrl}/api/csv/pending/${confirmingDeleteId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': secretKey || '',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete pending account');
+      }
+
+      toast({
+        title: 'Account Deleted',
+        description: `Pending account ${confirmingDeleteId} has been deleted from cache.`,
+      });
+
+      // Refresh data to update the list
+      await refreshData();
+
+      setConfirmingDeleteId(null);
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Error deleting pending account',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeletingAccount(null);
+    }
+  };
+
+  // Helper function for consistent delete button styling
+  const DeleteButton = ({ onClick, disabled = false, title = 'Delete Account' }) => (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-9 w-9 p-0 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+    >
+      <Trash className="h-4 w-4 text-red-600" />
+    </Button>
+  );
 
   // Función helper para manejar cuentas en conversión
   const startConversion = (accountId: string) => {
@@ -709,9 +768,24 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                       className="bg-gray-50  ml-0 pl-0 mt-0.5 link-platforms-gradient-text"
                     >
                       {getLinkingStatusDisplay(linkingStatus).message}
+                      {getLinkingStatusDisplay(linkingStatus).progress && (
+                        <span className="ml-2 text-xs">
+                          ({getLinkingStatusDisplay(linkingStatus).progress.percentage}%)
+                        </span>
+                      )}
                     </Badge>
                   )}
               </CardTitle>
+            </div>
+            <div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleHidden}
+                className="text-gray-400 hover:text-gray-900 text-sm font-medium"
+              >
+                <EyeOff className="w-4 h-4" />  
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -759,7 +833,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                   ) : (
                     <div>
                       <li>Link your platforms to detect them:</li>
-                      <li>1. Execute Link Platforms process</li>
+                      <li>1. Execute Install bots process</li>
                       <li>2. Add the IPTRADE Bot to the chart</li>
                       <li>3. Execute Find bots process</li>
                       <li>4. Wait for the accounts to appear here</li>
@@ -784,8 +858,8 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                         : 'border-blue-200 cursor-pointer link-platforms-shine'
                     }  hover:shadow-lg transition-all duration-300`}
                   >
-                    <Link className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
-                    {isLinking && linkingSource === 'link' ? 'Linking...' : 'Link Platforms'}
+                    <HardDriveDownload className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
+                    {isLinking && linkingSource === 'link' ? 'Installing...' : 'Install bots'}
                   </Button>
                   <Button
                     variant="outline"
@@ -824,17 +898,13 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                 {accounts
                   .filter(account => !convertingAccounts.has(account.account_id)) // Ocultar cuentas en conversión
                   .map(account => {
-                    const isOnline = (account.current_status || account.status) === 'online';
-
                     return (
                       <div
                         key={account.account_id}
                         className={`border rounded-lg p-2 shadow ${
                           confirmingMasterId === account.account_id
                             ? 'bg-blue-50 border-blue-200'
-                            : isOnline
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-orange-50 border-orange-200'
+                            : 'bg-green-50 border-green-200'
                         }`}
                       >
                         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -843,22 +913,16 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                               className={`font-semibold ml-2 ${
                                 confirmingMasterId === account.account_id
                                   ? ''
-                                  : isOnline
-                                    ? 'text-green-900'
-                                    : 'text-orange-900'
+                                  : 'text-green-900'
                               }`}
                             >
                               {account.account_id}
                             </h3>
                             <Badge
                               variant="outline"
-                              className={
-                                isOnline
-                                  ? 'bg-green-100 text-green-800 border-green-300'
-                                  : 'bg-red-50 text-red-800 border-red-300'
-                              }
+                              className="bg-green-100 text-green-800 border-green-300"
                             >
-                              {isOnline ? 'Pending Online' : 'Pending Offline'}
+                              Pending
                             </Badge>
                             <Badge
                               variant="outline"
@@ -946,14 +1010,38 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                   Cancel
                                 </Button>
                               </>
+                            ) : confirmingDeleteId === account.account_id ? (
+                              // Show delete confirmation buttons
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={confirmDeleteAccount}
+                                  disabled={isDeletingAccount === account.account_id}
+                                  className="bg-red-50 h-9 border border-red-200 text-red-700 hover:bg-red-100"
+                                >
+                                  {isDeletingAccount === account.account_id ? (
+                                    <>
+                                      <div className="h-4 w-4 rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                                      Deleting...
+                                    </>
+                                  ) : (
+                                    'Confirm Delete'
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={cancelDeleteAccount}
+                                  disabled={isDeletingAccount === account.account_id}
+                                  className="bg-white h-9 border border-gray-200 text-gray-700 hover:bg-gray-50"
+                                >
+                                  Cancel
+                                </Button>
+                              </>
                             ) : (
                               <>
-                                {!isOnline ? (
-                                  // Show offline status only
-                                  <div className="h-9 w-9"></div>
-                                ) : (
-                                  // Show normal buttons for online accounts
-                                  <>
+                                {/* Show normal buttons for all accounts */}
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -988,8 +1076,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     >
                                       <Unplug className="h-4 w-4" />
                                     </Button>
-                                  </>
-                                )}
+                                    <DeleteButton
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteAccount(account.account_id);
+                                      }}
+                                      disabled={isDeletingAccount === account.account_id}
+                                      title="Delete from cache"
+                                    />
                               </>
                             )}
                           </div>

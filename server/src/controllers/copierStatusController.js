@@ -290,23 +290,20 @@ export const getAllStatuses = (req, res) => {
     const masterStatus = userCopierStatus.masterAccounts[masterAccountId];
     // Default to false if no config exists (new accounts should be disabled by default)
     const defaultMasterStatus = masterStatus === true;
-    // Usar el sistema de tracking de timestamps para determinar estado
-    const isOnline = accountData && accountData.filePath ? csvManager.isFileOnline(accountData.filePath) : false;
-    const accountStatus = isOnline ? 'online' : 'offline';
+    // Simplified status - no online/offline tracking
+    const accountStatus = 'active';
 
     masterAccountsWithEffectiveStatus[masterAccountId] = {
       masterStatus: defaultMasterStatus,
       effectiveStatus:
         globalConfig.globalStatus &&
         userCopierStatus.globalStatus &&
-        defaultMasterStatus &&
-        accountStatus !== 'offline',
-      status: accountStatus, // Include the actual account status (online/offline)
+        defaultMasterStatus,
+      status: accountStatus, // Include the actual account status
       copierStatus:
         globalConfig.globalStatus &&
         userCopierStatus.globalStatus &&
-        defaultMasterStatus &&
-        accountStatus !== 'offline'
+        defaultMasterStatus
           ? 'ON'
           : 'OFF',
     };
@@ -416,37 +413,25 @@ export const getGlobalCopierStats = (req, res) => {
     slaves: 0,
     masters: 0,
     pendings: 0,
-    offline: 0,
     total: 0,
   };
 
-  // Count masters and check their status
+  // Count masters
   Object.values(userAccounts.masterAccounts || {}).forEach(account => {
     stats.masters++;
-    if (account.status === 'offline') {
-      stats.offline++;
-    }
   });
 
-  // Count slaves and check their status
+  // Count slaves
   Object.values(userAccounts.slaveAccounts || {}).forEach(account => {
     stats.slaves++;
-    if (account.status === 'offline') {
-      stats.offline++;
-    }
   });
 
-  // Count pending accounts (they are considered in the offline count)
+  // Count pending accounts
   const pendingAccounts = userAccounts.pendingAccounts || {};
   const pendingAccountsList = Object.entries(pendingAccounts).filter(
     ([_, account]) => account !== null && Object.keys(account).length > 0
   );
   stats.pendings = pendingAccountsList.length;
-
-  // Add pending accounts to offline count only if they exist
-  if (stats.pendings > 0) {
-    stats.offline += stats.pendings;
-  }
 
   // Calculate total accounts
   stats.total = stats.masters + stats.slaves + stats.pendings;

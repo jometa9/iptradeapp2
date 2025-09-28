@@ -51,18 +51,7 @@ export const getSlaveConnection = (apiKey, slaveAccountId) => {
   return userAccounts.connections[slaveAccountId] || null;
 };
 
-// Check if master account is online for a given slave
-export const isMasterOnlineForSlave = (apiKey, slaveAccountId) => {
-  const userAccounts = getUserAccounts(apiKey);
-  const masterId = userAccounts.connections[slaveAccountId];
-
-  if (!masterId) {
-    return false; // No master connected
-  }
-
-  const masterAccount = userAccounts.masterAccounts[masterId];
-  return masterAccount && masterAccount.status !== 'offline';
-};
+// Master online check removed - no longer validating online/offline status
 
 // Define supported platforms
 const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrader', 'NT8', 'Other'];
@@ -71,128 +60,9 @@ const SUPPORTED_PLATFORMS = ['MT4', 'MT5', 'cTrader', 'TradingView', 'NinjaTrade
 const ACTIVITY_TIMEOUT = 5000; // 5 seconds in milliseconds
 const PENDING_DELETION_TIMEOUT = 3600000; // 1 hour in milliseconds
 
-// Check and update account status based on activity
-const checkAccountActivity = async () => {
-  try {
-    // Get all accounts from CSV files
-    const allAccounts = await csvManager.getAllActiveAccounts();
-    let hasChanges = false;
-    const now = new Date();
+// Activity monitoring removed - no longer checking online/offline status
 
-    // Process all accounts (pending, master, and slave)
-    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-      try {
-        // Use async file reading to avoid EBUSY errors
-        const fileContent = await new Promise((resolve, reject) => {
-          readFile(filePath, 'utf8', (err, data) => {
-            if (err) {
-              if (err.code === 'EBUSY' || err.code === 'EACCES') {
-                resolve(null); // Skip this file
-              } else {
-                reject(err);
-              }
-            } else {
-              resolve(data);
-            }
-          });
-        });
-
-        if (!fileContent) {
-          continue; // Skip this file if it was busy
-        }
-
-        let fileModified = false;
-
-        fileData.data.forEach(account => {
-          const accountId = account.account_id;
-          const accountType = account.account_type;
-          const currentStatus = account.current_status || account.status;
-
-          // NUEVA LÓGICA: Usar tracking de cambios de timestamp
-          const trackingInfo = csvManager.getTimestampTracking(filePath);
-
-          if (trackingInfo) {
-            const currentTime = Date.now();
-            const timeSinceLastChange = currentTime - trackingInfo.lastChangeTime;
-            const fiveSecondsInMs = 5 * 1000; // 5 segundos en milisegundos
-
-            const shouldBeOnline = timeSinceLastChange <= fiveSecondsInMs;
-
-            // Check if account should be marked as offline
-            if (!shouldBeOnline && currentStatus !== 'offline') {
-              // Update status in CSV file
-              const statusLine = `[STATUS] [OFFLINE] [${Math.floor(now.getTime() / 1000)}]`;
-              fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-              fileModified = true;
-              hasChanges = true;
-            }
-            // Check if account should be marked as online
-            else if (shouldBeOnline && currentStatus === 'offline') {
-              // Update status in CSV file
-              const statusLine = `[STATUS] [ONLINE] [${Math.floor(now.getTime() / 1000)}]`;
-              fileContent = fileContent.replace(/\[STATUS\].*\n/, `${statusLine}\n`);
-              fileModified = true;
-              hasChanges = true;
-            }
-          }
-        });
-
-        // Save changes to file if modified
-        if (fileModified) {
-          try {
-            await new Promise((resolve, reject) => {
-              writeFile(filePath, fileContent, 'utf8', err => {
-                if (err) {
-                  if (err.code === 'EBUSY' || err.code === 'EACCES') {
-                    resolve(); // Continue without error
-                  } else {
-                    reject(err);
-                  }
-                } else {
-                  resolve();
-                }
-              });
-            });
-          } catch (error) {
-            console.error(`Error writing to file ${filePath}:`, error);
-          }
-        }
-      } catch (error) {
-        console.error(`Error processing file ${filePath}:`, error);
-        continue; // Skip this file and continue with others
-      }
-    }
-
-    // Refresh CSV data if changes were made
-    if (hasChanges) {
-      csvManager.refreshAllFileData().catch(error => {
-        console.error('Error refreshing CSV data:', error);
-      });
-
-      // Emit event to notify frontend of account changes
-      csvManager.emit('csvUpdated', {
-        type: 'statusUpdate',
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    return hasChanges;
-  } catch (error) {
-    console.error('Error checking account activity:', error);
-    return false;
-  }
-};
-
-// Start activity monitoring
-const startActivityMonitoring = () => {
-  // Check activity every 1 second
-  setInterval(() => {
-    checkAccountActivity();
-  }, 1000);
-};
-
-// Initialize activity monitoring when module loads
-// startActivityMonitoring(); // Removed to avoid duplicate monitoring - now called from dev.js
+// Activity monitoring completely removed
 
 // Register new master account
 export const registerMasterAccount = (req, res) => {
@@ -1367,7 +1237,6 @@ export const deleteMasterAccount = async (req, res) => {
         accountId: masterAccountId,
         accountType: 'master',
         apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error emitting accountDeleted event:', error);
@@ -1533,10 +1402,8 @@ export const getPendingAccounts = async (req, res) => {
       for (const account of cachedAccounts.pendingAccounts || []) {
         const accountId = account.account_id;
         const platform = account.platform;
-        const timestamp = account.timestamp;
-        const timeDiff = currentTime - timestamp;
         // Calcular estado usando el sistema de tracking
-        const statusInfo = csvManager.calculateStatus(account.filePath, timestamp, 'pending');
+        const statusInfo = csvManager.calculateStatus(account.filePath, null, 'pending');
 
         // Si es una cuenta pending y ha estado offline por más de 1 hora, no la incluimos
         if (statusInfo.shouldSkip) {
@@ -1569,7 +1436,6 @@ export const getPendingAccounts = async (req, res) => {
         platform: account.platform,
         status: account.status,
         current_status: account.status,
-        timestamp: account.timestamp,
         config: account.config,
         filePath: account.filePath, // For debugging
       };
@@ -1804,15 +1670,9 @@ export const convertPendingToSlave = async (req, res) => {
 };
 
 // Delete pending account
-export const deletePendingAccount = (req, res) => {
+export const deletePendingAccount = async (req, res) => {
   const { accountId } = req.params;
-  const apiKey = req.apiKey; // Should be set by requireValidSubscription middleware
-
-  if (!apiKey) {
-    return res.status(401).json({
-      error: 'API Key required - use requireValidSubscription middleware',
-    });
-  }
+  const apiKey = 'default-api-key'; // Use default API key since no authentication required
 
   if (!accountId) {
     return res.status(400).json({ error: 'Account ID is required' });
@@ -1831,10 +1691,59 @@ export const deletePendingAccount = (req, res) => {
     delete userAccounts.pendingAccounts[accountId];
 
     if (saveUserAccounts(apiKey, userAccounts)) {
+      // Remove account from CSV cache and refresh unified data
+      try {
+        console.log(`🔄 Removing account ${accountId} from CSV cache and refreshing unified data`);
+        
+        const csvManager = await import('../services/csvManager.js');
+        const csvManagerInstance = csvManager.default;
+        
+        // Find and remove CSV files that contained this account
+        let removedFromCache = 0;
+        const filesToRemove = [];
+        
+        for (const [filePath, fileData] of csvManagerInstance.csvFiles.entries()) {
+          // Check if this file contains the deleted account
+          try {
+            if (fileData.data && fileData.data.some(row => row.account_id === accountId)) {
+              filesToRemove.push(filePath);
+            }
+          } catch (error) {
+            console.error(`Error checking file ${filePath} for account ${accountId}:`, error);
+          }
+        }
+        
+        // Remove files from cache
+        for (const filePath of filesToRemove) {
+          csvManagerInstance.csvFiles.delete(filePath);
+          removedFromCache++;
+          console.log(`🗑️ Removed ${filePath} from CSV cache after deleting account ${accountId}`);
+        }
+        
+        // Save updated cache
+        if (removedFromCache > 0) {
+          csvManagerInstance.saveCSVPathsToCache();
+          console.log(`💾 Updated CSV cache after removing ${removedFromCache} files`);
+        }
+        
+        // Trigger unified data refresh
+        console.log(`🔄 Triggering unified data refresh after deleting account ${accountId}`);
+        const mockReq = { apiKey };
+        const mockRes = {
+          json: () => console.log('✅ Unified data refreshed after account deletion'),
+          status: () => ({ json: () => console.log('❌ Error refreshing unified data') })
+        };
+        await getUnifiedAccountData(mockReq, mockRes);
+        
+      } catch (error) {
+        console.error('Error updating CSV cache or refreshing unified data:', error);
+      }
+
       res.json({
         message: 'Pending account deleted successfully',
         accountId,
         status: 'deleted',
+        cacheUpdated: true,
       });
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
@@ -2067,7 +1976,6 @@ export const pingAccount = (req, res) => {
       message: 'Ping successful',
       accountId: accountInfo.accountId,
       accountType: accountInfo.type,
-      timestamp: new Date().toISOString(),
       status: 'active',
     });
   } catch (error) {
@@ -2076,7 +1984,7 @@ export const pingAccount = (req, res) => {
   }
 };
 
-export { checkAccountActivity };
+// checkAccountActivity function removed
 
 // Get connectivity statistics (real synchronization status)
 export const getConnectivityStats = (req, res) => {
@@ -2096,20 +2004,20 @@ export const getConnectivityStats = (req, res) => {
       total: 0,
       synchronized: 0,
       pending: 0,
-      offline: 0,
+      active: 0,
       error: 0,
       masters: {
         total: 0,
         synchronized: 0,
         pending: 0,
-        offline: 0,
+        active: 0,
         error: 0,
       },
       slaves: {
         total: 0,
         synchronized: 0,
         pending: 0,
-        offline: 0,
+        active: 0,
         error: 0,
       },
       connectivityDetails: [],
@@ -2126,25 +2034,13 @@ export const getConnectivityStats = (req, res) => {
           .filter(([, masterId]) => masterId === accountId)
           .map(([slaveId]) => slaveId);
 
-        // Usar el sistema de tracking de timestamps para determinar estado online/offline
-        const isOnline = csvManager.isFileOnline(account.filePath);
-        const isOffline = !isOnline;
-
-        // Actualizar estado en la base de datos si es necesario
-        if (isOnline && account.status === 'offline') {
-          account.status = 'active';
-          userHasChanges = true;
-        }
-
         // Check if copy trading is disabled for this master (for reference only)
         const copierStatus = loadUserCopierStatus(apiKey);
         const isCopyTradingDisabled =
           copierStatus.masterAccounts && copierStatus.masterAccounts[accountId] === false;
 
         let status;
-        if (isOffline) {
-          status = 'offline';
-        } else if (connectedSlaves.length > 0) {
+        if (connectedSlaves.length > 0) {
           status = 'synchronized';
         } else {
           status = 'active'; // Master without slaves is active (not connected)
@@ -2175,25 +2071,13 @@ export const getConnectivityStats = (req, res) => {
         // Check if slave is connected to a master (real synchronization)
         const connectedToMaster = userAccounts.connections && userAccounts.connections[accountId];
 
-        // Usar el sistema de tracking de timestamps para determinar estado online/offline
-        const isOnline = csvManager.isFileOnline(account.filePath);
-        const isOffline = !isOnline;
-
-        // Actualizar estado en la base de datos si es necesario
-        if (isOnline && account.status === 'offline') {
-          account.status = 'active';
-          userHasChanges = true;
-        }
-
         // Check if copy trading is disabled for this slave (for reference only)
         const slaveConfigs = loadSlaveConfigs();
         const isCopyTradingDisabled =
           slaveConfigs[accountId] && slaveConfigs[accountId].enabled === false;
 
         let status;
-        if (isOffline) {
-          status = 'offline';
-        } else if (connectedToMaster) {
+        if (connectedToMaster) {
           status = 'synchronized';
         } else {
           status = 'pending'; // Slave without master is pending (not connected)
@@ -2219,9 +2103,8 @@ export const getConnectivityStats = (req, res) => {
       for (const [accountId, account] of Object.entries(userAccounts.pendingAccounts)) {
         stats.total++;
 
-        // For pending accounts, we need to respect their actual status
-        // If they are offline, count them as offline, not pending
-        let status = account.status || 'pending';
+        // For pending accounts, always use pending status
+        let status = 'pending';
 
         stats[status] = (stats[status] || 0) + 1;
 
@@ -2263,6 +2146,7 @@ export const getConnectivityStats = (req, res) => {
 export const getUnifiedAccountData = async (req, res) => {
   try {
     const startTime = Date.now();
+    console.log('🔄 UNIFIED ACCOUNTS: Starting unified account data processing...');
     const useMockData = false;
 
     if (useMockData) {
@@ -2286,43 +2170,26 @@ export const getUnifiedAccountData = async (req, res) => {
     }
 
     // SINGLE CSV READ: Get all data from csvManager in one call (reads all CSV files once)
+    console.log('🔄 UNIFIED ACCOUNTS: Calling csvManager.getAllActiveAccounts()...');
     const allAccounts = await csvManager.getAllActiveAccounts();
+    console.log('🔄 UNIFIED ACCOUNTS: csvManager.getAllActiveAccounts() completed');
 
     // Process all data from the single CSV read
     const currentTime = Math.floor(Date.now() / 1000);
 
-    // Process pending accounts with timestamp validation
+    // Process pending accounts
     const allPendingAccounts = [];
     const pendingAccountIds = new Set(); // Track pending account IDs to avoid duplicates
 
     for (const account of allAccounts.pendingAccounts || []) {
-      // Use the status already calculated by getAllActiveAccounts
-      // No need to recalculate - it's already correct
-
-      // Skip if it's a pending account and has been offline for more than 1 hour
-      // We can check this using the timeSinceLastPing from getAllActiveAccounts
-      if (account.timeSinceLastPing > 3600) {
-        // 1 hour in seconds
-        continue;
-      }
-
-      const timeDiff = currentTime - account.timestamp;
-
+      // RESPETAR LA VALIDACIÓN YA HECHA EN getAllActiveAccounts
+      // Solo procesar cuentas que ya pasaron la validación estricta
+      
       const pendingAccount = {
         account_id: account.account_id,
         platform: account.platform,
         status: account.status, // Use the status from getAllActiveAccounts
         current_status: account.status, // Use the status from getAllActiveAccounts
-        timestamp: account.timestamp,
-        timeDiff: timeDiff, // Para debugging
-        lastActivity: (() => {
-          try {
-            const date = new Date(account.timestamp * 1000);
-            return date.toISOString();
-          } catch (error) {
-            return new Date().toISOString(); // Fallback to current time
-          }
-        })(),
       };
 
       allPendingAccounts.push(pendingAccount);
@@ -2495,43 +2362,6 @@ export const getUnifiedAccountData = async (req, res) => {
       totalCSVFiles: csvManager.csvFiles.size,
       totalPendingAccounts: allPendingAccounts.length,
 
-      // Count online accounts (all types)
-      totalOnlineAccounts:
-        // Pending accounts online
-        allPendingAccounts.filter(acc => acc.status === 'online').length +
-        // Master accounts online
-        Object.values(cleanMasterAccounts).filter(acc => acc.status === 'online').length +
-        // Slave accounts online (both connected and unconnected)
-        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'online').length +
-        cleanUnconnectedSlaves.filter(acc => acc.status === 'online').length +
-        // Connected slaves online
-        Object.values(cleanMasterAccounts).reduce(
-          (sum, master) =>
-            sum +
-            (master.connectedSlaves
-              ? master.connectedSlaves.filter(slave => slave.status === 'online').length
-              : 0),
-          0
-        ),
-
-      // Count offline accounts (all types)
-      totalOfflineAccounts:
-        // Pending accounts offline
-        allPendingAccounts.filter(acc => acc.status === 'offline').length +
-        // Master accounts offline
-        Object.values(cleanMasterAccounts).filter(acc => acc.status === 'offline').length +
-        // Slave accounts offline (both connected and unconnected)
-        Object.values(cleanSlaveAccounts).filter(acc => acc.status === 'offline').length +
-        cleanUnconnectedSlaves.filter(acc => acc.status === 'offline').length +
-        // Connected slaves offline
-        Object.values(cleanMasterAccounts).reduce(
-          (sum, master) =>
-            sum +
-            (master.connectedSlaves
-              ? master.connectedSlaves.filter(slave => slave.status === 'offline').length
-              : 0),
-          0
-        ),
 
       totalMasterAccounts: Object.keys(cleanMasterAccounts).length,
       totalSlaveAccounts:
@@ -2543,6 +2373,14 @@ export const getUnifiedAccountData = async (req, res) => {
     };
 
     const processingTime = Date.now() - startTime;
+
+    console.log(`✅ UNIFIED ACCOUNTS: Processing completed in ${processingTime}ms`);
+    console.log(`✅ UNIFIED ACCOUNTS: Final results:`);
+    console.log(`✅ UNIFIED ACCOUNTS: - Master accounts: ${Object.keys(cleanMasterAccounts).length}`);
+    console.log(`✅ UNIFIED ACCOUNTS: - Slave accounts: ${Object.keys(cleanSlaveAccounts).length}`);
+    console.log(`✅ UNIFIED ACCOUNTS: - Pending accounts: ${allPendingAccounts.length}`);
+    console.log(`✅ UNIFIED ACCOUNTS: - Unconnected slaves: ${cleanUnconnectedSlaves.length}`);
+    console.log(`✅ UNIFIED ACCOUNTS: - CSV files accessed: ${csvManager.csvFiles.size}`);
 
     res.json({
       success: true,
@@ -2570,7 +2408,6 @@ export const getUnifiedAccountData = async (req, res) => {
       },
 
       // Metadata
-      timestamp: new Date().toISOString(),
       processingTimeMs: processingTime,
       csvFilesAccessed: csvManager.csvFiles.size,
       singleReadOperation: true, // Indicates this was a single CSV read operation
@@ -2581,7 +2418,6 @@ export const getUnifiedAccountData = async (req, res) => {
       success: false,
       error: 'Failed to get unified account data',
       message: error.message,
-      timestamp: new Date().toISOString(),
     });
   }
 };

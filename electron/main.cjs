@@ -372,10 +372,10 @@ function createWindow() {
   const isMacOS = process.platform === 'darwin';
 
   const windowConfig = {
-    width: 1000,
-    minWidth: 1000,
-    height: 800,
-    minHeight: 800,
+    width: 800,
+    minWidth: 800,
+    height: 700,
+    minHeight: 700,
     resizable: true,
     icon: path.join(__dirname, '../public/iconShadow025.png'),
     title: 'IPTRADE',
@@ -483,8 +483,8 @@ function createWindow() {
 
   // Manejar el evento de cierre de ventana
   mainWindow.on('close', async event => {
-    // En Windows, cerrar la aplicación completamente cuando se cierra la ventana
-    if (process.platform === 'win32') {
+    // En todas las plataformas, cerrar la aplicación completamente cuando se cierra la ventana
+    if (!app.isQuiting) {
       event.preventDefault();
 
       // Marcar que estamos cerrando
@@ -498,20 +498,6 @@ function createWindow() {
 
       // Forzar el cierre de la aplicación
       app.exit(0);
-    } else {
-      // En otras plataformas, mantener el comportamiento de minimizar al tray
-      if (!app.isQuiting) {
-        event.preventDefault();
-        mainWindow.hide();
-
-        // En macOS, NO ocultar el icono del dock para mantener comportamiento nativo
-        // Solo ocultar en otras plataformas
-        if (process.platform !== 'darwin') {
-          // Para otras plataformas, ocultar completamente
-        }
-
-        return false;
-      }
     }
   });
 
@@ -602,19 +588,10 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async function () {
-  // En Windows, cerrar la aplicación completamente
-  if (process.platform === 'win32') {
-    app.isQuiting = true;
-    await cleanupProcesses();
-    app.exit(0);
-  }
-  // En macOS, mantener la app abierta (comportamiento estándar de macOS)
-  // En Linux, también cerrar la app
-  else if (process.platform !== 'darwin') {
-    app.isQuiting = true;
-    await cleanupProcesses();
-    app.quit();
-  }
+  // En todas las plataformas, cerrar la aplicación completamente
+  app.isQuiting = true;
+  await cleanupProcesses();
+  app.quit();
 });
 
 // Función para limpiar todos los procesos

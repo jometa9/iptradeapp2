@@ -44,6 +44,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
+console.log('🚀 SERVER: Registering routes...');
 app.use('/api', statusRoutes);
 app.use('/api', orderRoutes);
 app.use('/api', configRoutes);
@@ -54,7 +55,9 @@ app.use('/api', eventRoutes);
 app.use('/api', restartRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/slave-config', slaveConfigRoutes);
+console.log('🚀 SERVER: Registering link-platforms routes at /api/link-platforms');
 app.use('/api/link-platforms', linkPlatformsRoutes);
+console.log('🚀 SERVER: All routes registered successfully');
 // app.use('/api/ctrader', ctraderRoutes);
 // app.use('/api/mt5', mt5Routes);
 
@@ -79,13 +82,8 @@ async function startServer() {
   const startServerAttempt = (attempt = 1) => {
     return new Promise((resolve, reject) => {
       const server = app.listen(PORT, () => {
-        (async () => {
-          try {
-            const result = await linkPlatformsController.findAndSyncMQLFoldersOptimized();
-          } catch (err) {
-            console.error('❌ Auto Link Platforms failed on start:', err);
-          }
-        })();
+        console.log(`✅ Server started successfully on port ${PORT}`);
+        console.log('🔍 Find Bots will only run when manually triggered by user');
         resolve(server);
       });
 

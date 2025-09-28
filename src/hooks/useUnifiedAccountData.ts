@@ -27,8 +27,8 @@ const deepEqual = (a: unknown, b: unknown): boolean => {
 interface PendingAccount {
   account_id: string;
   platform: string;
-  status: 'online' | 'offline';
-  current_status: 'online' | 'offline';
+  status: string;
+  current_status: string;
   timestamp: number;
   timeDifference: number;
   filePath: string;
@@ -217,17 +217,12 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
 
     // Compute platform stats for compatibility
     const platformStats = pendingAccounts.reduce(
-      (stats: Record<string, { online: number; offline: number; total: number }>, account: PendingAccount) => {
+      (stats: Record<string, { total: number }>, account: PendingAccount) => {
         const platform = account.platform || 'Unknown';
         if (!stats[platform]) {
-          stats[platform] = { total: 0, online: 0, offline: 0 };
+          stats[platform] = { total: 0 };
         }
         stats[platform].total++;
-        if (account.current_status === 'online') {
-          stats[platform].online++;
-        } else {
-          stats[platform].offline++;
-        }
         return stats;
       },
       {}
@@ -237,8 +232,6 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
       accounts: pendingAccounts,
       summary: {
         totalAccounts: pendingAccounts.length,
-        onlineAccounts: pendingAccounts.filter((a: PendingAccount) => a.current_status === 'online').length,
-        offlineAccounts: pendingAccounts.filter((a: PendingAccount) => a.current_status === 'offline').length,
         platformStats,
       },
       platforms: Object.keys(platformStats),
@@ -254,6 +247,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
   }, [getAccountsGlobalState]);
 
   const loadUnifiedData = useCallback(async () => {
+    console.log('🔄 loadUnifiedData called');
     if (!secretKey) {
       setError('Authentication required');
       setLoading(false);
@@ -262,17 +256,17 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
 
     try {
       setError(null);
-      
+      console.log('🔄 loadUnifiedData - fetching data...');
       const rawData = await csvFrontendService.getUnifiedAccountData();
+      console.log('🔄 loadUnifiedData - data received:', rawData);
       
       const processedData = processUnifiedData(rawData);
+      console.log('🔄 loadUnifiedData - processed data:', processedData);
       
       // Only update state if data has actually changed
       if (!deepEqual(processedData, lastDataRef.current)) {
         setData(processedData);
         lastDataRef.current = processedData;
-      } else {
-        // Data unchanged, skipping update
       }
       
     } catch (err) {
@@ -323,18 +317,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     }
   }, [secretKey, loadUnifiedData]);
 
-  // Polling every second for real-time updates
-  useEffect(() => {
-    if (!secretKey) return;
-
-    const pollingInterval = setInterval(() => {
-      loadUnifiedData();
-    }, 1000); // Every 1 second for real-time updates
-
-    return () => {
-      clearInterval(pollingInterval);
-    };
-  }, [secretKey, loadUnifiedData]);
+  // Polling removed - data updates only via SSE events and manual refresh
 
   // Action methods
   const updateGlobalStatus = useCallback(async (enabled: boolean) => {
@@ -414,8 +397,6 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
           summary: {
             ...data.pendingData.summary,
             totalAccounts: updatedPendingAccounts.length,
-            onlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'online').length,
-            offlineAccounts: updatedPendingAccounts.filter(acc => acc.current_status === 'offline').length,
           },
         },
       };

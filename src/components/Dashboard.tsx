@@ -4,6 +4,7 @@ import {
   Bot,
   Eye,
   EyeOff,
+  HardDriveDownload,
   HelpCircle,
   Inbox,
   Link,
@@ -28,10 +29,13 @@ import { Button } from './ui/button';
 export const Dashboard: React.FC = () => {
   const { logout, userInfo, secretKey } = useAuth();
   const { openExternalLink } = useExternalLink();
-  const { linkPlatforms, isLinking, linkingSource } = useLinkPlatforms();
+  // Get refresh function from UnifiedAccountDataContext
+  const { isHidden, isBlinking, toggleHidden, refresh: refreshUnifiedData } = useUnifiedAccountDataContext();
+  
+  
+  const { linkPlatforms, findBots, isLinking, linkingSource, progress } = useLinkPlatforms(refreshUnifiedData);
 
-  // Get visibility state from UnifiedAccountDataContext
-  const { isHidden, isBlinking, toggleHidden } = useUnifiedAccountDataContext();
+  // Visibility state is now handled above with refresh function
 
   // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
   useAutoLinkPlatforms();
@@ -42,11 +46,6 @@ export const Dashboard: React.FC = () => {
     const saved = localStorage.getItem('showIP');
     return saved ? JSON.parse(saved) : true;
   });
-  const [isRestarting, setIsRestarting] = useState<boolean>(false);
-  // Removed separate "connect platforms" flow; unified under Link Platforms
-  // Estado para controlar si se acaba de iniciar sesión
-  // isRecentLogin not used
-  // Estado para saber si ya se disparó el temporizador
   const [loginTimerStarted, setLoginTimerStarted] = useState<boolean>(false);
 
   // Fetch user IP on component mount
@@ -106,88 +105,24 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleLinkPlatforms = async (source: 'link' | 'bot') => {
+  const handleLinkPlatforms = async () => {
     try {
-      await linkPlatforms(source);
+      await linkPlatforms('link');
       // Silent processing
     } catch {
       // Silent error handling
     }
   };
 
-  const handleRestartService = async () => {
-    if (isRestarting) return;
-
+  const handleFindBots = async () => {
     try {
-      setIsRestarting(true);
-
-      console.log('🔄 Starting service restart (preserving session)...');
-
-      // Llamar al endpoint del servidor para reiniciar el servicio backend
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
-
-      try {
-        const response = await fetch(`http://localhost:${serverPort}/api/restart-service`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': secretKey || '',
-          },
-        });
-
-        if (response.ok) {
-          console.log('✅ Backend restart initiated successfully');
-        } else {
-          console.log(
-            '⚠️ Backend restart endpoint not available, proceeding with frontend restart'
-          );
-        }
-      } catch {
-        console.log(
-          '⚠️ Could not connect to backend for restart, proceeding with frontend restart'
-        );
-      }
-
-      // Limpiar solo cachés específicos del frontend, NO datos de autenticación
-      try {
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (
-            key &&
-            (key.includes('cache') ||
-              key.includes('temp') ||
-              key.includes('csv_') ||
-              key.startsWith('auto_link_') ||
-              key.includes('hidden_'))
-          ) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-
-        console.log('✅ Frontend caches cleared (auth data preserved)');
-      } catch (error) {
-        console.log('⚠️ Cache clearing failed:', error);
-      }
-
-      // Esperar un momento para que el servidor complete su reinicio
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      console.log('🔄 Reloading application (session preserved)...');
-
-      // Recargar la página - la autenticación se mantendrá porque no tocamos esos datos
-      window.location.reload();
-    } catch (error) {
-      console.error('❌ Service restart failed:', error);
-      // Fallback: simplemente recargar la página (sin tocar autenticación)
-      window.location.reload();
-    } finally {
-      setIsRestarting(false);
+      await findBots();
+      // Silent processing
+    } catch {
+      // Silent error handling
     }
   };
 
-  // Removed: separate connect platforms handler (unified under linkPlatforms)
 
   return (
     <UpdateTestProvider>
@@ -212,7 +147,6 @@ export const Dashboard: React.FC = () => {
                   size="sm"
                   onClick={() => setShowIP(!showIP)}
                   className="text-gray-400 p-1 h-auto"
-                  title={showIP ? 'Hide IP' : 'Show IP'}
                 >
                   {showIP ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                 </Button>
@@ -228,8 +162,8 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title={`Link Platforms`}
-                  onClick={() => handleLinkPlatforms('link')}
+                  title="Install bots"
+                  onClick={handleLinkPlatforms}
                   disabled={isLinking}
                 >
                   {isLinking && linkingSource === 'link' ? (
@@ -238,7 +172,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   ) : (
                     <div className="flex items-center space-x-1">
-                      <Link className="w-4 h-4" />
+                      <HardDriveDownload className="w-4 h-4" />
                     </div>
                   )}
                 </Button>
@@ -246,8 +180,8 @@ export const Dashboard: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-gray-900"
-                  title={`Find bots`}
-                  onClick={() => handleLinkPlatforms('bot')}
+                  title="Link Bots"
+                  onClick={handleFindBots}
                   disabled={isLinking}
                 >
                   {isLinking && linkingSource === 'bot' ? (
@@ -266,25 +200,10 @@ export const Dashboard: React.FC = () => {
                   className={`font-bold text-md transition-all duration-50 ease-in-out ${
                     isHidden ? (isBlinking ? 'text-orange-400' : 'text-gray-400') : 'text-gray-600'
                   }`}
-                  title={isHidden ? 'Show Pending Accounts' : 'Hide Pending Accounts'}
+                  title={isHidden ? 'Show Pending Accounts Inbox' : 'Hide Pending Accounts Inbox'}
                   onClick={toggleHidden}
                 >
                   <Inbox className="w-4 h-4" />
-                </Button>
-                {/* Removed Connect Trading Accounts button; unified under Link Platforms */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-gray-600 hover:text-gray-900"
-                  title="Restart Service"
-                  onClick={handleRestartService}
-                  disabled={isRestarting}
-                >
-                  {isRestarting ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="w-4 h-4" />
-                  )}
                 </Button>
                 <Button
                   variant="ghost"
@@ -319,9 +238,14 @@ export const Dashboard: React.FC = () => {
             <PendingAccountsManager
               isLinking={isLinking}
               linkPlatforms={async (source: 'link' | 'bot') => {
-                await linkPlatforms(source);
+                if (source === 'bot') {
+                  await findBots();
+                } else {
+                  await linkPlatforms('link');
+                }
               }}
               linkingSource={linkingSource}
+              progress={progress}
             />
           )}
 

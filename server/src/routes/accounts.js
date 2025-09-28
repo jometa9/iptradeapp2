@@ -573,7 +573,7 @@ router.post(
  *       200:
  *         description: Pending account deleted
  */
-router.delete('/pending/:accountId', requireValidSubscription, deletePendingAccount);
+router.delete('/pending/:accountId', deletePendingAccount);
 
 // Get account activity statistics
 /**

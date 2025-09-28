@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Clock,
   HousePlug,
-  Info,
   Pencil,
   Plus,
   Power,
@@ -19,9 +18,7 @@ import {
   Trash,
   Unlink,
   Unplug,
-  WifiOff,
   X,
-  XCircle,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -62,7 +59,6 @@ interface TradingAccount {
   connectedToMaster?: string;
   connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
   totalSlaves?: number;
-  masterOnline?: boolean;
   config?: {
     enabled?: boolean;
     prefix?: string;
@@ -210,13 +206,12 @@ const TradingAccountsConfigComponent = () => {
           server: master.server || '',
           password: master.password || '',
           accountType: 'master',
-          status: master.status || 'offline',
+          status: master.status || 'active',
           lotCoefficient: master.lotCoefficient || 1,
           forceLot: master.forceLot || 0,
           reverseTrade: master.reverseTrade || false,
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
-          masterOnline: master.masterOnline || false,
           config: master.config || {
             prefix: master.config?.prefix || '',
             suffix: master.config?.suffix || '',
@@ -234,7 +229,7 @@ const TradingAccountsConfigComponent = () => {
               server: slave.server || '',
               password: slave.password || '',
               accountType: 'slave',
-              status: slave.status || 'offline',
+              status: slave.status || 'active',
               lotCoefficient: slave.lotCoefficient || 1,
               forceLot: slave.forceLot || 0,
               reverseTrade: slave.reverseTrade || false,
@@ -255,7 +250,7 @@ const TradingAccountsConfigComponent = () => {
           server: slave.server || '',
           password: slave.password || '',
           accountType: 'slave',
-          status: slave.status || 'offline',
+          status: slave.status || 'active',
           lotCoefficient: slave.lotCoefficient || 1,
           forceLot: slave.forceLot || 0,
           reverseTrade: slave.reverseTrade || false,
@@ -284,8 +279,6 @@ const TradingAccountsConfigComponent = () => {
   const serverStats = unifiedData?.serverStats || {
     totalCSVFiles: 0,
     totalPendingAccounts: 0,
-    totalOnlineAccounts: 0,
-    totalOfflineAccounts: 0,
     totalMasterAccounts: 0,
     totalSlaveAccounts: 0,
     totalConnectedSlaves: 0,
@@ -301,9 +294,7 @@ const TradingAccountsConfigComponent = () => {
         serverStats.totalMasterAccounts +
         serverStats.totalSlaveAccounts +
         serverStats.totalPendingAccounts,
-      online: serverStats.totalOnlineAccounts,
       pending: serverStats.totalPendingAccounts,
-      offline: serverStats.totalOfflineAccounts,
       slaves: { total: serverStats.totalSlaveAccounts },
       masters: { total: serverStats.totalMasterAccounts },
     };
@@ -1128,30 +1119,8 @@ const TradingAccountsConfigComponent = () => {
 
     if (totalAccounts === 0) return 'none';
 
-    const onlineAccounts = serverStats.totalOnlineAccounts || 0;
-    const offlineAccounts = serverStats.totalOfflineAccounts || 0;
-
-    // Calculate percentages
-    const onlinePercentage = (onlineAccounts / totalAccounts) * 100;
-    const offlinePercentage = (offlineAccounts / totalAccounts) * 100;
-
-    // GREEN: 100% online
-    if (onlinePercentage === 100) {
-      return 'optimal';
-    }
-
-    // RED: More than 50% offline
-    if (offlinePercentage > 50) {
-      return 'offline';
-    }
-
-    // YELLOW: More than 50% online but not 100%
-    if (onlinePercentage > 50) {
-      return 'mixed';
-    }
-
-    // Default case (shouldn't happen with proper data)
-    return 'mixed';
+    // Always return optimal since we're not checking online/offline status
+    return 'optimal';
   };
 
   const getServerStatusDetails = () => {
@@ -1180,40 +1149,12 @@ const TradingAccountsConfigComponent = () => {
       };
     }
 
-    const onlineAccounts = serverStats.totalOnlineAccounts || 0;
-    const offlineAccounts = serverStats.totalOfflineAccounts || 0;
-
-    const onlinePercentage = Math.round((onlineAccounts / totalAccounts) * 100);
-    const offlinePercentage = Math.round((offlineAccounts / totalAccounts) * 100);
-
-    const status = getServerStatus();
-
-    switch (status) {
-      case 'optimal':
-        return {
-          message: `${onlinePercentage}% online (${onlineAccounts}/${totalAccounts} accounts)`,
-          recommendation: 'All systems operational - copy trading active',
-          severity: 'success',
-        };
-      case 'offline':
-        return {
-          message: `${offlinePercentage}% offline (${offlineAccounts}/${totalAccounts} accounts)`,
-          recommendation: 'Check network connections and account credentials',
-          severity: 'error',
-        };
-      case 'mixed':
-        return {
-          message: `Mixed status: ${onlinePercentage}% online, ${offlinePercentage}% offline`,
-          recommendation: 'Address offline accounts to improve system performance',
-          severity: 'warning',
-        };
-      default:
-        return {
-          message: 'Unknown status',
-          recommendation: 'Check system configuration',
-          severity: 'info',
-        };
-    }
+    // Always show optimal status since we're not tracking online/offline
+    return {
+      message: `${totalAccounts} accounts configured`,
+      recommendation: 'All systems operational - copy trading active',
+      severity: 'success',
+    };
   };
 
   const toggleMasterCollapse = (masterId: string) => {
@@ -1282,8 +1223,6 @@ const TradingAccountsConfigComponent = () => {
         return 'Connected';
       case 'pending':
         return 'Not Connected';
-      case 'offline':
-        return 'Offline';
       default:
         return 'Not Connected'; // Default for unknown statuses
     }
@@ -1295,8 +1234,6 @@ const TradingAccountsConfigComponent = () => {
         return <CheckCircle className="text-green-700" />;
       case 'pending':
         return <Clock className="text-orange-500" />;
-      case 'offline':
-        return <XCircle className="text-red-700" />;
       default:
         return <CheckCircle className="text-green-700" />;
     }
@@ -1439,107 +1376,7 @@ const TradingAccountsConfigComponent = () => {
             </div>
           </div>
 
-          {/* Server Status Bar */}
-          <div
-            className={`mb-4 border border-gray-200 rounded-xl shadow-sm overflow-hidden
-            ${
-              getServerStatus() === 'optimal'
-                ? 'bg-green-50 border-green-200'
-                : getServerStatus() === 'offline'
-                  ? 'bg-red-50 border-red-200'
-                  : getServerStatus() === 'mixed'
-                    ? 'bg-yellow-50 border-yellow-200'
-                    : 'bg-gray-50 border-gray-200'
-            }`}
-          >
-            <div className="flex items-center justify-between p-4 px-6">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-semibold">Server Status:</div>
-                  {(() => {
-                    switch (getServerStatus()) {
-                      case 'optimal':
-                        return <CheckCircle className="h-4 w-4 text-green-600 stroke-2" />;
-                      case 'offline':
-                        return <WifiOff className="h-4 w-4 text-red-600 stroke-2" />;
-                      case 'mixed':
-                        return <AlertTriangle className="h-4 w-4 text-orange-600 stroke-2" />;
-                      default:
-                        return <Info className="h-4 w-4 text-gray-600 stroke-2" />;
-                    }
-                  })()}
-                  <div className="text-sm font-medium">
-                    {getServerStatus() === 'optimal'
-                      ? 'All Connected'
-                      : getServerStatus() === 'offline'
-                        ? 'Mostly Offline'
-                        : getServerStatus() === 'mixed'
-                          ? 'Mixed Status'
-                          : 'No Accounts'}
-                  </div>
-                </div>
 
-                {/* Status Details */}
-                <div className="hidden md:block border-l border-gray-300 pl-3">
-                  <div className="text-xs text-gray-600">{getServerStatusDetails().message}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Stats Row */}
-            <div className="border-b border-gray-200 mx-4"></div>
-            <div className="grid grid-cols-6 gap-4 p-4 px-6">
-              {/* Slaves */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-green-200 shadow-sm">
-                <div className="text-2xl font-bold text-green-700">
-                  {unifiedData?.serverStats?.totalSlaveAccounts || 0}
-                </div>
-                <div className="text-xs text-green-700 text-center">Slaves</div>
-              </div>
-
-              {/* Masters */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-blue-200 shadow-sm">
-                <div className="text-2xl font-bold text-blue-700">
-                  {unifiedData?.serverStats?.totalMasterAccounts || 0}
-                </div>
-                <div className="text-xs text-blue-700 text-center">Masters</div>
-              </div>
-
-              {/* Pending */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-orange-200 shadow-sm">
-                <div className="text-2xl font-bold text-orange-700">
-                  {unifiedData?.serverStats?.totalPendingAccounts || 0}
-                </div>
-                <div className="text-xs text-orange-700 text-center">Pendings</div>
-              </div>
-
-              {/* Online */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-emerald-200 shadow-sm">
-                <div className="text-2xl font-bold text-emerald-700">
-                  {unifiedData?.serverStats?.totalOnlineAccounts || 0}
-                </div>
-                <div className="text-xs text-emerald-700 text-center">Online</div>
-              </div>
-
-              {/* Offline */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-red-200 shadow-sm">
-                <div className="text-2xl font-bold text-red-700">
-                  {unifiedData?.serverStats?.totalOfflineAccounts || 0}
-                </div>
-                <div className="text-xs text-red-700 text-center">Offline</div>
-              </div>
-
-              {/* Total */}
-              <div className="flex flex-col items-center p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
-                <div className="text-2xl font-bold text-gray-700">
-                  {(unifiedData?.serverStats?.totalMasterAccounts || 0) +
-                    (unifiedData?.serverStats?.totalSlaveAccounts || 0) +
-                    (unifiedData?.serverStats?.totalPendingAccounts || 0)}
-                </div>
-                <div className="text-xs text-gray-700 text-center">Total</div>
-              </div>
-            </div>
-          </div>
 
           {/* Add/Edit Account Form */}
           {(isAddingAccount || editingAccount) && (
@@ -2298,9 +2135,6 @@ const TradingAccountsConfigComponent = () => {
                       <tr>
                         <th className=" px-4 py-3 align-middle"></th>
                         <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
-                          Status
-                        </th>
-                        <th className=" px-4 py-3 text-center text-xs uppercase align-middle">
                           Copy
                         </th>
                         <th className="px-4 py-3 text-left text-xs uppercase align-middle">
@@ -2358,13 +2192,6 @@ const TradingAccountsConfigComponent = () => {
                                         )}
                                       </button>
                                     ) : null}
-                                  </div>
-                                </td>
-                                <td className=" py-2 align-middle">
-                                  <div className="flex items-center justify-center h-full w-full">
-                                    <span className="flex items-center justify-center h-5 w-5">
-                                      {getStatusIcon(masterAccount.status)}
-                                    </span>
                                   </div>
                                 </td>
                                 <td className=" px-4 py-2 align-middle actions-column">
@@ -2555,7 +2382,6 @@ const TradingAccountsConfigComponent = () => {
                                     reverseTrade: slaveAccount.reverseTrade || false,
                                     connectedToMaster: masterAccount.id,
                                     config: slaveAccount.config,
-                                    masterOnline: slaveAccount.masterOnline || true, // Para slaves conectados, asumir que el master está online
                                   };
 
                                   return (
@@ -2564,13 +2390,7 @@ const TradingAccountsConfigComponent = () => {
                                       className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
                                     >
                                       <td className=" px-2 py-1.5 align-middle"></td>
-                                      <td className=" px-4 py-1.5 align-middle">
-                                        <div className="flex items-center justify-center h-full w-full">
-                                          <span className="flex items-center justify-center h-5 w-5">
-                                            {getStatusIcon(accountToUse.status)}
-                                          </span>
-                                        </div>
-                                      </td>
+               
                                       <td className=" px-4 py-1.5 align-middle actions-column">
                                         <div className="flex items-center justify-center">
                                           <Switch

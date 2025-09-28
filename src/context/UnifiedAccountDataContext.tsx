@@ -55,6 +55,7 @@ export const UnifiedAccountDataProvider: React.FC<{ children: React.ReactNode }>
     toggleHidden,
   };
 
+
   if (!secretKey) {
     return <>{children}</>;
   }

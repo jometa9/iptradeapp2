@@ -22,8 +22,12 @@ class LinkPlatformsController {
     this.operatingSystem = this.detectOperatingSystem();
     this.lastLinkPlatformsResult = null; // Store last result for new clients
     this.lastLinkPlatformsTimestamp = null; // Store timestamp of last operation
-    // Flag para controlar si cTrader está habilitado (por defecto deshabilitado)
-    this.cTraderEnabled = false;
+    // Flag para controlar si cTrader está habilitado (HABILITADO)
+    this.cTraderEnabled = true;
+    
+    // PROPIEDADES ELIMINADAS: validPlatformKeywords y csvSearchPatterns
+    // Estas propiedades pertenecen a Find Bots, no a Link Platforms
+    // Link Platforms solo debe instalar bots, no buscar CSV
   }
 
   // Detectar el sistema operativo
@@ -53,6 +57,10 @@ class LinkPlatformsController {
     return this.cTraderEnabled;
   }
 
+  // MÉTODO ELIMINADO: validateCSVPlatformContent() 
+  // Este método pertenece a Find Bots, no a Link Platforms
+  // Link Platforms solo debe instalar bots, no validar CSV
+
   async linkPlatforms(req, res) {
     try {
       // Check if Link Platforms is already running
@@ -65,19 +73,87 @@ class LinkPlatformsController {
         });
       }
 
-      const result = await this.findAndSyncMQLFoldersManual();
+      // Start the process in background and respond immediately
+      this.findAndSyncMQLFoldersManual().catch(error => {
+        console.error('❌ Background Link Platforms error:', error);
+        // Error handling is done within findAndSyncMQLFoldersManual() method via SSE events
+      });
 
+      // Respond immediately that the process has started
       res.json({
         success: true,
-        message: 'Link Platforms process completed',
-        result,
+        message: 'Link Platforms process started successfully',
+        isLinking: true,
+        backgroundProcess: true
       });
     } catch (error) {
-      console.error('❌ Link Platforms error:', error);
+      console.error('❌ Link Platforms endpoint error:', error);
       console.error('❌ Error stack:', error.stack);
       res.status(500).json({
         success: false,
-        message: 'Link Platforms process failed',
+        message: 'Failed to start Link Platforms process',
+        error: error.message,
+      });
+    }
+  }
+
+  async findBotsEndpoint(req, res) {
+    const startTime = Date.now();
+    console.log('🔍 Find Bots ENDPOINT: Request received at', new Date().toISOString());
+    console.log('🔍 Find Bots ENDPOINT: Request headers:', req.headers);
+    console.log('🔍 Find Bots ENDPOINT: Request body:', req.body);
+    
+    try {
+      // Check if Find Bots is already running
+      if (this.isLinking) {
+        console.log('⚠️ Find Bots ENDPOINT: Process already running, returning 409');
+        return res.status(409).json({
+          success: false,
+          message:
+            'Find Bots is already running. Please wait for the current process to complete.',
+          isLinking: true,
+        });
+      }
+
+      console.log('🔍 Find Bots ENDPOINT: Starting synchronous process...');
+      console.log('🔍 Find Bots ENDPOINT: Current working directory:', process.cwd());
+      console.log('🔍 Find Bots ENDPOINT: Bots path:', this.botsPath);
+      
+      // Execute the process synchronously and wait for completion
+      const result = await this.findBots();
+      
+      const duration = Date.now() - startTime;
+      console.log(`🔍 Find Bots ENDPOINT: Process completed in ${duration}ms, returning result`);
+      console.log('🔍 Find Bots ENDPOINT: Result summary:', {
+        csvFilesCount: result.csvFiles.length,
+        csvFilesFound: result.csvFilesFound,
+        errorsCount: result.errors.length,
+        hasErrors: result.errors.length > 0
+      });
+      
+      if (result.errors.length > 0) {
+        console.log('⚠️ Find Bots ENDPOINT: Errors found:', result.errors);
+      }
+      
+      // Respond only when the process is completely finished
+      res.json({
+        success: true,
+        message: `Find Bots completed. Found ${result.csvFiles.length} CSV files`,
+        result: {
+          csvFiles: result.csvFiles,
+          csvFilesFound: result.csvFilesFound,
+          errors: result.errors
+        },
+        isLinking: false // Process is now complete
+      });
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`❌ Find Bots ENDPOINT: Error after ${duration}ms:`, error);
+      console.error('❌ Find Bots ENDPOINT: Error stack:', error.stack);
+      console.error('❌ Find Bots ENDPOINT: Error type:', error.constructor.name);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to complete Find Bots process',
         error: error.message,
       });
     }
@@ -215,77 +291,337 @@ class LinkPlatformsController {
     return isTimeValid;
   }
 
-  // Unified method - ALWAYS full system scan (replaces both manual and optimized)
+  // Link Platforms - SOLO instalar bots en plataformas encontradas (SIN buscar CSV)
   async findAndSyncMQLFolders() {
     // Track linking state
     this.isLinking = true;
 
-    // Safety timeout to reset state if process gets stuck
-    const safetyTimeout = setTimeout(() => {
-      if (this.isLinking) {
-        this.isLinking = false;
-        this.emitLinkPlatformsEvent('error', {
-          message: 'Link Platforms process timed out',
-          error: 'Process took too long to complete',
-        });
-        this.emitLinkPlatformsEvent('idle', {
-          message: 'Link Platforms process finished (timeout)',
-          isLinking: false,
-        });
-      }
-    }, 300000); // 300 seconds timeout (reduced from 60)
-
     const result = {
       mql4Folders: [],
       mql5Folders: [],
-      created: 0,
+      ninjaTraderFolders: [],
+      cTraderFolders: [],
       synced: 0,
       errors: [],
-      filesCreated: 0,
-      csvFiles: [],
-      usedCache: false,
-      backgroundScan: false,
     };
 
-    // Emitir evento de inicio para el frontend
-    this.emitLinkPlatformsEvent('started', { message: 'Link Platforms process started' });
+    console.log('🔗 Link Platforms: Starting bot installation process...');
 
     try {
-      // PASO 1: Configurar CSV watching para archivos existentes PRIMERO
-
-      await this.configureCSVWatchingForExistingFilesInternal();
-
-      // PASO 2: Realizar scan completo de MetaTrader folders
-
-      await this.performFullScan(result);
-
-      // Emitir evento de finalización completa
-      this.emitLinkPlatformsEvent('completed', {
-        message: 'Link Platforms process completed successfully',
-        result,
-      });
+      // PASO 1: Buscar plataformas instaladas
+      console.log('🔍 Link Platforms: Searching for installed platforms...');
+      const { mql4Folders, mql5Folders } = await this.findBothMQLFolders();
+      const ninjaTraderFolders = await this.findNinjaTraderFolders();
+      
+      result.mql4Folders = mql4Folders;
+      result.mql5Folders = mql5Folders;
+      result.ninjaTraderFolders = ninjaTraderFolders;
+      
+      console.log(`📁 Link Platforms: Found ${mql4Folders.length} MT4, ${mql5Folders.length} MT5, ${ninjaTraderFolders.length} NT8 platforms`);
+      
+      // PASO 2: Instalar bots en cada plataforma
+      await this.installBotsInPlatforms(result);
+      
+      const totalPlatforms = result.mql4Folders.length + result.mql5Folders.length + result.ninjaTraderFolders.length + (result.cTraderFolders?.length || 0);
+      console.log(`✅ Link Platforms: Process completed. Synced ${result.synced} bot files to ${totalPlatforms} platforms`);
     } catch (error) {
       console.error('❌ Error in Link Platforms process:', error);
       result.errors.push(`General error: ${error.message}`);
-
-      // Emitir evento de error
-      this.emitLinkPlatformsEvent('error', {
-        message: 'Link Platforms process failed',
-        error: error.message,
-        result,
-      });
     } finally {
-      // Clear safety timeout
-      clearTimeout(safetyTimeout);
-
       // Always reset linking state
       this.isLinking = false;
+    }
 
-      // Emit SSE event to notify frontend that linking has finished
-      this.emitLinkPlatformsEvent('idle', {
-        message: 'Link Platforms process finished',
-        isLinking: false,
-      });
+    return result;
+  }
+
+  // Instalar bots en todas las plataformas encontradas
+  async installBotsInPlatforms(result) {
+    console.log('🚀 Link Platforms: Starting bot installation...');
+    
+    // Instalar en plataformas MT4
+    for (let i = 0; i < result.mql4Folders.length; i++) {
+      const folder = result.mql4Folders[i];
+      console.log(`🔧 Installing bots in MT4 platform ${i + 1}/${result.mql4Folders.length}: ${path.basename(folder)}`);
+      
+      try {
+        const expertsPath = path.join(folder, 'Experts');
+        
+        // Verificar que la carpeta Experts existe (no crearla)
+        if (!fs.existsSync(expertsPath)) {
+          const errorMsg = `Experts folder not found in ${folder}. Platform may not be properly installed.`;
+          console.warn(`  ⚠️ ${errorMsg}`);
+          result.errors.push(errorMsg);
+          continue;
+        }
+        
+        // Copiar archivos .mq4 para MT4
+        const mql4BotFiles = this.getBotFilesByExtension('.mq4');
+        for (const botFile of mql4BotFiles) {
+          if (fs.existsSync(botFile.path)) {
+            const targetPath = path.join(expertsPath, botFile.name);
+            fs.copyFileSync(botFile.path, targetPath);
+            result.synced++;
+            console.log(`  ✅ Copied ${botFile.name}`);
+          }
+        }
+      } catch (error) {
+        const errorMsg = `Error installing bots in MT4 folder ${folder}: ${error.message}`;
+        console.error(`  ❌ ${errorMsg}`);
+        result.errors.push(errorMsg);
+      }
+    }
+    
+    // Instalar en plataformas MT5
+    for (let i = 0; i < result.mql5Folders.length; i++) {
+      const folder = result.mql5Folders[i];
+      console.log(`🔧 Installing bots in MT5 platform ${i + 1}/${result.mql5Folders.length}: ${path.basename(folder)}`);
+      
+      try {
+        const expertsPath = path.join(folder, 'Experts');
+        
+        // Verificar que la carpeta Experts existe (no crearla)
+        if (!fs.existsSync(expertsPath)) {
+          const errorMsg = `Experts folder not found in ${folder}. Platform may not be properly installed.`;
+          console.warn(`  ⚠️ ${errorMsg}`);
+          result.errors.push(errorMsg);
+          continue;
+        }
+        
+        // Copiar archivos .mq5 para MT5
+        const mql5BotFiles = this.getBotFilesByExtension('.mq5');
+        for (const botFile of mql5BotFiles) {
+          if (fs.existsSync(botFile.path)) {
+            const targetPath = path.join(expertsPath, botFile.name);
+            fs.copyFileSync(botFile.path, targetPath);
+            result.synced++;
+            console.log(`  ✅ Copied ${botFile.name}`);
+          }
+        }
+      } catch (error) {
+        const errorMsg = `Error installing bots in MT5 folder ${folder}: ${error.message}`;
+        console.error(`  ❌ ${errorMsg}`);
+        result.errors.push(errorMsg);
+      }
+    }
+    
+    // Instalar en plataformas NinjaTrader
+    for (let i = 0; i < result.ninjaTraderFolders.length; i++) {
+      const folder = result.ninjaTraderFolders[i];
+      console.log(`🔧 Installing bots in NT8 platform ${i + 1}/${result.ninjaTraderFolders.length}: ${path.basename(folder)}`);
+      
+      try {
+        await this.installNinjaTraderBots(folder, result);
+      } catch (error) {
+        const errorMsg = `Error installing bots in NT8 folder ${folder}: ${error.message}`;
+        console.error(`  ❌ ${errorMsg}`);
+        result.errors.push(errorMsg);
+      }
+    }
+    
+    // Instalar en plataformas cTrader (si las encontramos)
+    const cTraderFolders = await this.findCTraderFolders();
+    if (cTraderFolders.length > 0) {
+      result.cTraderFolders = cTraderFolders;
+      
+      for (let i = 0; i < cTraderFolders.length; i++) {
+        const folder = cTraderFolders[i];
+        console.log(`🔧 Installing bots in cTrader platform ${i + 1}/${cTraderFolders.length}: ${path.basename(folder)}`);
+        
+        try {
+          await this.installCTraderBots(folder, result);
+        } catch (error) {
+          const errorMsg = `Error installing bots in cTrader folder ${folder}: ${error.message}`;
+          console.error(`  ❌ ${errorMsg}`);
+          result.errors.push(errorMsg);
+        }
+      }
+    }
+    
+    console.log(`🎉 Link Platforms: Bot installation completed!`);
+  }
+  
+  // Buscar instalaciones de cTrader
+  async findCTraderFolders() {
+    const cTraderFolders = [];
+    const username = os.userInfo().username;
+    
+    // Ubicaciones comunes de cTrader
+    const possiblePaths = [
+      `C:\\Users\\${username}\\Documents\\cAlgo`,
+      'C:\\Program Files\\cTrader\\cAlgo',
+      'C:\\Program Files (x86)\\cTrader\\cAlgo',
+    ];
+    
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        cTraderFolders.push(testPath);
+        console.log(`📁 Found cTrader installation: ${testPath}`);
+      }
+    }
+    
+    return cTraderFolders;
+  }
+  
+  // Instalar bots de cTrader
+  async installCTraderBots(folder, result) {
+    // Para cTrader, los bots van en la carpeta Sources/Robots
+    const robotsPath = path.join(folder, 'Sources', 'Robots');
+    
+    // Verificar que la carpeta existe
+    if (!fs.existsSync(robotsPath)) {
+      const errorMsg = `Robots folder not found in ${folder}. cTrader may not be properly installed.`;
+      console.warn(`  ⚠️ ${errorMsg}`);
+      result.errors.push(errorMsg);
+      return;
+    }
+    
+    console.log(`  📁 Using cTrader Robots path: ${robotsPath}`);
+    
+    // Copiar archivos .cs de cTrader
+    const cBotFiles = this.getBotFilesByExtension('.cs');
+    for (const botFile of cBotFiles) {
+      if (fs.existsSync(botFile.path)) {
+        const targetPath = path.join(robotsPath, botFile.name);
+        fs.copyFileSync(botFile.path, targetPath);
+        result.synced++;
+        console.log(`  ✅ Copied ${botFile.name}`);
+      }
+    }
+  }
+  
+  // Instalar bots de NinjaTrader
+  async installNinjaTraderBots(folder, result) {
+    // Para NT8, intentar diferentes ubicaciones posibles
+    const possiblePaths = [
+      path.join(folder, 'bin', 'Custom', 'Strategies'),  // Instalación estándar
+      path.join('C:', 'Program Files', 'NinjaTrader 8', 'bin', 'Custom', 'Strategies'), // Instalación global
+    ];
+    
+    let strategiesPath = null;
+    
+    // Buscar la primera ruta que exista
+    for (const testPath of possiblePaths) {
+      if (fs.existsSync(testPath)) {
+        strategiesPath = testPath;
+        break;
+      }
+    }
+    
+    // Verificar que encontramos una carpeta válida
+    if (!strategiesPath) {
+      const errorMsg = `Strategies folder not found for NinjaTrader. Tried: ${possiblePaths.join(', ')}`;
+      console.warn(`  ⚠️ ${errorMsg}`);
+      result.errors.push(errorMsg);
+      return;
+    }
+    
+    console.log(`  📁 Using NinjaTrader Strategies path: ${strategiesPath}`);
+    
+    // Copiar archivos .cs de NinjaTrader
+    const ntBotFiles = this.getBotFilesByExtension('.cs');
+    for (const botFile of ntBotFiles) {
+      if (fs.existsSync(botFile.path)) {
+        const targetPath = path.join(strategiesPath, botFile.name);
+        fs.copyFileSync(botFile.path, targetPath);
+        result.synced++;
+        console.log(`  ✅ Copied ${botFile.name}`);
+      }
+    }
+  }
+
+  // Find Bots - Solo buscar archivos CSV existentes (síncrono)
+  async findBots() {
+    const startTime = Date.now();
+    console.log('🔍 Find Bots CORE: Starting at', new Date().toISOString());
+    console.log('🔍 Find Bots CORE: Initial isLinking state:', this.isLinking);
+    
+    // Track linking state
+    this.isLinking = true;
+    console.log('🔍 Find Bots CORE: Set isLinking to true');
+
+    const result = {
+      csvFiles: [],
+      csvFilesFound: 0,
+      errors: [],
+    };
+
+    try {
+      console.log('🔍 Find Bots CORE: Starting CSV search...');
+      console.log('🔍 Find Bots CORE: csvManager instance:', !!csvManager);
+      
+      // PASO 1: Buscar archivos CSV existentes usando csvManager
+      console.log('🔍 Find Bots CORE: Using csvManager to scan for CSV files...');
+      const scanStartTime = Date.now();
+      const foundFiles = await csvManager.scanCSVFiles();
+      const scanDuration = Date.now() - scanStartTime;
+      
+      console.log(`🔍 Find Bots CORE: csvManager scan completed in ${scanDuration}ms`);
+      console.log(`🔍 Find Bots CORE: csvManager found ${foundFiles.length} files:`, foundFiles);
+      
+      if (foundFiles.length === 0) {
+        console.log('⚠️ Find Bots CORE: No files found by csvManager - this might be the issue!');
+      }
+      
+      // PASO 2: Validar cada archivo encontrado
+      for (const csvPath of foundFiles) {
+        if (fs.existsSync(csvPath)) {
+          try {
+            // Validar formato del archivo CSV
+            const buffer = fs.readFileSync(csvPath);
+            let content;
+
+            // Detectar UTF-16 LE BOM (FF FE)
+            if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+              content = buffer.toString('utf16le');
+            } else {
+              content = buffer.toString('utf8');
+            }
+
+            const lines = content.split('\n').filter(line => line.trim());
+
+            if (lines.length > 0) {
+              const firstLine = lines[0];
+              
+              // Validar formato básico del CSV
+              const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
+              const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
+              const hasValidFormat = hasBracketFormat || hasCommaFormat;
+              
+              // Validar que contenga nombres de plataformas válidas
+              const contentUpper = content.toUpperCase();
+              const fileName = path.basename(csvPath).toUpperCase();
+              const hasIPTRADEInName = fileName.includes('IPTRADE');
+              const validPlatformKeywords = ['MT4', 'MT5', 'CTRADER', 'NT8', 'NINJATRADER'];
+              const hasValidPlatformInContent = validPlatformKeywords.some(platformName => {
+                return contentUpper.includes(platformName) || contentUpper.includes(`[${platformName}]`);
+              });
+              
+              if (hasValidFormat && hasIPTRADEInName && hasValidPlatformInContent) {
+                result.csvFiles.push(csvPath);
+                result.csvFilesFound++;
+                console.log(`✅ Find Bots: Valid CSV file found: ${path.basename(csvPath)}`);
+              } else {
+                console.log(`⚠️ Find Bots: Invalid CSV file: ${path.basename(csvPath)}`);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Find Bots: Error reading CSV file ${csvPath}:`, error.message);
+            result.errors.push(`Error reading CSV file ${csvPath}: ${error.message}`);
+          }
+        } else {
+          console.log(`⚠️ Find Bots: File does not exist: ${csvPath}`);
+        }
+      }
+
+      console.log(`✅ Find Bots: Process completed. Found ${result.csvFiles.length} valid CSV files`);
+      
+    } catch (error) {
+      console.error('❌ Error in Find Bots process:', error);
+      result.errors.push(`General error: ${error.message}`);
+    } finally {
+      // Always reset linking state
+      this.isLinking = false;
     }
 
     return result;
@@ -416,7 +752,175 @@ class LinkPlatformsController {
     }
   }
 
-  // Realizar búsqueda completa (sin cache)
+  // MÉTODO OBSOLETO - Reemplazado por installBotsInPlatforms()
+  // Escanear plataformas e instalar bots (sin buscar CSV)
+  async performPlatformScanAndInstall(result) {
+    // Emitir evento de scanning
+    this.emitLinkPlatformsEvent('progress', {
+      message: 'Getting available drives...',
+      progress: { current: 15, total: 100, percentage: 15 }
+    });
+
+    // Obtener drives disponibles
+    const drives = await this.getAvailableDrives();
+    const totalDrives = drives.length;
+    
+    this.emitLinkPlatformsEvent('progress', {
+      message: `Found ${totalDrives} drives to scan for platforms...`,
+      progress: { current: 20, total: 100, percentage: 20 }
+    });
+
+    // Escanear cada drive con progreso individual
+    for (let i = 0; i < drives.length; i++) {
+      const drive = drives[i];
+      const driveProgress = 20 + Math.round((i / totalDrives) * 70); // 20% a 90%
+      
+      this.emitLinkPlatformsEvent('progress', {
+        message: `Scanning drive ${drive} for platforms (${i + 1}/${totalDrives})...`,
+        progress: { current: driveProgress, total: 100, percentage: driveProgress }
+      });
+
+      try {
+        // Callback para progreso granular dentro del drive
+        const progressCallback = (message) => {
+          const baseProgress = 20 + Math.round((i / totalDrives) * 70);
+          this.emitLinkPlatformsEvent('progress', {
+            message: `${drive}: ${message}`,
+            progress: { current: baseProgress, total: 100, percentage: baseProgress }
+          });
+        };
+
+        // Buscar y procesar plataformas (sin CSV)
+        const driveResult = await this.scanDriveForPlatformsOnly(drive, progressCallback);
+        
+        result.mql4Folders.push(...driveResult.mql4Folders);
+        result.mql5Folders.push(...driveResult.mql5Folders);
+        result.ninjaTraderFolders = [...(result.ninjaTraderFolders || []), ...(driveResult.ninjaTraderFolders || [])];
+
+        result.created += driveResult.created;
+        result.synced += driveResult.synced;
+        result.errors.push(...driveResult.errors);
+        result.filesCreated += driveResult.filesCreated;
+
+        // Emitir progreso con detalles encontrados hasta ahora
+        const currentProgress = 20 + Math.round(((i + 1) / totalDrives) * 70);
+        const platformsFound = driveResult.mql4Folders.length + driveResult.mql5Folders.length + (driveResult.ninjaTraderFolders?.length || 0);
+        
+        this.emitLinkPlatformsEvent('progress', {
+          message: platformsFound > 0 
+            ? `Drive ${drive} completed. Found ${platformsFound} platforms, synced ${driveResult.synced} files`
+            : `Drive ${drive} completed. No platforms found`,
+          progress: { current: currentProgress, total: 100, percentage: currentProgress },
+          details: {
+            mql4Platforms: result.mql4Folders.length,
+            mql5Platforms: result.mql5Folders.length,
+            ninjaTraderPlatforms: result.ninjaTraderFolders?.length || 0,
+            filesSynced: result.synced
+          }
+        });
+      } catch (error) {
+        result.errors.push(`Error scanning drive ${drive}: ${error.message}`);
+        console.error(`❌ Error scanning drive ${drive}:`, error);
+      }
+    }
+  }
+
+  // Realizar búsqueda completa con progreso real (método original mantenido para compatibilidad)
+  async performFullScanWithProgress(result) {
+    // Emitir evento de scanning
+    this.emitLinkPlatformsEvent('progress', {
+      message: 'Getting available drives...',
+      progress: { current: 20, total: 100, percentage: 20 }
+    });
+
+    // Obtener drives disponibles
+    const drives = await this.getAvailableDrives();
+    const totalDrives = drives.length;
+    
+    this.emitLinkPlatformsEvent('progress', {
+      message: `Found ${totalDrives} drives to scan...`,
+      progress: { current: 25, total: 100, percentage: 25 }
+    });
+
+    // Escanear cada drive con progreso individual
+    for (let i = 0; i < drives.length; i++) {
+      const drive = drives[i];
+      const driveProgress = 25 + Math.round((i / totalDrives) * 60); // 25% a 85%
+      
+      this.emitLinkPlatformsEvent('progress', {
+        message: `Scanning drive ${drive} (${i + 1}/${totalDrives})...`,
+        progress: { current: driveProgress, total: 100, percentage: driveProgress }
+      });
+
+      try {
+        // Callback para progreso granular dentro del drive
+        const progressCallback = (message) => {
+          const baseProgress = 25 + Math.round((i / totalDrives) * 60);
+          this.emitLinkPlatformsEvent('progress', {
+            message: `${drive}: ${message}`,
+            progress: { current: baseProgress, total: 100, percentage: baseProgress }
+          });
+        };
+
+        const driveResult = await this.scanDrive(drive, false, progressCallback);
+        
+        result.mql4Folders.push(...driveResult.mql4Folders);
+        result.mql5Folders.push(...driveResult.mql5Folders);
+        result.ninjaTraderFolders = [...(result.ninjaTraderFolders || []), ...(driveResult.ninjaTraderFolders || [])];
+
+        result.created += driveResult.created;
+        result.synced += driveResult.synced;
+        result.errors.push(...driveResult.errors);
+        result.filesCreated += driveResult.filesCreated;
+        result.csvFiles.push(...driveResult.csvFiles);
+
+        // Emitir progreso con detalles encontrados hasta ahora
+        const currentProgress = 25 + Math.round(((i + 1) / totalDrives) * 60);
+        const platformsFound = driveResult.mql4Folders.length + driveResult.mql5Folders.length + (driveResult.ninjaTraderFolders?.length || 0);
+        
+        this.emitLinkPlatformsEvent('progress', {
+          message: platformsFound > 0 
+            ? `Drive ${drive} completed. Found ${platformsFound} platform installations`
+            : `Drive ${drive} completed. No platforms found`,
+          progress: { current: currentProgress, total: 100, percentage: currentProgress },
+          details: {
+            mql4Platforms: result.mql4Folders.length,
+            mql5Platforms: result.mql5Folders.length,
+            ninjaTraderPlatforms: result.ninjaTraderFolders?.length || 0,
+            filesSynced: result.synced,
+            csvFilesFound: result.csvFiles.length
+          }
+        });
+      } catch (error) {
+        result.errors.push(`Error scanning drive ${drive}: ${error.message}`);
+        console.error(`❌ Error scanning drive ${drive}:`, error);
+      }
+    }
+
+    // Guardar cache
+    this.emitLinkPlatformsEvent('progress', {
+      message: 'Saving scan results to cache...',
+      progress: { current: 90, total: 100, percentage: 90 }
+    });
+
+    const pathsToCache = {
+      mql4Folders: result.mql4Folders,
+      mql5Folders: result.mql5Folders,
+      ninjaTraderFolders: result.ninjaTraderFolders || [],
+    };
+    this.cachedPaths = pathsToCache;
+    this.lastScanTime = new Date();
+    this.saveCacheToFile(pathsToCache);
+
+    // Log summary of registered CSV files
+    try {
+      csvManager.getCSVFilesSummary();
+    } catch (error) {
+      console.error(`❌ Error getting CSV summary: ${error.message}`);
+    }
+  }
+
+  // Realizar búsqueda completa (sin cache) - método original mantenido para compatibilidad
   async performFullScan(result) {
     // Emitir evento de scanning
     this.emitLinkPlatformsEvent('scanning', {
@@ -441,16 +945,29 @@ class LinkPlatformsController {
       result.errors.push(...driveResult.errors);
       result.filesCreated += driveResult.filesCreated;
       result.csvFiles.push(...driveResult.csvFiles);
+
+      // Emit progress update with detailed information
+      const totalPlatforms = result.mql4Folders.length + result.mql5Folders.length + result.ninjaTraderFolders.length;
+      this.emitLinkPlatformsEvent('progress', {
+        message: `Found ${totalPlatforms} platform installations. Synced ${result.synced} files.`,
+        details: {
+          mql4Platforms: result.mql4Folders.length,
+          mql5Platforms: result.mql5Folders.length,
+          ninjaTraderPlatforms: result.ninjaTraderFolders.length,
+          filesSynced: result.synced,
+          csvFilesFound: result.csvFiles.length
+        }
+      });
     } catch (error) {
       result.errors.push(`Error scanning system: ${error.message}`);
       console.error(`❌ Error scanning system:`, error);
     }
 
-    // Guardar nuevo cache
+    // Guardar nuevo cache (eliminando duplicados)
     const pathsToCache = {
-      mql4Folders: result.mql4Folders,
-      mql5Folders: result.mql5Folders,
-      ninjaTraderFolders: result.ninjaTraderFolders || [],
+      mql4Folders: [...new Set(result.mql4Folders)], // Eliminar duplicados
+      mql5Folders: [...new Set(result.mql5Folders)], // Eliminar duplicados
+      ninjaTraderFolders: [...new Set(result.ninjaTraderFolders || [])], // Eliminar duplicados
     };
     this.cachedPaths = pathsToCache;
     this.lastScanTime = new Date();
@@ -458,6 +975,9 @@ class LinkPlatformsController {
 
     // Configurar CSV watching
     if (result.csvFiles.length > 0) {
+      this.emitLinkPlatformsEvent('progress', {
+        message: `Configuring CSV file monitoring for ${result.csvFiles.length} files...`,
+      });
       await this.configureCSVWatching(result.csvFiles);
     }
 
@@ -561,380 +1081,23 @@ class LinkPlatformsController {
     }
   }
 
-  // Función interna para configurar CSV watching sin emitir eventos (usada dentro del proceso principal)
-  async configureCSVWatchingForExistingFilesInternal() {
-    // Guardar los archivos existentes antes de buscar nuevos
-    const existingFiles = new Map(csvManager.csvFiles);
+  // MÉTODOS ELIMINADOS: getAvailableWindowsDrives() y generateSearchLocations()
+  // Estos métodos pertenecen a Find Bots, no a Link Platforms
+  // Link Platforms solo debe instalar bots, no buscar en múltiples discos
 
-    // En Windows, usar el comando PowerShell específico para buscar archivos CSV
-    if (this.operatingSystem === 'windows') {
-      try {
-        // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
-        const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-    Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
-    Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
-    Select-Object -ExpandProperty FullName
-}`;
+  // MÉTODO ELIMINADO: findExistingCSVFilesWithProgress()
+  // Este método pertenece a Find Bots, no a Link Platforms
+  // Link Platforms solo debe instalar bots, no buscar CSV
 
-        // Usar exec asíncrono para manejar timeouts y errores
-        let stdout = '';
-        try {
-          const result = await execAsync(findCommand, {
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 30000,
-            shell: 'powershell.exe',
-          });
-          stdout = result.stdout;
-        } catch (error) {
-          // PowerShell puede retornar error por timeout pero aún encontrar archivos
-          // Usamos el stdout aunque haya error
-          if (error.stdout) {
-            stdout = error.stdout;
-          }
-        }
+  // MÉTODO ELIMINADO: cacheCSVPaths()
+  // Este método pertenece a Find Bots, no a Link Platforms
+  // Link Platforms solo debe instalar bots, no cachear CSV
 
-        const allCsvFiles = stdout
-          .trim()
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0);
+  // Método eliminado - ya no necesitamos file watching
 
-        for (const csvPath of allCsvFiles) {
-          if (fs.existsSync(csvPath)) {
-            // Si el archivo ya existe en el caché, mantener sus datos
-            if (existingFiles.has(csvPath)) {
-              csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
-            } else {
-              // Si es un archivo nuevo, agregarlo al caché
-              csvManager.csvFiles.set(csvPath, {
-                lastModified: csvManager.getFileLastModified(csvPath),
-                data: csvManager.parseCSVFile(csvPath),
-              });
-            }
-          }
-        }
+  // Método eliminado - ya no necesitamos file watching
 
-        // Configurar file watching
-        csvManager.startFileWatching();
-
-        // Guardar el cache después de encontrar los archivos CSV
-        if (csvManager.csvFiles.size > 0) {
-          csvManager.saveCSVPathsToCache();
-        }
-      } catch (error) {
-        console.error(`❌ Error during Windows system-wide CSV search for existing files:`, error);
-        // En caso de error, restaurar los archivos existentes
-        existingFiles.forEach((value, key) => {
-          csvManager.csvFiles.set(key, value);
-        });
-      }
-    } else if (this.operatingSystem === 'macos') {
-      try {
-        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-
-        // Usar exec asíncrono para evitar crash por exit code 1
-        let stdout = '';
-        try {
-          const result = await execAsync(findCommand, { encoding: 'utf8' });
-          stdout = result.stdout;
-        } catch (error) {
-          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
-          // Usamos el stdout aunque haya error
-          if (error.stdout) {
-            stdout = error.stdout;
-          }
-        }
-        const allCsvFiles = stdout
-          .trim()
-          .split('\n')
-          .filter(line => line.trim());
-
-        // Configurar watching para todos los archivos encontrados
-        for (const csvPath of allCsvFiles) {
-          if (fs.existsSync(csvPath)) {
-            // Si el archivo ya existe en el caché, mantener sus datos
-            if (existingFiles.has(csvPath)) {
-              csvManager.csvFiles.set(csvPath, existingFiles.get(csvPath));
-            } else {
-              // Si es un archivo nuevo, agregarlo al caché
-              csvManager.csvFiles.set(csvPath, {
-                lastModified: csvManager.getFileLastModified(csvPath),
-                data: csvManager.parseCSVFile(csvPath),
-              });
-            }
-          }
-        }
-
-        // Configurar file watching
-        csvManager.startFileWatching();
-
-        // Guardar el cache después de encontrar los archivos CSV
-        if (csvManager.csvFiles.size > 0) {
-          csvManager.saveCSVPathsToCache();
-        }
-      } catch (error) {
-        console.error(`❌ Error during system-wide CSV search for existing files:`, error);
-        // En caso de error, restaurar los archivos existentes
-        existingFiles.forEach((value, key) => {
-          csvManager.csvFiles.set(key, value);
-        });
-      }
-    } else {
-      // Para otros sistemas operativos, usar la lógica original
-    }
-  }
-
-  // Nueva función para configurar el CSV watching para archivos existentes en el sistema
-  async configureCSVWatchingForExistingFiles() {
-    // En macOS, hacer una búsqueda completa del sistema para archivos CSV válidos
-    if (this.operatingSystem === 'macos') {
-      try {
-        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-
-        // Usar exec asíncrono para evitar crash por exit code 1
-        let stdout = '';
-        try {
-          const result = await execAsync(findCommand, { encoding: 'utf8' });
-          stdout = result.stdout;
-        } catch (error) {
-          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
-          // Usamos el stdout aunque haya error
-          if (error.stdout) {
-            stdout = error.stdout;
-          }
-        }
-        const allCsvFiles = stdout
-          .trim()
-          .split('\n')
-          .filter(line => line.trim());
-
-        // Configurar watching para todos los archivos encontrados
-        allCsvFiles.forEach(csvPath => {
-          if (fs.existsSync(csvPath)) {
-            csvManager.csvFiles.set(csvPath, {
-              lastModified: csvManager.getFileLastModified(csvPath),
-              data: csvManager.parseCSVFile(csvPath),
-            });
-          }
-        });
-
-        // Configurar file watching
-        csvManager.startFileWatching();
-
-        // Guardar el cache después de encontrar los archivos CSV
-        if (csvManager.csvFiles.size > 0) {
-          csvManager.saveCSVPathsToCache();
-        }
-      } catch (error) {
-        console.error(`❌ Error during system-wide CSV search for existing files:`, error);
-      }
-    } else {
-    }
-
-    // Emit idle event after CSV watching configuration is complete
-    this.emitLinkPlatformsEvent('idle', {
-      message: 'CSV watching configuration completed',
-      isLinking: false,
-    });
-  }
-
-  // Nueva función para configurar el CSV watching específicamente en las rutas encontradas
-  async configureCSVWatching(csvPaths) {
-    // En Windows, usar el comando PowerShell específico para buscar archivos CSV
-    if (this.operatingSystem === 'windows') {
-      try {
-        // Comando PowerShell para buscar archivos IPTRADECSV2*.csv en todo el sistema
-        const findCommand = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-    Get-ChildItem -Path $_.Root -Recurse -File -Force -ErrorAction SilentlyContinue 2>$null |
-    Where-Object { $_.Name -like 'IPTRADECSV2*.csv' } |
-    Select-Object -ExpandProperty FullName
-}`;
-
-        // Usar exec asíncrono para manejar timeouts y errores
-        let stdout = '';
-        try {
-          const result = await execAsync(findCommand, {
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 30000,
-            shell: 'powershell.exe',
-          });
-          stdout = result.stdout;
-        } catch (error) {
-          // PowerShell puede retornar error por timeout pero aún encontrar archivos
-          // Usamos el stdout aunque haya error
-          if (error.stdout) {
-            stdout = error.stdout;
-          }
-        }
-
-        const allCsvFiles = stdout
-          .trim()
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.length > 0);
-
-        // Filtrar solo archivos CSV con formato válido
-        const validCsvFiles = [];
-
-        for (const csvPath of allCsvFiles) {
-          if (fs.existsSync(csvPath)) {
-            try {
-              // Leer el archivo como buffer primero para detectar encoding
-              const buffer = fs.readFileSync(csvPath);
-              let content;
-
-              // Detectar UTF-16 LE BOM (FF FE)
-              if (buffer[0] === 0xff && buffer[1] === 0xfe) {
-                content = buffer.toString('utf16le');
-              } else {
-                content = buffer.toString('utf8');
-              }
-
-              const lines = content.split('\n').filter(line => line.trim());
-
-              if (lines.length > 0) {
-                const firstLine = lines[0];
-
-                // Buscar patrones válidos en cualquier parte de la línea
-                // Esto manejará archivos con BOM u otros caracteres al inicio
-                const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
-                const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
-
-                const hasValidFormat = hasBracketFormat || hasCommaFormat;
-
-                if (hasValidFormat) {
-                  validCsvFiles.push(csvPath);
-
-                  // Log detallado del contenido del archivo CSV válido
-                } else {
-                }
-              }
-            } catch (error) {}
-          }
-        }
-
-        // Configurar watching para archivos válidos
-        validCsvFiles.forEach(csvPath => {
-          csvManager.csvFiles.set(csvPath, {
-            lastModified: csvManager.getFileLastModified(csvPath),
-            data: csvManager.parseCSVFile(csvPath),
-          });
-        });
-      } catch (error) {
-        console.error(`❌ Error during Windows system-wide CSV search:`, error);
-
-        // Fallback: usar las rutas originales
-        csvPaths.forEach(csvPath => {
-          if (fs.existsSync(csvPath)) {
-            csvManager.csvFiles.set(csvPath, {
-              lastModified: csvManager.getFileLastModified(csvPath),
-              data: csvManager.parseCSVFile(csvPath),
-            });
-          }
-        });
-      }
-    } else if (this.operatingSystem === 'macos') {
-      try {
-        // Buscar todos los archivos IPTRADECSV2*.csv en el sistema
-        // Comando para buscar archivos CSV en todo el sistema
-        const findCommand = `find "${process.env.HOME}" -name "IPTRADECSV2*.csv" -type f 2>/dev/null`;
-
-        // Usar exec asíncrono para evitar crash por exit code 1
-        let stdout = '';
-        try {
-          const result = await execAsync(findCommand, { encoding: 'utf8' });
-          stdout = result.stdout;
-        } catch (error) {
-          // find retorna exit code 1 cuando encuentra archivos pero también errores de permisos
-          // Usamos el stdout aunque haya error
-          if (error.stdout) {
-            stdout = error.stdout;
-          }
-        }
-        const allCsvFiles = stdout
-          .trim()
-          .split('\n')
-          .filter(line => line.trim());
-
-        // Filtrar solo archivos CSV con formato válido
-        const validCsvFiles = [];
-
-        for (const csvPath of allCsvFiles) {
-          if (fs.existsSync(csvPath)) {
-            try {
-              // Leer el archivo como buffer primero para detectar encoding
-              const buffer = fs.readFileSync(csvPath);
-              let content;
-
-              // Detectar UTF-16 LE BOM (FF FE)
-              if (buffer[0] === 0xff && buffer[1] === 0xfe) {
-                content = buffer.toString('utf16le');
-              } else {
-                content = buffer.toString('utf8');
-              }
-
-              const lines = content.split('\n').filter(line => line.trim());
-
-              if (lines.length > 0) {
-                const firstLine = lines[0];
-
-                // Log para debugging
-                // Esto manejará archivos con BOM u otros caracteres al inicio
-                const hasBracketFormat = /\[TYPE\]|\[STATUS\]|\[CONFIG\]/.test(firstLine);
-                const hasCommaFormat = /^[^\d]*[0-9],[0-9]+,\w+,\w+/.test(firstLine);
-
-                const hasValidFormat = hasBracketFormat || hasCommaFormat;
-
-                if (hasValidFormat) {
-                  validCsvFiles.push(csvPath);
-
-                  // Log detallado del contenido del archivo CSV válido
-                }
-              }
-            } catch (error) {
-              `❌ Error reading CSV file ${csvPath}: ${error.message}`;
-            }
-          }
-        }
-
-        validCsvFiles.forEach(csvPath => {
-          csvManager.csvFiles.set(csvPath, {
-            lastModified: csvManager.getFileLastModified(csvPath),
-            data: csvManager.parseCSVFile(csvPath),
-          });
-        });
-      } catch (error) {
-        console.error(`❌ Error during system-wide CSV search:`, error);
-
-        // Fallback: usar las rutas originales
-        csvPaths.forEach(csvPath => {
-          if (fs.existsSync(csvPath)) {
-            csvManager.csvFiles.set(csvPath, {
-              lastModified: csvManager.getFileLastModified(csvPath),
-              data: csvManager.parseCSVFile(csvPath),
-            });
-          }
-        });
-      }
-    } else {
-      // Para otros sistemas operativos, usar la lógica original
-      csvPaths.forEach(csvPath => {
-        if (fs.existsSync(csvPath)) {
-          csvManager.csvFiles.set(csvPath, {
-            lastModified: csvManager.getFileLastModified(csvPath),
-            data: csvManager.parseCSVFile(csvPath),
-          });
-        }
-      });
-    }
-
-    // Configurar file watching
-    csvManager.startFileWatching();
-
-    `✅ CSV watching configured for ${csvManager.csvFiles.size} files`;
-  }
+  // Método eliminado - ya no necesitamos file watching duplicado
 
 
 
@@ -1172,7 +1335,120 @@ class LinkPlatformsController {
     }
   }
 
-  async scanDrive(drivePath, searchOnly = false) {
+  // Escanear drive solo para plataformas e instalar bots (sin CSV)
+  async scanDriveForPlatformsOnly(drivePath, progressCallback = null) {
+    const result = {
+      mql4Folders: [],
+      mql5Folders: [],
+      ctraderFolders: [],
+      ninjaTraderFolders: [],
+      created: 0,
+      synced: 0,
+      errors: [],
+      filesCreated: 0,
+    };
+
+    try {
+      // Buscar MQL4, MQL5, cTrader y NinjaTrader folders
+      if (progressCallback) {
+        progressCallback('Searching for platform folders...');
+      }
+      
+      const { mql4Folders, mql5Folders, ctraderFolders } = await this.findBothMQLFolders();
+      const ninjaTraderFolders = await this.findNinjaTraderFolders();
+
+      // Solo agregar carpetas al resultado
+      result.mql4Folders = mql4Folders;
+      result.mql5Folders = mql5Folders;
+      result.ctraderFolders = ctraderFolders;
+      result.ninjaTraderFolders = ninjaTraderFolders;
+
+      // Procesar carpetas MQL4 - SOLO INSTALAR BOTS
+      for (let j = 0; j < mql4Folders.length; j++) {
+        const folder = mql4Folders[j];
+        
+        if (progressCallback) {
+          progressCallback(`Installing bots in MT4 platform ${j + 1}/${mql4Folders.length}: ${path.basename(folder)}`);
+        }
+        
+        try {
+          const expertsPath = path.join(folder, 'Experts');
+
+          if (!fs.existsSync(expertsPath)) {
+            fs.mkdirSync(expertsPath, { recursive: true });
+            result.created++;
+          }
+
+          // Get all MQL4 bot files (.mq4 extension)
+          const mql4BotFiles = this.getBotFilesByExtension('.mq4');
+          
+          // Copy all MQL4 bot files to ensure latest versions
+          for (const botFile of mql4BotFiles) {
+            if (fs.existsSync(botFile.path)) {
+              const targetBotPath = path.join(expertsPath, botFile.name);
+              fs.copyFileSync(botFile.path, targetBotPath);
+              result.synced++;
+            }
+          }
+        } catch (error) {
+          result.errors.push(`Error processing MQL4 folder ${folder}: ${error.message}`);
+        }
+      }
+
+      // Procesar carpetas MQL5 - SOLO INSTALAR BOTS
+      for (let j = 0; j < mql5Folders.length; j++) {
+        const folder = mql5Folders[j];
+        
+        if (progressCallback) {
+          progressCallback(`Installing bots in MT5 platform ${j + 1}/${mql5Folders.length}: ${path.basename(folder)}`);
+        }
+        
+        try {
+          const expertsPath = path.join(folder, 'Experts');
+
+          if (!fs.existsSync(expertsPath)) {
+            fs.mkdirSync(expertsPath, { recursive: true });
+            result.created++;
+          }
+
+          // Get all MQL5 bot files (.mq5 extension)
+          const mql5BotFiles = this.getBotFilesByExtension('.mq5');
+          
+          // Copy all MQL5 bot files to ensure latest versions
+          for (const botFile of mql5BotFiles) {
+            if (fs.existsSync(botFile.path)) {
+              const targetBotPath = path.join(expertsPath, botFile.name);
+              fs.copyFileSync(botFile.path, targetBotPath);
+              result.synced++;
+            }
+          }
+        } catch (error) {
+          result.errors.push(`Error processing MQL5 folder ${folder}: ${error.message}`);
+        }
+      }
+
+      // Procesar carpetas NinjaTrader - SOLO INSTALAR BOTS
+      for (let j = 0; j < ninjaTraderFolders.length; j++) {
+        const folder = ninjaTraderFolders[j];
+        
+        if (progressCallback) {
+          progressCallback(`Installing bots in NinjaTrader platform ${j + 1}/${ninjaTraderFolders.length}: ${path.basename(folder)}`);
+        }
+        
+        try {
+          await this.processNinjaTraderFolderBotsOnly(folder, result);
+        } catch (error) {
+          result.errors.push(`Error processing NinjaTrader folder ${folder}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      result.errors.push(`Error scanning drive ${drivePath}: ${error.message}`);
+    }
+
+    return result;
+  }
+
+  async scanDrive(drivePath, searchOnly = false, progressCallback = null) {
     const result = {
       mql4Folders: [],
       mql5Folders: [],
@@ -1187,6 +1463,10 @@ class LinkPlatformsController {
 
     try {
       // Buscar MQL4, MQL5, cTrader y NinjaTrader (solo Windows) en UNA SOLA PASADA para máxima eficiencia
+      if (progressCallback) {
+        progressCallback('Searching for platform folders...');
+      }
+      
       const { mql4Folders, mql5Folders, ctraderFolders } = await this.findBothMQLFolders();
       const ninjaTraderFolders = await this.findNinjaTraderFolders();
 
@@ -1210,7 +1490,13 @@ class LinkPlatformsController {
 
       // Procesar carpetas MQL4 solo si no es búsqueda únicamente
       if (!searchOnly) {
-        for (const folder of mql4Folders) {
+        for (let j = 0; j < mql4Folders.length; j++) {
+          const folder = mql4Folders[j];
+          
+          if (progressCallback) {
+            progressCallback(`Processing MT4 platform ${j + 1}/${mql4Folders.length}: ${path.basename(folder)}`);
+          }
+          
           try {
             const expertsPath = path.join(folder, 'Experts');
             const filesPath = path.join(folder, 'Files');
@@ -1261,7 +1547,13 @@ class LinkPlatformsController {
 
       // Procesar carpetas MQL5 solo si no es búsqueda únicamente
       if (!searchOnly) {
-        for (const folder of mql5Folders) {
+        for (let j = 0; j < mql5Folders.length; j++) {
+          const folder = mql5Folders[j];
+          
+          if (progressCallback) {
+            progressCallback(`Processing MT5 platform ${j + 1}/${mql5Folders.length}: ${path.basename(folder)}`);
+          }
+          
           try {
             const expertsPath = path.join(folder, 'Experts');
             const filesPath = path.join(folder, 'Files');
@@ -1413,23 +1705,40 @@ class LinkPlatformsController {
     }
   }
 
-  // Búsqueda específica para Windows - usa el comando PowerShell específico
+  // Búsqueda simplificada para Windows - busca directamente por nombres de carpetas
   async findBothMQLFoldersWindows() {
     try {
-      const platformsText = this.cTraderEnabled ? 'MQL4, MQL5, cTrader' : 'MQL4, MQL5';
+      console.log('🔍 Searching for platform folders by exact name across all drives...');
 
-      // Comando PowerShell específico para buscar carpetas MQL4, MQL5 y opcionalmente cTrader
-      const searchTargets = this.cTraderEnabled
-        ? "@('MQL4','MQL5','cTrader','cAlgo','Spotware')"
-        : "@('MQL4','MQL5')";
-
+      // Comando PowerShell simplificado - busca SOLO por nombres exactos de carpetas
       const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-    Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
-    Where-Object { $_.Name -in ${searchTargets} } |
-    Select-Object -ExpandProperty FullName
+    $drive = $_.Root
+    Write-Host "Scanning drive: $drive"
+    
+    # Buscar MQL4
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL4" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+        Join-Path $drive $_
+    }
+    
+    # Buscar MQL5  
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "MQL5" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+        Join-Path $drive $_
+    }
+    
+    ${this.cTraderEnabled ? `
+    # Buscar cTrader folders si está habilitado
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "cTrader" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+        Join-Path $drive $_
+    }
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "cAlgo" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+        Join-Path $drive $_
+    }
+    Get-ChildItem -Path $drive -Recurse -Directory -Name "Spotware" -ErrorAction SilentlyContinue 2>$null | ForEach-Object {
+        Join-Path $drive $_
+    }` : ''}
 }`;
 
-      // Usar exec asíncrono para manejar timeouts y errores
+      // Ejecutar comando con timeout
       let stdout = '';
       try {
         const result = await execAsync(command, {
@@ -1440,35 +1749,34 @@ class LinkPlatformsController {
         stdout = result.stdout;
       } catch (error) {
         // PowerShell puede retornar error por timeout pero aún encontrar carpetas
-        // Usamos el stdout aunque haya error
         if (error.stdout) {
           stdout = error.stdout;
         }
       }
 
+      // Procesar resultados - NO necesitamos filtros complejos
       const allFolders = stdout
         .trim()
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 0);
+        .filter(line => line.length > 0 && !line.startsWith('Scanning drive:'));
 
-      // Separar MQL4, MQL5 y opcionalmente cTrader usando el mismo comando unificado
-      const mql4Folders = allFolders.filter(
-        folder => folder.endsWith('\\MQL4') || folder.endsWith('/MQL4')
-      );
-      const mql5Folders = allFolders.filter(
-        folder => folder.endsWith('\\MQL5') || folder.endsWith('/MQL5')
-      );
+      // Separar por tipo de carpeta basado en el NOMBRE de la carpeta, no la ruta
+      const mql4Folders = allFolders.filter(folder => {
+        const folderName = path.basename(folder);
+        return folderName === 'MQL4';
+      });
+      
+      const mql5Folders = allFolders.filter(folder => {
+        const folderName = path.basename(folder);
+        return folderName === 'MQL5';
+      });
+      
       const ctraderFolders = this.cTraderEnabled
-        ? allFolders.filter(
-            folder =>
-              folder.endsWith('\\cTrader') ||
-              folder.endsWith('/cTrader') ||
-              folder.endsWith('\\cAlgo') ||
-              folder.endsWith('/cAlgo') ||
-              folder.endsWith('\\Spotware') ||
-              folder.endsWith('/Spotware')
-          )
+        ? allFolders.filter(folder => {
+            const folderName = path.basename(folder);
+            return folderName === 'cTrader' || folderName === 'cAlgo' || folderName === 'Spotware';
+          })
         : [];
 
       // Remover duplicados
@@ -1476,13 +1784,15 @@ class LinkPlatformsController {
       const uniqueMQL5 = [...new Set(mql5Folders)];
       const uniqueCtrader = [...new Set(ctraderFolders)];
 
+      console.log(`✅ Found ${uniqueMQL4.length} MQL4, ${uniqueMQL5.length} MQL5${this.cTraderEnabled ? `, ${uniqueCtrader.length} cTrader` : ''} folders`);
+
       return {
         mql4Folders: uniqueMQL4,
         mql5Folders: uniqueMQL5,
         ctraderFolders: uniqueCtrader,
       };
     } catch (error) {
-      console.error(`❌ Error in Windows MQL search: ${error.message}`);
+      console.error(`❌ Error in Windows platform search: ${error.message}`);
       return { mql4Folders: [], mql5Folders: [], ctraderFolders: [] };
     }
   }
@@ -1605,33 +1915,24 @@ class LinkPlatformsController {
     }
   }
 
-  // Búsqueda específica para NinjaTrader en Windows
+  // Búsqueda simplificada para NinjaTrader en Windows - busca por nombres exactos
   async findNinjaTraderFoldersWindows() {
     try {
-      const homeDir = os.homedir();
-      const documentsPath = path.join(homeDir, 'Documents');
-      
-      // Rutas típicas de NinjaTrader 8 en Windows
-      const ninjaTraderPaths = [
-        path.join(documentsPath, 'NinjaTrader 8'),
-        path.join(documentsPath, 'NinjaTrader'),
-        path.join(homeDir, 'AppData', 'Local', 'NinjaTrader 8'),
-        path.join(homeDir, 'AppData', 'Roaming', 'NinjaTrader 8'),
-      ];
+      console.log('🔍 Searching for NinjaTrader folders by exact name across all drives...');
 
-      const foundFolders = [];
-
-      // Verificar rutas específicas
-      for (const ninjaPath of ninjaTraderPaths) {
-        if (fs.existsSync(ninjaPath)) {
-          foundFolders.push(ninjaPath);
-        }
-      }
-
-      // También buscar usando PowerShell para encontrar instalaciones en otras ubicaciones
+      // Comando PowerShell simplificado - busca SOLO carpetas con nombres que contengan "NinjaTrader"
       const command = `Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-    Get-ChildItem -Path $_.Root -Recurse -Directory -ErrorAction SilentlyContinue -Force 2>$null |
-    Where-Object { $_.Name -like "*NinjaTrader*" -and $_.Name -notlike "*cache*" -and $_.Name -notlike "*temp*" } |
+    $drive = $_.Root
+    Write-Host "Scanning drive for NinjaTrader: $drive"
+    
+    # Buscar carpetas que contengan "NinjaTrader" en el nombre (excluyendo cache/temp)
+    Get-ChildItem -Path $drive -Recurse -Directory -ErrorAction SilentlyContinue 2>$null | 
+    Where-Object { 
+        $_.Name -like "*NinjaTrader*" -and 
+        $_.Name -notlike "*cache*" -and 
+        $_.Name -notlike "*temp*" -and
+        $_.Name -notlike "*backup*"
+    } | 
     Select-Object -ExpandProperty FullName
 }`;
 
@@ -1649,17 +1950,15 @@ class LinkPlatformsController {
         }
       }
 
+      // Procesar resultados
       const allFolders = stdout
         .trim()
         .split('\n')
         .map(line => line.trim())
-        .filter(line => line.length > 0 && !line.includes('cache') && !line.includes('temp'));
+        .filter(line => line.length > 0 && !line.startsWith('Scanning drive'));
 
-      // Agregar carpetas encontradas por PowerShell
-      foundFolders.push(...allFolders);
-
-      // Remover duplicados y filtrar solo carpetas válidas
-      const uniqueFolders = [...new Set(foundFolders)].filter(folder => {
+      // Filtrar solo carpetas válidas que existan
+      const validFolders = allFolders.filter(folder => {
         try {
           return fs.existsSync(folder) && fs.statSync(folder).isDirectory();
         } catch (error) {
@@ -1667,7 +1966,14 @@ class LinkPlatformsController {
         }
       });
 
-      console.log(`🔍 Found ${uniqueFolders.length} NinjaTrader folders: ${uniqueFolders.join(', ')}`);
+      // Remover duplicados
+      const uniqueFolders = [...new Set(validFolders)];
+
+      console.log(`✅ Found ${uniqueFolders.length} NinjaTrader folders`);
+      if (uniqueFolders.length > 0) {
+        console.log(`📁 NinjaTrader locations: ${uniqueFolders.map(f => path.basename(f)).join(', ')}`);
+      }
+
       return uniqueFolders;
     } catch (error) {
       console.error(`❌ Error in Windows NinjaTrader search: ${error.message}`);
@@ -1676,7 +1982,51 @@ class LinkPlatformsController {
   }
 
 
-  // Procesar una carpeta NinjaTrader individual (solo Windows)
+  // Procesar una carpeta NinjaTrader solo para instalar bots (sin CSV)
+  async processNinjaTraderFolderBotsOnly(folder, result) {
+    try {
+      // Verificar que estamos en Windows
+      if (this.operatingSystem !== 'windows') {
+        console.log('ℹ️ NinjaTrader processing skipped - only supported on Windows');
+        return;
+      }
+
+      // Determinar la estructura correcta basada en el nombre de la carpeta
+      const folderName = path.basename(folder).toUpperCase();
+      let customPath;
+
+      if (folderName.includes('NINJATRADER 8') || folderName.includes('NINJATRADER8')) {
+        // NinjaTrader 8 structure: Documents/NinjaTrader 8/bin/Custom
+        customPath = path.join(folder, 'bin', 'Custom');
+      } else {
+        // Default NinjaTrader structure: NinjaTrader/bin/Custom
+        customPath = path.join(folder, 'bin', 'Custom');
+      }
+
+      // Ensure Custom folder exists for bot installation
+      if (!fs.existsSync(customPath)) {
+        fs.mkdirSync(customPath, { recursive: true });
+        result.created++;
+      }
+
+      // Get all NinjaTrader bot files (.zip extension)
+      const ninjaTraderBotFiles = this.getBotFilesByExtension('.zip');
+      
+      // Copy all NinjaTrader bot files to ensure latest versions
+      for (const botFile of ninjaTraderBotFiles) {
+        if (fs.existsSync(botFile.path)) {
+          const targetBotPath = path.join(customPath, botFile.name);
+          fs.copyFileSync(botFile.path, targetBotPath);
+          result.synced++;
+        }
+      }
+    } catch (error) {
+      result.errors.push(`Error processing NinjaTrader folder ${folder}: ${error.message}`);
+      console.error(`❌ Error processing NinjaTrader folder:`, error);
+    }
+  }
+
+  // Procesar una carpeta NinjaTrader individual (solo Windows) - método original completo
   async processNinjaTraderFolder(folder, result) {
     try {
       // Verificar que estamos en Windows

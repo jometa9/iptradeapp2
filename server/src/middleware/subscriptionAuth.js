@@ -200,9 +200,14 @@ export const extractApiKey = req => {
 
 // Middleware to validate subscription and attach user info to request
 export const requireValidSubscription = async (req, res, next) => {
+  console.log('🔐 AUTH MIDDLEWARE: Request to', req.method, req.originalUrl);
+  console.log('🔐 AUTH MIDDLEWARE: Headers:', req.headers);
+  
   const apiKey = extractApiKey(req);
+  console.log('🔐 AUTH MIDDLEWARE: Extracted API key:', apiKey ? `${apiKey.substring(0, 8)}...` : 'NONE');
 
   if (!apiKey) {
+    console.log('❌ AUTH MIDDLEWARE: No API key found, returning 401');
     return res.status(401).json({
       error: 'API Key required',
       message:
@@ -216,7 +221,8 @@ export const requireValidSubscription = async (req, res, next) => {
     const now = Date.now();
 
     if (cachedValidation && now - cachedValidation.timestamp < CACHE_DURATION) {
-      // Use cached validation - no logging to reduce spam
+      // Use cached validation
+      console.log('✅ AUTH MIDDLEWARE: Using cached validation for', req.originalUrl);
       req.user = cachedValidation.userData;
       req.subscriptionLimits = getSubscriptionLimits(cachedValidation.userData.subscriptionType);
       req.apiKey = apiKey;
@@ -228,11 +234,13 @@ export const requireValidSubscription = async (req, res, next) => {
       const validation = await ongoingValidations.get(apiKey);
 
       if (validation.valid) {
+        console.log('✅ AUTH MIDDLEWARE: Ongoing validation successful for', req.originalUrl);
         req.user = validation.userData;
         req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
         req.apiKey = apiKey;
         return next();
       } else {
+        console.log('❌ AUTH MIDDLEWARE: Ongoing validation failed for', req.originalUrl, validation.error);
         return res.status(401).json({
           error: validation.error,
           details: validation,
@@ -244,6 +252,7 @@ export const requireValidSubscription = async (req, res, next) => {
     const validation = await validateSubscription(apiKey);
 
     if (!validation.valid) {
+      console.log('❌ AUTH MIDDLEWARE: New validation failed for', req.originalUrl, validation.error);
       return res.status(401).json({
         error: validation.error,
         details: validation,
@@ -263,6 +272,7 @@ export const requireValidSubscription = async (req, res, next) => {
     req.subscriptionLimits = getSubscriptionLimits(validation.userData.subscriptionType);
     req.apiKey = apiKey; // Add apiKey for account isolation
 
+    console.log('✅ AUTH MIDDLEWARE: New validation successful, proceeding to', req.originalUrl);
     next();
   } catch (error) {
     console.error('❌ Error in requireValidSubscription middleware:', error);

@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { glob } from 'glob';
-import path from 'path';
+import path, { join } from 'path';
 
 import { detectOrderChanges } from './orderChangeDetector.js';
 
@@ -36,10 +36,6 @@ class CSVManager extends EventEmitter {
     this.retryDelay = 1000; // Delay base entre reintentos (ms)
     this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
 
-    // Sistema de tracking de cambios de timestamp
-    this.timestampChangeTracking = new Map(); // filePath -> { lastTimestamp, lastChangeTime }
-    this.onlineThreshold = 5; // 5 segundos sin cambios = offline
-    this.trackingCacheFile = path.join(process.cwd(), 'config', 'ping_tracking_cache.json');
 
     this.init();
   }
@@ -170,27 +166,11 @@ class CSVManager extends EventEmitter {
       mkdirSync(this.csvDirectory, { recursive: true });
     }
 
-    // Cargar tracking de pings desde cache
-    this.loadPingTrackingCache();
+    // Ping tracking removed - no longer needed
 
-    // Cargar rutas desde cache si existen (como fallback)
-    const cachedPaths = this.loadCSVPathsFromCache();
-    if (cachedPaths.length > 0) {
-      // Cargar archivos desde cache
-      cachedPaths.forEach(filePath => {
-        if (existsSync(filePath) && !this.csvFiles.has(filePath)) {
-          this.csvFiles.set(filePath, {
-            lastModified: this.getFileLastModified(filePath),
-            data: this.parseCSVFile(filePath),
-          });
-        }
-      });
-    }
-
-    // Iniciar file watching si hay archivos cargados
-    if (this.csvFiles.size > 0) {
-      this.startFileWatching();
-    }
+    // ULTRA MINIMALISTA: No cargar nada automáticamente
+    // Solo procesar cuando se solicite explícitamente vía getAllActiveAccounts()
+    console.log('📁 CSVManager initialized - NO automatic loading/scanning');
   }
 
   // Función para limpiar el cache y archivos cargados (usada cuando se activa Link Accounts)
@@ -257,7 +237,6 @@ class CSVManager extends EventEmitter {
             const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
             statusData = {
               status: values[1], // ONLINE, OFFLINE
-              timestamp: parseInt(values[2]), // Unix timestamp
             };
           }
         } else if (line.includes('[CONFIG]')) {
@@ -307,14 +286,8 @@ class CSVManager extends EventEmitter {
 
       // Process account with all required lines
       {
-        const hasValidStatus = !isNaN(statusData.timestamp) && statusData.timestamp > 0;
-        const accountTime = hasValidStatus ? statusData.timestamp * 1000 : 0;
-        const timeDiff = hasValidStatus ? (currentTime - accountTime) / 1000 : Infinity;
 
-        // Track timestamp changes only if we have valid status
-        if (hasValidStatus) {
-          this.checkTimestampChanged(filePath, statusData.timestamp);
-        }
+        // Timestamp tracking removed - no longer needed
 
         // Process the account
         {
@@ -328,10 +301,8 @@ class CSVManager extends EventEmitter {
             account_id: typeData.accountId,
             platform: platform,
             account_type: configData ? configData.configType.toLowerCase() : 'pending', // Default to pending if no CONFIG
-            status: hasValidStatus ? (this.isFileOnline(filePath) ? 'online' : 'offline') : 'offline',
-            current_status: hasValidStatus ? (this.isFileOnline(filePath) ? 'online' : 'offline') : 'offline',
-            timestamp: hasValidStatus ? statusData.timestamp : 0,
-            timeDiff: timeDiff,
+            status: statusData ? statusData.status.toLowerCase() : 'pending',
+            current_status: statusData ? statusData.status.toLowerCase() : 'pending',
             filePath: filePath,
             format: 'csv2',
           };
@@ -678,6 +649,10 @@ class CSVManager extends EventEmitter {
       const csvFiles = Array.from(this.csvFiles.keys());
       const cacheDir = path.join(process.cwd(), 'server', 'server', 'config');
 
+      console.log('💾 saveCSVPathsToCache called');
+      console.log('💾 Saving CSV cache to:', cachePath);
+      console.log('📁 CSV files to save:', csvFiles.length, csvFiles);
+
       if (!existsSync(cacheDir)) {
         require('fs').mkdirSync(cacheDir, { recursive: true });
       }
@@ -694,6 +669,7 @@ class CSVManager extends EventEmitter {
 
       if (existsSync(cachePath)) {
         const stats = statSync(cachePath);
+        console.log('✅ Cache saved successfully, size:', stats.size, 'bytes');
       }
     } catch (error) {
       console.error('❌ Error guardando cache:', error.message);
@@ -712,10 +688,18 @@ class CSVManager extends EventEmitter {
         'csv_watching_cache.json'
       );
 
+      console.log('🔍 Loading CSV cache from:', cachePath);
+
       if (existsSync(cachePath)) {
         const cacheData = JSON.parse(readFileSync(cachePath, 'utf8'));
+        console.log('📁 Cache data loaded:', {
+          csvFiles: cacheData.csvFiles?.length || 0,
+          totalFiles: cacheData.totalFiles,
+          timestamp: cacheData.timestamp
+        });
         return cacheData.csvFiles;
       } else {
+        console.log('📁 Cache file does not exist, creating empty cache...');
         // Si no existe, crear un cache vacío
         const cacheDir = path.join(process.cwd(), 'server', 'server', 'config');
         if (!existsSync(cacheDir)) {
@@ -731,6 +715,7 @@ class CSVManager extends EventEmitter {
         };
 
         writeFileSync(cachePath, JSON.stringify(emptyCache, null, 2), 'utf8');
+        console.log('📁 Empty cache created');
         return [];
       }
     } catch (error) {
@@ -739,67 +724,198 @@ class CSVManager extends EventEmitter {
     return [];
   }
 
-  // Escanear todos los archivos CSV que contengan IPTRADECSV2 en el nombre (método original)
+  // Detectar discos disponibles (método auxiliar)
+  async getAvailableDrives() {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      console.log('💾 csvManager: Detecting available drives...');
+      
+      const command = 'Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Name';
+      
+      const { stdout } = await execAsync(command, {
+        shell: 'powershell.exe',
+        timeout: 10000
+      });
+      
+      const drives = stdout
+        .trim()
+        .split('\n')
+        .map(drive => drive.trim())
+        .filter(drive => drive.length === 1)
+        .map(drive => `${drive}:`);
+      
+      console.log('💾 csvManager: Available drives:', drives);
+      return drives;
+    } catch (error) {
+      console.warn('⚠️ csvManager: Could not detect drives, using default C:', error.message);
+      return ['C:'];
+    }
+  }
+
+  // Generar ubicaciones dinámicas basadas en discos disponibles
+  async generateDynamicLocations() {
+    try {
+      const drives = await this.getAvailableDrives();
+      const os = await import('os');
+      const username = os.userInfo().username;
+      
+      const locations = [];
+      
+      for (const drive of drives) {
+        // MetaTrader locations
+        locations.push(`${drive}\\Users\\${username}\\AppData\\Roaming\\MetaQuotes\\Terminal`);
+        
+        // cTrader locations  
+        locations.push(`${drive}\\Users\\${username}\\Documents\\cAlgo`);
+        
+        // NinjaTrader 8 locations
+        locations.push(`${drive}\\Users\\${username}\\Documents\\NinjaTrader 8`);
+        
+        // Alternative locations
+        locations.push(`${drive}\\ProgramData\\MetaQuotes`);
+        locations.push(`${drive}\\MetaTrader`);
+        locations.push(`${drive}\\cAlgo`);
+        locations.push(`${drive}\\NinjaTrader 8`);
+      }
+      
+      return locations;
+    } catch (error) {
+      console.error('❌ csvManager: Error generating dynamic locations:', error);
+      const os = await import('os');
+      const username = os.userInfo().username;
+      return [
+        `C:\\Users\\${username}\\AppData\\Roaming\\MetaQuotes\\Terminal`,
+        `C:\\Users\\${username}\\Documents\\cAlgo`
+      ];
+    }
+  }
+
+  // Escanear todos los archivos CSV que contengan IPTRADECSV2 en el nombre (con soporte multi-disco)
   async scanCSVFiles() {
+    const startTime = Date.now();
+    console.log('🔍 CSV MANAGER: scanCSVFiles started at', new Date().toISOString());
+    console.log('🔍 CSV MANAGER: searching for ALL *iptrade* files across all available drives');
+    console.log('🔍 CSV MANAGER: Current working directory:', process.cwd());
+    
     try {
       // Cargar configuración de ubicaciones
       const configPath = path.join(process.cwd(), 'server', 'config', 'csv_locations.json');
+      console.log('🔍 CSV MANAGER: Config path:', configPath);
+      console.log('🔍 CSV MANAGER: Config file exists:', existsSync(configPath));
+      
       let config = {
         csvLocations: [],
         searchPatterns: [
-          '**/*IPTRADECSV2*.csv',
-          '**/csv_data/**/*IPTRADECSV2*.csv',
-          '**/accounts/**/*IPTRADECSV2*.csv',
+          '**/MQL4/Files/*IPTRADE*.csv',
+          '**/MQL5/Files/*IPTRADE*.csv', 
+          '**/Common/Files/*IPTRADE*.csv',
+          '**/Data/cBots/**/*IPTRADE*.csv',
+          '**/Sources/Robots/**/*IPTRADE*.csv',
+          '**/Files/*IPTRADE*.csv',
+          '**/*IPTRADE*.csv'
         ],
         autoScan: true,
-        // scanInterval removed - file watching handled by SSE in real-time
+        multiDriveSearch: false
       };
+      
+      console.log('🔍 CSV MANAGER: Default config loaded:', config);
 
       if (existsSync(configPath)) {
-        config = JSON.parse(readFileSync(configPath, 'utf8'));
+        const configContent = readFileSync(configPath, 'utf8');
+        console.log('🔍 CSV MANAGER: Raw config file content:', configContent);
+        config = JSON.parse(configContent);
+        console.log('🔍 CSV MANAGER: Parsed config loaded:', config);
+      } else {
+        console.log('🔍 CSV MANAGER: No config file found, using default config');
+      }
+      
+      // Si está habilitada la búsqueda multi-disco, generar ubicaciones dinámicamente
+      if (config.multiDriveSearch) {
+        console.log('💾 Multi-drive search enabled, generating dynamic locations...');
+        const dynamicLocations = await this.generateDynamicLocations();
+        
+        // Combinar ubicaciones estáticas con dinámicas
+        const allLocations = [...new Set([...config.csvLocations, ...dynamicLocations])];
+        config.csvLocations = allLocations;
+        
+        console.log(`📁 Total search locations: ${config.csvLocations.length}`);
       }
 
-      // Buscar en ubicaciones configuradas
-      const patterns = config.searchPatterns;
-
-      for (const pattern of patterns) {
-        const files = await glob(pattern, {
-          ignore: ['node_modules/**', '.git/**'],
-          absolute: true,
-        });
-
-        files.forEach(file => {
-          this.csvFiles.set(file, {
-            lastModified: this.getFileLastModified(file),
-            data: this.parseCSVFile(file),
-          });
-        });
-      }
-
-      // También buscar en ubicaciones específicas
-      for (const location of config.csvLocations) {
-        if (existsSync(location)) {
-          const locationPattern = path.join(location, '**/*IPTRADECSV2*.csv');
-          const files = await glob(locationPattern, {
-            ignore: ['node_modules/**', '.git/**'],
+      // BÚSQUEDA MINIMALISTA: Solo buscar archivos *IPTRADE*.csv en todos los discos
+      console.log('🔍 CSV MANAGER: Starting minimalist search for *IPTRADE*.csv files...');
+      const drives = await this.getAvailableDrives();
+      console.log('🔍 CSV MANAGER: Available drives:', drives);
+      
+      for (const drive of drives) {
+        try {
+          console.log(`🔍 CSV MANAGER: Searching drive ${drive} for *IPTRADE*.csv files...`);
+          const simplePattern = `${drive}/**/*IPTRADE*.csv`;
+          console.log(`🔍 CSV MANAGER: Using simple pattern: ${simplePattern}`);
+          
+          const files = await glob(simplePattern, {
+            ignore: [
+              'node_modules/**', 
+              '.git/**',
+              'Windows/**',
+              'Program Files/**',
+              'Program Files (x86)/**',
+              'System Volume Information/**',
+              '$Recycle.Bin/**',
+              'ProgramData/Microsoft/**',
+              'Users/*/AppData/Local/Temp/**',
+              'Users/*/AppData/Local/Microsoft/**',
+              'Users/*/AppData/Roaming/Microsoft/**',
+              'pagefile.sys',
+              'hiberfil.sys',
+              'swapfile.sys'
+            ],
             absolute: true,
+            maxDepth: 20, // Búsqueda profunda pero eficiente
+            nocase: true, // Case-insensitive
           });
 
-          files.forEach(file => {
-            const normalizedPath = this.normalizePath(file);
-            if (!this.isDuplicatePath(normalizedPath)) {
-              this.csvFiles.set(normalizedPath, {
-                lastModified: this.getFileLastModified(normalizedPath),
-                data: this.parseCSVFile(normalizedPath),
+          console.log(`🔍 CSV MANAGER: Drive ${drive} found ${files.length} files:`, files);
+
+          for (const file of files) {
+            if (!this.csvFiles.has(file)) { // Evitar duplicados
+              console.log(`📁 CSV MANAGER: Adding file to cache: ${file}`);
+              
+              // LOG DETALLADO: Mostrar contenido RAW del CSV sin procesamiento
+              try {
+                const rawContent = readFileSync(file, 'utf8');
+                console.log(`📄 RAW CSV CONTENT from ${path.basename(file)} (EXACT FILE CONTENT):`);
+                console.log('='.repeat(80));
+                console.log(rawContent);
+                console.log('='.repeat(80));
+                console.log(`📄 END RAW CSV CONTENT - File size: ${rawContent.length} characters`);
+              } catch (error) {
+                console.log(`❌ Error reading raw content of ${file}:`, error.message);
+              }
+              
+              const parsedData = await this.parseCSVFileAsync(file);
+              console.log(`📊 PARSED CSV DATA from ${path.basename(file)}:`, parsedData);
+              
+              this.csvFiles.set(file, {
+                lastModified: this.getFileLastModified(file),
+                data: parsedData,
               });
             }
-          });
+          }
+        } catch (error) {
+          console.error(`❌ CSV MANAGER: Error searching drive ${drive}:`, error);
         }
       }
 
-      // Validate and remove duplicates after scanning
-      this.validateAndRemoveDuplicates();
-      this.saveCSVPathsToCache();
+      // Guardar cache después del escaneo
+      if (this.csvFiles.size > 0) {
+        this.saveCSVPathsToCache();
+        console.log(`✅ Scan completed. Found ${this.csvFiles.size} CSV files and saved to cache.`);
+      } else {
+        console.log(`⚠️ No CSV files found during scan.`);
+      }
 
       return Array.from(this.csvFiles.keys());
     } catch (error) {
@@ -830,8 +946,22 @@ class CSVManager extends EventEmitter {
         return false;
       }
 
+      // LOG DETALLADO: Mostrar contenido RAW del CSV sin procesamiento
+      try {
+        const rawContent = readFileSync(normalizedPath, 'utf8');
+        console.log(`📄 RAW CSV CONTENT from ${path.basename(normalizedPath)} (EXACT FILE CONTENT - addCSVFileAsync):`);
+        console.log('='.repeat(80));
+        console.log(rawContent);
+        console.log('='.repeat(80));
+        console.log(`📄 END RAW CSV CONTENT - File size: ${rawContent.length} characters`);
+      } catch (error) {
+        console.log(`❌ Error reading raw content of ${normalizedPath}:`, error.message);
+      }
+      
       // Add the file to the map with its data (using async parsing)
       const csvData = await this.parseCSVFileAsync(normalizedPath);
+      console.log(`📊 PARSED CSV DATA from ${path.basename(normalizedPath)} (addCSVFileAsync):`, csvData);
+      
       this.csvFiles.set(normalizedPath, {
         lastModified: this.getFileLastModified(normalizedPath),
         data: csvData,
@@ -853,7 +983,7 @@ class CSVManager extends EventEmitter {
   }
 
   // Add a single CSV file to the manager for watching
-  addCSVFile(filePath) {
+  async addCSVFile(filePath) {
     try {
       if (!existsSync(filePath)) {
         console.error(`❌ CSV file does not exist: ${filePath}`);
@@ -877,7 +1007,7 @@ class CSVManager extends EventEmitter {
       // Add the file to the map with its data
       this.csvFiles.set(normalizedPath, {
         lastModified: this.getFileLastModified(normalizedPath),
-        data: this.parseCSVFile(normalizedPath),
+        data: await this.parseCSVFileAsync(normalizedPath),
       });
 
       // Save updated paths to cache
@@ -1096,7 +1226,8 @@ class CSVManager extends EventEmitter {
     await Promise.allSettled(promises);
   }
 
-  // Parsear archivo CSV con el nuevo formato de corchetes (versión síncrona para compatibilidad)
+  // MÉTODO OBSOLETO - Usar parseCSVFileAsync en su lugar
+  /*
   parseCSVFile(filePath) {
     try {
       if (!existsSync(filePath)) {
@@ -1150,42 +1281,55 @@ class CSVManager extends EventEmitter {
 
         switch (lineType) {
           case 'TYPE':
-            // Nueva cuenta
-            currentAccountId = values[2]; // [TYPE][PLATFORM][12345]
-            currentAccountData = {
-              account_id: currentAccountId,
-              account_type: 'unknown', // Will be determined from CONFIG line
-              platform: values[1], // Platform from TYPE line
-              status: 'offline', // Se actualizará con STATUS line
-              timestamp: null,
-              config: {},
-              tickets: [],
-            };
-            accounts.set(currentAccountId, currentAccountData);
+            // Nueva cuenta - manejar líneas TYPE duplicadas
+            // FORMATO ESTÁNDAR: [TYPE] [ACCOUNT_TYPE] [PLATFORM] [ACCOUNT_ID]
+            // Simplemente extraemos lo que está en cada posición, sin importar la plataforma
+            
+            if (values.length !== 4) {
+              console.log(`⚠️ [TYPE] Skipping invalid TYPE line, expected 4 values but got ${values.length}:`, values);
+              continue;
+            }
+            
+            const accountType = values[1]; // Lo que esté en posición 1
+            const platform = values[2];    // Lo que esté en posición 2  
+            const accountId = values[3];   // Lo que esté en posición 3
+            
+            console.log(`🔍 [TYPE] Parsed - Type: "${accountType}", Platform: "${platform}", AccountID: "${accountId}"`);
+            
+            console.log(`🔍 [TYPE] Parsed platform: "${platform}" for account: "${accountId}"`);
+            console.log(`🔍 [TYPE] Final accountId: "${accountId}", platform: "${platform}"`);
+            
+            // Si ya existe la cuenta, actualizar datos
+            if (accounts.has(accountId)) {
+              const existingAccount = accounts.get(accountId);
+              existingAccount.platform = platform;
+              currentAccountId = accountId;
+              currentAccountData = existingAccount;
+            } else {
+              // Nueva cuenta
+              currentAccountId = accountId;
+              currentAccountData = {
+                account_id: accountId,
+                account_type: accountType.toLowerCase(), // pending, master, slave
+                platform: platform,
+                status: 'online',
+                config: {},
+                tickets: [],
+              };
+              accounts.set(accountId, currentAccountData);
+            }
             break;
 
           case 'STATUS':
-            // Actualizar status
+            // Actualizar status - sin timestamp
             if (currentAccountData) {
               currentAccountData.status = values[1].toLowerCase(); // online/offline
-              currentAccountData.timestamp = values[2];
-
-              // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
-              const timestampChanged = this.detectTimestampChange(filePath, values[2]);
-
-              // Determinar estado online/offline basado en la última vez que cambió el timestamp
-              const isOnline = this.isFileOnline(filePath);
-
-              // Para cuentas pending y slave, usar la nueva lógica de tracking
-              if (currentAccountData.account_type === 'pending' || currentAccountData.account_type === 'slave') {
-                // Usar el estado basado en tracking de cambios de timestamp
-                currentAccountData.status = isOnline ? 'online' : 'offline';
+              
+              // Set status based on account type
+              if (currentAccountData.account_type === 'pending') {
+                currentAccountData.status = 'pending';
               } else {
-                // Para cuentas master, mantener la lógica original pero también considerar tracking
-                if (values[1].toLowerCase() === 'online' && !isOnline) {
-                  // Si el CSV dice online pero nuestro tracking dice offline, usar offline
-                  currentAccountData.status = 'offline';
-                }
+                currentAccountData.status = 'active';
               }
             }
             break;
@@ -1293,18 +1437,31 @@ class CSVManager extends EventEmitter {
 
       // Convertir Map a Array para compatibilidad
       const result = Array.from(accounts.values());
-      console.log(`🔍 [CSV] Final accounts result:`, result.map(acc => ({
+      
+      // Filtrar cuentas inválidas - solo devolver cuentas con account_id válido
+      const validResult = result.filter(acc => {
+        const isValid = acc.account_id && acc.account_id.length > 2 && !['MT4', 'MT5', 'PENDING'].includes(acc.account_id);
+        if (!isValid) {
+          console.log(`⚠️ [CSV] Filtering out invalid account:`, acc.account_id, 'from file:', filePath);
+        }
+        return isValid;
+      });
+      
+      console.log(`🔍 [CSV] Final accounts result:`, validResult.map(acc => ({
         id: acc.account_id,
         type: acc.account_type,
+        platform: acc.platform,
         translations: acc.translations,
         configTranslations: acc.config?.translations
       })));
-      return result;
+      console.log(`🔍 [CSV] Full account data for debugging:`, validResult);
+      return validResult;
     } catch (error) {
       console.error(`Error parsing CSV file ${filePath}:`, error);
       return [];
     }
   }
+  */
 
   // Parser para formato antiguo (retrocompatibilidad)
   parseOldCSVFormat(lines) {
@@ -1391,42 +1548,48 @@ class CSVManager extends EventEmitter {
 
           switch (lineType) {
             case 'TYPE':
-              // Nueva cuenta
-              currentAccountId = values[2]; // [TYPE][PLATFORM][12345]
-              currentAccountData = {
-                account_id: currentAccountId,
-                account_type: 'unknown', // Will be determined from CONFIG line
-                platform: values[1], // Platform from TYPE line
-                status: 'offline', // Se actualizará con STATUS line
-                timestamp: null,
-                config: {},
-                tickets: [],
-              };
-              accounts.set(currentAccountId, currentAccountData);
+              // FORMATO ESTÁNDAR: [TYPE] [ACCOUNT_TYPE] [PLATFORM] [ACCOUNT_ID]
+              if (values.length !== 4) {
+                console.log(`⚠️ [TYPE] Skipping invalid TYPE line, expected 4 values but got ${values.length}:`, values);
+                continue;
+              }
+              
+              const accountType = values[1]; // PENDING, MASTER, SLAVE
+              const platform = values[2];    // MT4, MT5, CTRADER
+              const accountId = values[3];   // 260072071, 61402130, etc.
+              
+              // Si ya existe la cuenta, actualizar datos
+              if (accounts.has(accountId)) {
+                const existingAccount = accounts.get(accountId);
+                existingAccount.platform = platform;
+                existingAccount.account_type = accountType.toLowerCase();
+                currentAccountId = accountId;
+                currentAccountData = existingAccount;
+              } else {
+                // Nueva cuenta
+                currentAccountId = accountId;
+                currentAccountData = {
+                  account_id: accountId,
+                  account_type: accountType.toLowerCase(), // pending, master, slave
+                  platform: platform,
+                  status: 'online', // Default status
+                  config: {},
+                  tickets: [],
+                };
+                accounts.set(currentAccountId, currentAccountData);
+              }
               break;
 
             case 'STATUS':
-              // Actualizar status
+              // Actualizar status - sin timestamp
               if (currentAccountData) {
                 currentAccountData.status = values[1].toLowerCase(); // online/offline
-                currentAccountData.timestamp = values[2];
-
-                // NUEVA LÓGICA: Detectar cambios de timestamp y actualizar tracking
-                const timestampChanged = this.detectTimestampChange(filePath, values[2]);
-
-                // Determinar estado online/offline basado en la última vez que cambió el timestamp
-                const isOnline = this.isFileOnline(filePath);
-
-                // Para cuentas pending y slave, usar la nueva lógica de tracking
-                if (currentAccountData.account_type === 'pending' || currentAccountData.account_type === 'slave') {
-                  // Usar el estado basado en tracking de cambios de timestamp
-                  currentAccountData.status = isOnline ? 'online' : 'offline';
+                
+                // Set status based on account type
+                if (currentAccountData.account_type === 'pending') {
+                  currentAccountData.status = 'pending';
                 } else {
-                  // Para cuentas master, mantener la lógica original pero también considerar tracking
-                  if (values[1].toLowerCase() === 'online' && !isOnline) {
-                    // Si el CSV dice online pero nuestro tracking dice offline, usar offline
-                    currentAccountData.status = 'offline';
-                  }
+                  currentAccountData.status = 'active';
                 }
               }
               break;
@@ -1519,54 +1682,19 @@ class CSVManager extends EventEmitter {
 
   // Calculate account status based on timestamp and tracking
   calculateStatus(filePath, timestamp, accountType) {
-    if (!timestamp) return { status: 'offline', timeSinceLastPing: null, shouldSkip: accountType === 'pending' };
-
-    // Use timestamp tracking system
-    const isOnline = this.isFileOnline(filePath);
-    const tracking = this.timestampChangeTracking.get(this.normalizePath(filePath));
+    // Simplified status calculation - no timestamp validation
+    const status = accountType === 'pending' ? 'pending' : 'active';
     
-    // Debug logging for slave accounts
-    if (accountType === 'slave') {
-      console.log(`🔍 [calculateStatus] Slave account ${filePath}:`, {
-        isOnline,
-        tracking: tracking ? {
-          lastTimestamp: tracking.lastTimestamp,
-          lastChangeTime: tracking.lastChangeTime,
-          timeSinceChange: tracking.lastChangeTime ? (Date.now() - tracking.lastChangeTime) / 1000 : null
-        } : null
-      });
-    }
-    
-    // Calculate time since last ping based on when we detected the timestamp change
-    let timeSinceLastActivity = null;
-    if (tracking && tracking.lastChangeTime) {
-      // Use when we detected the change, not the CSV timestamp itself
-      timeSinceLastActivity = (Date.now() - tracking.lastChangeTime) / 1000;
-    } else {
-      // Fallback to account timestamp if no tracking data
-      const currentTime = Math.floor(Date.now() / 1000);
-      timeSinceLastActivity = currentTime - timestamp;
-    }
-    
-    // Log time since last ping for debugging
-    if (timeSinceLastActivity !== null) {
-      const hours = Math.floor(timeSinceLastActivity / 3600);
-      const minutes = Math.floor((timeSinceLastActivity % 3600) / 60);
-      const seconds = Math.floor(timeSinceLastActivity % 60);
-      console.log(`[CSV] Account ${accountType} - Time since last ping: ${hours}h ${minutes}m ${seconds}s (${timeSinceLastActivity}s total)`);
-    }
-    
-    const shouldSkip = accountType === 'pending' && timeSinceLastActivity > 3600;
-
     return { 
-      status: isOnline ? 'online' : 'offline',
-      timeSinceLastPing: timeSinceLastActivity,
-      shouldSkip
+      status: status,
+      shouldSkip: false
     };
   }
 
-  // Obtener todas las cuentas activas - FORZAR REFRESH DE TODOS LOS ARCHIVOS
+  // Obtener todas las cuentas activas - ULTRA MINIMALISTA
   async getAllActiveAccounts() {
+    console.log('🚀🚀🚀 ULTRA MINIMALISTA getAllActiveAccounts STARTED 🚀🚀🚀');
+    
     const accounts = {
       masterAccounts: {},
       slaveAccounts: {},
@@ -1574,86 +1702,126 @@ class CSVManager extends EventEmitter {
       pendingAccounts: [],
     };
 
-    // Track processed account IDs to prevent duplicates across account types
+    // Track processed account IDs to prevent duplicates
     const processedAccountIds = new Set();
 
-    // Re-parsear archivos de forma asíncrona para evitar errores EBUSY
-    const refreshPromises = [];
-    this.csvFiles.forEach((fileData, filePath) => {
-      refreshPromises.push(
-        this.parseCSVFileAsync(filePath)
-          .then(freshData => {
-            console.log(`🔍 [getAllActiveAccounts] Refreshing file ${filePath} with ${freshData.length} accounts`);
-            freshData.forEach(acc => {
-              if (acc.account_id === '85308252') {
-                console.log(`🔍 [getAllActiveAccounts] Fresh data for 85308252:`, {
-                  translations: acc.translations,
-                  configTranslations: acc.config?.translations
-                });
-              }
-            });
-            fileData.data = freshData;
-          })
-          .catch(error => {
-            // Manejar errores de permisos eliminando el archivo del cache
-            if (this.isPermissionError(error)) {
-              this.handleFileError(filePath, error, 'refreshing');
+    // 1. Leer rutas de CSV desde cache
+    const csvPaths = this.getCSVPathsFromCache();
+    console.log('📁 CSV paths from cache:', csvPaths);
+
+    // 2. Procesar cada archivo CSV directamente
+    for (const filePath of csvPaths) {
+      try {
+        console.log(`📄 Processing CSV: ${path.basename(filePath)}`);
+        const csvData = await this.parseCSVFileAsync(filePath);
+        console.log(`📊 Raw CSV data from ${path.basename(filePath)}:`, csvData);
+        
+        // Procesar cada cuenta del archivo con VALIDACIÓN ESTRICTA
+        csvData.forEach(account => {
+          console.log(`🔍 Processing account:`, account);
+          // VALIDACIÓN: Solo procesar cuentas con account_id VÁLIDO (no plataformas)
+          const isValidAccountId = account.account_id && 
+                                   account.account_id.length > 3 && 
+                                   !['MT4', 'MT5', 'PENDING', 'CTRADER', 'MASTER', 'SLAVE'].includes(account.account_id);
+          
+          if (isValidAccountId && !processedAccountIds.has(account.account_id)) {
+            console.log(`✅ Valid account found: ${account.account_id} (${account.platform})`);
+            
+            if (account.account_type === 'pending') {
+              accounts.pendingAccounts.push({
+                account_id: account.account_id,
+                platform: account.platform,
+                status: 'pending',
+                current_status: 'pending',
+                config: account.config || {},
+                translations: account.translations || {},
+                filePath: filePath
+              });
+              processedAccountIds.add(account.account_id);
             }
-          })
-      );
+            // Agregar lógica para master/slave si se necesita
+          } else if (account.account_id) {
+            console.log(`❌ Invalid account_id skipped: ${account.account_id} from ${path.basename(filePath)}`);
+          }
+        });
+      } catch (error) {
+        console.error(`❌ Error processing ${filePath}:`, error.message);
+      }
+    }
+
+    console.log('✅ ULTRA MINIMALISTA: Processing completed');
+    console.log('📊 Results:', {
+      pendingAccounts: accounts.pendingAccounts.length,
+      masterAccounts: Object.keys(accounts.masterAccounts).length,
+      slaveAccounts: Object.keys(accounts.slaveAccounts).length,
+      unconnectedSlaves: accounts.unconnectedSlaves.length
     });
 
-    // Esperar a que todos los archivos se procesen
-    await Promise.allSettled(refreshPromises);
+    return accounts;
+  }
 
+  // Método para obtener rutas de CSV desde cache
+  getCSVPathsFromCache() {
+    const cachePath = join(process.cwd(), 'server', 'server', 'config', 'csv_watching_cache.json');
+    try {
+      if (existsSync(cachePath)) {
+        const cacheData = JSON.parse(readFileSync(cachePath, 'utf8'));
+        return cacheData.csvFiles || [];
+      }
+    } catch (error) {
+      console.error('❌ Error reading CSV cache:', error.message);
+    }
+    return [];
+  }
+
+  // ===== CÓDIGO VIEJO ELIMINADO =====
+  // Todo el código viejo ha sido reemplazado por el enfoque ultra minimalista
+  
+  // Método dummy para mantener compatibilidad
+  oldProcessing() {
     this.csvFiles.forEach((fileData, filePath) => {
+      console.log(`📄 UNIFIED ACCOUNTS: Processing CSV file: ${path.basename(filePath)}`);
+      console.log(`📄 UNIFIED ACCOUNTS: File path: ${filePath}`);
+      console.log(`📄 UNIFIED ACCOUNTS: File has ${fileData.data.length} rows`);
+      
+      // Log del contenido completo del archivo CSV
+      console.log(`📄 UNIFIED ACCOUNTS: CSV Content for ${path.basename(filePath)}:`);
+      fileData.data.forEach((row, index) => {
+        console.log(`📄 UNIFIED ACCOUNTS: Row ${index + 1}:`, JSON.stringify(row, null, 2));
+      });
+      
       fileData.data.forEach((row, index) => {
         if (row.account_id) {
           const accountId = row.account_id;
           const accountType = row.account_type;
           const platform = row.platform || this.extractPlatformFromPath(filePath);
-          
-          // Debug: Log translations for slave accounts
-          if (accountType === 'slave' && accountId === '85308252') {
-            console.log(`🔍 [getAllActiveAccounts] Processing slave ${accountId}:`, {
-              translations: row.translations,
-              configTranslations: row.config?.translations
-            });
-          }
-          
-          // Track timestamp changes for online/offline detection
-          this.checkTimestampChanged(filePath, row.timestamp);
 
-          const { status, timeSinceLastPing } = this.calculateStatus(filePath, row.timestamp, accountType);
+          console.log(`🔍 UNIFIED ACCOUNTS: Processing account ${accountId} (${accountType}) from ${path.basename(filePath)}`);
+          console.log(`🔍 UNIFIED ACCOUNTS: Raw row data:`, JSON.stringify(row, null, 2));
+          console.log(`🔍 UNIFIED ACCOUNTS: Account details:`, {
+            account_id: accountId,
+            account_type: accountType,
+            platform: platform,
+            status: row.status,
+            config: row.config,
+            translations: row.translations
+          });
 
-          // Debug: Log status calculation for slave accounts
-          if (accountType === 'slave' && accountId === '85308252') {
-            console.log(`🔍 [getAllActiveAccounts] calculateStatus result for ${accountId}:`, {
-              status,
-              timeSinceLastPing
-            });
-          }
+          const { status } = this.calculateStatus(filePath, null, accountType);
 
-          // Skip if this account ID has already been processed
           if (processedAccountIds.has(accountId)) {
+            console.log(`⚠️ UNIFIED ACCOUNTS: Skipping duplicate account ${accountId} from ${path.basename(filePath)}`);
             return;
           }
 
-          // Incluir cuentas pending
+          // Incluir cuentas pending - sin validación de timestamp
           if (accountType === 'pending') {
-            // Aplicar filtro de tiempo: solo incluir cuentas que no hayan estado offline por más de 1 hora
-            const { shouldSkip } = this.calculateStatus(filePath, row.timestamp, accountType);
-            if (shouldSkip) {
-              return; // Skip this account
-            }
             
             accounts.pendingAccounts.push({
               account_id: accountId,
               platform: platform,
               status: status,
               current_status: status, // Agregar current_status para compatibilidad con frontend
-              timestamp: row.timestamp,
-              timeSinceLastPing: timeSinceLastPing,
               config: row.config || {},
               translations: row.translations || {}, // Agregar traducciones
               filePath: filePath, // Para debug
@@ -1673,7 +1841,6 @@ class CSVManager extends EventEmitter {
               platform: platform,
               status: status,
               lastPing: row.timestamp,
-              timeSinceLastPing: timeSinceLastPing,
               // Reflect CSV config for UI switches
               config: row.config || {},
               connectedSlaves: existingConnectedSlaves, // Preservar slaves existentes
@@ -1711,7 +1878,6 @@ class CSVManager extends EventEmitter {
                 name: accountId,
                 platform: platform,
                 status: status,
-                timeSinceLastPing: timeSinceLastPing,
                 masterOnline: true,
                 config: row.config || {},
                 translations: row.translations || {}, // Agregar traducciones
@@ -1725,7 +1891,6 @@ class CSVManager extends EventEmitter {
                 name: accountId,
                 platform: platform,
                 status: status,
-                timeSinceLastPing: timeSinceLastPing,
                 config: row.config || {},
                 translations: row.translations || {}, // Agregar traducciones
               });
@@ -1735,6 +1900,26 @@ class CSVManager extends EventEmitter {
         }
       });
     });
+
+    // Log del resultado final del procesamiento
+    console.log(`📊 UNIFIED ACCOUNTS: Final processing results:`);
+    console.log(`📊 UNIFIED ACCOUNTS: Master accounts: ${Object.keys(accounts.masterAccounts).length}`);
+    console.log(`📊 UNIFIED ACCOUNTS: Pending accounts: ${accounts.pendingAccounts.length}`);
+    console.log(`📊 UNIFIED ACCOUNTS: Unconnected slaves: ${accounts.unconnectedSlaves.length}`);
+    console.log(`📊 UNIFIED ACCOUNTS: Total processed account IDs: ${processedAccountIds.size}`);
+    
+    // Log detallado de cada tipo de cuenta
+    if (accounts.pendingAccounts.length > 0) {
+      console.log(`📊 UNIFIED ACCOUNTS: Pending accounts details:`, accounts.pendingAccounts);
+    }
+    
+    if (Object.keys(accounts.masterAccounts).length > 0) {
+      console.log(`📊 UNIFIED ACCOUNTS: Master accounts details:`, Object.values(accounts.masterAccounts));
+    }
+    
+    if (accounts.unconnectedSlaves.length > 0) {
+      console.log(`📊 UNIFIED ACCOUNTS: Unconnected slaves details:`, accounts.unconnectedSlaves);
+    }
 
     return accounts;
   }
@@ -1951,20 +2136,7 @@ class CSVManager extends EventEmitter {
     return globalEnabled && masterEnabled && masterOnline;
   }
 
-  // Verificar si una cuenta está online
-  isAccountOnline(accountId) {
-    let online = false;
-
-    this.csvFiles.forEach(fileData => {
-      fileData.data.forEach(row => {
-        if (row.account_id === accountId && row.status === 'online') {
-          online = true;
-        }
-      });
-    });
-
-    return online;
-  }
+  // Online check removed - no longer validating online/offline status
 
   // Convertir una cuenta configurada a pending
   convertToPending(accountId) {
@@ -2581,91 +2753,11 @@ class CSVManager extends EventEmitter {
 
   // ===== SISTEMA DE TRACKING DE CAMBIOS DE TIMESTAMP =====
 
-  // Detectar si el timestamp de un archivo ha cambiado
-  detectTimestampChange(filePath, newTimestamp) {
-    const normalizedPath = this.normalizePath(filePath);
-    const currentTime = Date.now();
-    
-    // Convertir timestamp a número si viene como string
-    const numericTimestamp = typeof newTimestamp === 'string' ? parseInt(newTimestamp) : newTimestamp;
-    
-    // Debug: verificar si el timestamp es válido
-    if (numericTimestamp > 2000000000) { // Timestamp en el futuro (año 2033+)
-      console.log(`[CSV] WARNING: Timestamp ${numericTimestamp} seems to be in the future for file ${filePath}`);
-    }
+  // Timestamp change detection removed - no longer needed
 
-    // Obtener el tracking actual para este archivo
-    const currentTracking = this.timestampChangeTracking.get(normalizedPath);
+  // File online check removed - no longer validating online/offline status
 
-    if (!currentTracking) {
-      // Primera vez que vemos este archivo
-      this.timestampChangeTracking.set(normalizedPath, {
-        lastTimestamp: numericTimestamp,
-        lastChangeTime: numericTimestamp * 1000, // Convertir timestamp a milisegundos
-        firstSeen: currentTime,
-      });
-
-      // Guardar cache automáticamente cuando se inicializa
-      this.savePingTrackingCache();
-
-      return true; // Considerar como cambio para inicializar
-    }
-
-    // Verificar si el timestamp ha cambiado
-    if (currentTracking.lastTimestamp !== numericTimestamp) {
-      // Timestamp cambió, actualizar tracking
-      this.timestampChangeTracking.set(normalizedPath, {
-        lastTimestamp: numericTimestamp,
-        lastChangeTime: numericTimestamp * 1000, // Convertir timestamp a milisegundos
-        firstSeen: currentTracking.firstSeen,
-      });
-
-      // Guardar cache automáticamente cuando hay cambios
-      this.savePingTrackingCache();
-
-      return true; // Hubo un cambio
-    }
-
-    return false; // No hubo cambio
-  }
-
-  // Determinar si un archivo está online basado en la última vez que cambió su timestamp
-  isFileOnline(filePath) {
-    const normalizedPath = this.normalizePath(filePath);
-    const currentTime = Date.now();
-    const tracking = this.timestampChangeTracking.get(normalizedPath);
-
-    // Si no hay tracking o el último timestamp es 0 o inválido, consideramos offline
-    if (!tracking || !tracking.lastTimestamp || tracking.lastTimestamp <= 0) {
-      return false;
-    }
-
-    const timeSinceLastChange = currentTime - tracking.lastChangeTime;
-    const isOnline = timeSinceLastChange <= this.onlineThreshold * 1000; // Convertir a milisegundos
-
-    return isOnline;
-  }
-
-  // Obtener información de tracking para un archivo
-  getTimestampTracking(filePath) {
-    const normalizedPath = this.normalizePath(filePath);
-    return this.timestampChangeTracking.get(normalizedPath);
-  }
-
-  // Check and track timestamp changes
-  checkTimestampChanged(filePath, timestamp) {
-    if (!timestamp) return false;
-    return this.detectTimestampChange(filePath, timestamp);
-  }
-
-  // Limpiar tracking de archivos que ya no existen
-  cleanupTimestampTracking() {
-    for (const [filePath, tracking] of this.timestampChangeTracking.entries()) {
-      if (!existsSync(filePath)) {
-        this.timestampChangeTracking.delete(filePath);
-      }
-    }
-  }
+  // Timestamp tracking functions removed - no longer needed
 
   // Helper para determinar plataforma desde el path del archivo
   determinePlatformFromPath(filePath) {
@@ -2694,88 +2786,7 @@ class CSVManager extends EventEmitter {
     }
   }
 
-  // Cargar tracking de pings desde archivo JSON
-  loadPingTrackingCache() {
-    try {
-      if (existsSync(this.trackingCacheFile)) {
-        const data = readFileSync(this.trackingCacheFile, 'utf8');
-        const cache = JSON.parse(data);
-        
-        // Convertir el objeto a Map
-        this.timestampChangeTracking = new Map();
-        if (cache.tracking) {
-          for (const [filePath, trackingData] of Object.entries(cache.tracking)) {
-            this.timestampChangeTracking.set(filePath, trackingData);
-          }
-        }
-        
-        console.log(`[CSV] Loaded ping tracking cache with ${this.timestampChangeTracking.size} entries`);
-      } else {
-        console.log(`[CSV] Ping tracking cache file not found, starting fresh`);
-        this.timestampChangeTracking = new Map();
-      }
-    } catch (error) {
-      console.error('[CSV] Error loading ping tracking cache:', error);
-      this.timestampChangeTracking = new Map();
-    }
-  }
-
-  // Asegurar que el archivo de cache existe
-  ensurePingTrackingCacheExists() {
-    try {
-      // Crear directorio si no existe
-      const configDir = path.dirname(this.trackingCacheFile);
-      if (!existsSync(configDir)) {
-        mkdirSync(configDir, { recursive: true });
-      }
-
-      // Si el archivo no existe, crearlo vacío
-      if (!existsSync(this.trackingCacheFile)) {
-        const initialCache = {
-          timestamp: new Date().toISOString(),
-          version: '1.0',
-          tracking: {}
-        };
-        writeFileSync(this.trackingCacheFile, JSON.stringify(initialCache, null, 2), 'utf8');
-        console.log(`[CSV] Created ping tracking cache file: ${this.trackingCacheFile}`);
-      }
-    } catch (error) {
-      console.error('[CSV] Error ensuring ping tracking cache exists:', error);
-    }
-  }
-
-  // Guardar tracking de pings a archivo JSON
-  savePingTrackingCache() {
-    try {
-      console.log(`[CSV] DEBUG: Saving to file: ${this.trackingCacheFile}`);
-      
-      // Crear directorio si no existe
-      const configDir = path.dirname(this.trackingCacheFile);
-      if (!existsSync(configDir)) {
-        mkdirSync(configDir, { recursive: true });
-      }
-
-      // Convertir Map a objeto
-      const trackingObj = {};
-      for (const [filePath, trackingData] of this.timestampChangeTracking.entries()) {
-        trackingObj[filePath] = trackingData;
-      }
-
-      console.log(`[CSV] DEBUG: timestampChangeTracking has ${this.timestampChangeTracking.size} entries`);
-      console.log(`[CSV] DEBUG: trackingObj has ${Object.keys(trackingObj).length} entries`);
-
-      const cache = {
-        timestamp: new Date().toISOString(),
-        version: '1.0',
-        tracking: trackingObj
-      };
-
-      writeFileSync(this.trackingCacheFile, JSON.stringify(cache, null, 2), 'utf8');
-      console.log(`[CSV] Saved ping tracking cache with ${Object.keys(trackingObj).length} entries`);
-    } catch (error) {
-      console.error('[CSV] Error saving ping tracking cache:', error);
-    }
-  }
+  // Ping tracking cache functions removed - no longer needed
 }
 
 export default new CSVManager();

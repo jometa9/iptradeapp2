@@ -152,7 +152,7 @@ class CSVFrontendService extends SimpleEventEmitter {
               accountId: data.accountId,
               newType: data.newType,
               platform: data.platform,
-              status: data.status || 'online',
+              status: data.status || 'active',
               timestamp: new Date().toISOString(),
             },
           })

@@ -624,7 +624,97 @@ router.get('/csv/scan-pending', requireValidSubscription, scanPendingAccounts);
  *       200:
  *         description: Pending account deleted successfully
  */
-router.delete('/csv/pending/:accountId', requireValidSubscription, deletePendingFromCSV);
+router.delete('/csv/pending/:accountId', deletePendingFromCSV);
+
+// Direct delete from CSV cache - remove specific account from cached data
+router.delete('/csv/pending-direct/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    
+    if (!accountId) {
+      return res.status(400).json({ error: 'Account ID is required' });
+    }
+
+    console.log(`🗑️ Direct cache delete request for account: ${accountId}`);
+
+    const csvManager = (await import('../services/csvManager.js')).default;
+    let modifiedFiles = 0;
+    let removedFromCache = 0;
+    const filesToRemove = [];
+
+    // 1. Find files that contain this account and filter out the account
+    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      try {
+        if (fileData.data && fileData.data.some(row => row.account_id === accountId)) {
+          console.log(`📁 Found account ${accountId} in cached file: ${filePath}`);
+          
+          // Filter out the specific account from the file data
+          const originalLength = fileData.data.length;
+          fileData.data = fileData.data.filter(row => row.account_id !== accountId);
+          const newLength = fileData.data.length;
+          
+          if (newLength < originalLength) {
+            console.log(`✏️ Removed account ${accountId} from file data (${originalLength} -> ${newLength} accounts)`);
+            modifiedFiles++;
+            
+            // If file is now empty, mark for removal from cache
+            if (newLength === 0) {
+              filesToRemove.push(filePath);
+              console.log(`🗑️ File ${filePath} is now empty, will remove from cache`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing file ${filePath}:`, error);
+      }
+    }
+
+    // 2. Remove empty files from cache
+    for (const filePath of filesToRemove) {
+      csvManager.csvFiles.delete(filePath);
+      removedFromCache++;
+      console.log(`🗑️ Removed empty file ${filePath} from CSV cache`);
+    }
+
+    // 3. Save updated cache
+    if (modifiedFiles > 0) {
+      csvManager.saveCSVPathsToCache();
+      console.log(`💾 Updated CSV cache after modifying ${modifiedFiles} files and removing ${removedFromCache} empty files`);
+    }
+
+    // 4. Trigger unified data refresh
+    try {
+      console.log(`🔄 Triggering unified data refresh after deleting account ${accountId}`);
+      const { getUnifiedAccountData } = await import('../controllers/accountsController.js');
+      const mockReq = { apiKey: 'default-api-key' };
+      const mockRes = {
+        json: (data) => console.log('✅ Unified data refreshed after account deletion'),
+        status: () => ({ json: (data) => console.log('❌ Error refreshing unified data:', data) })
+      };
+      await getUnifiedAccountData(mockReq, mockRes);
+    } catch (error) {
+      console.error('Error refreshing unified data after account deletion:', error);
+    }
+
+    if (modifiedFiles > 0) {
+      res.json({
+        success: true,
+        message: `Account ${accountId} deleted successfully - modified ${modifiedFiles} file(s), removed ${removedFromCache} empty file(s)`,
+        modifiedFiles: modifiedFiles,
+        removedFromCache: removedFromCache,
+        cacheUpdated: true,
+      });
+    } else {
+      res.status(404).json({
+        error: 'Account not found',
+        message: `Account ${accountId} not found in any cached CSV files`,
+      });
+    }
+  } catch (error) {
+    console.error('Error deleting pending account from cache:', error);
+    res.status(500).json({ error: 'Failed to delete pending account from cache' });
+  }
+});
 
 /**
  * @swagger

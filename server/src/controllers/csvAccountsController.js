@@ -51,7 +51,7 @@ const generateCSV2Content = async (
   const upperType = accountType.toUpperCase();
 
   let content = `[TYPE] [${platform}] [${accountId}]\n`;
-  content += `[STATUS] [ONLINE] [${timestamp}]\n`;
+  content += `[STATUS] [ACTIVE] [${timestamp}]\n`;
 
   if (accountType === 'master') {
     // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE][PREFIX][SUFFIX]
@@ -382,7 +382,7 @@ export const updateCSVAccountType = async (req, res) => {
                 continue;
               } else if (cleanLine.includes('[STATUS]')) {
                 // Update timestamp
-                newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+                newContent += `[STATUS] [ACTIVE] [${currentTimestamp}]\n`;
               } else {
                 newContent += line + '\n';
               }
@@ -441,7 +441,7 @@ export const updateCSVAccountType = async (req, res) => {
                   slaveFound = true;
                 } else if (cleanLine.includes('[STATUS]')) {
                   // Update timestamp for the slave
-                  newContent += `[STATUS] [ONLINE] [${currentTimestamp}]\n`;
+                  newContent += `[STATUS] [ACTIVE] [${currentTimestamp}]\n`;
                 } else {
                   newContent += line + '\n';
                 }
@@ -618,7 +618,7 @@ export const updateCSVAccountType = async (req, res) => {
         accountId: accountId,
         newType: newType,
         platform: platform,
-        status: 'online', // La cuenta está online cuando se convierte
+        status: 'active', // La cuenta está activa cuando se convierte
         apiKey: apiKey ? apiKey.substring(0, 8) + '...' : 'unknown',
         timestamp: new Date().toISOString(),
       });
@@ -656,7 +656,7 @@ export const updateCSVAccountType = async (req, res) => {
 export const deletePendingFromCSV = async (req, res) => {
   try {
     const { accountId } = req.params;
-    const apiKey = req.apiKey;
+    const apiKey = 'default-api-key'; // Use default API key since no authentication required
 
     if (!accountId) {
       return res.status(400).json({ error: 'Account ID is required' });
@@ -756,16 +756,76 @@ export const deletePendingFromCSV = async (req, res) => {
       }
     }
 
+    // Remove files containing the deleted account from CSV cache
+    let removedFromCache = 0;
+    if (deletedFromFiles > 0) {
+      const csvFilesToRemove = [];
+      
+      // Check which CSV files contained the deleted account and remove them from cache
+      for (const filePath of allFiles) {
+        if (csvManager.csvFiles.has(filePath)) {
+          // Check if this file contained the deleted account
+          try {
+            if (existsSync(filePath)) {
+              const content = readFileSync(filePath, 'utf8');
+              // If the file no longer contains the account or is empty, remove from cache
+              if (!content.includes(accountId) || content.trim().length === 0) {
+                csvFilesToRemove.push(filePath);
+              }
+            } else {
+              // File doesn't exist anymore, remove from cache
+              csvFilesToRemove.push(filePath);
+            }
+          } catch (error) {
+            console.error(`Error checking file ${filePath}:`, error);
+            // On error, remove from cache to be safe
+            csvFilesToRemove.push(filePath);
+          }
+        }
+      }
+      
+      // Remove files from cache
+      for (const filePath of csvFilesToRemove) {
+        csvManager.csvFiles.delete(filePath);
+        removedFromCache++;
+        console.log(`🗑️ Removed ${filePath} from CSV cache after deleting account ${accountId}`);
+      }
+      
+      // Save updated cache
+      if (removedFromCache > 0) {
+        csvManager.saveCSVPathsToCache();
+        console.log(`💾 Updated CSV cache after removing ${removedFromCache} files`);
+      }
+    }
+
     // Trigger a scan update only if there are CSV files to scan
     if (csvManager.csvFiles.size > 0) {
       await csvManager.scanAndEmitPendingUpdates();
     }
 
     if (deletedFromFiles > 0) {
+      // Trigger unified data refresh
+      try {
+        console.log(`🔄 Triggering unified data refresh after deleting account ${accountId}`);
+        // Import and call the unified data function to refresh
+        const { getUnifiedAccountData } = await import('./accountsController.js');
+        // Create a mock request/response to trigger the refresh
+        const mockReq = { apiKey };
+        const mockRes = {
+          json: () => console.log('✅ Unified data refreshed after account deletion'),
+          status: () => ({ json: () => console.log('❌ Error refreshing unified data') })
+        };
+        await getUnifiedAccountData(mockReq, mockRes);
+      } catch (error) {
+        console.error('Error refreshing unified data after account deletion:', error);
+      }
+
       res.json({
         success: true,
         message: `Account ${accountId} deleted from ${deletedFromFiles} CSV file(s)`,
         filesModified: deletedFromFiles,
+        removedFromCache: removedFromCache,
+        cacheUpdated: removedFromCache > 0,
       });
     } else {
       res.status(404).json({
@@ -790,12 +850,12 @@ export const scanPendingAccounts = async (req, res) => {
     const platformStats = {};
     pendingAccounts.forEach(account => {
       const platform = account.platform || 'Unknown';
-      const status = account.current_status || account.status || 'offline';
+      const status = account.current_status || account.status || 'pending';
 
       if (!platformStats[platform]) {
-        platformStats[platform] = { online: 0, offline: 0, total: 0 };
+        platformStats[platform] = { total: 0 };
       }
-      platformStats[platform][status]++;
+      // Just count total accounts, not by status
       platformStats[platform].total++;
     });
 
@@ -805,10 +865,6 @@ export const scanPendingAccounts = async (req, res) => {
       accounts: pendingAccounts,
       summary: {
         totalAccounts: pendingAccounts.length,
-        onlineAccounts: pendingAccounts.filter(a => (a.current_status || a.status) === 'online')
-          .length,
-        offlineAccounts: pendingAccounts.filter(a => (a.current_status || a.status) === 'offline')
-          .length,
         platformStats,
       },
       platforms: Object.keys(platformStats),
@@ -854,7 +910,7 @@ export const connectPlatforms = async (req, res) => {
     let registeredCount = 0;
     csvManager.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id && row.account_type === 'pending' && row.status === 'online') {
+        if (row.account_id && row.account_type === 'pending') {
           const accountId = row.account_id;
           const platform = row.platform || 'Unknown';
 
@@ -868,7 +924,7 @@ export const connectPlatforms = async (req, res) => {
               id: accountId,
               name: `Account ${accountId}`,
               platform: platform,
-              status: 'online',
+              status: 'pending',
               balance: parseFloat(row.balance) || 0,
               equity: parseFloat(row.equity) || 0,
               margin: parseFloat(row.margin) || 0,
@@ -909,17 +965,11 @@ export const connectPlatforms = async (req, res) => {
       if (!platformStats[platform]) {
         platformStats[platform] = {
           total: 0,
-          online: 0,
-          offline: 0,
           platforms: {},
         };
       }
       platformStats[platform].total++;
-      if (account.status === 'online') {
-        platformStats[platform].online++;
-      } else {
-        platformStats[platform].offline++;
-      }
+      // Just count total accounts, not by status
     });
 
     // Respuesta con estadísticas mejoradas y cuentas cacheadas
@@ -1000,7 +1050,7 @@ export const registerCSVAsPending = (req, res) => {
     // Procesar todos los archivos CSV
     csvManager.csvFiles.forEach((fileData, filePath) => {
       fileData.data.forEach(row => {
-        if (row.account_id && row.account_type === 'pending' && row.status === 'online') {
+        if (row.account_id && row.account_type === 'pending') {
           const accountId = row.account_id;
           const platform = row.platform || 'Unknown';
 
@@ -1015,7 +1065,7 @@ export const registerCSVAsPending = (req, res) => {
               id: accountId,
               name: accountId,
               platform: platform,
-              status: 'online',
+              status: 'pending',
               firstSeen: row.timestamp,
               lastActivity: row.timestamp,
               description: `Auto-detected ${platform} account`,
