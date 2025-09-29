@@ -139,6 +139,14 @@
       "target": "nsis",
       "artifactName": "IPTRADE.exe"
     },
+    "protocols": [
+      {
+        "name": "IPTRADE",
+        "schemes": [
+          "iptradeapp"
+        ]
+      }
+    ],
     "nodeGypRebuild": false,
     "npmRebuild": false,
     "nativeRebuilder": "sequential",

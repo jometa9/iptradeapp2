@@ -51,24 +51,22 @@ router.get('/subscription-limits', async (req, res) => {
 
   try {
     const validation = await validateSubscription(apiKey);
-    
+
     if (!validation.valid) {
       return res.status(401).json({ error: 'Invalid API Key' });
     }
 
     const limits = getSubscriptionLimits(validation.userData.subscriptionType);
-    
+
     return res.status(200).json({
       subscriptionType: validation.userData.subscriptionType,
-      limits
+      limits,
     });
   } catch (error) {
     console.error('Error getting subscription limits:', error);
     res.status(500).json({ error: 'Failed to get subscription limits' });
   }
 });
-
-
 
 /**
  * @swagger
@@ -136,6 +134,92 @@ router.get('/validate-subscription', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+/**
+ * @swagger
+ * /validate-token:
+ *   post:
+ *     summary: Validate JWT token from web login
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: JWT token from web authentication
+ *     responses:
+ *       200:
+ *         description: Token is valid, returns user info
+ *       401:
+ *         description: Invalid or expired token
+ *       400:
+ *         description: Token is required
+ */
+router.post('/validate-token', async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Token is required' });
+  }
+
+  try {
+    // Validate token against your website's API
+    const websiteApiUrl = process.env.WEBSITE_API_URL || 'https://iptradecopier.com/api';
+
+    const response = await fetch(`${websiteApiUrl}/validate-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (!response.ok) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    const webUserData = await response.json();
+
+    // Transform web user data to match your app's expected format
+    const userData = {
+      userId: webUserData.userId || webUserData.id,
+      email: webUserData.email,
+      name: webUserData.name,
+      role: webUserData.role,
+      subscriptionType: webUserData.subscriptionType || 'free',
+      planName: webUserData.planName,
+      subscriptionStatus: webUserData.subscriptionStatus || 'active',
+      // Generate/return existing API key for compatibility
+      apiKey: webUserData.apiKey || generateApiKeyForUser(webUserData.userId),
+    };
+
+    // Cache the validation result using the API key
+    if (userData.apiKey) {
+      const now = Date.now();
+      subscriptionCache.set(userData.apiKey, {
+        userData,
+        timestamp: now,
+      });
+    }
+
+    return res.status(200).json({
+      valid: true,
+      userData,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error during token validation' });
+  }
+});
+
+// Helper function to generate API key for web users (for compatibility)
+function generateApiKeyForUser(userId) {
+  return `iptrade_web_${userId}_${Date.now()}`;
+}
 
 /**
  * @swagger
@@ -207,8 +291,6 @@ router.get('/subscription-cache-status', async (req, res) => {
     res.status(500).json({ error: 'Failed to get cache status' });
   }
 });
-
-
 
 /**
  * @swagger

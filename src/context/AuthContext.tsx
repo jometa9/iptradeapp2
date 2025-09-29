@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -7,9 +7,12 @@ interface AuthContextType {
   userInfo: UserInfo | null;
   error: string | null;
   login: (secretKey: string) => Promise<boolean>;
+  loginWithToken: (token: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
-  onSubscriptionChange: (callback: (previousSubscription: string, currentSubscription: string) => void) => void;
+  onSubscriptionChange: (
+    callback: (previousSubscription: string, currentSubscription: string) => void
+  ) => void;
 }
 
 interface UserInfo {
@@ -30,6 +33,7 @@ export const useAuth = () => {
 };
 
 const STORAGE_KEY = 'iptrade_license_key';
+const TOKEN_STORAGE_KEY = 'iptrade_web_token';
 
 // Valid subscription types
 const VALID_SUBSCRIPTION_TYPES = ['free', 'premium', 'unlimited', 'managed_vps', 'admin'];
@@ -40,12 +44,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [secretKey, setSecretKey] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [subscriptionChangeCallback, setSubscriptionChangeCallback] = useState<((previousSubscription: string, currentSubscription: string) => void) | null>(null);
-  
+  const [subscriptionChangeCallback, setSubscriptionChangeCallback] = useState<
+    ((previousSubscription: string, currentSubscription: string) => void) | null
+  >(null);
+
   // Add debounce mechanism to prevent multiple simultaneous validations
   const validationInProgress = useRef<boolean>(false);
-  const validationPromise = useRef<Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> | null>(null);
-  
+  const validationPromise = useRef<Promise<{
+    valid: boolean;
+    userInfo?: UserInfo;
+    message?: string;
+  }> | null>(null);
+
   // Add subscription change polling
   const subscriptionPollingInterval = useRef<NodeJS.Timeout | null>(null);
 
@@ -79,25 +89,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Start new polling (check every hour)
-    subscriptionPollingInterval.current = setInterval(async () => {
-      const validation = await performValidation(apiKey);
-      if (validation.valid && validation.userInfo) {
-        const oldSubscription = userInfo?.subscriptionType;
-        const newSubscription = validation.userInfo.subscriptionType;
+    subscriptionPollingInterval.current = setInterval(
+      async () => {
+        const validation = await performValidation(apiKey);
+        if (validation.valid && validation.userInfo) {
+          const oldSubscription = userInfo?.subscriptionType;
+          const newSubscription = validation.userInfo.subscriptionType;
 
-        // Update user info with new subscription data
-        setUserInfo(validation.userInfo);
-        localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
-        localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
+          // Update user info with new subscription data
+          setUserInfo(validation.userInfo);
+          localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(validation.userInfo));
+          localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
 
-        // If subscription type changed, notify
-        if (oldSubscription && newSubscription && oldSubscription !== newSubscription) {
-          if (subscriptionChangeCallback) {
-            subscriptionChangeCallback(oldSubscription, newSubscription);
+          // If subscription type changed, notify
+          if (oldSubscription && newSubscription && oldSubscription !== newSubscription) {
+            if (subscriptionChangeCallback) {
+              subscriptionChangeCallback(oldSubscription, newSubscription);
+            }
           }
         }
-      }
-    }, 60 * 60 * 1000); // 1 hour
+      },
+      60 * 60 * 1000
+    ); // 1 hour
   };
 
   // Stop subscription polling
@@ -144,7 +157,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { valid: true, userInfo: userData };
     } catch (error) {
-
       // Solo error de conexión real - no mock data
       const errorMessage =
         'Connection error. Check your internet connection and ensure the server is running.';
@@ -155,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Función de login
+  // Función de login con API key
   const login = async (key: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
@@ -190,8 +202,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Función de login con token JWT del sitio web
+  const loginWithToken = async (token: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Validate token against local server endpoint
+      const baseUrl =
+        window.location.hostname === 'localhost'
+          ? 'http://localhost:30'
+          : `${window.location.protocol}//${window.location.hostname}:30`;
+
+      const response = await fetch(`${baseUrl}/api/validate-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Token validation failed' }));
+        setError(errorData.error || 'Invalid or expired token');
+        return false;
+      }
+
+      const validation = await response.json();
+
+      if (validation.valid && validation.userData) {
+        const userData = validation.userData;
+
+        // Store both token and API key for compatibility
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        localStorage.setItem(STORAGE_KEY, userData.apiKey);
+
+        setSecretKey(userData.apiKey);
+        setUserInfo(userData);
+        setIsAuthenticated(true);
+
+        // Cache the validation timestamp and user info
+        const now = Date.now();
+        localStorage.setItem(`${STORAGE_KEY}_last_validation`, now.toString());
+        localStorage.setItem(`${STORAGE_KEY}_user_info`, JSON.stringify(userData));
+
+        // Start subscription change polling using the API key
+        startSubscriptionPolling(userData.apiKey);
+
+        return true;
+      } else {
+        setError('Invalid token response');
+        return false;
+      }
+    } catch (error) {
+      console.error('Token login error:', error);
+      setError('Connection error during web authentication');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Register subscription change callback
-  const registerSubscriptionChangeCallback = (callback: (previousSubscription: string, currentSubscription: string) => void) => {
+  const registerSubscriptionChangeCallback = (
+    callback: (previousSubscription: string, currentSubscription: string) => void
+  ) => {
     setSubscriptionChangeCallback(() => callback);
   };
 
@@ -212,6 +287,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Clear auth-related data
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY); // Clear web token
       localStorage.removeItem(`${STORAGE_KEY}_last_validation`);
       localStorage.removeItem(`${STORAGE_KEY}_user_info`);
 
@@ -276,31 +352,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Primero verificar si hay datos preservados de un reinicio
       const preservedKey = localStorage.getItem('iptrade_restart_preserve_key');
       const preservedUser = localStorage.getItem('iptrade_restart_preserve_user');
-      
+
       let storedKey = localStorage.getItem(STORAGE_KEY);
-      
+
       // Si hay datos preservados, restaurarlos
       if (preservedKey && preservedUser) {
         try {
           const userData = JSON.parse(preservedUser);
-          
+
           // Restaurar datos de sesión
           localStorage.setItem(STORAGE_KEY, preservedKey);
           localStorage.setItem(`${STORAGE_KEY}_user_info`, preservedUser);
           localStorage.setItem(`${STORAGE_KEY}_last_validation`, Date.now().toString());
-          
+
           // Limpiar datos temporales
           localStorage.removeItem('iptrade_restart_preserve_key');
           localStorage.removeItem('iptrade_restart_preserve_user');
-          
+
           // Establecer estado inmediatamente
           setSecretKey(preservedKey);
           setUserInfo(userData);
           setIsAuthenticated(true);
-          
+
           // Iniciar polling de suscripción
           startSubscriptionPolling(preservedKey);
-          
+
           setIsLoading(false);
           return;
         } catch (error) {
@@ -309,7 +385,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('iptrade_restart_preserve_user');
         }
       }
-      
+
       // Continuar con el flujo normal de autenticación
       storedKey = localStorage.getItem(STORAGE_KEY);
 
@@ -386,6 +462,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userInfo,
     error,
     login,
+    loginWithToken,
     logout,
     clearError,
     onSubscriptionChange: registerSubscriptionChangeCallback,
