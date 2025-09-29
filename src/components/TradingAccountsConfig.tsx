@@ -1228,16 +1228,6 @@ const TradingAccountsConfigComponent = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'synchronized':
-        return <CheckCircle className="text-green-700" />;
-      case 'pending':
-        return <Clock className="text-orange-500" />;
-      default:
-        return <CheckCircle className="text-green-700" />;
-    }
-  };
 
   const getStatusBadge = (status: boolean) => {
     return status ? (
@@ -2658,13 +2648,6 @@ const TradingAccountsConfigComponent = () => {
                         .map(orphanSlave => (
                           <tr key={orphanSlave.id} className="hover:bg-muted/50 bg-gray-50">
                             <td className="w-8 px-2 py-2 align-middle"></td>
-                            <td className="w-20 px-4 py-2 align-middle">
-                              <div className="flex items-center justify-center h-full w-full">
-                                <span className="flex items-center justify-center h-5 w-5">
-                                  {getStatusIcon(orphanSlave.status)}
-                                </span>
-                              </div>
-                            </td>
                             <td className="w-32 px-4 py-2 align-middle">
                               <div className="flex items-center justify-center">
                                 <Switch
