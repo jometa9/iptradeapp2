@@ -37,7 +37,10 @@ class CSVManager extends EventEmitter {
     this.maxConcurrentWrites = 1; // Máximo de escrituras simultáneas
 
 
-    this.init();
+    // Inicializar de forma asíncrona
+    this.init().catch(error => {
+      console.error('❌ CSVManager: Error during initialization:', error);
+    });
   }
 
   // Procesar cola de escrituras
@@ -157,7 +160,7 @@ class CSVManager extends EventEmitter {
     return false;
   }
 
-  init() {
+  async init() {
     // Inicializar el estado global del copier
     this.initGlobalCopierStatus();
 
@@ -168,9 +171,37 @@ class CSVManager extends EventEmitter {
 
     // Ping tracking removed - no longer needed
 
-    // ULTRA MINIMALISTA: No cargar nada automáticamente
-    // Solo procesar cuando se solicite explícitamente vía getAllActiveAccounts()
-    console.log('📁 CSVManager initialized - NO automatic loading/scanning');
+    // Cargar archivos CSV desde cache al inicializar
+    console.log('📁 CSVManager initialized - Loading CSV files from cache...');
+    try {
+      const cachedPaths = this.loadCSVPathsFromCache();
+      console.log(`📁 CSVManager: Found ${cachedPaths.length} CSV files in cache`);
+      
+      if (cachedPaths.length > 0) {
+        // Cargar cada archivo del cache en this.csvFiles
+        for (const filePath of cachedPaths) {
+          if (existsSync(filePath)) {
+            try {
+              const fileData = await this.parseCSVFileAsync(filePath);
+              this.csvFiles.set(filePath, {
+                lastModified: this.getFileLastModified(filePath),
+                data: fileData
+              });
+              console.log(`📁 CSVManager: Loaded ${filePath} with ${fileData.length} accounts`);
+            } catch (error) {
+              console.error(`❌ CSVManager: Error loading ${filePath}:`, error.message);
+            }
+          } else {
+            console.log(`⚠️ CSVManager: File not found in cache: ${filePath}`);
+          }
+        }
+        console.log(`📁 CSVManager: Successfully loaded ${this.csvFiles.size} CSV files from cache`);
+      } else {
+        console.log('📁 CSVManager: No CSV files in cache - run "Find Bots" to load files');
+      }
+    } catch (error) {
+      console.error('❌ CSVManager: Error loading CSV files from cache:', error.message);
+    }
   }
 
   // Función para limpiar el cache y archivos cargados (usada cuando se activa Link Accounts)
@@ -1548,21 +1579,39 @@ class CSVManager extends EventEmitter {
 
           switch (lineType) {
             case 'TYPE':
-              // FORMATO ESTÁNDAR: [TYPE] [ACCOUNT_TYPE] [PLATFORM] [ACCOUNT_ID]
-              if (values.length !== 4) {
-                console.log(`⚠️ [TYPE] Skipping invalid TYPE line, expected 4 values but got ${values.length}:`, values);
+              // FORMATO FLEXIBLE: Soporta tanto [TYPE] [PLATFORM] [ACCOUNT_ID] como [TYPE] [ACCOUNT_TYPE] [PLATFORM] [ACCOUNT_ID]
+              if (values.length < 3) {
+                console.log(`⚠️ [TYPE] Skipping invalid TYPE line, expected at least 3 values but got ${values.length}:`, values);
                 continue;
               }
               
-              const accountType = values[1]; // PENDING, MASTER, SLAVE
-              const platform = values[2];    // MT4, MT5, CTRADER
-              const accountId = values[3];   // 260072071, 61402130, etc.
+              let accountType, platform, accountId;
+              
+              if (values.length === 3) {
+                // FORMATO ACTUAL: [TYPE] [PLATFORM] [ACCOUNT_ID]
+                platform = values[1];    // MT4, MT5, CTRADER
+                accountId = values[2];    // 260072071, 61402130, etc.
+                accountType = 'pending'; // Default to pending for 3-value format
+                console.log(`📋 [TYPE] 3-value format detected: platform=${platform}, accountId=${accountId}, defaulting to pending`);
+              } else if (values.length === 4) {
+                // FORMATO COMPLETO: [TYPE] [ACCOUNT_TYPE] [PLATFORM] [ACCOUNT_ID]
+                accountType = values[1]; // PENDING, MASTER, SLAVE
+                platform = values[2];    // MT4, MT5, CTRADER
+                accountId = values[3];   // 260072071, 61402130, etc.
+                console.log(`📋 [TYPE] 4-value format detected: accountType=${accountType}, platform=${platform}, accountId=${accountId}`);
+              } else {
+                console.log(`⚠️ [TYPE] Skipping invalid TYPE line, expected 3 or 4 values but got ${values.length}:`, values);
+                continue;
+              }
               
               // Si ya existe la cuenta, actualizar datos
               if (accounts.has(accountId)) {
                 const existingAccount = accounts.get(accountId);
                 existingAccount.platform = platform;
-                existingAccount.account_type = accountType.toLowerCase();
+                // Solo actualizar account_type si no es el default 'pending'
+                if (accountType !== 'pending') {
+                  existingAccount.account_type = accountType.toLowerCase();
+                }
                 currentAccountId = accountId;
                 currentAccountData = existingAccount;
               } else {
@@ -1585,13 +1634,17 @@ class CSVManager extends EventEmitter {
               // Parsear configuración según tipo de cuenta
               if (currentAccountData) {
                 const configType = values[1].toLowerCase();
+                console.log(`🔧 [CONFIG] Processing config for account ${currentAccountData.account_id}: type=${configType}`);
                 // Update account type based on CONFIG line
                 if (configType === 'master') {
                   currentAccountData.account_type = 'master';
+                  console.log(`👑 [CONFIG] Set account ${currentAccountData.account_id} as MASTER`);
                 } else if (configType === 'slave') {
                   currentAccountData.account_type = 'slave';
+                  console.log(`🔗 [CONFIG] Set account ${currentAccountData.account_id} as SLAVE`);
                 } else if (configType === 'pending') {
                   currentAccountData.account_type = 'pending';
+                  console.log(`⏳ [CONFIG] Set account ${currentAccountData.account_id} as PENDING`);
                 }
 
                 if (currentAccountData.account_type === 'master') {
@@ -1725,8 +1778,73 @@ class CSVManager extends EventEmitter {
                 filePath: filePath
               });
               processedAccountIds.add(account.account_id);
+            } else if (account.account_type === 'master') {
+              // Procesar cuenta master
+              console.log(`👑 Processing MASTER account: ${account.account_id}`);
+              accounts.masterAccounts[account.account_id] = {
+                id: account.account_id,
+                name: account.account_id,
+                platform: account.platform,
+                status: account.status || 'offline',
+                connectedSlaves: [],
+                totalSlaves: 0,
+                config: account.config || {},
+                translations: account.translations || {},
+                filePath: filePath
+              };
+              processedAccountIds.add(account.account_id);
+            } else if (account.account_type === 'slave') {
+              // Procesar cuenta slave
+              console.log(`🔗 Processing SLAVE account: ${account.account_id}`);
+              const masterId = account.config?.masterId;
+              const isValidMasterId = masterId && 
+                                    masterId !== 'NULL' && 
+                                    masterId !== 'ENABLED' && 
+                                    masterId !== 'DISABLED' &&
+                                    !isNaN(parseInt(masterId));
+
+              console.log(`🔗 Slave ${account.account_id} masterId: ${masterId}, isValid: ${isValidMasterId}`);
+
+              if (isValidMasterId) {
+                // Es un slave conectado - crear el master si no existe
+                console.log(`🔗 Adding connected slave ${account.account_id} to master ${masterId}`);
+                if (!accounts.masterAccounts[masterId]) {
+                  accounts.masterAccounts[masterId] = {
+                    id: masterId,
+                    name: masterId,
+                    platform: 'Unknown',
+                    status: 'offline',
+                    connectedSlaves: [],
+                    totalSlaves: 0,
+                  };
+                }
+
+                accounts.masterAccounts[masterId].connectedSlaves.push({
+                  id: account.account_id,
+                  name: account.account_id,
+                  platform: account.platform,
+                  status: account.status || 'offline',
+                  masterOnline: true,
+                  config: account.config || {},
+                  translations: account.translations || {},
+                });
+
+                accounts.masterAccounts[masterId].totalSlaves++;
+              } else {
+                // Es un slave no conectado
+                console.log(`🔗 Adding unconnected slave ${account.account_id}`);
+                accounts.unconnectedSlaves.push({
+                  id: account.account_id,
+                  name: account.account_id,
+                  platform: account.platform,
+                  status: account.status || 'offline',
+                  config: account.config || {},
+                  translations: account.translations || {},
+                  filePath: filePath
+                });
+              }
+              processedAccountIds.add(account.account_id);
             }
-            // Agregar lógica para master/slave si se necesita
           } else if (account.account_id) {
             console.log(`❌ Invalid account_id skipped: ${account.account_id} from ${path.basename(filePath)}`);
           }
@@ -1759,6 +1877,25 @@ class CSVManager extends EventEmitter {
       console.error('❌ Error reading CSV cache:', error.message);
     }
     return [];
+  }
+
+  // Método para actualizar rutas de CSV en cache
+  updateCSVPathsCache(newPaths) {
+    const cachePath = join(process.cwd(), 'server', 'server', 'config', 'csv_watching_cache.json');
+    try {
+      const updatedCache = {
+        csvFiles: newPaths,
+        timestamp: new Date().toISOString(),
+        version: '1.0',
+        totalFiles: newPaths.length,
+        lastScan: new Date().toISOString(),
+      };
+
+      writeFileSync(cachePath, JSON.stringify(updatedCache, null, 2), 'utf8');
+      console.log(`💾 CSV cache updated with ${newPaths.length} paths`);
+    } catch (error) {
+      console.error('❌ Error updating CSV cache:', error.message);
+    }
   }
 
   // ===== CÓDIGO VIEJO ELIMINADO =====
@@ -2519,13 +2656,27 @@ class CSVManager extends EventEmitter {
   // Actualizar estado de una cuenta específica
   async updateAccountStatus(accountId, enabled) {
     try {
+      console.log(`🔄 UPDATE ACCOUNT STATUS: Starting update for account ${accountId}, enabled: ${enabled}`);
+      console.log(`🔄 UPDATE ACCOUNT STATUS: csvFiles cache size: ${this.csvFiles.size}`);
+      console.log(`🔄 UPDATE ACCOUNT STATUS: csvFiles keys:`, Array.from(this.csvFiles.keys()));
+
+      // NO hacer escaneo automático - solo usar archivos ya cargados
+      if (this.csvFiles.size === 0) {
+        console.log(`⚠️ UPDATE ACCOUNT STATUS: No CSV files in cache. CSV files should be loaded via 'Find Bots' first.`);
+        console.log(`⚠️ UPDATE ACCOUNT STATUS: Please run 'Find Bots' to load CSV files before updating account status.`);
+        return false;
+      }
+
       // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples)
       const targetFiles = [];
 
       // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
+        console.log(`🔍 UPDATE ACCOUNT STATUS: Checking file ${filePath}, data length: ${fileData.data.length}`);
         fileData.data.forEach(row => {
+          console.log(`🔍 UPDATE ACCOUNT STATUS: Checking row:`, row);
           if (row.account_id === accountId && !targetFiles.includes(filePath)) {
+            console.log(`✅ UPDATE ACCOUNT STATUS: Found account ${accountId} in file ${filePath}`);
             targetFiles.push(filePath);
           }
         });
@@ -2533,6 +2684,10 @@ class CSVManager extends EventEmitter {
 
       if (targetFiles.length === 0) {
         console.error(`❌ No CSV files found for account ${accountId}`);
+        console.error(`❌ Available accounts in cache:`, Array.from(this.csvFiles.entries()).map(([path, data]) => ({
+          file: path,
+          accounts: data.data.map(acc => acc.account_id)
+        })));
         return false;
       }
 

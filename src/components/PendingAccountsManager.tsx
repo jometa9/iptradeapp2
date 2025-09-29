@@ -1026,7 +1026,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                       Deleting...
                                     </>
                                   ) : (
-                                    'Confirm Delete'
+                                    'Delete'
                                   )}
                                 </Button>
                                 <Button

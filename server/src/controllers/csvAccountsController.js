@@ -134,9 +134,13 @@ export const updateCSVAccountType = async (req, res) => {
     const { newType, slaveConfig, masterConfig } = req.body; // 'master' or 'slave', plus configs
     const apiKey = req.apiKey;
 
-
+    console.log(`🔄 CSV UPDATE TYPE: Starting update for account ${accountId} to type ${newType}`);
+    console.log(`🔄 CSV UPDATE TYPE: Request body:`, { newType, slaveConfig, masterConfig });
+    console.log(`🔄 CSV UPDATE TYPE: csvManager available:`, !!csvManager);
+    console.log(`🔄 CSV UPDATE TYPE: csvManager.csvFiles available:`, !!csvManager?.csvFiles);
 
     if (!accountId || !newType) {
+      console.log(`❌ CSV UPDATE TYPE: Missing required parameters - accountId: ${accountId}, newType: ${newType}`);
       return res.status(400).json({
         error: 'Missing required parameters',
         message: 'accountId and newType are required',
@@ -144,6 +148,7 @@ export const updateCSVAccountType = async (req, res) => {
     }
 
     if (!['master', 'slave'].includes(newType)) {
+      console.log(`❌ CSV UPDATE TYPE: Invalid account type: ${newType}`);
       return res.status(400).json({
         error: 'Invalid account type',
         message: 'newType must be either "master" or "slave"',
@@ -159,6 +164,20 @@ export const updateCSVAccountType = async (req, res) => {
     const csvFiles = Array.from(csvManager.csvFiles.keys());
     let platform = 'MT4'; // Default platform
     let currentTimestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+
+    console.log(`📁 CSV UPDATE TYPE: Found ${csvFiles.length} CSV files to process:`, csvFiles);
+    console.log(`📁 CSV UPDATE TYPE: csvManager.csvFiles size: ${csvManager.csvFiles.size}`);
+    console.log(`📁 CSV UPDATE TYPE: csvManager.csvFiles keys:`, Array.from(csvManager.csvFiles.keys()));
+
+    // NO hacer escaneo automático - solo usar archivos ya cargados
+    if (csvFiles.length === 0) {
+      console.log(`⚠️ CSV UPDATE TYPE: No CSV files found. CSV files should be loaded via 'Find Bots' first.`);
+      console.log(`⚠️ CSV UPDATE TYPE: Please run 'Find Bots' to load CSV files before updating account type.`);
+      return res.status(400).json({
+        error: 'No CSV files loaded',
+        message: 'Please run "Find Bots" first to load CSV files before updating account type',
+      });
+    }
 
     // Check if we're converting from master to slave and need to disconnect slaves
     let isConvertingFromMaster = false;
@@ -234,14 +253,22 @@ export const updateCSVAccountType = async (req, res) => {
       }
     }
 
+    // Get updated CSV files after potential scan
+    const finalCsvFiles = Array.from(csvManager.csvFiles.keys());
+    console.log(`📁 CSV UPDATE TYPE: Final CSV files to process: ${finalCsvFiles.length}`, finalCsvFiles);
+
     // Process each file
-    for (const filePath of csvFiles) {
+    for (const filePath of finalCsvFiles) {
       try {
+        console.log(`🔍 CSV UPDATE TYPE: Processing file: ${filePath}`);
         if (existsSync(filePath)) {
           const content = readFileSync(filePath, 'utf8');
           const lines = content.split('\n').filter(line => line.trim());
 
+          console.log(`📄 CSV UPDATE TYPE: File has ${lines.length} lines`);
+
           if (lines.length < 1) {
+            console.log(`⚠️ CSV UPDATE TYPE: File ${filePath} is empty, skipping`);
             continue;
           }
 
@@ -255,8 +282,14 @@ export const updateCSVAccountType = async (req, res) => {
             // Clean the line from BOM and special characters
             const cleanLine = line.replace(/^\uFEFF/, '').replace(/[^\x20-\x7E\[\]]/g, '');
 
+            // Log each line that contains the account ID for debugging
+            if (cleanLine.includes(accountId)) {
+              console.log(`🔍 CSV UPDATE TYPE: Found line with account ${accountId}: ${cleanLine}`);
+            }
+
             // Simple check: if the line contains the accountId, this is our file
             if (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId)) {
+              console.log(`🎯 CSV UPDATE TYPE: Account ${accountId} found in line: ${cleanLine}`);
               // Extract platform from the line
               const matches = cleanLine.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 3) {
@@ -265,6 +298,7 @@ export const updateCSVAccountType = async (req, res) => {
                 // Find platform (usually the second or third bracket)
                 accountPlatform = values.find(v => ['MT4', 'MT5', 'CTRADER'].includes(v)) || 'MT4';
                 foundAccount = true;
+                console.log(`🎯 CSV UPDATE TYPE: Extracted platform: ${accountPlatform}, values: ${values.join(', ')}`);
                 break;
               }
             }
@@ -297,6 +331,7 @@ export const updateCSVAccountType = async (req, res) => {
           }
 
           if (foundAccount) {
+            console.log(`✅ CSV UPDATE TYPE: Found account ${accountId} in file ${filePath}, platform: ${accountPlatform}`);
             // Simple approach: just update the CONFIG line, bot will update TYPE
             const fileContent = readFileSync(filePath, 'utf8');
             const lines = fileContent.split('\n');
@@ -391,10 +426,13 @@ export const updateCSVAccountType = async (req, res) => {
             // Ensure we're writing to .csv not .cssv
             const correctPath = filePath.replace(/\.cssv$/, '.csv');
             
-
+            console.log(`💾 CSV UPDATE TYPE: Writing updated content to ${correctPath}`);
+            console.log(`📝 CSV UPDATE TYPE: New content preview (first 500 chars):`, newContent.substring(0, 500));
             
             writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
             filesUpdated++;
+            
+            console.log(`✅ CSV UPDATE TYPE: Successfully updated file ${correctPath}, filesUpdated: ${filesUpdated}`);
 
             // IMPORTANT: Immediately refresh cache for this specific file to ensure latest data
             if (csvManager.csvFiles.has(filePath)) {
@@ -404,11 +442,15 @@ export const updateCSVAccountType = async (req, res) => {
               });
             }
           }
+        } else {
+          console.log(`⚠️ CSV UPDATE TYPE: File ${filePath} does not exist, skipping`);
         }
       } catch (error) {
-        console.error(`Error processing file ${filePath}:`, error);
+        console.error(`❌ CSV UPDATE TYPE: Error processing file ${filePath}:`, error);
       }
     }
+
+    console.log(`📊 CSV UPDATE TYPE: Processing complete. Files updated: ${filesUpdated}`);
 
     if (filesUpdated > 0) {
       // If converting from master to slave, disconnect all connected slaves
@@ -638,6 +680,7 @@ export const updateCSVAccountType = async (req, res) => {
           isConvertingFromMaster && newType === 'slave' ? slavesToDisconnect.length : 0,
       });
     } else {
+      console.log(`❌ CSV UPDATE TYPE: No files were updated for account ${accountId}`);
       res.status(404).json({
         error: 'Account not found',
         message: `No account with ID ${accountId} found in CSV files`,
@@ -652,190 +695,69 @@ export const updateCSVAccountType = async (req, res) => {
   }
 };
 
-// Delete pending account from CSV files
+// Delete pending account from CSV files - CLEAN VERSION
 export const deletePendingFromCSV = async (req, res) => {
   try {
     const { accountId } = req.params;
-    const apiKey = 'default-api-key'; // Use default API key since no authentication required
 
     if (!accountId) {
       return res.status(400).json({ error: 'Account ID is required' });
     }
 
-    // Buscar todos los archivos IPTRADECSV2.csv que contienen esta cuenta
-    const patterns = [
-      '**/IPTRADECSV2.csv',
-      '**/csv_data/**/IPTRADECSV2.csv',
-      '**/accounts/**/IPTRADECSV2.csv',
-    ];
+    console.log(`🗑️ DELETE PENDING: Starting deletion of account ${accountId} (REMOVE FROM CACHE PATHS)`);
 
-    let deletedFromFiles = 0;
-    const allFiles = [];
+    // Obtener rutas CSV cacheadas (igual que el sistema unificado)
+    const csvPaths = csvManager.getCSVPathsFromCache();
+    console.log(`📁 DELETE PENDING: Found ${csvPaths.length} CSV paths in cache`);
 
-    // Encontrar archivos
-    for (const pattern of patterns) {
+    let foundInFile = null;
+
+    // Buscar en qué archivo CSV está la cuenta
+    for (const filePath of csvPaths) {
       try {
-        const files = await glob(pattern, {
-          ignore: ['**/node_modules/**', '**/.git/**'],
-          absolute: true,
-        });
-        allFiles.push(...files);
-      } catch (error) {
-        console.error(`Error searching pattern ${pattern}:`, error);
-      }
-    }
-
-    // Procesar cada archivo para eliminar la cuenta
-    for (const filePath of allFiles) {
-      try {
-        if (existsSync(filePath)) {
-          const content = readFileSync(filePath, 'utf8');
-          const lines = content.split('\n').filter(line => line.trim());
-
-          if (lines.length < 2) continue;
-
-          // Verificar si es el nuevo formato simplificado [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
-          const firstDataLine = lines[1]; // Primera línea de datos
-          const firstValues = firstDataLine.split(',').map(v => v.trim());
-
-          let modified = false;
-          let filteredLines = [];
-
-          if (firstValues[0] === '0' && firstValues.length >= 5) {
-            // Nuevo formato simplificado - no hay header
-
-            for (let i = 0; i < lines.length; i++) {
-              const lineValues = lines[i].split(',').map(v => v.trim());
-
-              // Verificar formato: [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
-              if (lineValues[0] === '0' && lineValues.length >= 5) {
-                if (lineValues[1] === accountId) {
-                  modified = true;
-                  // No agregar esta línea (eliminar)
-                } else {
-                  filteredLines.push(lines[i]);
-                }
-              } else {
-                // Mantener líneas que no siguen el formato esperado
-                filteredLines.push(lines[i]);
-              }
-            }
-          } else {
-            // Formato anterior con headers
-            const headers = lines[0].split(',').map(h => h.trim());
-            const expectedHeaders = ['timestamp', 'account_id', 'account_type', 'platform'];
-            const isSimplifiedFormat = expectedHeaders.every(h => headers.includes(h));
-
-            if (!isSimplifiedFormat) continue;
-
-            filteredLines = [headers.join(',')]; // Mantener header
-
-            for (let i = 1; i < lines.length; i++) {
-              const values = lines[i].split(',').map(v => v.trim());
-              const accountIdIndex = headers.indexOf('account_id');
-
-              if (accountIdIndex >= 0 && values[accountIdIndex] === accountId) {
-                modified = true;
-                // No agregar esta línea (eliminar)
-              } else {
-                filteredLines.push(lines[i]);
-              }
-            }
-          }
-
-          if (modified) {
-            // Escribir el archivo actualizado
-            // Ensure we're writing to .csv not .cssv
-            const correctPath = filePath.replace(/\.cssv$/, '.csv');
-            writeFileSync(correctPath, filteredLines.join('\n'));
-            deletedFromFiles++;
-          }
+        console.log(`🔍 DELETE PENDING: Checking file ${filePath}`);
+        
+        // Leer el archivo directamente
+        const content = readFileSync(filePath, 'utf8');
+        
+        // Buscar si el archivo contiene el accountId (simple)
+        if (content.includes(accountId)) {
+          console.log(`✅ DELETE PENDING: Found account ${accountId} in file ${filePath}`);
+          foundInFile = filePath;
+          break;
         }
       } catch (error) {
-        console.error(`Error processing file ${filePath}:`, error);
+        console.error(`❌ DELETE PENDING: Error reading file ${filePath}:`, error);
       }
     }
 
-    // Remove files containing the deleted account from CSV cache
-    let removedFromCache = 0;
-    if (deletedFromFiles > 0) {
-      const csvFilesToRemove = [];
-      
-      // Check which CSV files contained the deleted account and remove them from cache
-      for (const filePath of allFiles) {
-        if (csvManager.csvFiles.has(filePath)) {
-          // Check if this file contained the deleted account
-          try {
-            if (existsSync(filePath)) {
-              const content = readFileSync(filePath, 'utf8');
-              // If the file no longer contains the account or is empty, remove from cache
-              if (!content.includes(accountId) || content.trim().length === 0) {
-                csvFilesToRemove.push(filePath);
-              }
-            } else {
-              // File doesn't exist anymore, remove from cache
-              csvFilesToRemove.push(filePath);
-            }
-          } catch (error) {
-            console.error(`Error checking file ${filePath}:`, error);
-            // On error, remove from cache to be safe
-            csvFilesToRemove.push(filePath);
-          }
-        }
-      }
-      
-      // Remove files from cache
-      for (const filePath of csvFilesToRemove) {
-        csvManager.csvFiles.delete(filePath);
-        removedFromCache++;
-        console.log(`🗑️ Removed ${filePath} from CSV cache after deleting account ${accountId}`);
-      }
-      
-      // Save updated cache
-      if (removedFromCache > 0) {
-        csvManager.saveCSVPathsToCache();
-        console.log(`💾 Updated CSV cache after removing ${removedFromCache} files`);
-      }
-    }
-
-    // Trigger a scan update only if there are CSV files to scan
-    if (csvManager.csvFiles.size > 0) {
-      await csvManager.scanAndEmitPendingUpdates();
-    }
-
-    if (deletedFromFiles > 0) {
-      // Trigger unified data refresh
-      try {
-        console.log(`🔄 Triggering unified data refresh after deleting account ${accountId}`);
-        // Import and call the unified data function to refresh
-        const { getUnifiedAccountData } = await import('./accountsController.js');
-        // Create a mock request/response to trigger the refresh
-        const mockReq = { apiKey };
-        const mockRes = {
-          json: () => console.log('✅ Unified data refreshed after account deletion'),
-          status: () => ({ json: () => console.log('❌ Error refreshing unified data') })
-        };
-        await getUnifiedAccountData(mockReq, mockRes);
-      } catch (error) {
-        console.error('Error refreshing unified data after account deletion:', error);
-      }
-
-      res.json({
-        success: true,
-        message: `Account ${accountId} deleted from ${deletedFromFiles} CSV file(s)`,
-        filesModified: deletedFromFiles,
-        removedFromCache: removedFromCache,
-        cacheUpdated: removedFromCache > 0,
-      });
-    } else {
-      res.status(404).json({
+    if (!foundInFile) {
+      console.log(`❌ DELETE PENDING: Account ${accountId} not found in any CSV files`);
+      return res.status(404).json({
         error: 'Account not found',
         message: `Account ${accountId} not found in any CSV files`,
       });
     }
+
+    // Eliminar la ruta del cache
+    const updatedPaths = csvPaths.filter(path => path !== foundInFile);
+    
+    // Actualizar el cache de rutas CSV
+    csvManager.updateCSVPathsCache(updatedPaths);
+    console.log(`🗑️ DELETE PENDING: Removed path ${foundInFile} from cache`);
+    console.log(`💾 DELETE PENDING: Updated cache with ${updatedPaths.length} remaining paths`);
+
+    res.json({
+      success: true,
+      message: `Account ${accountId} removed from cache. File path removed: ${foundInFile}`,
+      accountId,
+      removedPath: foundInFile,
+      remainingPaths: updatedPaths.length,
+      note: 'CSV file path removed from cache. File was not modified.'
+    });
   } catch (error) {
-    console.error('Error deleting pending account from CSV:', error);
-    res.status(500).json({ error: 'Failed to delete pending account from CSV' });
+    console.error('❌ DELETE PENDING: Error deleting pending account from cache:', error);
+    res.status(500).json({ error: 'Failed to delete pending account from cache' });
   }
 };
 
@@ -1167,3 +1089,6 @@ export const runInstallScript = async (req, res) => {
     res.status(500).json({ error: 'Failed to run install script', details: error.message });
   }
 };
+
+
+
