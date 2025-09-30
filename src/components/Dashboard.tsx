@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import frontendConfig from '../../config/frontend_config.json';
 
 import {
   Bot,
@@ -93,7 +94,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleHelp = () => {
-    const urlHelp = import.meta.env.VITE_HELP_URL;
+    const urlHelp = frontendConfig.app.helpUrl;
     openExternalLink(urlHelp);
   };
 

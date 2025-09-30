@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('fullscreen-changed', (event, isFullscreen) => callback(isFullscreen));
   },
 
+  // Deep link listener
+  onDeepLink: callback => {
+    ipcRenderer.on('deep-link', (event, data) => callback(data));
+  },
+
   // Remover listeners
   removeAllListeners: channel => {
     ipcRenderer.removeAllListeners(channel);

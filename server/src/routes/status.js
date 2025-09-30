@@ -10,8 +10,6 @@ import {
   subscriptionCache,
   validateSubscription,
 } from '../middleware/subscriptionAuth.js';
-import CtraderAuthServiceInstance from '../services/ctraderAuth.js';
-import Mt5AuthServiceInstance from '../services/mt5Auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = fileURLToPath(new URL('.', import.meta.url));

@@ -1,32 +1,49 @@
-import dotenv from 'dotenv';
 import fs, { existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import { createServer } from './standalone.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+// Handle both development and production environments
+let __dirname;
+try {
+  const __filename = fileURLToPath(import.meta.url);
+  __dirname = dirname(__filename);
+} catch (error) {
+  // Fallback for production/packaged environments
+  __dirname = process.cwd();
+}
 
-// Load environment variables from root .env only
-// Try to load from current directory first, then from parent directory
-const rootEnvPath = join(process.cwd(), '.env');
-const parentEnvPath = join(process.cwd(), '..', '.env');
+// Load configuration from JSON
+const configPath = join(__dirname, '../config/app_config.json');
+let config;
 
-// Check which path exists and load it
-if (existsSync(rootEnvPath)) {
-  dotenv.config({ path: rootEnvPath });
-} else if (existsSync(parentEnvPath)) {
-  dotenv.config({ path: parentEnvPath });
+try {
+  const configData = fs.readFileSync(configPath, 'utf8');
+  config = JSON.parse(configData);
+  console.log('🔧 Loaded configuration from:', configPath);
+} catch (error) {
+  console.warn('⚠️ Failed to load config, using defaults:', error.message);
+  config = {
+    server: {
+      port: 30,
+      environment: process.env.NODE_ENV || 'development'
+    },
+    paths: {
+      configDir: 'config',
+      autoLinkCacheFile: 'config/auto_link_cache.json'
+    }
+  };
 }
 
 const { app } = createServer();
-const DEV_PORT = process.env.PORT || 30;
+const DEV_PORT = config.server.port;
 
 // Cache para controlar el auto-link
-const AUTO_LINK_CACHE_FILE = join(__dirname, '../config/auto_link_cache.json');
+const configDir = join(__dirname, '..', config.paths.configDir);
+const AUTO_LINK_CACHE_FILE = join(__dirname, '..', config.paths.autoLinkCacheFile);
 
 // Endpoint simple para limpiar cache
 app.post('/api/clear-auto-link-cache', (req, res) => {
@@ -57,7 +74,6 @@ const hasAutoLinkExecuted = () => {
 const markAutoLinkExecuted = () => {
   try {
     // Crear directorio si no existe
-    const configDir = join(__dirname, '../config');
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }
@@ -68,11 +84,17 @@ const markAutoLinkExecuted = () => {
     };
 
     fs.writeFileSync(AUTO_LINK_CACHE_FILE, JSON.stringify(cache, null, 2));
-  } catch (error) {}
+    console.log('✅ Auto-link marked as executed');
+  } catch (error) {
+    console.error('❌ Failed to mark auto-link as executed:', error);
+  }
 };
 
-// Debug: Let's see what environment variables are loaded
+// Enhanced server startup for both development and production
 async function startDevServer() {
+  const isProduction = config.server.environment === 'production';
+  console.log(`🚀 Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode on port ${DEV_PORT}`);
+  
   await killProcessOnPort(DEV_PORT);
 
   // Wait a moment to ensure port is fully free
@@ -81,23 +103,33 @@ async function startDevServer() {
   const startServerAttempt = (attempt = 1) => {
     return new Promise((resolve, reject) => {
       const server = app.listen(DEV_PORT, () => {
+        console.log(`✅ Server successfully started on port ${DEV_PORT}`);
+        console.log(`🌐 Server available at: http://localhost:${DEV_PORT}`);
+        console.log(`📚 API Documentation: http://localhost:${DEV_PORT}/api-docs`);
+        
         (async () => {
           try {
+            console.log('🔍 Checking auto-link execution status...');
+            
             // Verificar si ya se ejecutó el auto-link (cache nunca expira)
             if (hasAutoLinkExecuted()) {
+              console.log('✅ Auto-link already executed previously (cached), skipping');
               return;
             }
 
             if (linkPlatformsController.isLinking) {
+              console.log('⏳ Auto-link is already in progress, skipping');
               return;
             }
 
+            console.log('🚀 Starting auto-link process...');
             const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
+            console.log('✅ Auto-link process completed:', result);
 
             // Marcar como ejecutado en el cache
             markAutoLinkExecuted();
 
-            // CSV watching is now integrated into the main process, no need for separate call
+            console.log('📊 CSV watching is integrated into the main process');
           } catch (err) {
             console.error('❌ Auto Link Platforms failed on start:', err);
           }
@@ -108,7 +140,9 @@ async function startDevServer() {
 
       server.on('error', async err => {
         if (err.code === 'EADDRINUSE') {
+          console.warn(`⚠️ Port ${DEV_PORT} is in use (attempt ${attempt}/3)`);
           if (attempt < 3) {
+            console.log('🔄 Retrying server startup...');
             // Try to kill processes again and retry
             await killProcessOnPort(DEV_PORT);
             setTimeout(() => {
@@ -117,12 +151,13 @@ async function startDevServer() {
                 .catch(reject);
             }, 2000);
           } else {
-            console.error(`❌ Unable to start dev server on port ${DEV_PORT} after 3 attempts`);
-            console.error('Please check if another application is using this port');
+            console.error(`❌ Unable to start server on port ${DEV_PORT} after 3 attempts`);
+            console.error('💡 Please check if another application is using this port');
+            console.error('💡 You can try changing the PORT in your .env file');
             reject(err);
           }
         } else {
-          console.error('❌ [DEV SERVER FAILED TO START]', err);
+          console.error('❌ [SERVER FAILED TO START]', err);
           reject(err);
         }
       });

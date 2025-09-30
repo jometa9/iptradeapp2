@@ -39,6 +39,7 @@ export interface ElectronAPI {
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => void;
   onUpdateDownloaded: (callback: (info: UpdateInfo) => void) => void;
   onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => void;
+  onDeepLink: (callback: (data: { url: string }) => void) => void;
   removeAllListeners: (channel: string) => void;
 }
 
@@ -73,6 +74,9 @@ declare global {
 
       // Listener para cambios de fullscreen
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => void;
+
+      // Deep link listener
+      onDeepLink: (callback: (data: { url: string }) => void) => void;
 
       // Remover listeners
       removeAllListeners: (channel: string) => void;

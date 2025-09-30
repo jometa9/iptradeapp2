@@ -34,7 +34,7 @@ if (existsSync(rootEnvPath)) {
 
 export function createServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 30;
 
   // Middleware
   app.use(cors());
@@ -72,13 +72,14 @@ export function startServer() {
   const { app, PORT } = createServer();
 
   return new Promise((resolve, reject) => {
-    const server = app.listen(PORT, err => {
-      if (err) {
-        console.error('[SERVER FAILED TO START]', err);
-        reject(err);
-      } else {
-        resolve(server);
-      }
+    const server = app.listen(PORT, () => {
+      console.log(`✅ [PRODUCTION] Server started successfully on port ${PORT}`);
+      resolve(server);
+    });
+
+    server.on('error', (err) => {
+      console.error('❌ [PRODUCTION] Server error:', err);
+      reject(err);
     });
   });
 }

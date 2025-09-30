@@ -56,7 +56,7 @@ function getPortFromEnv() {
     if (vitePortMatch) return vitePortMatch[1];
   }
 
-  return '3000'; // fallback por defecto
+  return '30'; // fallback por defecto
 }
 
 // Mejorar la detección de modo desarrollo
@@ -66,9 +66,83 @@ let serverProcess; // Para el proceso del servidor en desarrollo
 let mainWindow;
 let tray = null;
 
-// Configuración del autoUpdater
+// Variable to store deep link URL when app is not ready
+let deeplinkingUrl;
+
+// Protocol handling for deep links
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, we should focus our window instead.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    
+    // Handle deep link on second instance (Windows/Linux)
+    if (process.platform === 'win32' || process.platform === 'linux') {
+      // Keep only command line / deep linked arguments
+      deeplinkingUrl = commandLine.find((arg) => arg.startsWith('iptrade://'));
+      if (deeplinkingUrl && mainWindow) {
+        handleDeepLink(deeplinkingUrl);
+      }
+    }
+  });
+}
+
+// Function to handle deep link
+function handleDeepLink(url) {
+  console.log('Deep link received:', url);
+  if (mainWindow && mainWindow.webContents) {
+    mainWindow.webContents.send('deep-link', { url });
+    
+    // Focus the window when receiving deep link
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+    mainWindow.show();
+  } else {
+    // Store URL if window is not ready yet
+    deeplinkingUrl = url;
+  }
+}
+
+// Handle deep links on macOS
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
+// Add command line arguments to fix cache issues on Windows
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('--disable-gpu-sandbox');
+  app.commandLine.appendSwitch('--disable-software-rasterizer');
+  app.commandLine.appendSwitch('--disable-gpu');
+  app.commandLine.appendSwitch('--disable-gpu-compositing');
+  app.commandLine.appendSwitch('--disable-gpu-rasterization');
+  app.commandLine.appendSwitch('--disable-gpu-sandbox');
+  app.commandLine.appendSwitch('--disable-software-rasterizer');
+  app.commandLine.appendSwitch('--disable-background-timer-throttling');
+  app.commandLine.appendSwitch('--disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch('--disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('--disable-features', 'TranslateUI');
+  app.commandLine.appendSwitch('--disable-ipc-flooding-protection');
+  app.commandLine.appendSwitch('--no-sandbox');
+  app.commandLine.appendSwitch('--disable-web-security');
+  app.commandLine.appendSwitch('--disable-features', 'VizDisplayCompositor');
+  // Agregar flags para mejorar el rendimiento de GPU
+  app.commandLine.appendSwitch('--disable-gpu-process-crash-limit');
+  app.commandLine.appendSwitch('--disable-gpu-memory-buffer-video-frames');
+  app.commandLine.appendSwitch('--disable-gpu-memory-buffer-compositor-resources');
+}
+
+// Configuración del autoUpdater - DESHABILITADO para evitar errores
 if (!isDev) {
-  autoUpdater.checkForUpdatesAndNotify();
+  // autoUpdater.checkForUpdatesAndNotify();
   // Configurar para NO descargar automáticamente
   autoUpdater.autoDownload = false;
 }
@@ -170,7 +244,20 @@ async function startServer() {
     const port = getPortFromEnv();
 
     if (isDev) {
-      // En desarrollo, lanzar el servidor como proceso hijo
+      // En desarrollo, verificar si el servidor ya está ejecutándose
+      console.log('🔍 [DEV] Checking if server is already running...');
+      
+      try {
+        const response = await fetch(`http://localhost:${port}/api/status`);
+        if (response.ok) {
+          console.log('✅ [DEV] Server is already running, skipping server startup');
+          return;
+        }
+      } catch (error) {
+        console.log('🚀 [DEV] Server not running, starting server process...');
+      }
+
+      // En desarrollo, lanzar el servidor como proceso hijo solo si no está ejecutándose
       const serverPath = path.join(__dirname, '../server/src/dev.js');
 
       serverProcess = spawn('node', [serverPath], {
@@ -182,25 +269,114 @@ async function startServer() {
         windowsHide: true,
       });
 
-      serverProcess.stdout.on('data', data => {});
+       serverProcess.stdout.on('data', data => {
+         console.log('[SERVER]', data.toString());
+       });
 
-      serverProcess.stderr.on('data', data => {});
+       serverProcess.stderr.on('data', data => {
+         console.error('[SERVER ERROR]', data.toString());
+       });
 
-      serverProcess.on('close', code => {});
+       serverProcess.on('close', code => {
+         console.log(`[SERVER] Process closed with code ${code}`);
+       });
 
-      serverProcess.on('error', err => {});
+       serverProcess.on('error', err => {
+         console.error('[SERVER] Process error:', err);
+       });
 
       // Esperar un poco para que el servidor se inicie
       await new Promise(resolve => setTimeout(resolve, 2000));
       return;
     }
 
-    // Only start the embedded server in production
-    const serverPath = path.join(process.resourcesPath, 'server/dist/server.mjs');
+    // Production: Start server as child process (dependencies should be pre-packaged)
+    console.log('🚀 [PRODUCTION] Starting server...');
+    console.log('🚀 [PRODUCTION] Resources path:', process.resourcesPath);
+    console.log('🚀 [PRODUCTION] Port:', port);
+    
+    const serverResourcesPath = path.join(process.resourcesPath, 'server');
+    console.log('🚀 [PRODUCTION] Server path:', serverResourcesPath);
+    
+    // Start server process directly (no npm install needed - dependencies pre-packaged)
+    console.log('🚀 [PRODUCTION] Starting server process...');
+    const serverPath = path.join(__dirname, 'server-production.cjs');
+    
+    // Verify server file exists
+    console.log('🔍 [PRODUCTION] Server file exists:', fs.existsSync(serverPath));
+    console.log('🔍 [PRODUCTION] Server file path:', serverPath);
+    
+    // Create logs directory if it doesn't exist
+    const logsDir = path.join(process.resourcesPath, 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
 
-    const { startServer } = require(serverPath);
-    serverInstance = await startServer();
-  } catch (error) {}
+    // Create log files for stdout and stderr
+    const serverLogFile = fs.createWriteStream(path.join(logsDir, 'server.log'), { flags: 'a' });
+    const serverErrorLogFile = fs.createWriteStream(path.join(logsDir, 'server-error.log'), { flags: 'a' });
+
+    // Log startup information
+    const startupLog = `\n[${new Date().toISOString()}] Server starting...\nPath: ${serverPath}\nPort: ${port}\n`;
+    serverLogFile.write(startupLog);
+
+    console.log('Starting server process with:', {
+      serverPath,
+      cwd: serverResourcesPath,
+      port,
+      env: process.env
+    });
+
+    serverProcess = spawn('node', [serverPath], {
+      cwd: serverResourcesPath,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { 
+        ...process.env, 
+        PORT: port, 
+        NODE_ENV: 'production',
+        NODE_PATH: path.join(serverResourcesPath, 'node_modules'),
+        NODE_MODULE_PATH: path.join(serverResourcesPath, 'node_modules')
+      },
+      detached: process.platform !== 'win32',
+      windowsHide: true,
+    });
+
+    // Pipe server output to log files
+    serverProcess.stdout.pipe(serverLogFile);
+    serverProcess.stderr.pipe(serverErrorLogFile);
+
+    // Also log to console in development
+    if (isDev) {
+      serverProcess.stdout.pipe(process.stdout);
+      serverProcess.stderr.pipe(process.stderr);
+    }
+
+    serverProcess.stdout.on('data', data => {
+      console.log('[PRODUCTION SERVER]', data.toString());
+    });
+
+    serverProcess.stderr.on('data', data => {
+      console.error('[PRODUCTION SERVER ERROR]', data.toString());
+    });
+
+    serverProcess.on('close', code => {
+      console.log(`[PRODUCTION SERVER] Process closed with code ${code}`);
+    });
+
+    serverProcess.on('error', err => {
+      console.error('[PRODUCTION SERVER] Process error:', err);
+    });
+
+    console.log('🚀 [PRODUCTION] Server process started, waiting...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  } catch (error) {
+    console.error('💥 [SERVER] Failed to start server:', error);
+    // Show error dialog to user
+    if (mainWindow) {
+      dialog.showErrorBox('Server Error', `Failed to start server: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 async function createAdaptiveIcon() {
@@ -383,8 +559,11 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs'),
-      devTools: isDev, // Solo habilitar DevTools en desarrollo
+      devTools: true, // Habilitado temporalmente para depuración
       webSecurity: false, // Permitir cargar recursos locales
+      // Fix cache issues on Windows
+      partition: 'persist:main',
+      cache: false, // Disable cache to prevent access issues
     },
   };
 
@@ -503,14 +682,9 @@ function createWindow() {
 
   // Manejar el evento de minimizar
   mainWindow.on('minimize', event => {
-    // En macOS, permitir minimización normal
-    if (process.platform === 'darwin') {
-      return; // No prevenir el comportamiento por defecto
-    }
-
-    // En otras plataformas, ocultar al tray
-    event.preventDefault();
-    mainWindow.hide();
+    // Permitir minimización normal en todas las plataformas
+    // No prevenir el comportamiento por defecto - solo minimizar la ventana
+    return; // Comportamiento de minimización estándar
   });
 
   // Manejar eventos de fullscreen
@@ -530,17 +704,61 @@ function createWindow() {
     // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    
+    // Log frontend events
+    mainWindow.webContents.on('did-finish-load', () => {
+      const frontendLogFile = fs.createWriteStream(path.join(process.resourcesPath, 'logs', 'frontend.log'), { flags: 'a' });
+      frontendLogFile.write(`\n[${new Date().toISOString()}] Frontend loaded successfully\n`);
+    });
 
-    // Verificar actualizaciones después de cargar la app (solo en producción)
-    setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify();
-    }, 3600000);
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      const frontendErrorLogFile = fs.createWriteStream(path.join(process.resourcesPath, 'logs', 'frontend-error.log'), { flags: 'a' });
+      frontendErrorLogFile.write(`\n[${new Date().toISOString()}] Frontend failed to load: ${errorDescription} (${errorCode})\n`);
+    });
+
+    // Verificar actualizaciones después de cargar la app (solo en producción) - DESHABILITADO
+    // setTimeout(() => {
+    //   autoUpdater.checkForUpdatesAndNotify();
+    // }, 3600000);
   }
 }
 
 app.whenReady().then(async () => {
+  // Set app as default protocol handler for iptrade://
+  if (!isDev) {
+    app.setAsDefaultProtocolClient('iptrade');
+  } else {
+    // In development, we need to set the path to the electron executable
+    app.setAsDefaultProtocolClient('iptrade', process.execPath, [path.resolve(process.argv[1])]);
+  }
+  
+  // Handle deep link from command line arguments (Windows/Linux)
+  if (process.platform === 'win32' || process.platform === 'linux') {
+    // Keep only command line / deep linked arguments
+    deeplinkingUrl = process.argv.find((arg) => arg.startsWith('iptrade://'));
+  }
+  
   // Solicitar permisos necesarios una sola vez al inicio
   await requestMacOSPermissions();
+
+  // Configure cache settings to prevent access issues on Windows
+  if (process.platform === 'win32') {
+    // Set cache directory to a writable location
+    const userDataPath = app.getPath('userData');
+    const cachePath = path.join(userDataPath, 'cache');
+    
+    // Ensure cache directory exists and is writable
+    try {
+      if (!fs.existsSync(cachePath)) {
+        fs.mkdirSync(cachePath, { recursive: true });
+      }
+      
+      // Set cache directory for the session
+      app.setPath('cache', cachePath);
+    } catch (error) {
+      console.warn('Warning: Could not set custom cache directory:', error.message);
+    }
+  }
 
   await startServer();
   // Cambiar el nombre de la app
@@ -574,6 +792,14 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+
+  // Send stored deep link to renderer if any
+  if (deeplinkingUrl && mainWindow) {
+    setTimeout(() => {
+      handleDeepLink(deeplinkingUrl);
+      deeplinkingUrl = null;
+    }, 1000); // Wait for renderer to be ready
+  }
 
   await createTray();
 

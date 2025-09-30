@@ -15,6 +15,7 @@ class LinkPlatformsController {
   constructor() {
     this.botsPath = path.join(__dirname, '../../../bots');
     this.isLinking = false; // Track if linking is in progress
+    this.isFindingBots = false; // Track if findBots is in progress (separate from linking)
     this.cachedPaths = null; // Cache for found MQL paths
     this.lastScanTime = null; // Track when last scan happened
     this.cacheValidityHours = 24; // Cache válido por 24 horas
@@ -104,8 +105,8 @@ class LinkPlatformsController {
     console.log('🔍 Find Bots ENDPOINT: Request body:', req.body);
     
     try {
-      // Check if Find Bots is already running
-      if (this.isLinking) {
+      // Check if Find Bots is already running (use separate state variable)
+      if (this.isFindingBots) {
         console.log('⚠️ Find Bots ENDPOINT: Process already running, returning 409');
         return res.status(409).json({
           success: false,
@@ -534,11 +535,11 @@ class LinkPlatformsController {
   async findBots() {
     const startTime = Date.now();
     console.log('🔍 Find Bots CORE: Starting at', new Date().toISOString());
-    console.log('🔍 Find Bots CORE: Initial isLinking state:', this.isLinking);
+    console.log('🔍 Find Bots CORE: Initial isFindingBots state:', this.isFindingBots);
     
-    // Track linking state
-    this.isLinking = true;
-    console.log('🔍 Find Bots CORE: Set isLinking to true');
+    // Track findBots state (separate from linking)
+    this.isFindingBots = true;
+    console.log('🔍 Find Bots CORE: Set isFindingBots to true');
 
     const result = {
       csvFiles: [],
@@ -620,8 +621,9 @@ class LinkPlatformsController {
       console.error('❌ Error in Find Bots process:', error);
       result.errors.push(`General error: ${error.message}`);
     } finally {
-      // Always reset linking state
-      this.isLinking = false;
+      // Always reset findBots state
+      this.isFindingBots = false;
+      console.log('🔍 Find Bots CORE: Reset isFindingBots to false');
     }
 
     return result;
@@ -1140,6 +1142,7 @@ class LinkPlatformsController {
   getLinkingStatus() {
     return {
       isLinking: this.isLinking,
+      isFindingBots: this.isFindingBots,
       timestamp: new Date().toISOString(),
       lastResult: this.lastLinkPlatformsResult,
       lastTimestamp: this.lastLinkPlatformsTimestamp,

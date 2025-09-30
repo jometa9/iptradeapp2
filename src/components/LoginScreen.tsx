@@ -15,7 +15,7 @@ export const LoginScreen: React.FC = () => {
   const [webLoginStatus, setWebLoginStatus] = useState<'idle' | 'authenticating' | 'redirecting'>(
     'idle'
   );
-  const { login, loginWithToken, isLoading, error, clearError } = useAuth();
+  const { login, isLoading, error, clearError } = useAuth();
   const { openExternalLink } = useExternalLink();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +58,7 @@ export const LoginScreen: React.FC = () => {
     setWebLoginStatus('authenticating');
 
     // Open browser to your website login page
-    const loginUrl = 'https://iptradecopier.com/sign-in?redirect=iptradeapp://login&source=app';
+    const loginUrl = 'https://iptradecopier.com/sign-in?redirect=iptrade://login&source=app';
     openExternalLink(loginUrl);
 
     // Show "Authenticating in browser..." message
@@ -69,18 +69,22 @@ export const LoginScreen: React.FC = () => {
     }, 3000);
   };
 
-  // Handle URL scheme callback (iptradeapp://login?token=XXX)
+  // Handle URL scheme callback (iptrade://login?apiKey=XXX)
   useEffect(() => {
     const handleAuthCallback = (event: any) => {
       const url = event.detail?.url || event.url;
 
-      if (url && url.startsWith('iptradeapp://login')) {
+      if (url && url.startsWith('iptrade://login')) {
         const urlObj = new URL(url);
-        const token = urlObj.searchParams.get('token');
+        const apiKey = urlObj.searchParams.get('apiKey');
 
-        if (token) {
+        if (apiKey) {
           setWebLoginStatus('idle');
-          loginWithToken(token);
+          console.log('API Key recibido del deep link:', apiKey);
+          
+          // Usar el mismo flujo que el login manual con input
+          setApiKey(apiKey);
+          login(apiKey);
         } else {
           setWebLoginStatus('idle');
           clearError();
@@ -89,20 +93,20 @@ export const LoginScreen: React.FC = () => {
     };
 
     // Listen for deep link events (Electron)
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.on('deep-link', handleAuthCallback);
+    if (window.electronAPI?.onDeepLink) {
+      window.electronAPI.onDeepLink(handleAuthCallback);
     }
 
     // Listen for custom events (fallback)
     window.addEventListener('auth-callback', handleAuthCallback);
 
     return () => {
-      if (window.electron?.ipcRenderer) {
-        window.electron.ipcRenderer.removeAllListeners('deep-link');
+      if (window.electronAPI?.removeAllListeners) {
+        window.electronAPI.removeAllListeners('deep-link');
       }
       window.removeEventListener('auth-callback', handleAuthCallback);
     };
-  }, [loginWithToken, clearError]);
+  }, [login, clearError]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
