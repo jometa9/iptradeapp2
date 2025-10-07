@@ -14,6 +14,9 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { EventSource } = require('eventsource');
+// ADD THIS LINE after other requires:
+const { startProductionServer, stopProductionServer, getServerUrl } = require('../server-production.cjs');
+const { setupDirectories } = require('../scripts/setup-directories.cjs');
 
 // Función para manejar permisos de macOS de manera eficiente
 async function requestMacOSPermissions() {
@@ -56,7 +59,7 @@ function getPortFromEnv() {
     if (vitePortMatch) return vitePortMatch[1];
   }
 
-  return '30'; // fallback por defecto
+  return '3000'; // fallback por defecto
 }
 
 // Mejorar la detección de modo desarrollo
@@ -183,6 +186,10 @@ ipcMain.handle('check-for-updates', async () => {
   return null;
 });
 
+ipcMain.handle('get-server-url', () => {
+  return getServerUrl();
+});
+
 // Handler para abrir enlaces externos
 ipcMain.handle('open-external-link', async (event, url) => {
   try {
@@ -244,9 +251,9 @@ async function startServer() {
     const port = getPortFromEnv();
 
     if (isDev) {
-      // En desarrollo, verificar si el servidor ya está ejecutándose
+      // In development, check if server is already running
       console.log('🔍 [DEV] Checking if server is already running...');
-      
+
       try {
         const response = await fetch(`http://localhost:${port}/api/status`);
         if (response.ok) {
@@ -257,125 +264,54 @@ async function startServer() {
         console.log('🚀 [DEV] Server not running, starting server process...');
       }
 
-      // En desarrollo, lanzar el servidor como proceso hijo solo si no está ejecutándose
+      // In development, spawn the dev server as a child process
       const serverPath = path.join(__dirname, '../server/src/dev.js');
 
       serverProcess = spawn('node', [serverPath], {
         cwd: path.join(__dirname, '..'),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, PORT: port },
-        // En Windows, desconectar el proceso del padre para evitar que quede colgado
         detached: process.platform !== 'win32',
         windowsHide: true,
       });
 
-       serverProcess.stdout.on('data', data => {
-         console.log('[SERVER]', data.toString());
-       });
+      serverProcess.stdout.on('data', data => {
+        console.log('[DEV SERVER]', data.toString());
+      });
 
-       serverProcess.stderr.on('data', data => {
-         console.error('[SERVER ERROR]', data.toString());
-       });
+      serverProcess.stderr.on('data', data => {
+        console.error('[DEV SERVER ERROR]', data.toString());
+      });
 
-       serverProcess.on('close', code => {
-         console.log(`[SERVER] Process closed with code ${code}`);
-       });
+      serverProcess.on('close', code => {
+        console.log(`[DEV SERVER] Process closed with code ${code}`);
+        serverProcess = null;
+      });
 
-       serverProcess.on('error', err => {
-         console.error('[SERVER] Process error:', err);
-       });
+      serverProcess.on('error', err => {
+        console.error('[DEV SERVER] Process error:', err);
+      });
 
-      // Esperar un poco para que el servidor se inicie
+      // Wait for server to start
       await new Promise(resolve => setTimeout(resolve, 2000));
       return;
     }
 
-    // Production: Start server as child process (dependencies should be pre-packaged)
-    console.log('🚀 [PRODUCTION] Starting server...');
-    console.log('🚀 [PRODUCTION] Resources path:', process.resourcesPath);
-    console.log('🚀 [PRODUCTION] Port:', port);
-    
-    const serverResourcesPath = path.join(process.resourcesPath, 'server');
-    console.log('🚀 [PRODUCTION] Server path:', serverResourcesPath);
-    
-    // Start server process directly (no npm install needed - dependencies pre-packaged)
-    console.log('🚀 [PRODUCTION] Starting server process...');
-    const serverPath = path.join(__dirname, 'server-production.cjs');
-    
-    // Verify server file exists
-    console.log('🔍 [PRODUCTION] Server file exists:', fs.existsSync(serverPath));
-    console.log('🔍 [PRODUCTION] Server file path:', serverPath);
-    
-    // Create logs directory if it doesn't exist
-    const logsDir = path.join(process.resourcesPath, 'logs');
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
+    // Production: Use the new server-production.cjs manager to spawn full server
+    console.log('🚀 [PRODUCTION] Starting full backend server...');
+    await startProductionServer();
+    console.log('✅ [PRODUCTION] Server started successfully');
 
-    // Create log files for stdout and stderr
-    const serverLogFile = fs.createWriteStream(path.join(logsDir, 'server.log'), { flags: 'a' });
-    const serverErrorLogFile = fs.createWriteStream(path.join(logsDir, 'server-error.log'), { flags: 'a' });
-
-    // Log startup information
-    const startupLog = `\n[${new Date().toISOString()}] Server starting...\nPath: ${serverPath}\nPort: ${port}\n`;
-    serverLogFile.write(startupLog);
-
-    console.log('Starting server process with:', {
-      serverPath,
-      cwd: serverResourcesPath,
-      port,
-      env: process.env
-    });
-
-    serverProcess = spawn('node', [serverPath], {
-      cwd: serverResourcesPath,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { 
-        ...process.env, 
-        PORT: port, 
-        NODE_ENV: 'production',
-        NODE_PATH: path.join(serverResourcesPath, 'node_modules'),
-        NODE_MODULE_PATH: path.join(serverResourcesPath, 'node_modules')
-      },
-      detached: process.platform !== 'win32',
-      windowsHide: true,
-    });
-
-    // Pipe server output to log files
-    serverProcess.stdout.pipe(serverLogFile);
-    serverProcess.stderr.pipe(serverErrorLogFile);
-
-    // Also log to console in development
-    if (isDev) {
-      serverProcess.stdout.pipe(process.stdout);
-      serverProcess.stderr.pipe(process.stderr);
-    }
-
-    serverProcess.stdout.on('data', data => {
-      console.log('[PRODUCTION SERVER]', data.toString());
-    });
-
-    serverProcess.stderr.on('data', data => {
-      console.error('[PRODUCTION SERVER ERROR]', data.toString());
-    });
-
-    serverProcess.on('close', code => {
-      console.log(`[PRODUCTION SERVER] Process closed with code ${code}`);
-    });
-
-    serverProcess.on('error', err => {
-      console.error('[PRODUCTION SERVER] Process error:', err);
-    });
-
-    console.log('🚀 [PRODUCTION] Server process started, waiting...');
-    await new Promise(resolve => setTimeout(resolve, 3000));
   } catch (error) {
-    console.error('💥 [SERVER] Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
+
     // Show error dialog to user
-    if (mainWindow) {
-      dialog.showErrorBox('Server Error', `Failed to start server: ${error.message}`);
-    }
-    throw error;
+    dialog.showErrorBox(
+      'Server Startup Error',
+      `Failed to start the backend server:\n\n${error.message}\n\nThe application will now exit.`
+    );
+
+    app.quit();
   }
 }
 
@@ -585,6 +521,7 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowConfig);
+  mainWindow.webContents.openDevTools();
 
   // Log de la configuración aplicada
 
@@ -646,7 +583,7 @@ function createWindow() {
 
   // Prevenir que se abran las DevTools
   mainWindow.webContents.on('devtools-opened', () => {
-    mainWindow.webContents.closeDevTools();
+    // mainWindow.webContents.closeDevTools();
   });
 
   // Prevenir que se abran nuevas ventanas
@@ -725,6 +662,8 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   // Set app as default protocol handler for iptrade://
+  const userDataPath = setupDirectories();
+  console.log(`📂 User data initialized: ${userDataPath}`);
   if (!isDev) {
     app.setAsDefaultProtocolClient('iptrade');
   } else {
@@ -760,7 +699,6 @@ app.whenReady().then(async () => {
     }
   }
 
-  await startServer();
   // Cambiar el nombre de la app
   app.setName('IPTRADE');
 
@@ -792,6 +730,7 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  await startServer();
 
   // Send stored deep link to renderer if any
   if (deeplinkingUrl && mainWindow) {
@@ -843,12 +782,14 @@ async function cleanupProcesses() {
     tray.destroy();
     tray = null;
   }
+  await stopProductionServer();
 }
 
 // Manejar el evento before-quit para limpiar recursos
 app.on('before-quit', async event => {
   if (!app.isQuiting) {
     event.preventDefault();
+    await stopProductionServer();
     app.isQuiting = true;
 
     await cleanupProcesses();

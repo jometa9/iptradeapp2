@@ -94,7 +94,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   progress: propProgress,
 }) => {
   const { secretKey, userInfo } = useAuth();
-  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:30';
+  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
   const {
     isLinking: hookIsLinking,
     linkPlatforms: hookLinkPlatforms,
