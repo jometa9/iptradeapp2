@@ -55,7 +55,6 @@ accounts/account_*.csv
 config/mt5_accounts.json
 server/config/mt5_accounts.json
 accounts/generated_accounts_summary.json
-config/*
 
 TODO.md
 tatus

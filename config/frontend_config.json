@@ -1,0 +1,6 @@
+{
+  "app": {
+    "serverPort": 30,
+    "environment": "production"
+  }
+}
