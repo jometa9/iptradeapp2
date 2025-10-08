@@ -2,5 +2,8 @@
   "app": {
     "serverPort": 30,
     "environment": "production"
+  },
+  "paths": {
+    "configDir": "test"
   }
 }

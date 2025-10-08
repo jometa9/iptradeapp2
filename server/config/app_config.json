@@ -1,0 +1,10 @@
+{
+  "server": {
+    "port": 30,
+    "environment": "development"
+  },
+  "paths": {
+    "configDir": "config",
+    "autoLinkCacheFile": "config/auto_link_cache.json"
+  }
+}
