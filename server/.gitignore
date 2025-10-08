@@ -3,4 +3,5 @@ config/auto_link_cache.json
 config/csv_locations.json
 config/copuer_status.json
 config/slave_configurations.json
+server/server/config/csv_watching_cache.json
 server/config/csv_watching_cache.json
