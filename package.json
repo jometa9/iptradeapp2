@@ -18,6 +18,7 @@
     "preview": "vite preview",
     "electron:dev": "npm run build && concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"npm run dev:server\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build && electron-builder --win --publish=never",
+    "electron:build-mac": "npm run build && electron-builder -m --publish=never",
     "electron:build:ci": "npm run build && electron-builder --win --publish=always",
     "electron:preview": "electron .",
     "build:server": "npm install --prefix server && npm run build --prefix server",
@@ -101,19 +102,20 @@
     "productName": "IPTRADE",
     "icon": "public/iconShadow025.png",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "public"
     },
     "files": [
       "dist/**/*",
       "public/dmg-installer.png",
       "electron/**/*",
-      "server-production.cjs"
+      "scripts/setup-directories.cjs",
+      "server-production.cjs",
+      "package.json"
     ],
     "extraResources": [
-      {
-        "from": "server",
-        "to": "server"
-      }
+      "server/**/*",
+      "!server/**/*.md"
     ],
     "publish": [
       {
@@ -126,7 +128,7 @@
     ],
     "win": {
       "icon": "public/iconShadow025.png",
-      "target": "nsis",
+          "target": "nsis",
       "artifactName": "IPTRADE.exe",
       "forceCodeSigning": false
     },

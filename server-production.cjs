@@ -1,141 +1,206 @@
-const express = require('express');
-const cors = require('cors');
+/**
+ * Production Server Manager
+ * Spawns the full Node.js server (server/src/production.js) as a child process
+ * and manages its lifecycle within the Electron app.
+ */
+
+const { fork } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const app = express();
-const port = process.env.PORT || 30;
+let serverProcess = null;
+const port = process.env.PORT || 3000;
 
-// Middleware básico
-app.use(cors());
-app.use(express.json());
-
-// Rutas básicas
-app.get('/api/status', (req, res) => {
-  res.json({ status: 'ok', version: '1.2.3' });
-});
-
-// SSE endpoint para eventos del frontend
-app.get('/api/csv/events/frontend', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  // Enviar estado inicial
-  res.write(`data: ${JSON.stringify({
-    type: 'initial_data',
-    copierStatus: { globalStatus: false }
-  })}\n\n`);
-
-  // Mantener la conexión viva
-  const interval = setInterval(() => {
-    res.write(':\n\n');
-  }, 30000);
-
-  req.on('close', () => {
-    clearInterval(interval);
-  });
-});
-
-// Endpoint para limpiar cache de auto-link
-app.post('/api/clear-auto-link-cache', (req, res) => {
+/**
+ * Get the correct base path for the app
+ */
+function getBasePath() {
   try {
-    const cacheFile = path.join(process.cwd(), 'config', 'auto_link_cache.json');
-    if (fs.existsSync(cacheFile)) {
-      fs.unlinkSync(cacheFile);
-    }
-    res.json({ message: 'Cache cleared successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to clear cache' });
-  }
-});
-
-// Endpoint para obtener configuración
-app.get('/api/config', (req, res) => {
-  try {
-    const configPath = path.join(process.cwd(), 'config', 'app_config.json');
-    if (fs.existsSync(configPath)) {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      res.json(config);
+    const { app } = require('electron');
+    if (app.isPackaged) {
+      // Production: use resources path where server files are bundled
+      return path.join(process.resourcesPath, 'server');
     } else {
-      res.json({
-        server: {
-          port: 30,
-          environment: 'production'
-        }
-      });
+      // Development: use project server directory
+      return path.join(app.getAppPath(), 'server');
     }
   } catch (error) {
-    res.status(500).json({ error: 'Failed to load config' });
+    return path.join(process.cwd(), 'server');
   }
-});
+}
 
-// Endpoint para obtener cuentas CSV
-app.get('/api/csv/accounts', (req, res) => {
+/**
+ * Get the user data path for logs
+ */
+function getUserDataPath() {
   try {
-    const csvPath = path.join(process.cwd(), 'csv_data');
-    if (!fs.existsSync(csvPath)) {
-      return res.json([]);
-    }
-    
-    const files = fs.readdirSync(csvPath).filter(file => file.endsWith('.csv'));
-    const accounts = [];
-    
-    files.forEach(file => {
-      const filePath = path.join(csvPath, file);
-      const content = fs.readFileSync(filePath, 'utf8');
-      const lines = content.split('\n');
-      
-      lines.forEach(line => {
-        if (line.startsWith('[TYPE]')) {
-          const parts = line.split(' ').filter(part => part.trim());
-          if (parts.length >= 3) {
-            accounts.push({
-              platform: parts[1],
-              accountId: parts[2],
-              file: file
-            });
+    const { app } = require('electron');
+    return app.getPath('userData');
+  } catch (error) {
+    return process.cwd();
+  }
+}
+
+/**
+ * Start the production server as a child process
+ */
+function startProductionServer() {
+  return new Promise((resolve, reject) => {
+    try {
+      const basePath = getBasePath();
+      const userDataPath = getUserDataPath();
+      const serverEntryPoint = path.join(basePath, 'src', 'production.js');
+
+      console.log('🚀 [PRODUCTION] Starting full server...');
+      console.log('📂 Server path:', basePath);
+      console.log('📝 Logs path:', userDataPath);
+      console.log('🔌 Port:', port);
+      console.log('🎯 Entry point:', serverEntryPoint);
+
+      // Verify server file exists
+      if (!fs.existsSync(serverEntryPoint)) {
+        const error = new Error(`Server entry point not found: ${serverEntryPoint}`);
+        console.error('❌', error.message);
+        reject(error);
+        return;
+      }
+
+      // Setup environment variables for the child process
+      const serverEnv = {
+        ...process.env,
+        PORT: port.toString(),
+        NODE_ENV: 'production',
+        ELECTRON_RESOURCES_PATH: userDataPath,
+        // Add node_modules paths for production
+        NODE_PATH: path.join(basePath, 'node_modules')
+      };
+
+      // Fork the server process (better for Node.js scripts)
+      serverProcess = fork(serverEntryPoint, [], {
+        cwd: basePath,
+        env: serverEnv,
+        silent: false, // Let output go to parent's stdio
+        execArgv: [] // Don't inherit parent's exec arguments
+      });
+
+      console.log('🔄 Server process forked with PID:', serverProcess.pid);
+
+      // Track server startup
+      let serverStarted = false;
+      const startupTimeout = setTimeout(() => {
+        if (!serverStarted) {
+          console.error('❌ Server startup timeout');
+          reject(new Error('Server failed to start within 10 seconds'));
+        }
+      }, 10000);
+
+      // Handle IPC messages from child process
+      serverProcess.on('message', (message) => {
+        console.log('[SERVER MESSAGE]', message);
+
+        if (message && message.type === 'server-started') {
+          if (!serverStarted) {
+            serverStarted = true;
+            clearTimeout(startupTimeout);
+            console.log('✅ Server confirmed running via IPC');
+            resolve({ port, basePath: userDataPath });
           }
         }
       });
-    });
-    
-    res.json(accounts);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to read CSV files' });
-  }
-});
 
-// Endpoint para obtener estado del copier
-app.get('/api/copier-status', (req, res) => {
-  res.json({
-    globalStatus: false,
-    accounts: []
+      // Handle process exit
+      serverProcess.on('close', (code) => {
+        console.log(`[SERVER] Process exited with code ${code}`);
+        serverProcess = null;
+
+        if (!serverStarted) {
+          clearTimeout(startupTimeout);
+          reject(new Error(`Server process exited with code ${code}`));
+        }
+      });
+
+      // Handle process errors
+      serverProcess.on('error', (err) => {
+        console.error('[SERVER] Process error:', err);
+        clearTimeout(startupTimeout);
+
+        if (!serverStarted) {
+          reject(err);
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to start production server:', error);
+      reject(error);
+    }
   });
-});
+}
 
-// Endpoint para obtener órdenes
-app.get('/api/orders', (req, res) => {
-  res.json([]);
-});
+/**
+ * Stop the production server
+ */
+function stopProductionServer() {
+  return new Promise((resolve) => {
+    if (serverProcess) {
+      console.log('🛑 Stopping production server...');
 
-// Endpoint para obtener configuraciones de trading
-app.get('/api/trading-config', (req, res) => {
-  res.json({});
-});
+      // Give the process time to shutdown gracefully
+      const shutdownTimeout = setTimeout(() => {
+        if (serverProcess) {
+          console.log('⚠️  Force killing server process');
+          serverProcess.kill('SIGKILL');
+          serverProcess = null;
+        }
+        resolve();
+      }, 5000);
 
-// Endpoint para obtener configuraciones de esclavos
-app.get('/api/slave-config', (req, res) => {
-  res.json([]);
-});
+      // Try graceful shutdown first
+      serverProcess.on('close', () => {
+        clearTimeout(shutdownTimeout);
+        console.log('✅ Server stopped successfully');
+        serverProcess = null;
+        resolve();
+      });
 
-// Endpoint para vincular plataformas
-app.post('/api/link-platforms', (req, res) => {
-  res.json({ message: 'Platform linking not available in production mode' });
-});
+      // Send shutdown signal (platform-specific)
+      try {
+        if (process.platform === 'win32') {
+          // On Windows, use IPC message for graceful shutdown
+          serverProcess.send('shutdown');
+        } else {
+          // On Unix-like systems, use SIGTERM
+          serverProcess.kill('SIGTERM');
+        }
+      } catch (error) {
+        console.error('Error sending shutdown signal:', error);
+        clearTimeout(shutdownTimeout);
+        serverProcess = null;
+        resolve();
+      }
+    } else {
+      console.log('ℹ️  No server process to stop');
+      resolve();
+    }
+  });
+}
 
-// Iniciar el servidor
-app.listen(port, () => {
-  console.log(`🚀 [PRODUCTION] Server running on port ${port}`);
-  console.log(`🌐 Server available at: http://localhost:${port}`);
-});
+/**
+ * Get server URL
+ */
+function getServerUrl() {
+  return `http://localhost:${port}`;
+}
+
+/**
+ * Check if server is running
+ */
+function isServerRunning() {
+  return serverProcess !== null && !serverProcess.killed;
+}
+
+module.exports = {
+  startProductionServer,
+  stopProductionServer,
+  getServerUrl,
+  isServerRunning
+};

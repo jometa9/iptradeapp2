@@ -37,7 +37,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 30;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -120,6 +120,6 @@ async function startServer() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith('server.js')) {
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith('server.js') || process.env.NODE_ENV === 'production') {
   startServer();
 }
