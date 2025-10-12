@@ -92,9 +92,7 @@ void CreateDefaultCsv()
     int handle = FileOpen(csvFileName, FILE_WRITE|FILE_TXT);
     if(handle != INVALID_HANDLE)
     {
-        long timestamp = TimeGMT(); // UTC timestamp with seconds
         FileWriteString(handle, "[TYPE] [MT4] [" + IntegerToString(AccountNumber()) + "]\n");
-        FileWriteString(handle, "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]\n");
         FileWriteString(handle, "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]\n");
         FileWriteString(handle, "[TRANSLATE] [NULL]\n");
         FileClose(handle);
@@ -140,7 +138,7 @@ void ReadAndValidateCsv()
     Print("=== End CSV reading ===");
 
     // Validate format - NO recrear archivo existente, solo leer lo que hay
-    if(StringFind(line1, "[TYPE]") == -1 || StringFind(line2, "[STATUS]") == -1 || StringFind(line3, "[CONFIG]") == -1)
+    if(StringFind(line1, "[TYPE]") == -1 || StringFind(line3, "[CONFIG]") == -1)
     {
         // Formato inesperado pero NO sobrescribir - el servidor maneja el CSV
         Print("ADVERTENCIA: Formato CSV inesperado, pero NO sobrescribiendo archivo existente");

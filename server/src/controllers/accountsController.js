@@ -12,6 +12,7 @@ import {
 import linkPlatformsController from './linkPlatformsController.js';
 import { createDisabledSlaveConfig, loadSlaveConfigs } from './slaveConfigController.js';
 import { createDefaultTradingConfig } from './tradingConfigController.js';
+import { findMasterCSVPath as findCSVPathForAccount } from './csvAccountsController.js';
 
 // Accounts management file
 const configBaseDir = join(process.cwd(), 'server', 'config');
@@ -661,15 +662,19 @@ export const updateSlaveAccount = async (req, res) => {
 // Function to write account back to CSV as PENDING using new CSV2 format
 const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
   try {
-    // Use csvManager to find appropriate CSV file
-    let csvFilePath = null;
-    let currentStatus = 'ONLINE'; // Default status
-    let currentTimestamp = null; // Will be set from CSV
+    console.log(`🔄 Attempting to convert account ${accountId} to PENDING`);
 
     // Import csvManager dynamically
     const csvManager = (await import('../services/csvManager.js')).default;
 
+    // Determine line ending and encoding based on platform
+    let lineEnding = platform === 'CTRADER' ? '\n' : '\r\n';
+    let encoding = platform === 'CTRADER' ? 'utf8' : 'latin1';
+
     // Find which cached file contains this account or find a suitable file for the platform
+    let csvFilePath = null;
+    let fileFoundReason = '';
+
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
       // Check if this file contains the account
       const accountExists = fileData.data.some(
@@ -680,34 +685,9 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
 
       if (accountExists) {
         csvFilePath = filePath;
-
-        // Try to preserve the current status and timestamp from the existing CSV
-        try {
-          const content = readFileSync(filePath, 'utf8');
-          const lines = content.split('\n');
-
-          for (const line of lines) {
-            if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
-              const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
-              const timestampMatch = line.match(/\[(\d+)\]/);
-              if (statusMatch) {
-                currentStatus = statusMatch[1];
-              }
-              if (timestampMatch) {
-                currentTimestamp = parseInt(timestampMatch[1]);
-              }
-              break;
-            }
-          }
-        } catch (error) {}
-
+        fileFoundReason = 'account_exists';
         break;
       }
-    }
-
-    // If we couldn't find the timestamp, use current time as fallback
-    if (currentTimestamp === null) {
-      currentTimestamp = Math.floor(Date.now() / 1000);
     }
 
     // If no file found with the account, find a file for the platform
@@ -717,6 +697,7 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
         const platformMatch = fileData.data.some(account => account.platform === platform);
         if (platformMatch) {
           csvFilePath = filePath;
+          fileFoundReason = 'platform_match';
           break;
         }
       }
@@ -725,117 +706,44 @@ const writeAccountToCSVAsPending = async (accountId, platform = 'MT4') => {
     // If still no file found, use the first available file
     if (!csvFilePath && csvManager.csvFiles.size > 0) {
       csvFilePath = Array.from(csvManager.csvFiles.keys())[0];
+      fileFoundReason = 'first_available';
     }
 
     if (!csvFilePath) {
+      console.error(`❌ No suitable CSV file found for account ${accountId}`);
       return false;
     }
 
-    // Instead of overwriting the entire file, use csvManager.convertToPending()
-    // which properly modifies only the specific account lines
-    const success = csvManager.convertToPending(accountId);
+    console.log(`🔍 Found CSV file for account ${accountId}: ${csvFilePath} (Reason: ${fileFoundReason})`);
 
-    if (success) {
-      return true;
-    } else {
-      return false;
-    }
-  } catch (error) {
-    console.error('Error writing account to CSV as pending:', error);
-    return false;
-  }
-};
+    // Generate new CSV2 format content for pending account
+    let csvContent = `[TYPE] [PENDING] [${platform}] [${accountId}]${lineEnding}`;
+    csvContent += `[CONFIG] [PENDING] [DISABLED] [NULL] [NULL] [NULL] [NULL] [NULL] [NULL] [NULL]${lineEnding}`;
+    csvContent += `[TRANSLATE] [NULL]${lineEnding}`;
 
-// Function to update CSV account to MASTER using new CSV2 format
-const updateCSVAccountToMaster = async (accountId, platform = 'MT4') => {
-  try {
-    // Import csvManager dynamically
-    const csvManager = (await import('../services/csvManager.js')).default;
-
-    // Use cached CSV files from csvManager to find the account
-    let csvFilePath = null;
-
-    // Find which cached file contains this account
-    for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
-      // Check if this file contains the account
-      const accountExists = fileData.data.some(
-        account =>
-          account.account_id === accountId ||
-          (existsSync(filePath) && readFileSync(filePath, 'utf8').includes(`[${accountId}]`))
-      );
-
-      if (accountExists) {
-        csvFilePath = filePath;
-        break;
-      }
-    }
-
-    if (!csvFilePath) {
-      return false;
-    }
-
-    // Try to preserve the current status and timestamp from the existing CSV
-    let currentStatus = 'ONLINE'; // Default status
-    let currentTimestamp = null; // Will be set from CSV
-    try {
-      const content = readFileSync(csvFilePath, 'utf8');
-      const lines = content.split('\n');
-
-      for (const line of lines) {
-        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
-          const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
-          const timestampMatch = line.match(/\[(\d+)\]/);
-          if (statusMatch) {
-            currentStatus = statusMatch[1];
-          }
-          if (timestampMatch) {
-            currentTimestamp = parseInt(timestampMatch[1]);
-          }
-          break;
-        }
-      }
-    } catch (error) {}
-
-    // If we couldn't find the timestamp, use current time as fallback
-    if (currentTimestamp === null) {
-      currentTimestamp = Math.floor(Date.now() / 1000);
-    }
-
-    // Generate new CSV2 format content for master account (WITH SPACES)
-    let csvContent, encoding, lineEnding;
-
-    // Detectar plataforma y usar encoding/line endings apropiados
-    if (platform === 'CTRADER') {
-      // cTrader usa C# que prefiere UTF-8 con \n
-      lineEnding = '\n';
-      encoding = 'utf8';
-    } else {
-      // MT4/MT5 usan MQL que prefiere Windows-1252 (ANSI)
-      lineEnding = '\r\n';
-      encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
-    }
-
-    csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
-    csvContent += `[STATUS] [${currentStatus}] [${currentTimestamp}]${lineEnding}`;
-    csvContent += `[CONFIG] [MASTER] [DISABLED] [${accountId}] [] []${lineEnding}`;
-
-    // Write the master account to CSV in new format
     // Ensure we're writing to .csv not .cssv
     const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
-    // Para MT4/MT5, escribir como buffer para evitar problemas de encoding
-    if (platform === 'CTRADER') {
-      writeFileSync(correctPath, csvContent, encoding);
-    } else {
-      // Escribir directamente con encoding latin1 (Windows-1252/ANSI)
-      writeFileSync(correctPath, csvContent, encoding);
-    }
 
-    return true;
+    try {
+      // Write with platform-specific encoding
+      writeFileSync(correctPath, csvContent, encoding);
+
+      console.log(`✅ Successfully converted account ${accountId} to PENDING in ${correctPath}`);
+
+      // Refresh cache for this file
+      csvManager.refreshFileData(correctPath);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error writing account ${accountId} to CSV as pending:`, error);
+      return false;
+    }
   } catch (error) {
-    console.error('Error updating CSV account to master:', error);
+    console.error(`❌ Unexpected error converting account ${accountId} to PENDING:`, error);
     return false;
   }
 };
+
+// Function removed - now using updateCSVAccountType from csvAccountsController
 
 // Helper function to find CSV file path for a master account
 const findMasterCSVPath = async masterId => {
@@ -875,7 +783,8 @@ const updateCSVAccountToSlave = async (
   accountId,
   platform = 'MT4',
   masterId = 'NULL',
-  translations = null
+  translations = null,
+  slaveConfig = null
 ) => {
   try {
     // Use cached CSV files from csvManager to find the account
@@ -900,28 +809,7 @@ const updateCSVAccountToSlave = async (
       return false;
     }
 
-    // Try to preserve the current timestamp from the existing CSV
-    let currentTimestamp = null; // Will be set from CSV
-    try {
-      const content = readFileSync(csvFilePath, 'utf8');
-      const lines = content.split('\n');
 
-      for (const line of lines) {
-        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
-          const timestampMatch = line.match(/\[(\d+)\]/);
-          if (timestampMatch) {
-            currentTimestamp = parseInt(timestampMatch[1]);
-
-            break;
-          }
-        }
-      }
-    } catch (error) {}
-
-    // If we couldn't find the timestamp, use current time as fallback
-    if (currentTimestamp === null) {
-      currentTimestamp = Math.floor(Date.now() / 1000);
-    }
 
     // Get master CSV path if masterId is available
     let masterCsvPath = 'NULL';
@@ -965,23 +853,6 @@ const updateCSVAccountToSlave = async (
       }
     }
 
-    // Try to preserve the current ONLINE/OFFLINE status from the existing CSV
-    let currentOnlineStatus = 'ONLINE'; // Default status
-    try {
-      const content = readFileSync(csvFilePath, 'utf8');
-      const lines = content.split('\n');
-
-      for (const line of lines) {
-        if (line.includes('[STATUS]') && line.includes(`[${accountId}]`)) {
-          const statusMatch = line.match(/\[(ONLINE|OFFLINE)\]/);
-          if (statusMatch) {
-            currentOnlineStatus = statusMatch[1];
-
-            break;
-          }
-        }
-      }
-    } catch (error) {}
 
     // Generate new CSV2 format content for slave account (WITH SPACES)
     let csvContent, encoding, lineEnding;
@@ -997,9 +868,32 @@ const updateCSVAccountToSlave = async (
       encoding = 'latin1'; // Node.js equivalent to Windows-1252/ANSI
     }
 
-    csvContent = `[TYPE] [${platform}] [${accountId}]${lineEnding}`;
-    csvContent += `[STATUS] [${currentOnlineStatus}] [${currentTimestamp}]${lineEnding}`;
-    csvContent += `[CONFIG] [SLAVE] [${currentStatus}] [1.0] [NULL] [FALSE] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [NULL] [NULL]${lineEnding}`;
+    // Get config values from slaveConfig or use defaults
+    const lotCoefficient = slaveConfig?.lotCoefficient || 1.0;
+    const forceLot = slaveConfig?.forceLot || 'NULL';
+    const reverseTrade = slaveConfig?.reverseTrade ? 'TRUE' : 'FALSE';
+    const prefix = slaveConfig?.prefix || 'NULL';
+    const suffix = slaveConfig?.suffix || 'NULL';
+
+    // Read existing content to preserve orders and other data
+    let existingContent = '';
+    if (existsSync(csvFilePath)) {
+      existingContent = readFileSync(csvFilePath, encoding);
+    }
+
+    // Split into lines and filter out old TYPE, CONFIG, and TRANSLATE lines for this account
+    const lines = existingContent.split(/\r?\n/).filter(line => {
+      return !(
+        (line.includes(`[${accountId}]`) && (line.includes('[TYPE]') || line.includes('[CONFIG]'))) ||
+        (line.includes('[TRANSLATE]') && line.includes(`[${accountId}]`))
+      );
+    });
+
+    // Add new TYPE, CONFIG and TRANSLATE lines at the beginning
+    const newLines = [
+      `[TYPE] [SLAVE] [${platform}] [${accountId}]`,
+      `[CONFIG] [SLAVE] [${currentStatus}] [${lotCoefficient}] [${forceLot}] [${reverseTrade}] [${masterId || 'NULL'}] [${masterCsvPath || 'NULL'}] [${prefix}] [${suffix}]`
+    ];
 
     // Add TRANSLATE line with translations or NULL
     const translationPairs = Object.entries(translations || {})
@@ -1007,10 +901,13 @@ const updateCSVAccountToSlave = async (
       .join(' ');
 
     if (translationPairs.length > 0) {
-      csvContent += `[TRANSLATE] ${translationPairs}${lineEnding}`;
+      newLines.push(`[TRANSLATE] ${translationPairs}`);
     } else {
-      csvContent += `[TRANSLATE] [NULL]${lineEnding}`;
+      newLines.push(`[TRANSLATE] [NULL]`);
     }
+
+    // Combine new lines with existing content
+    csvContent = [...newLines, ...lines].join(lineEnding);
 
     // Write the slave account to CSV in new format
     // Ensure we're writing to .csv not .cssv
@@ -1242,6 +1139,19 @@ export const deleteMasterAccount = async (req, res) => {
       console.error('Error emitting accountDeleted event:', error);
     }
 
+    // Trigger unified data refresh after successful deletion
+    try {
+      console.log(`🔄 Triggering unified data refresh after deleting master account ${masterAccountId}`);
+      const mockReq = { apiKey };
+      const mockRes = {
+        json: () => console.log('✅ Unified data refreshed after master account deletion'),
+        status: () => ({ json: () => console.log('❌ Error refreshing unified data') })
+      };
+      await getUnifiedAccountData(mockReq, mockRes);
+    } catch (error) {
+      console.error('Error refreshing unified account data:', error);
+    }
+
     res.json({
       message: 'Master account deleted successfully with proper slave disconnection',
       masterAccountId,
@@ -1315,12 +1225,27 @@ export const deleteSlaveAccount = async (req, res) => {
 
   if (saveUserAccounts(apiKey, userAccounts)) {
     // STEP 2: Convert slave account to PENDING in CSV
-    // Use the same method as master accounts to convert to pending
-    writeAccountToCSVAsPending(slaveAccountId, platform)
-      .then(csvWritten => {})
-      .catch(error => {
-        console.error(`Error converting slave ${slaveAccountId} to pending:`, error);
-      });
+    try {
+      const csvWritten = await writeAccountToCSVAsPending(slaveAccountId, platform);
+      if (!csvWritten) {
+        console.error(`Failed to convert slave ${slaveAccountId} to pending`);
+      }
+    } catch (error) {
+      console.error(`Error converting slave ${slaveAccountId} to pending:`, error);
+    }
+
+    // Trigger unified data refresh after successful deletion
+    try {
+      console.log(`🔄 Triggering unified data refresh after deleting slave account ${slaveAccountId}`);
+      const mockReq = { apiKey };
+      const mockRes = {
+        json: () => console.log('✅ Unified data refreshed after slave account deletion'),
+        status: () => ({ json: () => console.log('❌ Error refreshing unified data') })
+      };
+      await getUnifiedAccountData(mockReq, mockRes);
+    } catch (error) {
+      console.error('Error refreshing unified account data:', error);
+    }
 
     res.json({
       message: 'Slave account deleted successfully and converted to pending',
@@ -1438,6 +1363,7 @@ export const getPendingAccounts = async (req, res) => {
         current_status: account.status,
         config: account.config,
         filePath: account.filePath, // For debugging
+        csvPath: account.csvPath || null, // Add csvPath
       };
     });
 
@@ -1520,9 +1446,53 @@ export const convertPendingToMaster = async (req, res) => {
 
       // Update CSV file to reflect the master account conversion using new CSV2 format
       try {
-        await updateCSVAccountToMaster(accountId, masterAccount.platform);
+        console.log('🔄 Starting CSV update for master conversion');
+        console.log('📝 Master config data:', {
+          prefix: req.body.prefix,
+          suffix: req.body.suffix,
+          translations: req.body.translations
+        });
+        
+        // Use the same method as slave conversion - call csvAccountsController
+        const { updateCSVAccountType } = await import('./csvAccountsController.js');
+        
+        // Create a mock request/response for the CSV update
+        const mockReq = {
+          params: { accountId },
+          body: {
+            newType: 'master',
+            masterConfig: {
+              prefix: req.body.prefix || '',
+              suffix: req.body.suffix || '',
+              translations: req.body.translations || {}
+            }
+          },
+          apiKey: apiKey
+        };
+        
+        console.log('📤 Mock request created:', JSON.stringify(mockReq, null, 2));
+        
+        let csvUpdateSuccess = false;
+        const mockRes = {
+          json: (data) => {
+            console.log('✅ CSV update result:', data);
+            csvUpdateSuccess = data.success || data.filesUpdated > 0;
+          },
+          status: (code) => ({
+            json: (data) => {
+              console.error('❌ CSV update error:', data);
+              csvUpdateSuccess = false;
+            }
+          })
+        };
+        
+        await updateCSVAccountType(mockReq, mockRes);
+        
+        if (!csvUpdateSuccess) {
+          console.error('⚠️ CSV update may have failed - check logs above');
+        }
       } catch (error) {
-        console.error('Error updating CSV for master conversion:', error);
+        console.error('❌ Error updating CSV for master conversion:', error);
         // Continue with success response even if CSV update fails
       }
 
@@ -1621,11 +1591,21 @@ export const convertPendingToSlave = async (req, res) => {
 
       // Update CSV file to reflect the slave account conversion using new CSV2 format
       try {
+        // Get slave config from the request
+        const slaveConfig = {
+          lotCoefficient: req.body.lotCoefficient || 1.0,
+          forceLot: req.body.forceLot || null,
+          reverseTrade: req.body.reverseTrade || false,
+          prefix: req.body.prefix || '',
+          suffix: req.body.suffix || '',
+        };
+
         await updateCSVAccountToSlave(
           accountId,
           slaveAccount.platform,
           masterAccountId,
-          translations
+          translations,
+          slaveConfig
         );
       } catch (error) {
         console.error('Error updating CSV for slave conversion:', error);
@@ -2190,6 +2170,7 @@ export const getUnifiedAccountData = async (req, res) => {
         platform: account.platform,
         status: account.status, // Use the status from getAllActiveAccounts
         current_status: account.status, // Use the status from getAllActiveAccounts
+        csvPath: account.filePath || null, // Add csvPath
       };
 
       allPendingAccounts.push(pendingAccount);
@@ -2224,36 +2205,46 @@ export const getUnifiedAccountData = async (req, res) => {
       return result;
     };
 
-    Object.keys(allAccounts.masterAccounts || {}).forEach(masterId => {
-      // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
-      const isValidMasterId =
-        masterId &&
-        masterId !== 'ENABLED' &&
-        masterId !== 'DISABLED' &&
-        masterId !== 'ON' &&
-        masterId !== 'OFF' &&
-        masterId !== 'NULL' &&
-        !isNaN(parseInt(masterId)); // Must be a number
-
-      if (isValidMasterId) {
-        // Skip if this master account is already in pending accounts
-        if (pendingAccountIds.has(masterId)) {
-          return;
+    for (const [masterId, masterAccount] of Object.entries(allAccounts.masterAccounts || {})) {
+      try {
+        // Use the provided csvPath if available, otherwise fallback to searching
+        const masterCsvPath = await findCSVPathForAccount(masterId, masterAccount.csvPath);
+        
+        if (masterCsvPath) {
+          masterAccount.filePath = masterCsvPath;
+        } else {
+          console.warn(`⚠️ Could not find CSV path for master account ${masterId}`);
         }
+        
+        // Only include valid master account IDs (numeric or alphanumeric, not configuration values)
+        const isValidMasterId =
+          masterId &&
+          masterId !== 'ENABLED' &&
+          masterId !== 'DISABLED' &&
+          masterId !== 'ON' &&
+          masterId !== 'OFF' &&
+          masterId !== 'NULL' &&
+          !isNaN(parseInt(masterId)); // Must be a number
 
-        const masterAccount = allAccounts.masterAccounts[masterId];
+        if (isValidMasterId) {
+          // Skip if this master account is already in pending accounts
+          if (pendingAccountIds.has(masterId)) {
+            continue; // FIXED: use 'continue' instead of 'return' to skip to next iteration
+          }
 
-        // Use the status already calculated by getAllActiveAccounts
-        // No need to recalculate - it's already correct
-        cleanMasterAccounts[masterId] = {
-          ...masterAccount,
-          status: masterAccount.status, // Use the status from getAllActiveAccounts
-          current_status: masterAccount.status, // Use the status from getAllActiveAccounts
-          config: getAccountConfig(masterAccount),
-        };
-        processedMasterIds.add(masterId);
+          cleanMasterAccounts[masterId] = {
+            ...masterAccount,
+            status: masterAccount.status, // Use the status from getAllActiveAccounts
+            current_status: masterAccount.status, // Use the status from getAllActiveAccounts
+            config: getAccountConfig(masterAccount),
+            csvPath: masterAccount.filePath || null, // Add csvPath
+          };
+          processedMasterIds.add(masterId);
+        }
+      } catch (error) {
+        console.error(`Error processing master account ${masterId}:`, error);
       }
-    });
+    }
 
     // Clean unconnected slaves - remove duplicates and invalid configurations
     const cleanUnconnectedSlaves = [];
@@ -2316,6 +2307,7 @@ export const getUnifiedAccountData = async (req, res) => {
         status: slave.status, // Use the status from getAllActiveAccounts
         current_status: slave.status, // Use the status from getAllActiveAccounts
         config: getAccountConfig(slave),
+        csvPath: slave.filePath || null, // Add csvPath
       });
       seenSlaveIds.add(slave.id);
     });
@@ -2342,6 +2334,7 @@ export const getUnifiedAccountData = async (req, res) => {
         status: slaveAccount.status, // Use the status from getAllActiveAccounts
         current_status: slaveAccount.status, // Use the status from getAllActiveAccounts
         config: getAccountConfig(slaveAccount),
+        csvPath: slaveAccount.filePath || null, // Add csvPath
       };
     });
 

@@ -734,7 +734,6 @@ class LinkPlatformsController {
 
         // Create empty CSV file with basic structure
         const emptyCSVContent = `[TYPE][${platformSuffix}][0]
-[STATUS][OFFLINE][0]
 [CONFIG][PENDING]`;
 
         fs.writeFileSync(csvPath, emptyCSVContent, 'utf8');
@@ -2160,7 +2159,6 @@ class LinkPlatformsController {
 
         // Create empty CSV file with basic structure
         const emptyCSVContent = `[TYPE][NINJATRADER][0]
-[STATUS][OFFLINE][0]
 [CONFIG][PENDING]`;
 
         fs.writeFileSync(csvPath, emptyCSVContent, 'utf8');

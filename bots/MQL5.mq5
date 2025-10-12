@@ -96,16 +96,13 @@ void CreateDefaultCsv()
     int handle = FileOpen(csvFileName, FILE_WRITE|FILE_ANSI|FILE_SHARE_READ|FILE_SHARE_WRITE);
     if(handle != INVALID_HANDLE)
     {
-        long timestamp = TimeGMT();
         string line1 = "[TYPE] [MT5] [" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "]";
-        string line2 = "[STATUS] [ONLINE] [" + IntegerToString(timestamp) + "]";
-        string line3 = "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]";
-        string line4 = "[TRANSLATE] [NULL]";
+        string line2 = "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]";
+        string line3 = "[TRANSLATE] [NULL]";
 
         FileWriteString(handle, line1 + "\r\n");
         FileWriteString(handle, line2 + "\r\n");
         FileWriteString(handle, line3 + "\r\n");
-        FileWriteString(handle, line4 + "\r\n");
 
         FileClose(handle);
         Print("Created default CSV file: ", csvFileName);
@@ -137,7 +134,7 @@ void ReadAndValidateCsv()
     Print("=== END ===");
 
     // Validación básica
-    if(StringFind(line1, "[TYPE]") >= 0 && StringFind(line2, "[STATUS]") >= 0 && StringFind(line3, "[CONFIG]") >= 0)
+    if(StringFind(line1, "[TYPE]") >= 0 && StringFind(line3, "[CONFIG]") >= 0)
     {
         ParseConfigLine(line3);
     }

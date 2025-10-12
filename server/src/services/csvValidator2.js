@@ -29,12 +29,6 @@ export const validateLine = line => {
       if (!/^\d+$/.test(values[2])) return { valid: false, error: 'Invalid account ID' };
       break;
 
-    case 'STATUS':
-      if (values.length !== 3) return { valid: false, error: 'STATUS line must have 3 values' };
-      if (!['ONLINE', 'OFFLINE'].includes(values[1]))
-        return { valid: false, error: 'Invalid status' };
-      if (!/^\d+$/.test(values[2])) return { valid: false, error: 'Invalid timestamp' };
-      break;
 
     case 'CONFIG':
       if (values.length < 2)
@@ -91,21 +85,16 @@ export const validateCSVStructure = lines => {
     return { valid: false, error: 'First line must be TYPE line: ' + typeLineResult.error };
   }
 
-  const statusLineResult = validateLine(lines[1]);
-  if (!statusLineResult.valid || statusLineResult.values[0] !== 'STATUS') {
-    return { valid: false, error: 'Second line must be STATUS line: ' + statusLineResult.error };
-  }
-
-  const configLineResult = validateLine(lines[2]);
+  const configLineResult = validateLine(lines[1]);
   if (!configLineResult.valid || configLineResult.values[0] !== 'CONFIG') {
-    return { valid: false, error: 'Third line must be CONFIG line: ' + configLineResult.error };
+    return { valid: false, error: 'Second line must be CONFIG line: ' + configLineResult.error };
   }
 
-  const translateLineResult = validateLine(lines[3]);
+  const translateLineResult = validateLine(lines[2]);
   if (!translateLineResult.valid || translateLineResult.values[0] !== 'TRANSLATE') {
     return {
       valid: false,
-      error: 'Fourth line must be TRANSLATE line: ' + translateLineResult.error,
+      error: 'Third line must be TRANSLATE line: ' + translateLineResult.error,
     };
   }
 
@@ -113,8 +102,8 @@ export const validateCSVStructure = lines => {
   const accountType = configLineResult.values[1];
 
   // For MASTER accounts, validate ORDER lines
-  if (accountType === 'MASTER' && lines.length > 4) {
-    for (let i = 4; i < lines.length; i++) {
+  if (accountType === 'MASTER' && lines.length > 3) {
+    for (let i = 3; i < lines.length; i++) {
       const orderLineResult = validateLine(lines[i]);
       if (!orderLineResult.valid || orderLineResult.values[0] !== 'ORDER') {
         const errorMessage = orderLineResult.error || 'Unknown error';

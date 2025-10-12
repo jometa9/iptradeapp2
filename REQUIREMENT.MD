@@ -21,16 +21,7 @@ The current CSV format uses **4 main types of lines**:
 
 **Example**: `[TYPE] [MT5] [3920392]`
 
-### 2. **STATUS Line**
-```
-[STATUS] [ONLINE/OFFLINE] [TIMESTAMP]
-```
-- **STATUS**: `ONLINE` or `OFFLINE`
-- **TIMESTAMP**: Unix timestamp (digits only)
-
-**Example**: `[STATUS] [ONLINE] [1703123456]`
-
-### 3. **CONFIG Line** (The most complex)
+### 2. **CONFIG Line** (The most complex)
 
 #### For **MASTER** accounts:
 ```
@@ -81,7 +72,7 @@ The current CSV format uses **4 main types of lines**:
 [TRANSLATE] [US100:NASDAQ] [US500:ES500] [ETC...]
 ```
 
-### 5. **ORDER Lines** (Only for MASTER accounts with open trades)
+### 4. **ORDER Lines** (Only for MASTER accounts with open trades)
 ```
 [ORDER] [TICKET] [SYMBOL] [ORDER_TYPE] [VOLUME] [PRICE] [SL] [TP] [TIMESTAMP]
 ```
@@ -123,7 +114,6 @@ The current CSV format uses **4 main types of lines**:
 
 ```
 [TYPE] [MT5] [3920392]
-[STATUS] [ONLINE] [1703123456]
 [CONFIG] [SLAVE] [ENABLED] [2.0] [NULL] [TRUE] [12345] [/path/master.csv] [#] [pro]
 [TRANSLATE] [US100:NASDAQ] [US500:ES500]
 [ORDER] [12345] [EURUSD] [BUY] [0.1] [1.0850] [1.0800] [1.0900] [1703123456]
@@ -135,7 +125,6 @@ This format allows bots to communicate in a structured manner with the server an
 
 - It should be clarified that we should NOT modify the format in which the bot writes and add more labels/variables than we already have since the server is prepared for that.
 - When the bot starts for the first time, it reads if it has any csv corresponding to it, if it exists it reads what it has and acts as such, otherwise it starts its process as pending
-- Bots always write a timestamp at each interval that I use as a ping to know if the bot is online or offline
 - None of the bots should have user inputs, since these are modified from the server interface
 - All data and configuration of how it should behave is in the csv, depending on the type we will do most actions reading the csv (for example the slave, which if it has a master configured, must go and read the orders from the master's csv)
 

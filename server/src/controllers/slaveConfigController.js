@@ -589,16 +589,6 @@ export const setSlaveConfig = async (req, res) => {
           } else if (cleanLine.includes('[TRANSLATE]')) {
             // Skip existing TRANSLATE line as we already added it after CONFIG
             continue;
-          } else if (cleanLine.includes('[STATUS]')) {
-            // Preserve existing timestamp and status
-            const statusMatch = cleanLine.match(/\[STATUS\]\s*\[(ONLINE|OFFLINE)\]\s*\[(\d+)\]/);
-            if (statusMatch) {
-              const [, status, timestamp] = statusMatch;
-              newContent += `[STATUS] [${status}] [${timestamp}]\n`;
-            } else {
-              // Fallback to current line if we can't parse it
-              newContent += line + '\n';
-            }
           } else {
             newContent += line + '\n';
           }

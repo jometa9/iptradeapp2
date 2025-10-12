@@ -113,10 +113,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                 var csvContent = new StringBuilder();
                 csvContent.AppendLine($"[TYPE][NINJATRADER][{AccountId}]");
                 
-                var status = isRunning ? "ONLINE" : "OFFLINE";
-                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                csvContent.AppendLine($"[STATUS][{status}][{timestamp}]");
-                
                 // Add basic configuration
                 csvContent.AppendLine("[CONFIG][PENDING]");
 

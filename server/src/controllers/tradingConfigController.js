@@ -46,6 +46,7 @@ const getDefaultConfig = () => ({
   reverseTrading: false,
   prefix: '',
   suffix: '',
+  translations: {},
 });
 
 // Create default trading configuration for new master account
@@ -148,7 +149,7 @@ export const getTradingConfig = (req, res) => {
 
 // Set trading configuration for specific master account
 export const setTradingConfig = async (req, res) => {
-  const { masterAccountId, lotMultiplier, forceLot, reverseTrading, prefix, suffix } = req.body;
+  const { masterAccountId, lotMultiplier, forceLot, reverseTrading, prefix, suffix, translations } = req.body;
 
   if (!masterAccountId) {
     return res.status(400).json({
@@ -196,25 +197,33 @@ export const setTradingConfig = async (req, res) => {
     configs[masterAccountId].suffix = String(suffix || '');
   }
 
+  if (translations !== undefined) {
+    configs[masterAccountId].translations = translations || {};
+  }
+
   if (saveTradingConfig(configs)) {
     // Also update CSV file with the new configuration
     try {
       // Import csvManager dynamically to avoid circular imports
       const csvManager = (await import('../services/csvManager.js')).default;
       
-              // Get current enabled state from CSV to preserve it
-        const currentEnabled = csvManager.isMasterEnabled(masterAccountId);
+      // Get current enabled state from CSV to preserve it
+      const currentEnabled = csvManager.isMasterEnabled(masterAccountId);
+      console.log(`📝 Trading Config: Updating CSV for master ${masterAccountId}, enabled: ${currentEnabled}`);
 
-        const csvConfig = {
-          type: 'master',
-          enabled: currentEnabled, // Preserve current enabled state
-          name: masterAccountId,
-          prefix: configs[masterAccountId].prefix,
-          suffix: configs[masterAccountId].suffix,
-        };
+      const csvConfig = {
+        type: 'master',
+        enabled: currentEnabled !== undefined ? currentEnabled : true, // Default to true if undefined
+        name: masterAccountId,
+        prefix: configs[masterAccountId].prefix,
+        suffix: configs[masterAccountId].suffix,
+        translations: configs[masterAccountId].translations,
+      };
       
+      console.log(`📝 Trading Config: CSV Config to write:`, csvConfig);
       
       const result = csvManager.writeConfig(masterAccountId, csvConfig);
+      console.log(`📝 Trading Config: writeConfig result: ${result}`);
       
     } catch (error) {
       console.error(`❌ Error updating CSV for master ${masterAccountId}:`, error);

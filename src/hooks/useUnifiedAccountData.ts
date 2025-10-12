@@ -91,7 +91,12 @@ interface UnifiedAccountDataReturn {
   updateAccountStatus: (accountId: string, enabled: boolean) => Promise<void>;
   emergencyShutdown: () => Promise<void>;
   resetAllToOn: () => Promise<void>;
-  deletePendingAccount: (accountId: string) => Promise<any>;
+  deletePendingAccount: (accountId: string) => Promise<{
+    success: boolean;
+    message: string;
+    accountId: string;
+    status: string;
+  }>;
   convertToPending: (accountId: string) => Promise<boolean>;
   deleteMasterAccount: (masterAccountId: string) => Promise<boolean>;
 }
@@ -114,11 +119,11 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
   }, [secretKey]);
 
   // Función para verificar el estado de todas las cuentas
-  const getAccountsGlobalState = useCallback((configuredAccounts: any) => {
+  const getAccountsGlobalState = useCallback((configuredAccounts: ConfiguredAccounts) => {
     if (!configuredAccounts) return { allEnabled: false, allDisabled: false, hasAccounts: false };
 
     // Recopilar todas las cuentas (masters y slaves)
-    const allAccounts: any[] = [];
+    const allAccounts: Array<{config?: {enabled?: boolean}}> = [];
     
     // Agregar masters
     const masterAccountIds = Object.keys(configuredAccounts.masterAccounts || {});
@@ -130,7 +135,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     });
 
     // Agregar slaves conectados
-    Object.values(configuredAccounts.masterAccounts || {}).forEach((master: any) => {
+    Object.values(configuredAccounts.masterAccounts || {}).forEach((master: {connectedSlaves?: Array<{config?: {enabled?: boolean}}>}) => {
       if (master?.connectedSlaves) {
         allAccounts.push(...master.connectedSlaves);
       }
@@ -138,7 +143,7 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
 
     // Agregar slaves desconectados que estén configurados
     const unconnectedSlaves = configuredAccounts.unconnectedSlaves || [];
-    const configuredUnconnectedSlaves = unconnectedSlaves.filter((slave: any) => 
+    const configuredUnconnectedSlaves = unconnectedSlaves.filter((slave: {config?: Record<string, unknown>}) => 
       slave?.config && Object.keys(slave.config).length > 0
     );
     allAccounts.push(...configuredUnconnectedSlaves);
@@ -156,14 +161,14 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     return { allEnabled, allDisabled, hasAccounts: true, totalAccounts: allAccounts.length };
   }, []);
 
-  const processUnifiedData = useCallback((rawData: { data?: any }): UnifiedAccountData => {
-    const pendingAccounts = (rawData.data as any)?.pendingAccounts || [];
-    const configuredAccounts = (rawData.data as any)?.configuredAccounts || {
+  const processUnifiedData = useCallback((rawData: { data?: Record<string, unknown> }): UnifiedAccountData => {
+    const pendingAccounts = (rawData.data as {pendingAccounts?: PendingAccount[]})?.pendingAccounts || [];
+    const configuredAccounts: ConfiguredAccounts = (rawData.data as {configuredAccounts?: ConfiguredAccounts})?.configuredAccounts || {
       masterAccounts: {},
       slaveAccounts: {},
       unconnectedSlaves: [],
     };
-    let copierStatus = (rawData.data as any)?.copierStatus || {
+    let copierStatus: CopierStatus = (rawData.data as {copierStatus?: CopierStatus})?.copierStatus || {
       globalStatus: false,
       globalStatusText: 'OFF',
       masterAccounts: {},
@@ -205,22 +210,23 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
       }
     }
     
-    const serverStats = (rawData.data as any)?.serverStats || {
+    const serverStats: ServerStats = (rawData.data as {serverStats?: ServerStats})?.serverStats || {
       totalCSVFiles: 0,
       totalPendingAccounts: 0,
       totalOnlineAccounts: 0,
       totalOfflineAccounts: 0,
       totalMasterAccounts: 0,
       totalSlaveAccounts: 0,
+      totalConnectedSlaves: 0,
       totalUnconnectedSlaves: 0,
     };
 
     // Compute platform stats for compatibility
     const platformStats = pendingAccounts.reduce(
-      (stats: Record<string, { total: number }>, account: PendingAccount) => {
+      (stats: Record<string, { total: number; online: number; offline: number }>, account: PendingAccount) => {
         const platform = account.platform || 'Unknown';
         if (!stats[platform]) {
-          stats[platform] = { total: 0 };
+          stats[platform] = { total: 0, online: 0, offline: 0 };
         }
         stats[platform].total++;
         return stats;
@@ -232,6 +238,8 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
       accounts: pendingAccounts,
       summary: {
         totalAccounts: pendingAccounts.length,
+        onlineAccounts: pendingAccounts.filter(a => a.current_status === 'online').length,
+        offlineAccounts: pendingAccounts.filter(a => a.current_status === 'offline').length,
         platformStats,
       },
       platforms: Object.keys(platformStats),
@@ -317,7 +325,20 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     }
   }, [secretKey, loadUnifiedData]);
 
-  // Polling removed - data updates only via SSE events and manual refresh
+  // Polling for periodic updates
+  useEffect(() => {
+    if (!secretKey) return;
+
+    // Set up interval to refresh data every 30 seconds
+    const intervalId = setInterval(() => {
+      loadUnifiedData();
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on unmount or when secretKey changes
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [secretKey, loadUnifiedData]);
 
   // Action methods
   const updateGlobalStatus = useCallback(async (enabled: boolean) => {
@@ -381,14 +402,19 @@ export const useUnifiedAccountData = (): UnifiedAccountDataReturn => {
     }
   }, [loadUnifiedData]);
 
-  const deletePendingAccount = useCallback(async (accountId: string) => {
+  const deletePendingAccount = useCallback(async (accountId: string): Promise<{
+    success: boolean;
+    message: string;
+    accountId: string;
+    status: string;
+  }> => {
     // Update local state immediately for better UX
     if (data && data.pendingAccounts) {
       const updatedPendingAccounts = data.pendingAccounts.filter(
         account => account.account_id !== accountId
       );
       
-      const updatedData = {
+      const updatedData: UnifiedAccountData = {
         ...data,
         pendingAccounts: updatedPendingAccounts,
         pendingData: {

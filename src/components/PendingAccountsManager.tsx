@@ -563,6 +563,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       const masterConfig = {
         prefix: conversionForm.prefix,
         suffix: conversionForm.suffix,
+        translations: conversionForm.translations,
       };
 
       const csvUpdateResponse = await fetch(`${baseUrl}/api/csv/pending/${accountId}/update-type`, {
@@ -592,6 +593,15 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       }
       if (conversionForm.suffix) {
         configSummary.push(`Comment suffix: "${conversionForm.suffix}"`);
+      }
+      
+      // Add translations to the summary
+      const translations = Object.entries(conversionForm.translations || {});
+      if (translations.length > 0) {
+        configSummary.push('Symbol translations:');
+        translations.forEach(([from, to]) => {
+          configSummary.push(`  ${from} → ${to}`);
+        });
       }
 
       const configText =
@@ -1148,6 +1158,93 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                     </p>
                                   </div>
                                 </div>
+
+                                {/* Symbol Translations */}
+                                <div className="mt-4">
+                                  <Label>Symbol Translations</Label>
+                                  <div className="space-y-2">
+                                    {Object.entries(conversionForm.translations || {}).map(
+                                      ([from, to], index) => (
+                                        <div
+                                          key={index}
+                                          className="flex items-center justify-between gap-2"
+                                        >
+                                          <Input
+                                            placeholder="From symbol"
+                                            value={from}
+                                            onChange={e => {
+                                              const newTranslations = {
+                                                ...(conversionForm.translations || {}),
+                                              };
+                                              delete newTranslations[from];
+                                              if (e.target.value) {
+                                                newTranslations[e.target.value.toUpperCase()] = to;
+                                              }
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: newTranslations,
+                                              }));
+                                            }}
+                                            className="bg-white border border-gray-200"
+                                          />
+                                          <ArrowBigRight className="h-12 w-12 text-gray-500" />
+                                          <Input
+                                            placeholder="To symbol"
+                                            value={to}
+                                            onChange={e => {
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: {
+                                                  ...(prev.translations || {}),
+                                                  [from]: e.target.value.toUpperCase(),
+                                                },
+                                              }));
+                                            }}
+                                            className="bg-white border border-gray-200"
+                                          />
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+                                            onClick={() => {
+                                              const newTranslations = {
+                                                ...(conversionForm.translations || {}),
+                                              };
+                                              delete newTranslations[from];
+                                              setConversionForm(prev => ({
+                                                ...prev,
+                                                translations: newTranslations,
+                                              }));
+                                            }}
+                                          >
+                                            <Trash className="h-4 w-4 text-red-600" />
+                                          </Button>
+                                        </div>
+                                      )
+                                    )}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setConversionForm(prev => ({
+                                          ...prev,
+                                          translations: {
+                                            ...(prev.translations || {}),
+                                            '': '',
+                                          },
+                                        }));
+                                      }}
+                                      className="w-full bg-white text-blue-800 border border-gray-200"
+                                    >
+                                      <Plus className="h-4 w-4 mr-2" />
+                                      Add Translation
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                                    Map symbols from master to slave (e.g., US100 → NASDAQ)
+                                  </p>
+                                </div>
                               </div>
                             </form>
                           </div>
@@ -1524,14 +1621,14 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                               };
                                               delete newTranslations[from];
                                               if (e.target.value) {
-                                                newTranslations[e.target.value] = to;
+                                                newTranslations[e.target.value.toUpperCase()] = to;
                                               }
                                               setConversionForm(prev => ({
                                                 ...prev,
                                                 translations: newTranslations,
                                               }));
                                             }}
-                                            className="bg-white border border-gray-200"
+                                            className="bg-white border border-gray-200 "
                                           />
                                           <ArrowBigRight className="h-12 w-12 text-gray-500" />
                                           <Input
@@ -1542,7 +1639,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                                                 ...prev,
                                                 translations: {
                                                   ...(prev.translations || {}),
-                                                  [from]: e.target.value,
+                                                  [from]: e.target.value.toUpperCase(),
                                                 },
                                               }));
                                             }}

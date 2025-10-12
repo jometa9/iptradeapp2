@@ -246,7 +246,6 @@ class CSVManager extends EventEmitter {
       }
 
       let typeData = null;
-      let statusData = null;
       let configData = null;
       let translateData = null;
 
@@ -260,14 +259,6 @@ class CSVManager extends EventEmitter {
             typeData = {
               platform: values[1], // Platform (MT4, MT5, CTRADER)
               accountId: values[2], // Account ID
-            };
-          }
-        } else if (line.includes('[STATUS]')) {
-          const matches = line.match(/\[([^\]]+)\]/g);
-          if (matches && matches.length >= 3) {
-            const values = matches.map(m => m.replace(/[\[\]]/g, '').trim());
-            statusData = {
-              status: values[1], // ONLINE, OFFLINE
             };
           }
         } else if (line.includes('[CONFIG]')) {
@@ -294,7 +285,7 @@ class CSVManager extends EventEmitter {
       }
 
       // Si no tenemos todas las líneas necesarias, retornar la cuenta como offline
-      if (!typeData || !statusData || !configData) {
+      if (!typeData || !configData) {
         if (typeData) {
           return {
             account_id: typeData.accountId,
@@ -332,8 +323,8 @@ class CSVManager extends EventEmitter {
             account_id: typeData.accountId,
             platform: platform,
             account_type: configData ? configData.configType.toLowerCase() : 'pending', // Default to pending if no CONFIG
-            status: statusData ? statusData.status.toLowerCase() : 'pending',
-            current_status: statusData ? statusData.status.toLowerCase() : 'pending',
+            status: 'pending',
+            current_status: 'pending',
             filePath: filePath,
             format: 'csv2',
           };
@@ -472,7 +463,6 @@ class CSVManager extends EventEmitter {
     // Si es string ISO o cualquier otro formato
     return new Date(timestamp);
   }
-
   // Nuevo método para escanear archivos pending con formato simplificado [0][ACCOUNT_ID][PLATFORM][STATUS][TIMESTAMP]
   async scanSimplifiedPendingCSVFiles() {
     try {
@@ -1744,6 +1734,8 @@ class CSVManager extends EventEmitter {
 
     // Track processed account IDs to prevent duplicates
     const processedAccountIds = new Set();
+    // Track pending account IDs to check if a master is actually pending
+    const pendingAccountIds = new Set();
 
     // 1. Leer rutas de CSV desde cache
     const csvPaths = this.getCSVPathsFromCache();
@@ -1778,6 +1770,7 @@ class CSVManager extends EventEmitter {
                 filePath: filePath
               });
               processedAccountIds.add(account.account_id);
+              pendingAccountIds.add(account.account_id); // Track as pending
             } else if (account.account_type === 'master') {
               // Procesar cuenta master
               console.log(`👑 Processing MASTER account: ${account.account_id}`);
@@ -1803,10 +1796,13 @@ class CSVManager extends EventEmitter {
                                     masterId !== 'DISABLED' &&
                                     !isNaN(parseInt(masterId));
 
-              console.log(`🔗 Slave ${account.account_id} masterId: ${masterId}, isValid: ${isValidMasterId}`);
+              // Check if the masterId points to a pending account
+              const masterIsPending = isValidMasterId && pendingAccountIds.has(masterId);
 
-              if (isValidMasterId) {
-                // Es un slave conectado - crear el master si no existe
+              console.log(`🔗 Slave ${account.account_id} masterId: ${masterId}, isValid: ${isValidMasterId}, masterIsPending: ${masterIsPending}`);
+
+              if (isValidMasterId && !masterIsPending) {
+                // Es un slave conectado a un master válido (no pending) - crear el master si no existe
                 console.log(`🔗 Adding connected slave ${account.account_id} to master ${masterId}`);
                 if (!accounts.masterAccounts[masterId]) {
                   accounts.masterAccounts[masterId] = {
@@ -1831,8 +1827,12 @@ class CSVManager extends EventEmitter {
 
                 accounts.masterAccounts[masterId].totalSlaves++;
               } else {
-                // Es un slave no conectado
-                console.log(`🔗 Adding unconnected slave ${account.account_id}`);
+                // Es un slave no conectado (o su master es pending)
+                if (masterIsPending) {
+                  console.log(`🔗 Slave ${account.account_id} master is PENDING - adding as unconnected slave`);
+                } else {
+                  console.log(`🔗 Adding unconnected slave ${account.account_id}`);
+                }
                 accounts.unconnectedSlaves.push({
                   id: account.account_id,
                   name: account.account_id,
@@ -2302,7 +2302,14 @@ class CSVManager extends EventEmitter {
             if (line.includes('[TYPE]')) {
               const matches = line.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 3) {
-                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+                const extractedAccountId = matches[matches.length - 1].replace(/[\[\]]/g, '').trim();
+                if (extractedAccountId === accountId) {
+                  currentAccountId = extractedAccountId;
+                  // Actualizar línea TYPE a PENDING
+                  const platform = matches[matches.length - 2].replace(/[\[\]]/g, '').trim();
+                  updatedLine = `[TYPE] [PENDING] [${platform}] [${accountId}]`;
+                  fileModified = true;
+                }
               }
             } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
               // Convertir a PENDING - Solo modificar líneas CONFIG que contengan MASTER o SLAVE
@@ -2310,6 +2317,9 @@ class CSVManager extends EventEmitter {
                 updatedLine = `[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]`;
                 fileModified = true;
               }
+            } else if (line.includes('[TRANSLATE]') && currentAccountId === accountId) {
+              // Omitir línea TRANSLATE al convertir a pending
+              continue;
             }
 
             updatedLines.push(updatedLine);
@@ -2365,6 +2375,7 @@ class CSVManager extends EventEmitter {
   // Escribir configuración en CSV
   writeConfig(accountId, config) {
     try {
+      console.log(`📝 [writeConfig] Starting for account ${accountId} with config:`, config);
       // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples) - IGUAL QUE updateAccountStatus
       const targetFiles = [];
 
@@ -2395,16 +2406,26 @@ class CSVManager extends EventEmitter {
           const updatedLines = [];
           let fileModified = false;
 
-          for (const line of lines) {
+          let translateLineIndex = -1;
+          let configLineIndex = -1;
+          let updatedConfigLineIndex = -1;
+          
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
             let updatedLine = line;
 
             // Detectar línea TYPE para identificar la cuenta actual - IGUAL QUE updateAccountStatus
             if (line.includes('[TYPE]')) {
               const matches = line.match(/\[([^\]]+)\]/g);
               if (matches && matches.length >= 3) {
-                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
+                // El accountId está en la última posición para el formato CSV2
+                currentAccountId = matches[matches.length - 1].replace(/[\[\]]/g, '').trim();
+                console.log(`📝 [writeConfig] Detected account from TYPE line: ${currentAccountId}`);
               }
             } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
+              configLineIndex = i;
+              updatedConfigLineIndex = updatedLines.length; // Guardar el índice en updatedLines
+              console.log(`📝 [writeConfig] Found CONFIG line for ${accountId}: ${line}`);
               // Actualizar la línea CONFIG para la cuenta específica - SIMILAR A updateAccountStatus
 
               if (config.type === 'master') {
@@ -2424,13 +2445,17 @@ class CSVManager extends EventEmitter {
 
                   // Usar nuevos valores si se proporcionan, o mantener los actuales
                   const prefix =
-                    config.prefix !== undefined ? config.prefix || 'NULL' : currentPrefix;
+                    config.prefix !== undefined ? (config.prefix === '' ? 'NULL' : config.prefix) : currentPrefix;
                   const suffix =
-                    config.suffix !== undefined ? config.suffix || 'NULL' : currentSuffix;
+                    config.suffix !== undefined ? (config.suffix === '' ? 'NULL' : config.suffix) : currentSuffix;
+
+                  console.log(`📝 [writeConfig] Updating CONFIG - Old prefix: ${currentPrefix}, New prefix: ${prefix}`);
+                  console.log(`📝 [writeConfig] Updating CONFIG - Old suffix: ${currentSuffix}, New suffix: ${suffix}`);
 
                   // Reconstruir la línea CONFIG
                   updatedLine = `[CONFIG] [${accountType}] [${newStatus}] [${configParts[3] || 'NULL'}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]`;
                   fileModified = true;
+                  console.log(`📝 [writeConfig] New CONFIG line: ${updatedLine}`);
                 } else {
                   // Si no se pueden parsear los campos, mantener la línea original
                   updatedLine = line;
@@ -2475,9 +2500,37 @@ class CSVManager extends EventEmitter {
                   updatedLine = line;
                 }
               }
+            } else if (line.includes('[TRANSLATE]') && currentAccountId === accountId) {
+              translateLineIndex = i;
+              // Skip the old TRANSLATE line, we'll handle it later
+              continue;
             }
 
             updatedLines.push(updatedLine);
+          }
+          
+          // Después de procesar todas las líneas, manejar TRANSLATE para masters
+          if (config.type === 'master' && updatedConfigLineIndex !== -1) {
+            console.log(`📝 [writeConfig] Processing TRANSLATE for master. UpdatedConfigLineIndex: ${updatedConfigLineIndex}, TranslateLineIndex: ${translateLineIndex}`);
+            console.log(`📝 [writeConfig] Translations:`, config.translations);
+            
+            // Si hay translations, agregar o actualizar la línea TRANSLATE
+            if (config.translations && Object.keys(config.translations).length > 0) {
+              const translationPairs = Object.entries(config.translations)
+                .map(([from, to]) => `[${from}:${to}]`)
+                .join(' ');
+              const translateLine = `[TRANSLATE] ${translationPairs}`;
+              console.log(`📝 [writeConfig] Creating TRANSLATE line: ${translateLine}`);
+              
+              // Insertar después de CONFIG
+              updatedLines.splice(updatedConfigLineIndex + 1, 0, translateLine);
+              fileModified = true;
+            } else if (translateLineIndex === -1) {
+              // Si no hay translations y no había línea TRANSLATE, agregar [TRANSLATE] [NULL]
+              console.log(`📝 [writeConfig] No translations, adding [TRANSLATE] [NULL]`);
+              updatedLines.splice(updatedConfigLineIndex + 1, 0, '[TRANSLATE] [NULL]');
+              fileModified = true;
+            }
           }
 
           // Solo escribir si se modificó el archivo - IGUAL QUE updateAccountStatus
@@ -2500,6 +2553,7 @@ class CSVManager extends EventEmitter {
             console.log(
               `ℹ️ [writeConfig] No changes needed for account ${accountId} in file ${targetFile}`
             );
+            console.log(`📝 [writeConfig] fileModified: ${fileModified}, configLineIndex: ${configLineIndex}, updatedConfigLineIndex: ${updatedConfigLineIndex}`);
           }
         } catch (error) {
           console.error(`❌ [writeConfig] Error processing file ${targetFile}:`, error);
@@ -2656,179 +2710,192 @@ class CSVManager extends EventEmitter {
   // Actualizar estado de una cuenta específica
   async updateAccountStatus(accountId, enabled) {
     try {
-      console.log(`🔄 UPDATE ACCOUNT STATUS: Starting update for account ${accountId}, enabled: ${enabled}`);
-      console.log(`🔄 UPDATE ACCOUNT STATUS: csvFiles cache size: ${this.csvFiles.size}`);
-      console.log(`🔄 UPDATE ACCOUNT STATUS: csvFiles keys:`, Array.from(this.csvFiles.keys()));
+      console.log(`🔄 UPDATE STATUS: Starting update for account ${accountId} to ${enabled ? 'ENABLED' : 'DISABLED'}`);
+      
+      // Buscar la cuenta en los datos cacheados
+      let targetFile = null;
+      let accountType = null;
+      let accountData = null;
 
-      // NO hacer escaneo automático - solo usar archivos ya cargados
-      if (this.csvFiles.size === 0) {
-        console.log(`⚠️ UPDATE ACCOUNT STATUS: No CSV files in cache. CSV files should be loaded via 'Find Bots' first.`);
-        console.log(`⚠️ UPDATE ACCOUNT STATUS: Please run 'Find Bots' to load CSV files before updating account status.`);
-        return false;
-      }
-
-      // Buscar TODOS los archivos CSV para esta cuenta (puede haber múltiples)
-      const targetFiles = [];
-
-      // Buscar en todos los archivos CSV monitoreados
       this.csvFiles.forEach((fileData, filePath) => {
-        console.log(`🔍 UPDATE ACCOUNT STATUS: Checking file ${filePath}, data length: ${fileData.data.length}`);
+        console.log(`🔍 UPDATE STATUS: Checking file ${filePath}, data:`, fileData.data);
+        
         fileData.data.forEach(row => {
-          console.log(`🔍 UPDATE ACCOUNT STATUS: Checking row:`, row);
-          if (row.account_id === accountId && !targetFiles.includes(filePath)) {
-            console.log(`✅ UPDATE ACCOUNT STATUS: Found account ${accountId} in file ${filePath}`);
-            targetFiles.push(filePath);
+          if (row.account_id === accountId) {
+            console.log(`✅ UPDATE STATUS: Found account ${accountId} in ${filePath}`);
+            targetFile = filePath;
+            accountType = row.account_type.toUpperCase();
+            accountData = row;
           }
         });
       });
 
-      if (targetFiles.length === 0) {
-        console.error(`❌ No CSV files found for account ${accountId}`);
-        console.error(`❌ Available accounts in cache:`, Array.from(this.csvFiles.entries()).map(([path, data]) => ({
-          file: path,
-          accounts: data.data.map(acc => acc.account_id)
-        })));
+      if (!targetFile || !accountData) {
+        console.error(`❌ UPDATE STATUS: No CSV file found for account ${accountId}`);
         return false;
       }
 
-      let totalFilesUpdated = 0;
+      console.log(`📄 UPDATE STATUS: Found account ${accountId} (${accountType}) in ${targetFile}`);
+      console.log(`📄 UPDATE STATUS: Current account data:`, accountData);
 
-      // Procesar cada archivo que contiene esta cuenta
-      for (const targetFile of targetFiles) {
-        try {
-          // Leer el archivo completo
-          const content = readFileSync(targetFile, 'utf8');
-          const sanitizedContent = content.replace(/\uFEFF/g, '').replace(/\r/g, '');
-          const lines = sanitizedContent.split('\n');
-          let currentAccountId = null;
-          const updatedLines = [];
-          let fileModified = false;
+      // Leer y actualizar el archivo
+      let content;
+      try {
+        console.log(`📄 UPDATE STATUS: Reading file ${targetFile}`);
+        content = readFileSync(targetFile, 'utf8');
+        console.log(`📄 UPDATE STATUS: File content:`, content.substring(0, 500));
+      } catch (error) {
+        console.error(`❌ UPDATE STATUS: Error reading file:`, error);
+        return false;
+      }
 
-          for (const line of lines) {
-            let updatedLine = line;
+      const lines = content.replace(/\uFEFF/g, '').replace(/\r/g, '').split('\n');
+      console.log(`📄 UPDATE STATUS: File has ${lines.length} lines`);
+      let newContent = '';
+      let updated = false;
 
-            // Detectar línea TYPE para identificar la cuenta actual
-            if (line.includes('[TYPE]')) {
-              const matches = line.match(/\[([^\]]+)\]/g);
-              if (matches && matches.length >= 3) {
-                currentAccountId = matches[2].replace(/[\[\]]/g, '').trim();
-              }
-            } else if (line.includes('[CONFIG]') && currentAccountId === accountId) {
-              // Actualizar la línea CONFIG para la cuenta específica
-              const newStatus = enabled ? 'ENABLED' : 'DISABLED';
-
-              // Buscar el patrón específicamente en la posición correcta (tercer campo después de CONFIG y MASTER/SLAVE)
-              const configParts = line
-                .split('[')
-                .map(part => part.replace(']', '').trim())
-                .filter(part => part);
-
-              if (configParts.length >= 3) {
-                // Reemplazar específicamente el tercer campo (índice 2) que es el status
-                const currentStatus = configParts[2];
-                updatedLine = line.replace(`[${currentStatus}]`, `[${newStatus}]`);
-              } else {
-                // Fallback al método anterior
-                updatedLine = line.replace(/\[(ENABLED|DISABLED)\]/, `[${newStatus}]`);
-              }
-
-              fileModified = true;
-            }
-
-            updatedLines.push(updatedLine);
-          }
-
-          // Solo escribir si se modificó el archivo
-          if (fileModified) {
-            // Escribir archivo actualizado
-            try {
-              // Detectar plataforma del archivo para usar encoding correcto
-              const platform = this.detectPlatformFromFile(targetFile, updatedLines);
-              const { encoding, lineEnding } = this.getEncodingForPlatform(platform);
-              // Escribir con encoding específico por plataforma
-              const content = updatedLines.join(lineEnding) + lineEnding;
-              writeFileSync(targetFile, content, encoding);
-              this.refreshFileData(targetFile);
-              totalFilesUpdated++;
-            } catch (writeError) {
-              this.handleFileError(targetFile, writeError, 'writing');
-              console.error(`❌ [updateAccountStatus] Failed to write file ${targetFile}`);
+      // Procesar cada línea
+      for (const line of lines) {
+        console.log(`📄 UPDATE STATUS: Processing line:`, line);
+        
+        // Para cuentas slave, la línea CONFIG no incluye el accountId
+        if (line.includes('[CONFIG]') && (line.includes(`[${accountId}]`) || (accountType === 'SLAVE' && line.includes('[SLAVE]')))) {
+          console.log(`📄 UPDATE STATUS: Found CONFIG line for account ${accountId}`);
+          
+          // Extraer los valores actuales
+          const matches = line.match(/\[([^\]]+)\]/g);
+          console.log(`📄 UPDATE STATUS: Extracted values:`, matches);
+          
+          if (matches && matches.length >= 3) {
+            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+            console.log(`📄 UPDATE STATUS: Parsed values:`, values);
+            const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+            
+            if (accountType === 'MASTER') {
+              // [CONFIG] [MASTER] [ENABLED/DISABLED] [ACCOUNT_ID] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
+              const prefix = values[8] || 'NULL';
+              const suffix = values[9] || 'NULL';
+              newContent += `[CONFIG] [MASTER] [${newStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
+              updated = true;
+            } else if (accountType === 'SLAVE') {
+              // [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV] [PREFIX] [SUFFIX]
+              // Mantener los valores existentes excepto el estado
+              const currentConfig = line.split(']').map(part => part.trim().replace('[', '')).filter(Boolean);
+              const lotMult = currentConfig[3] || '1';
+              const forceLot = currentConfig[4] || 'NULL';
+              const reverse = currentConfig[5] || 'FALSE';
+              const masterId = currentConfig[6] || 'NULL';
+              const masterCsv = currentConfig[7] || 'NULL';
+              const prefix = currentConfig[8] || 'NULL';
+              const suffix = currentConfig[9] || 'NULL';
+              newContent += `[CONFIG] [SLAVE] [${newStatus}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsv}] [${prefix}] [${suffix}]\n`;
+              updated = true;
             }
           } else {
+            newContent += line + '\n';
           }
-        } catch (error) {
-          console.error(`❌ [updateAccountStatus] Error processing file ${targetFile}:`, error);
+        } else {
+          newContent += line + '\n';
         }
       }
 
-      if (totalFilesUpdated === 0) {
-        console.error(
-          `❌ [updateAccountStatus] No files were successfully updated for account ${accountId}`
-        );
-        return false;
+      // Si se actualizó el archivo, guardarlo y actualizar el cache
+      if (updated) {
+        console.log(`💾 UPDATE STATUS: Writing updated content to ${targetFile}`);
+        console.log(`📝 UPDATE STATUS: New content preview:`, newContent.substring(0, 500));
+        
+        // Detectar plataforma y usar encoding correcto
+        const platform = accountData.platform || 'MT4';
+        if (platform === 'MT4' || platform === 'MT5') {
+            writeFileSync(targetFile, newContent.replace(/\n/g, '\r\n'), 'latin1');
+        } else {
+            writeFileSync(targetFile, newContent, 'utf8');
+        }
+        
+        // Actualizar cache
+        this.csvFiles.set(targetFile, {
+          lastModified: this.getFileLastModified(targetFile),
+          data: await this.parseCSVFileAsync(targetFile)
+        });
+        
+        console.log(`✅ UPDATE STATUS: Successfully updated file and cache`);
+        return true;
       }
 
-      // Emitir evento de actualización
-      this.emit('accountStatusChanged', {
-        accountId,
-        enabled,
-        timestamp: new Date().toISOString(),
-      });
-
-      return true;
+      console.log(`❌ UPDATE STATUS: No changes were made to the file`);
+      return false;
     } catch (error) {
-      this.handleFileError(targetFile, error, `updating account ${accountId} status`);
+      console.error('Error updating account status:', error);
       return false;
     }
   }
 
   // Actualizar estado de master
-  updateMasterStatus(masterId, enabled, name = null) {
-    const config = {
-      type: 'master',
-      enabled,
-      name: name || `Master ${masterId}`,
-    };
+  async updateMasterStatus(masterId, enabled, name = null) {
+    try {
+      const config = {
+        type: 'master',
+        enabled,
+        name: name || `Master ${masterId}`,
+      };
 
-    return this.writeConfig(masterId, config);
+      return await this.writeConfig(masterId, config);
+    } catch (error) {
+      console.error('Error updating master status:', error);
+      return false;
+    }
   }
 
   // Actualizar estado de slave
-  updateSlaveStatus(slaveId, enabled, slaveConfig = null) {
-    const config = {
-      type: 'slave',
-      enabled,
-      slaveConfig: slaveConfig || {
-        lotMultiplier: 1.0,
-        forceLot: null,
-        reverseTrading: false,
-        maxLotSize: null,
-        minLotSize: null,
-      },
-    };
+  async updateSlaveStatus(slaveId, enabled, slaveConfig = null) {
+    try {
+      const config = {
+        type: 'slave',
+        enabled,
+        slaveConfig: slaveConfig || {
+          lotMultiplier: 1.0,
+          forceLot: null,
+          reverseTrading: false,
+          maxLotSize: null,
+          minLotSize: null,
+        },
+      };
 
-    const result = this.writeConfig(slaveId, config);
-    return result;
+      return await this.writeConfig(slaveId, config);
+    } catch (error) {
+      console.error('Error updating slave status:', error);
+      return false;
+    }
   }
 
   // Emergency shutdown
-  emergencyShutdown() {
-    const config = {
-      emergencyShutdown: true,
-      timestamp: new Date().toISOString(),
-    };
+  async emergencyShutdown() {
+    try {
+      const config = {
+        emergencyShutdown: true,
+        timestamp: new Date().toISOString(),
+      };
 
-    this.writeConfig('EMERGENCY', config);
+      return await this.writeConfig('EMERGENCY', config);
+    } catch (error) {
+      console.error('Error in emergency shutdown:', error);
+      return false;
+    }
   }
 
   // Reset all to ON
-  resetAllToOn() {
-    const config = {
-      resetAllOn: true,
-      timestamp: new Date().toISOString(),
-    };
+  async resetAllToOn() {
+    try {
+      const config = {
+        resetAllOn: true,
+        timestamp: new Date().toISOString(),
+      };
 
-    this.writeConfig('RESET', config);
+      return await this.writeConfig('RESET', config);
+    } catch (error) {
+      console.error('Error resetting all to ON:', error);
+      return false;
+    }
   }
 
   // Limpiar recursos (para testing o shutdown)

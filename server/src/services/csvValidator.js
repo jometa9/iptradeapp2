@@ -39,8 +39,8 @@ const validateOrderLine = values => {
 };
 
 const validateCSVStructure = lines => {
-  if (!Array.isArray(lines) || lines.length < 3) {
-    return { valid: false, error: 'CSV must have at least TYPE, STATUS, and CONFIG lines' };
+  if (!Array.isArray(lines) || lines.length < 2) {
+    return { valid: false, error: 'CSV must have at least TYPE and CONFIG lines' };
   }
 
   // Validate TYPE line
@@ -54,26 +54,15 @@ const validateCSVStructure = lines => {
     return { valid: false, error: 'Invalid TYPE line format' };
   }
 
-  // Validate STATUS line
-  const statusValues = validateCSVLine(lines[1]);
-  if (
-    !statusValues ||
-    statusValues[0] !== 'STATUS' ||
-    !['ONLINE', 'OFFLINE'].includes(statusValues[1]) ||
-    !/^\d+$/.test(statusValues[2])
-  ) {
-    return { valid: false, error: 'Invalid STATUS line format' };
-  }
-
   // Validate CONFIG line
-  const configValues = validateCSVLine(lines[2]);
+  const configValues = validateCSVLine(lines[1]);
   if (!configValues || configValues[0] !== 'CONFIG') {
     return { valid: false, error: 'Invalid CONFIG line format' };
   }
 
   // Validate ORDER lines (if any) - account type will be determined from CONFIG line
-  if (lines.length > 3) {
-    for (let i = 3; i < lines.length; i++) {
+  if (lines.length > 2) {
+    for (let i = 2; i < lines.length; i++) {
       const orderValues = validateCSVLine(lines[i]);
       if (orderValues && orderValues[0] === 'ORDER' && !validateOrderLine(orderValues)) {
         return { valid: false, error: `Invalid ORDER line format at line ${i + 1}` };

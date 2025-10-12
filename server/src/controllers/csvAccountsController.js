@@ -4,16 +4,22 @@ import { glob } from 'glob';
 import csvManager from '../services/csvManager.js';
 
 // Helper function to find CSV file path for a master account
-const findMasterCSVPath = async masterId => {
+const findMasterCSVPath = async (masterId, providedCsvPath = null) => {
   try {
-    // Use csvManager that's already imported at the top of this file
+    // If a specific CSV path is provided, validate and return it first
+    if (providedCsvPath && existsSync(providedCsvPath)) {
+      console.log(`🔍 Using directly provided CSV path for master account ${masterId}`);
+      return providedCsvPath;
+    }
+
+    // Fallback to existing CSV manager search if no path provided or path is invalid
     if (!csvManager || !csvManager.csvFiles) {
+      console.warn(`⚠️ CSV Manager not initialized for master account ${masterId}`);
       return null;
     }
 
-    // IMPORTANT: Refresh cache before searching to ensure we have the latest data
-
-    await csvManager.refreshAllFileData();
+    // FIXED: Don't refresh all files - data should already be fresh from getAllActiveAccounts()
+    // await csvManager.refreshAllFileData();
 
     // Search through scanned CSV files
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
@@ -21,6 +27,7 @@ const findMasterCSVPath = async masterId => {
       const accountExists = fileData.data.some(account => account.account_id === masterId);
 
       if (accountExists) {
+        console.log(`🔍 Found CSV path for master account ${masterId} through scanning`);
         return filePath;
       }
 
@@ -28,11 +35,13 @@ const findMasterCSVPath = async masterId => {
       if (existsSync(filePath)) {
         const content = readFileSync(filePath, 'utf8');
         if (content.includes(`[${masterId}]`)) {
+          console.log(`🔍 Found CSV path for master account ${masterId} through raw content check`);
           return filePath;
         }
       }
     }
 
+    console.warn(`⚠️ No CSV path found for master account ${masterId}`);
     return null;
   } catch (error) {
     console.error(`Error finding CSV path for master account ${masterId}:`, error);
@@ -51,7 +60,6 @@ const generateCSV2Content = async (
   const upperType = accountType.toUpperCase();
 
   let content = `[TYPE] [${platform}] [${accountId}]\n`;
-  content += `[STATUS] [ACTIVE] [${timestamp}]\n`;
 
   if (accountType === 'master') {
     // For master accounts: [CONFIG][MASTER][ENABLED/DISABLED][NOMBRE][PREFIX][SUFFIX]
@@ -348,7 +356,8 @@ export const updateCSVAccountType = async (req, res) => {
                 cleanLine.includes('[TYPE]') &&
                 (cleanLine.includes(`[${accountId}]`) || cleanLine.includes(accountId))
               ) {
-                newContent += `[TYPE] [${accountPlatform}] [${accountId}]\n`;
+                // Write TYPE line
+                newContent += `[TYPE] [${newType.toUpperCase()}] [${accountPlatform}] [${accountId}]\n`;
               } else if (
                 cleanLine.includes('[CONFIG]') &&
                 (cleanLine.includes(`[${accountId}]`) ||
@@ -415,9 +424,6 @@ export const updateCSVAccountType = async (req, res) => {
               } else if (cleanLine.includes('[TRANSLATE]')) {
                 // Skip existing TRANSLATE line as we already added it after CONFIG
                 continue;
-              } else if (cleanLine.includes('[STATUS]')) {
-                // Update timestamp
-                newContent += `[STATUS] [ACTIVE] [${currentTimestamp}]\n`;
               } else {
                 newContent += line + '\n';
               }
@@ -426,10 +432,23 @@ export const updateCSVAccountType = async (req, res) => {
             // Ensure we're writing to .csv not .cssv
             const correctPath = filePath.replace(/\.cssv$/, '.csv');
             
+            // Ensure content ends with a newline
+            if (!newContent.endsWith('\n')) {
+                newContent += '\n';
+            }
+            
+            // Remove any extra blank lines
+            newContent = newContent.replace(/\n{3,}/g, '\n\n');
+            
             console.log(`💾 CSV UPDATE TYPE: Writing updated content to ${correctPath}`);
             console.log(`📝 CSV UPDATE TYPE: New content preview (first 500 chars):`, newContent.substring(0, 500));
             
-            writeFileSync(correctPath, newContent.replace(/\r\n/g, '\n'), 'utf8');
+            // Write with Windows line endings for MT4/MT5
+            if (accountPlatform === 'MT4' || accountPlatform === 'MT5') {
+                writeFileSync(correctPath, newContent.replace(/\n/g, '\r\n'), 'latin1');
+            } else {
+                writeFileSync(correctPath, newContent, 'utf8');
+            }
             filesUpdated++;
             
             console.log(`✅ CSV UPDATE TYPE: Successfully updated file ${correctPath}, filesUpdated: ${filesUpdated}`);
@@ -438,7 +457,7 @@ export const updateCSVAccountType = async (req, res) => {
             if (csvManager.csvFiles.has(filePath)) {
               csvManager.csvFiles.set(filePath, {
                 lastModified: csvManager.getFileLastModified(filePath),
-                data: csvManager.parseCSVFile(filePath),
+                data: await csvManager.parseCSVFileAsync(filePath),
               });
             }
           }
@@ -481,9 +500,6 @@ export const updateCSVAccountType = async (req, res) => {
                   // Set masterId and masterCsvPath to NULL to disconnect (8-parameter format)
                   newContent += `[CONFIG] [SLAVE] [DISABLED] [${lotMultiplier}] [${forceLot}] [${reverseTrade}] [NULL] [NULL]\n`;
                   slaveFound = true;
-                } else if (cleanLine.includes('[STATUS]')) {
-                  // Update timestamp for the slave
-                  newContent += `[STATUS] [ACTIVE] [${currentTimestamp}]\n`;
                 } else {
                   newContent += line + '\n';
                 }
@@ -1089,6 +1105,8 @@ export const runInstallScript = async (req, res) => {
     res.status(500).json({ error: 'Failed to run install script', details: error.message });
   }
 };
+
+export { findMasterCSVPath };
 
 
 

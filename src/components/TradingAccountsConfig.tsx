@@ -59,6 +59,7 @@ interface TradingAccount {
   connectedToMaster?: string;
   connectedSlaves?: Array<{ id: string; name: string; platform: string }>;
   totalSlaves?: number;
+  translations?: Record<string, string>;
   config?: {
     enabled?: boolean;
     prefix?: string;
@@ -212,6 +213,7 @@ const TradingAccountsConfigComponent = () => {
           reverseTrade: master.reverseTrade || false,
           connectedSlaves: master.connectedSlaves || [],
           totalSlaves: master.totalSlaves || 0,
+          translations: master.translations || {},
           config: master.config || {
             prefix: master.config?.prefix || '',
             suffix: master.config?.suffix || '',
@@ -233,6 +235,7 @@ const TradingAccountsConfigComponent = () => {
               lotCoefficient: slave.lotCoefficient || 1,
               forceLot: slave.forceLot || 0,
               reverseTrade: slave.reverseTrade || false,
+              translations: slave.translations || {},
               connectedToMaster: id, // Indicar a qué master está conectado
             });
           }
@@ -254,6 +257,7 @@ const TradingAccountsConfigComponent = () => {
           lotCoefficient: slave.lotCoefficient || 1,
           forceLot: slave.forceLot || 0,
           reverseTrade: slave.reverseTrade || false,
+          translations: slave.translations || {},
         });
       }
     });
@@ -876,6 +880,7 @@ const TradingAccountsConfigComponent = () => {
               reverseTrading: formState.reverseTrade,
               prefix: formState.prefix || '',
               suffix: formState.suffix || '',
+              translations: formState.translations || {},
             };
 
             response = await fetch(`http://localhost:${serverPort}/api/trading-config`, {
@@ -926,6 +931,11 @@ const TradingAccountsConfigComponent = () => {
             // Ahora convertir a master
             const masterPayload = {
               newType: 'master',
+              masterConfig: {
+                prefix: formState.prefix || '',
+                suffix: formState.suffix || '',
+                translations: formState.translations || {},
+              },
             };
 
             response = await fetch(
@@ -1062,6 +1072,9 @@ const TradingAccountsConfigComponent = () => {
 
       await fetchAccounts();
       await fetchPendingAccountsCount();
+      
+      // Asegurarse de que los datos unificados se actualicen también
+      await refreshCSVData();
 
       // If we just created a slave account connected to a master, show deployment message
       if (
@@ -1534,8 +1547,91 @@ const TradingAccountsConfigComponent = () => {
                             </div>
                           </div>
 
-                          {/* Symbol Translations for Masters - HIDDEN: Masters don't need translations */}
-                          {/* Masters are the source accounts, they don't need symbol translations */}
+                          {/* Symbol Translations for Masters */}
+                          <div className=" col-span-full">
+                            <Label>Symbol Translations</Label>
+                            <div className="space-y-2">
+                              {Object.entries(formState.translations || {}).map(
+                                ([from, to], index) => (
+                                  <div key={index} className="flex items-center gap-2">
+                                    <Input
+                                      placeholder="From symbol"
+                                      value={from}
+                                      onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        if (e.target.value) {
+                                          newTranslations[e.target.value.toUpperCase()] = to;
+                                        }
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <ArrowBigRight className="h-12 w-12 text-gray-500"/>
+                                    <Input
+                                      placeholder="To symbol"
+                                      value={to}
+                                      onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        newTranslations[from] = e.target.value.toUpperCase();
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      className="bg-white border border-gray-200"
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+                                      onClick={() => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                      type="button"
+                                    >
+                                      <Trash className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setFormState(prev => ({
+                                    ...prev,
+                                    translations: {
+                                      ...(prev.translations || {}),
+                                      '': '',
+                                    },
+                                  }));
+                                }}
+                                className="w-full bg-white text-blue-800 border border-gray-200"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Translation
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                              Map symbols from master to slave (e.g., US100 → NASDAQ)
+                            </p>
+                          </div>
                         </>
                       )}
 
@@ -1832,7 +1928,7 @@ const TradingAccountsConfigComponent = () => {
                                         };
                                         delete newTranslations[from];
                                         if (e.target.value) {
-                                          newTranslations[e.target.value] = to;
+                                          newTranslations[e.target.value.toUpperCase()] = to;
                                         }
                                         setFormState(prev => ({
                                           ...prev,
@@ -1846,12 +1942,13 @@ const TradingAccountsConfigComponent = () => {
                                       placeholder="To symbol"
                                       value={to}
                                       onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        newTranslations[from] = e.target.value.toUpperCase();
                                         setFormState(prev => ({
                                           ...prev,
-                                          translations: {
-                                            ...(prev.translations || {}),
-                                            [from]: e.target.value,
-                                          },
+                                          translations: newTranslations,
                                         }));
                                       }}
                                       className="bg-white border border-gray-200"
@@ -1988,7 +2085,7 @@ const TradingAccountsConfigComponent = () => {
                                         };
                                         delete newTranslations[from];
                                         if (e.target.value) {
-                                          newTranslations[e.target.value] = to;
+                                          newTranslations[e.target.value.toUpperCase()] = to;
                                         }
                                         setFormState(prev => ({
                                           ...prev,
@@ -2002,12 +2099,13 @@ const TradingAccountsConfigComponent = () => {
                                       placeholder="To symbol"
                                       value={to}
                                       onChange={e => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        newTranslations[from] = e.target.value.toUpperCase();
                                         setFormState(prev => ({
                                           ...prev,
-                                          translations: {
-                                            ...(prev.translations || {}),
-                                            [from]: e.target.value,
-                                          },
+                                          translations: newTranslations,
                                         }));
                                       }}
                                       className="bg-white border border-gray-200"
@@ -2231,6 +2329,18 @@ const TradingAccountsConfigComponent = () => {
                                         Suffix {masterAccount.config.suffix}
                                       </div>
                                     )}
+                                    
+                                    {/* Translation badges for master accounts */}
+                                    {masterAccount?.translations && Object.keys(masterAccount.translations).length > 0 && 
+                                      Object.entries(masterAccount.translations).map(([from, to]) => (
+                                        <div 
+                                          key={`translate-${from}-${to}`}
+                                          className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
+                                        >
+                                          {String(from)} to {String(to)}
+                                        </div>
+                                      ))
+                                    }
                                   </div>
                                 </td>
                                 <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">

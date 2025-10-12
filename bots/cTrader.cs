@@ -82,11 +82,9 @@ namespace cAlgo.Robots
         {
             try
             {
-                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var lines = new string[]
                 {
                     $"[TYPE] [CTRADER] [{Account.Number}]",
-                    $"[STATUS] [ONLINE] [{timestamp}]",
                     "[CONFIG] [PENDING] [DISABLED] [1.0] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]",
                     "[TRANSLATE] [NULL]"
                 };
@@ -139,7 +137,7 @@ namespace cAlgo.Robots
                 Print("=== End CSV reading ===");
 
                 // Validate format - NO recrear archivo existente, solo leer lo que hay
-                if (!lines[0].Contains("[TYPE]") || !lines[1].Contains("[STATUS]") || !lines[2].Contains("[CONFIG]"))
+                if (!lines[0].Contains("[TYPE]") || !lines[1].Contains("[CONFIG]"))
                 {
                     // Formato inesperado pero NO sobrescribir - el servidor maneja el CSV
                     Print("ADVERTENCIA: Formato CSV inesperado, pero NO sobrescribiendo archivo existente");
@@ -148,7 +146,7 @@ namespace cAlgo.Robots
                 }
 
                 // Parse CONFIG line to extract variables
-                ParseConfigLine(lines[2]);
+                ParseConfigLine(lines[1]);
             }
             catch (Exception ex)
             {
