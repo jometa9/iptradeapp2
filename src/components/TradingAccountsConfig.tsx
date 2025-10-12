@@ -1992,7 +1992,7 @@ const TradingAccountsConfigComponent = () => {
 
                               >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Translation Pair
+                                Add Translation
                               </Button>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
@@ -2147,7 +2147,7 @@ const TradingAccountsConfigComponent = () => {
                                 className="w-full"
                               >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Translation Pair
+                                Add Translation
                               </Button>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
