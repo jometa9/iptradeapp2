@@ -17,8 +17,10 @@
     "build:all": "rimraf dist resources/dist && npm run build:frontend && npm run build:server && npm run build:resources && npm run build:neutralino",
     "build:resources": "node scripts/prepare-resources.js",
     "build:windows": "npm run build:all && neu build --release",
+    "build:installer": "node scripts/build-installer.js",
+    "build:complete": "npm run build:windows && npm run build:installer",
     "preview": "vite preview",
-    "release": "npm run build:windows",
+    "release": "npm run build:complete",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write . && eslint . --fix"

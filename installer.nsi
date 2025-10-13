@@ -3,6 +3,7 @@
 
 Name "IPTRADE"
 BrandingText "IPTRADE Trading Platform"
+OutFile "release\IPTRADE-Setup.exe"
 
 # Define version info
 !define VERSION "1.2.3"
@@ -11,7 +12,7 @@ BrandingText "IPTRADE Trading Platform"
 !define COPYRIGHT "Copyright © 2024 IPTRADE"
 
 # Define the main executable name
-!define MAIN_APP_EXE "IPTRADE.exe"
+!define MAIN_APP_EXE "IPTRADE-win_x64.exe"
 
 # Set compression
 SetCompressor /SOLID lzma
@@ -32,7 +33,6 @@ RequestExecutionLevel admin
 
 # Pages
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -49,9 +49,19 @@ RequestExecutionLevel admin
 Section "IPTRADE" SecMain
     SetOutPath "$INSTDIR"
 
-    # Add files
-    File /r "dist\*.*"
-    File "public\iconShadow025.png"
+    # Add files from dist/IPTRADE directory
+    File /r "dist\IPTRADE\*.*"
+    
+    # Add resources directory
+    SetOutPath "$INSTDIR\resources"
+    File /r "resources\*.*"
+    
+    # Add config and data directories
+    SetOutPath "$INSTDIR"
+    CreateDirectory "$INSTDIR\config"
+    CreateDirectory "$INSTDIR\csv_data"
+    CreateDirectory "$INSTDIR\accounts"
+    CreateDirectory "$INSTDIR\logs"
 
     # Create uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -69,7 +79,7 @@ Section "IPTRADE" SecMain
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "InstallLocation" "$\"$INSTDIR$\""
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "DisplayIcon" "$\"$INSTDIR\iconShadow025.png$\""
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "DisplayIcon" "$\"$INSTDIR\${MAIN_APP_EXE}$\""
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "Publisher" "${COMPANY}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE" "DisplayVersion" "${VERSION}"
 
@@ -95,13 +105,21 @@ Section "Uninstall"
     # Remove Desktop shortcut
     Delete "$DESKTOP\IPTRADE.lnk"
 
-    # Remove files
-    RMDir /r "$INSTDIR"
-
     # Remove registry entries
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\IPTRADE"
+    DeleteRegKey HKLM "Software\IPTRADE"
     DeleteRegKey HKCR "iptrade"
 
+    # Remove files and directories
+    RMDir /r "$INSTDIR\resources"
+    RMDir /r "$INSTDIR\config"
+    RMDir /r "$INSTDIR\csv_data"
+    RMDir /r "$INSTDIR\accounts"
+    RMDir /r "$INSTDIR\logs"
+    Delete "$INSTDIR\${MAIN_APP_EXE}"
+    Delete "$INSTDIR\resources.neu"
+    Delete "$INSTDIR\Uninstall.exe"
+    
     # Remove installation directory
-    RMDir /r "$INSTDIR"
+    RMDir "$INSTDIR"
 SectionEnd

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -42,6 +42,44 @@ filesToCopy.forEach(([src, dest]) => {
     copyFileSync(srcPath, destPath);
   }
 });
+
+// Update resources/index.html with correct asset paths
+const distIndexPath = join(rootDir, 'dist', 'index.html');
+const resourcesIndexPath = join(rootDir, 'resources', 'index.html');
+
+if (existsSync(distIndexPath)) {
+  let distHtml = readFileSync(distIndexPath, 'utf8');
+  
+  // Extract JS and CSS file names
+  const jsMatch = distHtml.match(/src="\.\/assets\/(index-[^"]+\.js)"/);
+  const cssMatch = distHtml.match(/href="\.\/assets\/(index-[^"]+\.css)"/);
+  
+  if (jsMatch && cssMatch) {
+    const jsFile = jsMatch[1];
+    const cssFile = cssMatch[1];
+    
+    // Create resources/index.html with Neutralino integration
+    const resourcesHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IPTRADE</title>
+    <link rel="icon" type="image/x-icon" href="/dist/favicon.ico" />
+    <script type="module" crossorigin src="/dist/assets/${jsFile}"></script>
+    <link rel="stylesheet" crossorigin href="/dist/assets/${cssFile}">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="js/neutralino.js"></script>
+  </body>
+</html>
+`;
+    
+    writeFileSync(resourcesIndexPath, resourcesHtml);
+    console.log('✅ Updated resources/index.html with asset paths');
+  }
+}
 
 function copyDirectory(src, dest) {
   if (!existsSync(src)) {
