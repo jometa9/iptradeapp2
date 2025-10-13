@@ -521,7 +521,7 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowConfig);
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 
   // Log de la configuración aplicada
 
@@ -644,13 +644,29 @@ function createWindow() {
     
     // Log frontend events
     mainWindow.webContents.on('did-finish-load', () => {
-      const frontendLogFile = fs.createWriteStream(path.join(process.resourcesPath, 'logs', 'frontend.log'), { flags: 'a' });
-      frontendLogFile.write(`\n[${new Date().toISOString()}] Frontend loaded successfully\n`);
+      try {
+        const logsDir = path.join(process.resourcesPath, 'logs');
+        if (!fs.existsSync(logsDir)) {
+          fs.mkdirSync(logsDir, { recursive: true });
+        }
+        const frontendLogFile = fs.createWriteStream(path.join(logsDir, 'frontend.log'), { flags: 'a' });
+        frontendLogFile.write(`\n[${new Date().toISOString()}] Frontend loaded successfully\n`);
+      } catch (error) {
+        console.error('Failed to create frontend log:', error);
+      }
     });
 
     mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-      const frontendErrorLogFile = fs.createWriteStream(path.join(process.resourcesPath, 'logs', 'frontend-error.log'), { flags: 'a' });
-      frontendErrorLogFile.write(`\n[${new Date().toISOString()}] Frontend failed to load: ${errorDescription} (${errorCode})\n`);
+      try {
+        const logsDir = path.join(process.resourcesPath, 'logs');
+        if (!fs.existsSync(logsDir)) {
+          fs.mkdirSync(logsDir, { recursive: true });
+        }
+        const frontendErrorLogFile = fs.createWriteStream(path.join(logsDir, 'frontend-error.log'), { flags: 'a' });
+        frontendErrorLogFile.write(`\n[${new Date().toISOString()}] Frontend failed to load: ${errorDescription} (${errorCode})\n`);
+      } catch (error) {
+        console.error('Failed to create frontend error log:', error);
+      }
     });
 
     // Verificar actualizaciones después de cargar la app (solo en producción) - DESHABILITADO

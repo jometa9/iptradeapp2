@@ -200,9 +200,9 @@ if (process.platform === 'win32') {
   });
 
   // Also handle Ctrl+C on Windows
-  const readline = require('readline');
+  const { createInterface } = await import('readline');
   if (process.stdin && process.stdin.isTTY) {
-    const rl = readline.createInterface({
+    const rl = createInterface({
       input: process.stdin,
       output: process.stdout
     });
