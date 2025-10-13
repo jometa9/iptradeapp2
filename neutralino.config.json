@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "com.iptrade.app",
+  "version": "1.2.3",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/resources/",
+  "url": "http://localhost:31000",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": true,
+    "logPath": "logs/neutralino.log"
+  },
+  "nativeAllowList": [
+    "app.*",
+    "os.*",
+    "debug.log",
+    "filesystem.*",
+    "window.*",
+    "events.*",
+    "computer.*",
+    "browser.*",
+    "storage.*",
+    "clipboard.*",
+    "shell.*"
+  ],
+  "globalVariables": {
+    "SERVER_PORT": 30,
+    "VITE_PORT": 31000
+  },
+  "modes": {
+    "window": {
+      "title": "IPTRADE",
+      "width": 800,
+      "height": 800,
+      "minWidth": 800,
+      "minHeight": 700,
+      "center": true,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/public/iconShadow025.png",
+      "enableInspector": false,
+      "borderless": false,
+      "maximize": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": true
+    }
+  },
+  "cli": {
+    "binaryName": "IPTRADE",
+    "resourcesPath": "/resources/",
+    "extensionsPath": "/extensions/",
+    "clientLibrary": "/resources/js/neutralino.js",
+    "binaryVersion": "6.3.0",
+    "clientVersion": "6.3.0"
+  },
+  "urlSchemes": ["iptrade"],
+  "enableExtensions": true,
+  "enableProtocolLinks": true,
+  "platform": {
+    "windows": {
+      "icon": "public/iconShadow025.png",
+      "webviewOptions": {
+        "browserPath": "default"
+      },
+      "fileAssociations": [
+        {
+          "ext": "iptrade",
+          "name": "IPTRADE Protocol",
+          "description": "IPTRADE Trading Platform",
+          "icon": "public/iconShadow025.png"
+        }
+      ]
+    }
+  },
+  "enableWindowOperations": true,
+  "enableSystemOperations": true,
+  "buildResources": {
+    "files": ["dist/**/*", "server/**/*", "public/**/*"]
+  }
+}

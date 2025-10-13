@@ -54,19 +54,29 @@ export const LoginScreen: React.FC = () => {
 
   // Handle web login
   const handleWebLogin = async () => {
-    clearError();
-    setWebLoginStatus('authenticating');
+    try {
+      clearError();
+      setWebLoginStatus('authenticating');
 
-    // Open browser to your website login page
-    const loginUrl = 'https://iptradecopier.com/sign-in?redirect=iptrade://login&source=app';
-    openExternalLink(loginUrl);
-
-    // Show "Authenticating in browser..." message
-    setTimeout(() => {
-      if (webLoginStatus === 'authenticating') {
-        setWebLoginStatus('redirecting');
+      // Open browser to your website login page
+      const loginUrl = 'https://iptradecopier.com/sign-in?redirect=iptrade://login&source=app';
+      const opened = await openExternalLink(loginUrl);
+      
+      if (!opened) {
+        throw new Error('Failed to open browser');
       }
-    }, 3000);
+
+      // Show "Authenticating in browser..." message
+      setTimeout(() => {
+        if (webLoginStatus === 'authenticating') {
+          setWebLoginStatus('redirecting');
+        }
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to open login URL:', error);
+      setWebLoginStatus('idle');
+      clearError();
+    }
   };
 
   // Handle URL scheme callback (iptrade://login?apiKey=XXX)
@@ -75,34 +85,41 @@ export const LoginScreen: React.FC = () => {
       const url = event.detail?.url || event.url;
 
       if (url && url.startsWith('iptrade://login')) {
-        const urlObj = new URL(url);
-        const apiKey = urlObj.searchParams.get('apiKey');
+        try {
+          const urlObj = new URL(url);
+          const apiKey = urlObj.searchParams.get('apiKey');
 
-        if (apiKey) {
-          setWebLoginStatus('idle');
-          console.log('API Key recibido del deep link:', apiKey);
-          
-          // Usar el mismo flujo que el login manual con input
-          setApiKey(apiKey);
-          login(apiKey);
-        } else {
+          if (apiKey) {
+            setWebLoginStatus('idle');
+            console.log('API Key received from deep link');
+            
+            // Use the same flow as manual login with input
+            setApiKey(apiKey);
+            login(apiKey);
+          } else {
+            setWebLoginStatus('idle');
+            clearError();
+          }
+        } catch (error) {
+          console.error('Failed to parse auth callback URL:', error);
           setWebLoginStatus('idle');
           clearError();
         }
       }
     };
 
-    // Listen for deep link events (Electron)
-    if (window.electronAPI?.onDeepLink) {
-      window.electronAPI.onDeepLink(handleAuthCallback);
+    // Listen for Neutralino auth callback events
+    if (window.Neutralino) {
+      window.Neutralino.events.on('urlSchemeAccess', handleAuthCallback);
     }
 
     // Listen for custom events (fallback)
     window.addEventListener('auth-callback', handleAuthCallback);
 
     return () => {
-      if (window.electronAPI?.removeAllListeners) {
-        window.electronAPI.removeAllListeners('deep-link');
+      // Cleanup Neutralino event listener
+      if (window.Neutralino) {
+        window.Neutralino.events.off('urlSchemeAccess', handleAuthCallback);
       }
       window.removeEventListener('auth-callback', handleAuthCallback);
     };
@@ -147,7 +164,7 @@ export const LoginScreen: React.FC = () => {
             ) : (
               <>
                 <ExternalLink className="mr-2 h-4 w-4" />
-                Sing in to IPTRADE
+                Sign in to IPTRADE
               </>
             )}
           </Button>
@@ -162,7 +179,7 @@ export const LoginScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Web Login Button */}
+          {/* License Key Input */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <CardDescription className="text-gray-600 text-center mb-4">

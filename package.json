@@ -5,40 +5,23 @@
   "description": "Professional Trading Platform with Copy Trading Capabilities",
   "author": "IPTRADE",
   "type": "module",
-  "main": "electron/main.cjs",
-  "homepage": "./",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
-    "dev:frontend": "vite --port 5174",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\" \"npm run dev:neutralino\"",
+    "dev:frontend": "vite --port 31000",
     "dev:server": "node server/src/dev.js",
-    "build": "vite build --mode production",
-    "build:no-check": "vite build --mode production",
-    "build:force": "vite build --mode production",
-    "lint": "eslint .",
+    "dev:neutralino": "neu run",
+    "build": "npm run build:all",
+    "build:frontend": "vite build",
+    "build:server": "cd server && npm install && npm run build",
+    "build:neutralino": "neu build",
+    "build:all": "rimraf dist resources/dist && npm run build:frontend && npm run build:server && npm run build:resources && npm run build:neutralino",
+    "build:resources": "node scripts/prepare-resources.js",
+    "build:windows": "npm run build:all && neu build --release",
     "preview": "vite preview",
-    "electron:dev": "npm run build && concurrently \"cross-env NODE_ENV=development vite --port 5174\" \"npm run dev:server\" \"wait-on http://localhost:5174 && cross-env NODE_ENV=development electron .\"",
-    "electron:build": "npm run build && electron-builder --win --publish=never",
-    "electron:build:ci": "npm run build && electron-builder --win --publish=always",
-    "electron:preview": "electron .",
-    "build:server": "npm install --prefix server && npm run build --prefix server",
-    "version:patch": "npm version patch",
-    "version:minor": "npm version minor",
-    "version:major": "npm version major",
-    "publish": "npm run build && electron-builder --win --publish=always",
-    "release": "npm run electron:build",
+    "release": "npm run build:windows",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "format:fix": "prettier --write . && eslint . --fix",
-    "test:accounts": "node scripts/manage-test-accounts.cjs",
-    "test:accounts:generate": "node scripts/manage-test-accounts.cjs generate",
-    "test:accounts:cleanup": "node scripts/manage-test-accounts.cjs cleanup",
-    "test:accounts:reset": "node scripts/manage-test-accounts.cjs reset",
-    "clean:mac": "node scripts/clean-csv-mac.js",
-    "check:csv": "node scripts/check-csv-cache.js",
-    "reset:permissions": "node scripts/reset-macos-permissions.js",
-    "check:permissions": "node scripts/check-macos-permissions.js",
-    "clear:cache": "node scripts/clear-cache.js",
-    "clean": "powershell -ExecutionPolicy Bypass -File scripts/force-clean.ps1"
+    "format:fix": "prettier --write . && eslint . --fix"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",
@@ -54,13 +37,9 @@
     "@radix-ui/react-switch": "^1.2.5",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.14",
-    "canvas": "^3.1.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
-    "cva": "^0.0.0",
-    "electron-updater": "^6.3.11",
-    "eventsource": "^4.0.0",
     "express": "^5.1.0",
     "lucide-react": "^0.511.0",
     "node-fetch": "^3.3.2",
@@ -80,8 +59,6 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
-    "electron": "^36.3.2",
-    "electron-builder": "^26.0.12",
     "esbuild": "^0.25.5",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -93,54 +70,50 @@
     "tailwindcss": "^4.1.8",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
-    "vite": "^6.3.5",
-    "wait-on": "^8.0.3"
+    "vite": "^6.3.5"
   },
   "build": {
     "appId": "com.iptrade.app",
     "productName": "IPTRADE",
-    "icon": "public/iconShadow025.png",
+    "copyright": "Copyright © 2024 IPTRADE",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "resources"
     },
     "files": [
       "dist/**/*",
-      "public/dmg-installer.png",
-      "electron/**/*",
-      "server-production.cjs"
-    ],
-    "extraResources": [
-      {
-        "from": "server",
-        "to": "server"
-      }
-    ],
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "jometa9",
-        "repo": "iptradeapp2",
-        "private": false,
-        "releaseType": "release"
-      }
+      "resources/**/*"
     ],
     "win": {
-      "icon": "public/iconShadow025.png",
-      "target": "nsis",
-      "artifactName": "IPTRADE.exe",
-      "forceCodeSigning": false
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/iconShadow025.png"
     },
-    "protocols": [
-      {
-        "name": "IPTRADE",
-        "schemes": [
-          "iptrade"
-        ]
-      }
-    ],
-    "nodeGypRebuild": false,
-    "npmRebuild": false,
-    "nativeRebuilder": "sequential",
-    "buildDependenciesFromSource": false
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IPTRADE",
+      "include": "installer.nsh",
+      "installerIcon": "public/iconShadow025.png",
+      "uninstallerIcon": "public/iconShadow025.png",
+      "installerHeaderIcon": "public/iconShadow025.png",
+      "artifactName": "IPTRADE-Setup-${version}.${ext}"
+    },
+    "protocols": {
+      "name": "IPTRADE Protocol",
+      "schemes": [
+        "iptrade"
+      ]
+    }
   }
 }
