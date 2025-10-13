@@ -746,6 +746,8 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
   const { masterAccountId } = req.params;
 
   try {
+    console.log(`📝 [disconnectAllSlavesFromMaster] Disconnecting all slaves from master ${masterAccountId}`);
+    
     // Import csvManager to find slaves connected to this master
     const csvManager = await import('../services/csvManager.js')
       .then(m => m.default)
@@ -758,25 +760,75 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
       });
     }
 
-    // Find all slaves connected to this master
+    // Find all slaves connected to this master - usando el enfoque mejorado
     const connectedSlaves = [];
 
+    // Primero escanear los CSV para encontrar todas las conexiones
     for (const [filePath, fileData] of csvManager.csvFiles.entries()) {
+      console.log(`📝 [disconnectAllSlavesFromMaster] Scanning file: ${filePath}`);
+      
+      // Buscar en los datos parseados
       fileData.data.forEach(account => {
-        if (
-          account.account_type === 'slave' &&
-          account.config &&
-          account.config.masterId === masterAccountId
-        ) {
-          connectedSlaves.push({
-            slaveId: account.account_id,
-            filePath: filePath,
-          });
+        if (account.account_type === 'slave') {
+          // Verificar si está conectado a nuestro master en diferentes formatos de configuración
+          let isConnectedToMaster = false;
+          
+          // Verificar en account.config.masterId (formato estándar)
+          if (account.config && account.config.masterId === masterAccountId) {
+            isConnectedToMaster = true;
+          }
+          
+          // También verificar en las líneas de config sin parsear
+          if (!isConnectedToMaster) {
+            // Leer el archivo y buscar la conexión
+            try {
+              const { existsSync, readFileSync } = require('fs');
+              if (existsSync(filePath)) {
+                const fileContent = readFileSync(filePath, 'utf8');
+                const lines = fileContent.split('\n');
+                
+                // Primero encontrar línea TYPE para esta cuenta
+                let foundAccountInFile = false;
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  if (line.includes('[TYPE]') && line.includes(`[${account.account_id}]`)) {
+                    foundAccountInFile = true;
+                    
+                    // Buscar la línea CONFIG cercana
+                    if (i + 2 < lines.length) {
+                      const configLine = lines[i + 2]; // Típicamente 2 líneas después de TYPE
+                      if (configLine.includes('[CONFIG]') && configLine.includes('[SLAVE]') && 
+                          configLine.includes(`[${masterAccountId}]`)) {
+                        isConnectedToMaster = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                if (foundAccountInFile) {
+                  console.log(`📝 [disconnectAllSlavesFromMaster] Found slave ${account.account_id} in file but not connected to master ${masterAccountId}`);
+                }
+              }
+            } catch (fileError) {
+              console.error(`Error reading file ${filePath}:`, fileError);
+            }
+          }
+          
+          // Si está conectado, agregarlo a la lista
+          if (isConnectedToMaster) {
+            console.log(`📝 [disconnectAllSlavesFromMaster] Found slave ${account.account_id} connected to master ${masterAccountId}`);
+            connectedSlaves.push({
+              slaveId: account.account_id,
+              filePath: filePath,
+            });
+          }
         }
       });
     }
 
     if (connectedSlaves.length === 0) {
+      console.log(`📝 [disconnectAllSlavesFromMaster] No slaves found connected to master ${masterAccountId}`);
       return res.json({
         success: true,
         message: `No slaves found connected to master ${masterAccountId}`,
@@ -786,15 +838,30 @@ export const disconnectAllSlavesFromMaster = async (req, res) => {
       });
     }
 
+    console.log(`📝 [disconnectAllSlavesFromMaster] Found ${connectedSlaves.length} slaves connected to master ${masterAccountId}`);
+
+    // Desconectar cada slave
     let successCount = 0;
     for (const { slaveId, filePath } of connectedSlaves) {
       try {
+        console.log(`📝 [disconnectAllSlavesFromMaster] Disconnecting slave ${slaveId} from master ${masterAccountId}`);
         if (await updateCSVFileToDisconnectSlave(filePath, slaveId)) {
           successCount++;
+          console.log(`📝 [disconnectAllSlavesFromMaster] Successfully disconnected slave ${slaveId}`);
         }
       } catch (error) {
         console.error(`Error disconnecting slave ${slaveId}:`, error);
       }
+    }
+
+    console.log(`📝 [disconnectAllSlavesFromMaster] Disconnected ${successCount} out of ${connectedSlaves.length} slaves`);
+
+    // Refrescar el cache de datos
+    try {
+      await csvManager.refreshAllFileData();
+      console.log(`📝 [disconnectAllSlavesFromMaster] Refreshed csvManager data cache`);
+    } catch (refreshError) {
+      console.error(`Error refreshing CSV data cache:`, refreshError);
     }
 
     res.json({
@@ -894,6 +961,7 @@ const findMasterCSVPath = async masterId => {
 // Helper function to update CSV file to disconnect slave
 export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId) => {
   try {
+    console.log(`📝 [updateCSVFileToDisconnectSlave] Attempting to disconnect slave ${slaveAccountId} in file ${csvFilePath}`);
     const { readFile, writeFileSync } = await import('fs');
 
     // Read the CSV file asynchronously to avoid EBUSY errors
@@ -919,64 +987,79 @@ export const updateCSVFileToDisconnectSlave = async (csvFilePath, slaveAccountId
 
     const lines = csvContent.split('\n');
     let updated = false;
+    let currentAccountId = null;
 
-    // Find the TYPE line for the slave account
-    const typeLineIndex = lines.findIndex(
-      line => line.includes('[TYPE]') && line.includes(`[${slaveAccountId}]`)
-    );
+    // Procesamos cada línea para encontrar y modificar la configuración del slave
+    const updatedLines = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let updatedLine = line;
 
-    if (typeLineIndex !== -1) {
-      // Find the corresponding CONFIG line (should be 2 lines after TYPE)
-      const configLineIndex = typeLineIndex + 2;
-
-      if (
-        configLineIndex < lines.length &&
-        lines[configLineIndex].includes('[CONFIG]') &&
-        lines[configLineIndex].includes('[SLAVE]')
-      ) {
-        const configLine = lines[configLineIndex];
-
-        // Update the CONFIG line to set masterId to NULL (handle both 7 and 8 parameter formats)
-        let updatedConfigLine = configLine;
-
-        // Try 10-parameter format first (new format with masterCsvPath, prefix, suffix)
-        if (
-          configLine.match(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]/
-          )
-        ) {
-          updatedConfigLine = configLine.replace(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]\s*\[([^\]]*)\]/,
-            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL] [NULL] [$7] [$8]'
-          );
+      // Detectar línea TYPE para identificar la cuenta actual
+      if (line.includes('[TYPE]')) {
+        const matches = line.match(/\[([^\]]+)\]/g);
+        if (matches && matches.length >= 3) {
+          // El accountId está en la última posición para el formato CSV2
+          const extractedAccountId = matches[matches.length - 1].replace(/[\[\]]/g, '').trim();
+          console.log(`📝 [updateCSVFileToDisconnectSlave] Found TYPE line for account: ${extractedAccountId}`);
+          
+          if (extractedAccountId === slaveAccountId) {
+            currentAccountId = extractedAccountId;
+            console.log(`📝 [updateCSVFileToDisconnectSlave] Found slave account: ${currentAccountId}`);
+          }
         }
-        // Fallback to 7-parameter format (old format)
-        else if (
-          configLine.match(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/
-          )
-        ) {
-          updatedConfigLine = configLine.replace(
-            /\[CONFIG\]\s*\[SLAVE\]\s*\[(ENABLED|DISABLED)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]\s*\[([^\]]+)\]/,
-            '[CONFIG] [SLAVE] [$1] [$2] [$3] [$4] [NULL]'
-          );
-        }
-
-        if (updatedConfigLine !== configLine) {
-          lines[configLineIndex] = updatedConfigLine;
+      } 
+      // Buscar y actualizar línea CONFIG para desconectar el slave
+      else if (line.includes('[CONFIG]') && line.includes('[SLAVE]') && currentAccountId === slaveAccountId) {
+        console.log(`📝 [updateCSVFileToDisconnectSlave] Found CONFIG line for slave: ${line}`);
+        
+        // Actualizar la línea CONFIG para quitar el masterId y masterCsvPath (NULL)
+        const parts = line.split(']').map(part => part.trim() + ']');
+        
+        if (parts.length >= 9) { // Formato completo con prefix/suffix
+          // [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV_PATH] [PREFIX] [SUFFIX]
+          const status = parts[2];
+          const lotMult = parts[3];
+          const forceLot = parts[4];
+          const reverse = parts[5];
+          const prefix = parts.length > 8 ? parts[8] : '[NULL]';
+          const suffix = parts.length > 9 ? parts[9] : '[NULL]';
+          
+          updatedLine = `[CONFIG] [SLAVE] ${status} ${lotMult} ${forceLot} ${reverse} [NULL] [NULL] ${prefix} ${suffix}`;
+          console.log(`📝 [updateCSVFileToDisconnectSlave] Updated CONFIG line: ${updatedLine}`);
           updated = true;
         }
       }
+      
+      // Agregar la línea actualizada al array
+      updatedLines.push(updatedLine);
     }
 
     if (updated) {
+      console.log(`📝 [updateCSVFileToDisconnectSlave] Writing updated content to file`);
       // Write the updated content back to the file
-      const updatedContent = lines.join('\n');
+      const updatedContent = updatedLines.join('\n');
       // Ensure we're writing to .csv not .cssv
       const correctPath = csvFilePath.replace(/\.cssv$/, '.csv');
       writeFileSync(correctPath, updatedContent, 'utf8');
+      
+      // También actualizar el cache interno de csvManager
+      try {
+        const csvManager = await import('../services/csvManager.js')
+          .then(m => m.default)
+          .catch(() => null);
+          
+        if (csvManager && csvManager.csvFiles.has(csvFilePath)) {
+          console.log(`📝 [updateCSVFileToDisconnectSlave] Refreshing csvManager cache for file`);
+          await csvManager.refreshFileData(csvFilePath);
+        }
+      } catch (refreshError) {
+        console.error('Error refreshing CSV manager cache:', refreshError);
+      }
+      
       return true;
     } else {
+      console.log(`📝 [updateCSVFileToDisconnectSlave] No changes were made to the file`);
       return false;
     }
   } catch (error) {

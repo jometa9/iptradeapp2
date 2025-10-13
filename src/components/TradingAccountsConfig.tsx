@@ -699,8 +699,11 @@ const TradingAccountsConfigComponent = () => {
         setIsDeletingAccount(null);
 
         // Forzar actualización inmediata de datos
-        setTimeout(() => {
-          fetchAccounts();
+        setTimeout(async () => {
+          await fetchAccounts();
+          // Asegurarse de actualizar los datos unificados también
+          await refreshCSVData();
+          // Forzar actualización de datos unificados para actualizar UI correctamente después de la conversión
         }, 100);
       } else {
         toast({
@@ -772,7 +775,9 @@ const TradingAccountsConfigComponent = () => {
           description: 'Slave account disconnected successfully',
         });
         setDisconnectConfirmId(null);
-        fetchAccounts();
+        // Actualizar todos los datos
+        await fetchAccounts();
+        await refreshCSVData();
       } else {
         throw new Error('Failed to disconnect slave account');
       }
@@ -809,7 +814,9 @@ const TradingAccountsConfigComponent = () => {
           description: `${result.disconnectedCount} slave accounts disconnected successfully`,
         });
         setDisconnectAllConfirmId(null);
-        fetchAccounts();
+        // Actualizar todos los datos
+        await fetchAccounts();
+        await refreshCSVData();
       } else {
         throw new Error('Failed to disconnect all slave accounts');
       }
@@ -1992,7 +1999,7 @@ const TradingAccountsConfigComponent = () => {
 
                               >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Translation Pair
+                                Add Translation
                               </Button>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
@@ -2147,7 +2154,7 @@ const TradingAccountsConfigComponent = () => {
                                 className="w-full"
                               >
                                 <Plus className="h-4 w-4 mr-2" />
-                                Add Translation Pair
+                                Add Translation
                               </Button>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 text-gray-500">
