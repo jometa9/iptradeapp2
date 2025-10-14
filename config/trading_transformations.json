@@ -25,7 +25,8 @@
     "forceLot": null,
     "reverseTrading": false,
     "prefix": "",
-    "suffix": "sufix"
+    "suffix": "suffixx",
+    "translations": {}
   },
   "250062001": {
     "lotMultiplier": 1,

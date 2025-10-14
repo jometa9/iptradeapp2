@@ -18,7 +18,6 @@ import {
   Trash,
   Unlink,
   Unplug,
-  X,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -92,6 +91,7 @@ const TradingAccountsConfigComponent = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [disconnectConfirmId, setDisconnectConfirmId] = useState<string | null>(null);
   const [disconnectAllConfirmId, setDisconnectAllConfirmId] = useState<string | null>(null);
+  const [disconnectAllFromEditForm, setDisconnectAllFromEditForm] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [collapsedMasters, setCollapsedMasters] = useState<{ [key: string]: boolean }>({});
@@ -546,6 +546,7 @@ const TradingAccountsConfigComponent = () => {
   const closeEditForm = () => {
     setEditingAccount(null);
     setIsAddingAccount(false);
+    setDisconnectAllFromEditForm(false);
   };
 
   const handleEditAccount = async (account: TradingAccount) => {
@@ -835,6 +836,10 @@ const TradingAccountsConfigComponent = () => {
   const cancelDisconnectAction = () => {
     setDisconnectConfirmId(null);
     setDisconnectAllConfirmId(null);
+  };
+
+  const cancelDisconnectFromEditForm = () => {
+    setDisconnectAllFromEditForm(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1468,43 +1473,107 @@ const TradingAccountsConfigComponent = () => {
                     >
                       {/* Para cuentas nuevas o cuentas master existentes, mostrar todos los campos */}
 
-                      <div
-                        className={
-                          // Si estamos editando una cuenta y seleccionamos master o pending, hacer que ocupe todo el ancho
-                          editingAccount &&
-                          ((editingAccount.accountType === 'master' &&
-                            formState.accountType === 'master') ||
-                            formState.accountType === 'master' ||
-                            formState.accountType === 'pending')
-                            ? 'col-span-1'
-                            : ''
-                        }
-                      >
-                        <Label htmlFor="accountType">Account Type</Label>
-                        <Select
-                          name="accountType"
-                          value={formState.accountType}
-                          onValueChange={value => handleSelectChange('accountType', value)}
+                      {/* Mostrar sección de Account Type solo si no es una cuenta master con slaves */}
+                      {!(editingAccount?.accountType === 'master' && 
+                          editingAccount.totalSlaves && 
+                          editingAccount.totalSlaves > 0) && (
+                        <div
+                          className={
+                            // Si estamos editando una cuenta y seleccionamos master o pending, hacer que ocupe todo el ancho
+                            editingAccount &&
+                            ((editingAccount.accountType === 'master' &&
+                              formState.accountType === 'master') ||
+                              formState.accountType === 'master' ||
+                              formState.accountType === 'pending')
+                              ? 'col-span-1'
+                              : ''
+                          }
                         >
-                          <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
-                            <SelectValue placeholder="Select Type" className="bg-white" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-white border border-gray-200">
-                            {accountTypeOptions.map(option => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                                className="bg-white cursor-pointer hover:bg-gray-50"
+                          <Label htmlFor="accountType">Account Type</Label>
+                          <Select
+                            name="accountType"
+                            value={formState.accountType}
+                            onValueChange={value => handleSelectChange('accountType', value)}
+                          >
+                            <SelectTrigger className="bg-white border border-gray-200 shadow-sm cursor-pointer">
+                              <SelectValue placeholder="Select Type" className="bg-white" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white border border-gray-200">
+                              {accountTypeOptions.map(option => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                  className="bg-white cursor-pointer hover:bg-gray-50"
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1 text-gray-500">
+                            Select the type of account you want to convert
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Mostrar botón de Disconnect All Slaves si es master con slaves */}
+                      {editingAccount?.accountType === 'master' && 
+                        editingAccount.totalSlaves && 
+                        editingAccount.totalSlaves > 0 ? (
+                          <div className="col-span-1">
+                            {!disconnectAllFromEditForm ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 w-full"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setDisconnectAllFromEditForm(true);
+                                }}
                               >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                          Select the type of account you want to convert
-                        </p>
-                      </div>
+                                <Unlink className="h-4 w-4 mr-2" />
+                                Disconnect All Slaves
+                              </Button>
+                            ) : (
+                              <div className="flex space-x-4">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="flex-1 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    await disconnectAllSlaves(editingAccount.accountNumber);
+                                    setDisconnectAllFromEditForm(false);
+                                    closeEditForm();
+                                  }}
+                                  disabled={isDisconnecting === editingAccount.id}
+                                >
+                                  {isDisconnecting === editingAccount.id ? (
+                                    <>
+                                      Disconnecting Slaves...
+                                    </>
+                                  ) : (
+                                    <>
+                                      Disconnect Slaves
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="flex-1 bg-white border-gray-300 text-gray-700 hover:bg-gray-100"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    cancelDisconnectFromEditForm();
+                                  }}
+                                  disabled={isDisconnecting === editingAccount.id}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                      ) : <></>}
 
                       {/* Configuration fields for Master accounts - only prefix/suffix */}
                       {formState.accountType === 'master' && editingAccount && (
@@ -2028,141 +2097,7 @@ const TradingAccountsConfigComponent = () => {
                         </>
                       )}
 
-                      {/* Configuration fields for Pending accounts - prefix/suffix and translations */}
-                      {formState.accountType === 'pending' && editingAccount && (
-                        <>
-                          {/* Prefix and Suffix Fields for Pending */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label htmlFor="prefix">Ticker Symbol Prefix</Label>
-                              <Input
-                                id="prefix"
-                                name="prefix"
-                                type="text"
-                                placeholder="Enter prefix..."
-                                value={formState.prefix ?? ''}
-                                onChange={e =>
-                                  setFormState({
-                                    ...formState,
-                                    prefix: e.target.value || '',
-                                  })
-                                }
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                Text to remove at the beginning of ticker symbols
-                              </p>
-                            </div>
-
-                            <div>
-                              <Label htmlFor="suffix">Ticker Symbol Suffix</Label>
-                              <Input
-                                id="suffix"
-                                name="suffix"
-                                type="text"
-                                placeholder="Enter suffix..."
-                                value={formState.suffix ?? ''}
-                                onChange={e =>
-                                  setFormState({
-                                    ...formState,
-                                    suffix: e.target.value || '',
-                                  })
-                                }
-                                className="bg-white border border-gray-200 shadow-sm"
-                              />
-                              <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                                Text to remove at the end of ticker symbols
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Symbol Translations */}
-                          <div className="mt-4">
-                            <Label>Symbol Translations</Label>
-                            <div className="space-y-2">
-                              {Object.entries(formState.translations || {}).map(
-                                ([from, to], index) => (
-                                  <div key={index} className="flex items-center gap-2">
-                                    <Input
-                                      placeholder="From symbol"
-                                      value={from}
-                                      onChange={e => {
-                                        const newTranslations = {
-                                          ...(formState.translations || {}),
-                                        };
-                                        delete newTranslations[from];
-                                        if (e.target.value) {
-                                          newTranslations[e.target.value.toUpperCase()] = to;
-                                        }
-                                        setFormState(prev => ({
-                                          ...prev,
-                                          translations: newTranslations,
-                                        }));
-                                      }}
-                                      className="bg-white border border-gray-200"
-                                    />
-                                    <span className="text-gray-500">→</span>
-                                    <Input
-                                      placeholder="To symbol"
-                                      value={to}
-                                      onChange={e => {
-                                        const newTranslations = {
-                                          ...(formState.translations || {}),
-                                        };
-                                        newTranslations[from] = e.target.value.toUpperCase();
-                                        setFormState(prev => ({
-                                          ...prev,
-                                          translations: newTranslations,
-                                        }));
-                                      }}
-                                      className="bg-white border border-gray-200"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        const newTranslations = {
-                                          ...(formState.translations || {}),
-                                        };
-                                        delete newTranslations[from];
-                                        setFormState(prev => ({
-                                          ...prev,
-                                          translations: newTranslations,
-                                        }));
-                                      }}
-                                      className="text-red-500 hover:text-red-700"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )
-                              )}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setFormState(prev => ({
-                                    ...prev,
-                                    translations: {
-                                      ...(prev.translations || {}),
-                                      '': '',
-                                    },
-                                  }));
-                                }}
-                                className="w-full"
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Translation
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1 text-gray-500">
-                              Map symbols from one format to another (e.g., EURUSD → EURUSD.m)
-                            </p>
-                          </div>
-                        </>
-                      )}
+                      {/* Pending accounts don't need configuration fields */}
                     </div>
 
                     <div className="flex justify-end space-x-2 pt-2">
@@ -2417,23 +2352,22 @@ const TradingAccountsConfigComponent = () => {
                                     </div>
                                   ) : (
                                     <div className="flex space-x-2">
-                                      {(!masterAccount.totalSlaves ||
-                                        masterAccount.totalSlaves === 0) && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            closeEditForm();
-                                            handleEditAccount(masterAccount);
-                                          }}
-                                          title="Edit Account"
-                                          disabled={isDeletingAccount === masterAccount.id}
-                                        >
-                                          <Pencil className="h-4 w-4 text-blue-600" />
-                                        </Button>
-                                      )}
+                                      {/* Mostrar botón de Edit siempre */}
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-9 w-9 p-0 rounded-lg bg-white border border-gray-200 hover:bg-gray-50"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          closeEditForm();
+                                          handleEditAccount(masterAccount);
+                                        }}
+                                        title="Edit Account"
+                                        disabled={isDeletingAccount === masterAccount.id}
+                                      >
+                                        <Pencil className="h-4 w-4 text-blue-600" />
+                                      </Button>
+                                      {/* Mostrar botón de Delete solo si no tiene slaves */}
                                       {(!masterAccount.totalSlaves ||
                                         masterAccount.totalSlaves === 0) && (
                                         <DeleteButton
