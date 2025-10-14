@@ -6,26 +6,26 @@
   "author": "IPTRADE",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\" \"npm run dev:neutralino\"",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:server\"",
     "dev:frontend": "vite --port 31000",
     "dev:server": "node server/src/dev.js",
-    "dev:neutralino": "neu run",
     "build": "npm run build:all",
     "build:frontend": "vite build",
     "build:server": "cd server && npm install && npm run build",
-    "build:neutralino": "neu build",
-    "build:all": "rimraf dist resources/dist && npm run build:frontend && npm run build:server && npm run build:resources && npm run build:neutralino",
-    "build:resources": "node scripts/prepare-resources.js",
-    "build:windows": "npm run build:all && neu build --release",
+    "build:nodegui": "node scripts/build-nodegui.js",
+    "build:all": "rimraf dist && npm run build:frontend && npm run build:server && npm run build:nodegui",
+    "build:windows": "npm run build:all && npm run build:installer",
     "build:installer": "node scripts/build-installer.js",
-    "build:complete": "npm run build:windows && npm run build:installer",
     "preview": "vite preview",
-    "release": "npm run build:complete",
+    "release": "npm run build:windows",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write . && eslint . --fix"
   },
   "dependencies": {
+    "@nodegui/nodegui": "^0.57.3",
+    "@nodegui/react-nodegui": "^0.14.0",
+    "@nodegui/qwebengine": "^1.0.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -46,17 +46,18 @@
     "lucide-react": "^0.511.0",
     "node-fetch": "^3.3.2",
     "radix-ui": "^1.4.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^16.14.0",
+    "react-dom": "^16.14.0",
     "react-hook-form": "^7.57.0",
     "tailwind-merge": "^3.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@nodegui/packer": "^1.5.0",
     "@tailwindcss/postcss": "^4.1.8",
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
+    "@types/react": "^16.14.0",
+    "@types/react-dom": "^16.14.0",
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
@@ -73,49 +74,5 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"
-  },
-  "build": {
-    "appId": "com.iptrade.app",
-    "productName": "IPTRADE",
-    "copyright": "Copyright © 2024 IPTRADE",
-    "directories": {
-      "output": "release",
-      "buildResources": "resources"
-    },
-    "files": [
-      "dist/**/*",
-      "resources/**/*"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "public/iconShadow025.png"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "IPTRADE",
-      "include": "installer.nsh",
-      "installerIcon": "public/iconShadow025.png",
-      "uninstallerIcon": "public/iconShadow025.png",
-      "installerHeaderIcon": "public/iconShadow025.png",
-      "artifactName": "IPTRADE-Setup-${version}.${ext}"
-    },
-    "protocols": {
-      "name": "IPTRADE Protocol",
-      "schemes": [
-        "iptrade"
-      ]
-    }
   }
 }

@@ -1,47 +1,60 @@
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { createWindowsInstaller } from '@nodegui/packer';
+import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const __dirname = path.dirname(__filename);
 
-console.log('🔨 Building IPTRADE Installer...');
+const config = {
+  appDirectory: path.resolve(__dirname, '../dist/win-unpacked'),
+  outputDirectory: path.resolve(__dirname, '../release'),
+  authors: 'IPTRADE',
+  exe: 'IPTRADE.exe',
+  name: 'IPTRADE',
+  title: 'IPTRADE - Trading Platform',
+  description: 'Professional Trading Platform with Copy Trading Capabilities',
+  version: '1.2.3',
+  iconPath: path.resolve(__dirname, '../public/iconShadow025.png'),
+  setupIcon: path.resolve(__dirname, '../public/iconShadow025.png'),
+  noMsi: true,
+  setupExe: 'IPTRADE-Setup.exe',
+  setupLanguages: ['es-ES'],
+  nsis: {
+    // Permite al usuario elegir el directorio de instalación
+    allowToChangeInstallationDirectory: true,
+    // Instala para todos los usuarios (requiere admin)
+    perMachine: true,
+    // Crea acceso directo en el escritorio
+    createDesktopShortcut: true,
+    // Crea acceso directo en el menú inicio
+    createStartMenuShortcut: true,
+    // Nombre para los accesos directos
+    shortcutName: 'IPTRADE',
+    // Elimina datos de la app al desinstalar
+    deleteAppDataOnUninstall: true,
+    // Mensajes personalizados en español
+    messages: {
+      welcomePageTitle: 'Instalación de IPTRADE',
+      welcomePageDescription: 'Asistente de instalación para la plataforma IPTRADE.',
+      installationCompleteTitle: 'Instalación Completada',
+      installationCompleteDescription: 'IPTRADE se ha instalado correctamente.',
+      installationDirectoryLabel: 'Directorio de instalación:',
+      installButtonLabel: 'Instalar',
+      cancelButtonLabel: 'Cancelar',
+    },
+  },
+};
 
-// Ensure dist directory exists
-const distPath = join(rootDir, 'dist');
-if (!existsSync(distPath)) {
-  console.error('❌ dist directory not found. Run "npm run build:all" first.');
-  process.exit(1);
+async function buildInstaller() {
+  try {
+    console.log('Creando instalador para Windows...');
+    await createWindowsInstaller(config);
+    console.log('¡Instalador creado exitosamente!');
+    console.log('Ubicación del instalador:', path.join(config.outputDirectory, config.setupExe));
+  } catch (error) {
+    console.error('Error al crear el instalador:', error);
+    process.exit(1);
+  }
 }
 
-// Ensure release directory exists
-const releasePath = join(rootDir, 'release');
-if (!existsSync(releasePath)) {
-  mkdirSync(releasePath, { recursive: true });
-}
-
-// Check if NSIS is installed
-try {
-  execSync('makensis /VERSION', { stdio: 'pipe' });
-} catch (error) {
-  console.error('❌ NSIS not found. Please install NSIS from https://nsis.sourceforge.io/');
-  console.error('   Or use Chocolatey: choco install nsis');
-  process.exit(1);
-}
-
-// Build the installer
-console.log('📦 Compiling installer...');
-try {
-  execSync('makensis /V3 installer.nsi', { 
-    cwd: rootDir,
-    stdio: 'inherit' 
-  });
-  console.log('✅ Installer created successfully!');
-  console.log(`📍 Location: ${join(releasePath, 'IPTRADE-Setup.exe')}`);
-} catch (error) {
-  console.error('❌ Failed to build installer');
-  process.exit(1);
-}
-
+buildInstaller();
