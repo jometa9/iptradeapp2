@@ -128,9 +128,20 @@
     ],
     "win": {
       "icon": "public/iconShadow025.png",
-          "target": "nsis",
-      "artifactName": "IPTRADE.exe",
-      "forceCodeSigning": false
+      "target": "nsis",
+      "artifactName": "IPTRADE-Setup.exe",
+      "forceCodeSigning": false,
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false,
+      "signExts": [],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IPTRADE"
     },
     "protocols": [
       {
@@ -143,6 +154,7 @@
     "nodeGypRebuild": false,
     "npmRebuild": false,
     "nativeRebuilder": "sequential",
-    "buildDependenciesFromSource": false
+    "buildDependenciesFromSource": false,
+    "forceCodeSigning": false
   }
 }

@@ -19,13 +19,35 @@ function getBasePath() {
     const { app } = require('electron');
     if (app.isPackaged) {
       // Production: use resources path where server files are bundled
-      return path.join(process.resourcesPath, 'server');
+      const resourcesPath = path.join(process.resourcesPath, 'server');
+      console.log('🔍 [PRODUCTION] Checking resources path:', resourcesPath);
+      
+      // Verify the path exists
+      if (fs.existsSync(resourcesPath)) {
+        console.log('✅ [PRODUCTION] Resources path exists');
+        return resourcesPath;
+      } else {
+        console.error('❌ [PRODUCTION] Resources path does not exist:', resourcesPath);
+        // Fallback to app path
+        const appPath = path.join(app.getAppPath(), 'server');
+        console.log('🔍 [PRODUCTION] Trying app path:', appPath);
+        if (fs.existsSync(appPath)) {
+          console.log('✅ [PRODUCTION] App path exists');
+          return appPath;
+        }
+        throw new Error(`Server directory not found in resources (${resourcesPath}) or app (${appPath})`);
+      }
     } else {
       // Development: use project server directory
-      return path.join(app.getAppPath(), 'server');
+      const devPath = path.join(app.getAppPath(), 'server');
+      console.log('🔍 [DEV] Using dev path:', devPath);
+      return devPath;
     }
   } catch (error) {
-    return path.join(process.cwd(), 'server');
+    console.error('❌ [FALLBACK] Error getting base path:', error.message);
+    const fallbackPath = path.join(process.cwd(), 'server');
+    console.log('🔍 [FALLBACK] Using fallback path:', fallbackPath);
+    return fallbackPath;
   }
 }
 
@@ -49,7 +71,7 @@ function startProductionServer() {
     try {
       const basePath = getBasePath();
       const userDataPath = getUserDataPath();
-      const serverEntryPoint = path.join(basePath, 'src', 'production.js');
+      const serverEntryPoint = path.join(basePath, 'src', 'production.cjs');
 
       console.log('🚀 [PRODUCTION] Starting full server...');
       console.log('📂 Server path:', basePath);
@@ -59,10 +81,19 @@ function startProductionServer() {
 
       // Verify server file exists
       if (!fs.existsSync(serverEntryPoint)) {
-        const error = new Error(`Server entry point not found: ${serverEntryPoint}`);
-        console.error('❌', error.message);
-        reject(error);
-        return;
+        console.error('❌', `Server entry point not found: ${serverEntryPoint}`);
+        
+        // Try minimal server as fallback
+        const minimalServerPath = path.join(basePath, 'src', 'minimal-production.cjs');
+        if (fs.existsSync(minimalServerPath)) {
+          console.log('🔄 Falling back to minimal server...');
+          serverEntryPoint = minimalServerPath;
+        } else {
+          const error = new Error(`No server entry point found. Tried: ${serverEntryPoint} and ${minimalServerPath}`);
+          console.error('❌', error.message);
+          reject(error);
+          return;
+        }
       }
 
       // Setup environment variables for the child process
@@ -75,12 +106,19 @@ function startProductionServer() {
         NODE_PATH: path.join(basePath, 'node_modules')
       };
 
+      console.log('🔧 [PRODUCTION] Environment setup:');
+      console.log('  - PORT:', serverEnv.PORT);
+      console.log('  - NODE_ENV:', serverEnv.NODE_ENV);
+      console.log('  - ELECTRON_RESOURCES_PATH:', serverEnv.ELECTRON_RESOURCES_PATH);
+      console.log('  - NODE_PATH:', serverEnv.NODE_PATH);
+      console.log('  - Working directory:', basePath);
+
       // Fork the server process (better for Node.js scripts)
       serverProcess = fork(serverEntryPoint, [], {
         cwd: basePath,
         env: serverEnv,
         silent: false, // Let output go to parent's stdio
-        execArgv: [] // Don't inherit parent's exec arguments
+        execArgv: [] // No special flags needed for CommonJS
       });
 
       console.log('🔄 Server process forked with PID:', serverProcess.pid);
@@ -105,6 +143,10 @@ function startProductionServer() {
             console.log('✅ Server confirmed running via IPC');
             resolve({ port, basePath: userDataPath });
           }
+        } else if (message && message.type === 'server-error') {
+          console.error('❌ Server reported error via IPC:', message.error);
+          clearTimeout(startupTimeout);
+          reject(new Error(`Server error: ${message.error.message}`));
         }
       });
 
@@ -115,6 +157,20 @@ function startProductionServer() {
 
         if (!serverStarted) {
           clearTimeout(startupTimeout);
+          
+          // If the full server failed and we haven't tried minimal server yet, try it
+          if (code === 9 && !serverEntryPoint.includes('minimal-production.cjs')) {
+            console.log('🔄 Full server failed with exit code 9, trying minimal server...');
+            const minimalServerPath = path.join(basePath, 'src', 'minimal-production.cjs');
+            if (fs.existsSync(minimalServerPath)) {
+              // Retry with minimal server
+              setTimeout(() => {
+                startProductionServer().then(resolve).catch(reject);
+              }, 1000);
+              return;
+            }
+          }
+          
           reject(new Error(`Server process exited with code ${code}`));
         }
       });

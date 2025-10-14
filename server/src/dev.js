@@ -28,7 +28,7 @@ try {
   console.warn('⚠️ Failed to load config, using defaults:', error.message);
   config = {
     server: {
-      port: 30,
+      port: 3000,
       environment: process.env.NODE_ENV || 'development'
     },
     paths: {

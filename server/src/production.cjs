@@ -1,11 +1,12 @@
 /**
- * Production Server Entry Point
+ * Production Server Entry Point (CommonJS)
  * This file is spawned as a child process when the Electron app runs in production mode.
  * It runs the full server with all routes, controllers, and services.
+ * Using CommonJS for better compatibility in packaged Electron apps.
  */
 
 // Immediately log that we started to help debugging
-console.log('[STARTUP] production.js starting...');
+console.log('[STARTUP] production.cjs starting...');
 console.log('[STARTUP] Node version:', process.version);
 console.log('[STARTUP] Platform:', process.platform);
 console.log('[STARTUP] Current working directory:', process.cwd());
@@ -18,13 +19,18 @@ console.log('  - NODE_PATH:', process.env.NODE_PATH);
 
 console.log('[STARTUP] Loading modules...');
 
-import fs from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { createServer } from './standalone.js';
-import { killProcessOnPort } from './controllers/ordersController.js';
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
 
-console.log('[STARTUP] Modules loaded successfully');
+console.log('[STARTUP] Core modules loaded successfully');
+
+// Load route loader
+const { loadRoutes } = require('./routeLoader.cjs');
+
+// Store routes globally
+let routes = null;
 
 // Get base path - in production, this will be the resources path
 function getBasePath() {
@@ -39,13 +45,13 @@ function getBasePath() {
 const basePath = getBasePath();
 
 // Setup logging
-const logsDir = join(basePath, 'logs');
+const logsDir = path.join(basePath, 'logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-const logFile = join(logsDir, 'server.log');
-const errorLogFile = join(logsDir, 'server-error.log');
+const logFile = path.join(logsDir, 'server.log');
+const errorLogFile = path.join(logsDir, 'server-error.log');
 
 // Create log streams
 const logStream = fs.createWriteStream(logFile, { flags: 'a' });
@@ -95,6 +101,71 @@ console.warn = (...args) => {
   originalConsoleWarn(`WARN: ${message}`);
 };
 
+// Create server function
+async function createServer() {
+  const app = express();
+  const PORT = process.env.PORT || 3000;
+
+  // Load routes if not already loaded
+  if (!routes) {
+    console.log('[SERVER] Loading routes...');
+    routes = await loadRoutes();
+    console.log('[SERVER] Routes loaded successfully');
+  }
+
+  // Middleware
+  app.use(cors());
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // Swagger API documentation
+  try {
+    const swaggerUi = require('swagger-ui-express');
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(routes.swaggerDocs));
+  } catch (error) {
+    console.warn('⚠️ Swagger UI not available:', error.message);
+  }
+
+  // Routes
+  app.use('/api', routes.statusRoutes);
+  app.use('/api', routes.orderRoutes);
+  app.use('/api', routes.configRoutes);
+  app.use('/api', routes.tradingConfigRoutes);
+
+  // Keep these for now for compatibility
+  app.use('/api', routes.copierStatusRoutes);
+  app.use('/api', routes.csvRoutes);
+  app.use('/api', routes.eventRoutes);
+  app.use('/api/accounts', routes.accountsRoutes);
+  app.use('/api/slave-config', routes.slaveConfigRoutes);
+  app.use('/api/link-platforms', routes.linkPlatformsRoutes);
+
+  // Error handling middleware
+  app.use((err, req, res, next) => {
+    console.error('[SERVER ERROR]', err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+  });
+
+  return { app, PORT };
+}
+
+// Kill process on port function (simplified)
+async function killProcessOnPort(port) {
+  try {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    
+    if (process.platform === 'win32') {
+      await execAsync(`netstat -ano | findstr :${port}`);
+    } else {
+      await execAsync(`lsof -ti:${port} | xargs kill -9`);
+    }
+  } catch (error) {
+    // Ignore errors - port might not be in use
+  }
+}
+
 // Start server function
 async function startProductionServer() {
   try {
@@ -116,7 +187,7 @@ async function startProductionServer() {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Create and start the server
-    const { app } = createServer();
+    const { app } = await createServer();
 
     return new Promise((resolve, reject) => {
       const startAttempt = (attempt = 1) => {
@@ -209,9 +280,9 @@ if (process.platform === 'win32') {
   });
 
   // Also handle Ctrl+C on Windows
-  const { createInterface } = await import('readline');
+  const readline = require('readline');
   if (process.stdin && process.stdin.isTTY) {
-    const rl = createInterface({
+    const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
@@ -228,7 +299,7 @@ process.on('uncaughtException', (error) => {
   logStream.end();
   errorLogStream.end();
 
-  // process.exit(1);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {

@@ -10,13 +10,105 @@ const {
   protocol,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
-const { spawn } = require('child_process');
+const { spawn, fork } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { EventSource } = require('eventsource');
 // ADD THIS LINE after other requires:
 const { startProductionServer, stopProductionServer, getServerUrl } = require('../server-production.cjs');
 const { setupDirectories } = require('../scripts/setup-directories.cjs');
+
+// Minimal server function for fallback
+async function startMinimalServer() {
+  return new Promise((resolve, reject) => {
+    try {
+      const port = getPortFromEnv();
+      const basePath = path.join(process.resourcesPath, 'server');
+      const minimalServerPath = path.join(basePath, 'src', 'minimal-production.cjs');
+
+      console.log('🚀 [MINIMAL] Starting minimal server...');
+      console.log('📂 Server path:', basePath);
+      console.log('🔌 Port:', port);
+      console.log('🎯 Entry point:', minimalServerPath);
+
+      // Verify minimal server file exists
+      if (!fs.existsSync(minimalServerPath)) {
+        const error = new Error(`Minimal server entry point not found: ${minimalServerPath}`);
+        console.error('❌', error.message);
+        reject(error);
+        return;
+      }
+
+      // Setup environment variables for the child process
+      const serverEnv = {
+        ...process.env,
+        PORT: port.toString(),
+        NODE_ENV: 'production',
+        ELECTRON_RESOURCES_PATH: app.getPath('userData'),
+        NODE_PATH: path.join(basePath, 'node_modules')
+      };
+
+      // Fork the minimal server process
+      const minimalServerProcess = fork(minimalServerPath, [], {
+        cwd: basePath,
+        env: serverEnv,
+        silent: false,
+        execArgv: []
+      });
+
+      console.log('🔄 Minimal server process forked with PID:', minimalServerProcess.pid);
+
+      // Track server startup
+      let serverStarted = false;
+      const startupTimeout = setTimeout(() => {
+        if (!serverStarted) {
+          console.error('❌ Minimal server startup timeout');
+          reject(new Error('Minimal server failed to start within 10 seconds'));
+        }
+      }, 10000);
+
+      // Handle IPC messages from child process
+      minimalServerProcess.on('message', (message) => {
+        console.log('[MINIMAL SERVER MESSAGE]', message);
+
+        if (message && message.type === 'server-started') {
+          if (!serverStarted) {
+            serverStarted = true;
+            clearTimeout(startupTimeout);
+            console.log('✅ Minimal server confirmed running via IPC');
+            resolve({ port, basePath: app.getPath('userData') });
+          }
+        } else if (message && message.type === 'server-error') {
+          console.error('❌ Minimal server reported error via IPC:', message.error);
+          clearTimeout(startupTimeout);
+          reject(new Error(`Minimal server error: ${message.error.message}`));
+        }
+      });
+
+      // Handle process exit
+      minimalServerProcess.on('close', (code) => {
+        console.log(`[MINIMAL SERVER] Process exited with code ${code}`);
+        if (!serverStarted) {
+          clearTimeout(startupTimeout);
+          reject(new Error(`Minimal server process exited with code ${code}`));
+        }
+      });
+
+      // Handle process errors
+      minimalServerProcess.on('error', (err) => {
+        console.error('[MINIMAL SERVER] Process error:', err);
+        clearTimeout(startupTimeout);
+        if (!serverStarted) {
+          reject(err);
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to start minimal server:', error);
+      reject(error);
+    }
+  });
+}
 
 // Función para manejar permisos de macOS de manera eficiente
 async function requestMacOSPermissions() {
@@ -190,6 +282,25 @@ ipcMain.handle('get-server-url', () => {
   return getServerUrl();
 });
 
+// Handler to check if server is running
+ipcMain.handle('check-server-status', async () => {
+  try {
+    const port = getPortFromEnv();
+    const response = await fetch(`http://localhost:${port}/api/status`);
+    return { 
+      running: response.ok, 
+      status: response.status,
+      url: `http://localhost:${port}`
+    };
+  } catch (error) {
+    return { 
+      running: false, 
+      error: error.message,
+      url: `http://localhost:${getPortFromEnv()}`
+    };
+  }
+});
+
 // Handler para abrir enlaces externos
 ipcMain.handle('open-external-link', async (event, url) => {
   try {
@@ -247,71 +358,123 @@ ipcMain.handle('get-window-config', () => {
 });
 
 async function startServer() {
-  try {
-    const port = getPortFromEnv();
+  const maxRetries = 3;
+  let retryCount = 0;
 
-    if (isDev) {
-      // In development, check if server is already running
-      console.log('🔍 [DEV] Checking if server is already running...');
+  while (retryCount < maxRetries) {
+    try {
+      const port = getPortFromEnv();
 
-      try {
-        const response = await fetch(`http://localhost:${port}/api/status`);
-        if (response.ok) {
-          console.log('✅ [DEV] Server is already running, skipping server startup');
-          return;
+      if (isDev) {
+        // In development, check if server is already running
+        console.log('🔍 [DEV] Checking if server is already running...');
+
+        try {
+          const response = await fetch(`http://localhost:${port}/api/status`);
+          if (response.ok) {
+            console.log('✅ [DEV] Server is already running, skipping server startup');
+            return;
+          }
+        } catch (error) {
+          console.log('🚀 [DEV] Server not running, starting server process...');
         }
-      } catch (error) {
-        console.log('🚀 [DEV] Server not running, starting server process...');
+
+        // In development, spawn the dev server as a child process
+        const serverPath = path.join(__dirname, '../server/src/dev.js');
+
+        serverProcess = spawn('node', [serverPath], {
+          cwd: path.join(__dirname, '..'),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, PORT: port },
+          detached: process.platform !== 'win32',
+          windowsHide: true,
+        });
+
+        serverProcess.stdout.on('data', data => {
+          console.log('[DEV SERVER]', data.toString());
+        });
+
+        serverProcess.stderr.on('data', data => {
+          console.error('[DEV SERVER ERROR]', data.toString());
+        });
+
+        serverProcess.on('close', code => {
+          console.log(`[DEV SERVER] Process closed with code ${code}`);
+          serverProcess = null;
+        });
+
+        serverProcess.on('error', err => {
+          console.error('[DEV SERVER] Process error:', err);
+        });
+
+        // Wait for server to start
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return;
       }
 
-      // In development, spawn the dev server as a child process
-      const serverPath = path.join(__dirname, '../server/src/dev.js');
+      // Production: Use the new server-production.cjs manager to spawn full server
+      console.log(`🚀 [PRODUCTION] Starting full backend server... (attempt ${retryCount + 1}/${maxRetries})`);
+      
+      try {
+        await startProductionServer();
+        console.log('✅ [PRODUCTION] Full server started successfully');
+        return; // Success, exit the retry loop
+      } catch (fullServerError) {
+        console.warn('⚠️ [PRODUCTION] Full server failed, trying minimal server...');
+        console.warn('Full server error:', fullServerError.message);
+        
+        // Try minimal server as fallback
+        try {
+          await startMinimalServer();
+          console.log('✅ [PRODUCTION] Minimal server started successfully');
+          return; // Success with minimal server
+        } catch (minimalServerError) {
+          console.error('❌ [PRODUCTION] Both full and minimal servers failed');
+          console.error('Minimal server error:', minimalServerError.message);
+          throw minimalServerError; // This will be caught by the outer catch
+        }
+      }
 
-      serverProcess = spawn('node', [serverPath], {
-        cwd: path.join(__dirname, '..'),
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, PORT: port },
-        detached: process.platform !== 'win32',
-        windowsHide: true,
+    } catch (error) {
+      retryCount++;
+      console.error(`❌ Failed to start server (attempt ${retryCount}/${maxRetries}):`, error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall
       });
 
-      serverProcess.stdout.on('data', data => {
-        console.log('[DEV SERVER]', data.toString());
-      });
+      if (retryCount < maxRetries) {
+        console.log(`🔄 Retrying server startup in 3 seconds... (${retryCount}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        continue;
+      }
 
-      serverProcess.stderr.on('data', data => {
-        console.error('[DEV SERVER ERROR]', data.toString());
-      });
+      // All retries failed
+      const errorDetails = `
+Error: ${error.message}
 
-      serverProcess.on('close', code => {
-        console.log(`[DEV SERVER] Process closed with code ${code}`);
-        serverProcess = null;
-      });
+Details:
+- Code: ${error.code || 'N/A'}
+- Error Number: ${error.errno || 'N/A'}
+- System Call: ${error.syscall || 'N/A'}
+- Attempts: ${retryCount}/${maxRetries}
 
-      serverProcess.on('error', err => {
-        console.error('[DEV SERVER] Process error:', err);
-      });
+The application will continue running, but the backend server is not available.
+Please check the console logs for more information.
+      `.trim();
 
-      // Wait for server to start
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return;
+      dialog.showErrorBox(
+        'Server Startup Error',
+        errorDetails
+      );
+
+      // Don't quit the app - let it continue running
+      // The frontend can still load and show an error state
+      break;
     }
-
-    // Production: Use the new server-production.cjs manager to spawn full server
-    console.log('🚀 [PRODUCTION] Starting full backend server...');
-    await startProductionServer();
-    console.log('✅ [PRODUCTION] Server started successfully');
-
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-
-    // Show error dialog to user
-    dialog.showErrorBox(
-      'Server Startup Error',
-      `Failed to start the backend server:\n\n${error.message}\n\nThe application will now exit.`
-    );
-
-    app.quit();
   }
 }
 
