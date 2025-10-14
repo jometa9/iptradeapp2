@@ -138,7 +138,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
     }
 
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/link-platforms/status`, {
         headers: {
           'x-api-key': secretKey || 'test-key', // TEMPORAL: usar test-key si no hay secretKey
