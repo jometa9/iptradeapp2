@@ -212,7 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const baseUrl =
         window.location.hostname === 'localhost'
           ? 'http://localhost:3000'
-          : `${window.location.protocol}//${window.location.hostname}:30`;
+          : `${window.location.protocol}//${window.location.hostname}:3000`;
 
       const response = await fetch(`${baseUrl}/api/validate-token`, {
         method: 'POST',

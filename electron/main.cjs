@@ -684,7 +684,7 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowConfig);
-  // mainWindow.webContents.openDevTools();
+   mainWindow.webContents.openDevTools();
 
   // Log de la configuración aplicada
 
