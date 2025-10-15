@@ -81,19 +81,10 @@ function startProductionServer() {
 
       // Verify server file exists
       if (!fs.existsSync(serverEntryPoint)) {
-        console.error('❌', `Server entry point not found: ${serverEntryPoint}`);
-        
-        // Try minimal server as fallback
-        const minimalServerPath = path.join(basePath, 'src', 'minimal-production.cjs');
-        if (fs.existsSync(minimalServerPath)) {
-          console.log('🔄 Falling back to minimal server...');
-          serverEntryPoint = minimalServerPath;
-        } else {
-          const error = new Error(`No server entry point found. Tried: ${serverEntryPoint} and ${minimalServerPath}`);
-          console.error('❌', error.message);
-          reject(error);
-          return;
-        }
+        const error = new Error(`Server entry point not found: ${serverEntryPoint}`);
+        console.error('❌', error.message);
+        reject(error);
+        return;
       }
 
       // Setup environment variables for the child process
@@ -157,20 +148,6 @@ function startProductionServer() {
 
         if (!serverStarted) {
           clearTimeout(startupTimeout);
-          
-          // If the full server failed and we haven't tried minimal server yet, try it
-          if (code === 9 && !serverEntryPoint.includes('minimal-production.cjs')) {
-            console.log('🔄 Full server failed with exit code 9, trying minimal server...');
-            const minimalServerPath = path.join(basePath, 'src', 'minimal-production.cjs');
-            if (fs.existsSync(minimalServerPath)) {
-              // Retry with minimal server
-              setTimeout(() => {
-                startProductionServer().then(resolve).catch(reject);
-              }, 1000);
-              return;
-            }
-          }
-          
           reject(new Error(`Server process exited with code ${code}`));
         }
       });
