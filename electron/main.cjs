@@ -539,13 +539,39 @@ function createWindow() {
   // Configuración de la ventana según el sistema operativo
   const isMacOS = process.platform === 'darwin';
 
+  // Determinar la ruta correcta del icono según el entorno
+  let iconPath;
+  if (isDev) {
+    iconPath = path.join(__dirname, '../public/app-icon.ico');
+  } else {
+    // En producción, buscar el icono en varias ubicaciones posibles
+    const possiblePaths = [
+      path.join(process.resourcesPath, 'app-icon.ico'),
+      path.join(process.resourcesPath, '..', 'app-icon.ico'),
+      path.join(__dirname, '../dist/app-icon.ico'),
+      path.join(process.resourcesPath, 'app.asar.unpacked/dist/app-icon.ico'),
+    ];
+    
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        iconPath = possiblePath;
+        break;
+      }
+    }
+    
+    // Si no se encuentra en ninguna ubicación, usar la primera como fallback
+    if (!iconPath) {
+      iconPath = possiblePaths[0];
+    }
+  }
+
   const windowConfig = {
     width: 800,
     minWidth: 800,
     height: 700,
     minHeight: 700,
     resizable: true,
-    icon: path.join(__dirname, '../public/iconShadow025.png'),
+    icon: iconPath,
     title: 'IPTRADE',
     webPreferences: {
       nodeIntegration: false,
@@ -577,7 +603,23 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowConfig);
-   mainWindow.webContents.openDevTools();
+   //mainWindow.webContents.openDevTools();
+
+  // Forzar el uso del icono personalizado en Windows
+  if (process.platform === 'win32') {
+    if (fs.existsSync(iconPath)) {
+      const icon = nativeImage.createFromPath(iconPath);
+      if (!icon.isEmpty()) {
+        // Establecer el icono de la ventana
+        mainWindow.setIcon(icon);
+        console.log('✅ Icono de ventana establecido:', iconPath);
+      } else {
+        console.warn('⚠️ El icono está vacío:', iconPath);
+      }
+    } else {
+      console.warn('⚠️ No se encontró el icono en:', iconPath);
+    }
+  }
 
   // Log de la configuración aplicada
 
@@ -733,6 +775,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Configurar el AppUserModelId PRIMERO en Windows para identificación correcta
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.iptrade.app');
+  }
+  
   // Set app as default protocol handler for iptrade://
   const userDataPath = setupDirectories();
   console.log(`📂 User data initialized: ${userDataPath}`);
@@ -816,7 +863,7 @@ app.whenReady().then(async () => {
 
   // Configurar el icono del dock en macOS
   if (process.platform === 'darwin') {
-    app.dock.setIcon(path.join(__dirname, '../public/iconShadow025.png'));
+    app.dock.setIcon(path.join(__dirname, '../public/app-icon.ico'));
   }
 
   app.on('activate', function () {
