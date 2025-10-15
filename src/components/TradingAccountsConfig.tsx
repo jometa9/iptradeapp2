@@ -370,7 +370,7 @@ const TradingAccountsConfigComponent = () => {
   // Fetch pending accounts count
   const fetchPendingAccountsCount = useCallback(async () => {
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
         headers: {
           'x-api-key': secretKey || '',
@@ -759,7 +759,7 @@ const TradingAccountsConfigComponent = () => {
   const disconnectSlaveAccount = async (slaveAccountId: string, masterAccountId: string) => {
     try {
       setIsDisconnecting(slaveAccountId);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(
         `http://localhost:${serverPort}/api/slave-config/${slaveAccountId}/disconnect/${masterAccountId}`,
         {
@@ -797,7 +797,7 @@ const TradingAccountsConfigComponent = () => {
   const disconnectAllSlaves = async (masterAccountId: string) => {
     try {
       setIsDisconnecting(masterAccountId);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       const response = await fetch(
         `http://localhost:${serverPort}/api/slave-config/master/${masterAccountId}/disconnect-all`,
         {
@@ -847,7 +847,7 @@ const TradingAccountsConfigComponent = () => {
     setIsSubmitting(true);
 
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
       let response;
       let payload;
 

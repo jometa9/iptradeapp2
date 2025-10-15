@@ -131,7 +131,7 @@ export const TradingAccountsManager: React.FC = () => {
     masterAccountId: 'none',
   });
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Register subscription change callback

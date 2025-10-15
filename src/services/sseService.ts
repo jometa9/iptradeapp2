@@ -12,7 +12,7 @@ export const SSEService = {
       return;
     }
 
-    const serverPort = import.meta.env.VITE_SERVER_PORT || '30';
+    const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
     const baseUrl = import.meta.env.VITE_SERVER_URL || `http://localhost:${serverPort}`;
     const sseUrl = `${baseUrl}/api/csv/events?apiKey=${secretKey}`;
 

@@ -1,6 +1,6 @@
 {
   "server": {
-    "port": 30,
+    "port": 3000,
     "environment": "development"
   },
   "paths": {

@@ -1,6 +1,6 @@
 {
   "app": {
-    "serverPort": 30,
+    "serverPort": 3000,
     "environment": "production"
   },
   "paths": {
