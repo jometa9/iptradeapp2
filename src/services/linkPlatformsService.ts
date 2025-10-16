@@ -1,4 +1,4 @@
-const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:7777';
 
 export interface LinkPlatformsResult {
   success: boolean;
@@ -79,11 +79,11 @@ export const linkPlatformsService = {
     console.log('🔍 FRONTEND SERVICE: findBots called at', new Date().toISOString());
     console.log('🔍 FRONTEND SERVICE: baseUrl:', baseUrl);
     console.log('🔍 FRONTEND SERVICE: secretKey length:', secretKey?.length || 0);
-    
+
     try {
       const url = `${baseUrl}/api/link-platforms/find-bots`;
       console.log('🔍 FRONTEND SERVICE: Making POST request to:', url);
-      
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -96,7 +96,10 @@ export const linkPlatformsService = {
       console.log(`🔍 FRONTEND SERVICE: Response received after ${duration}ms`);
       console.log('🔍 FRONTEND SERVICE: Response status:', response.status);
       console.log('🔍 FRONTEND SERVICE: Response ok:', response.ok);
-      console.log('🔍 FRONTEND SERVICE: Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log(
+        '🔍 FRONTEND SERVICE: Response headers:',
+        Object.fromEntries(response.headers.entries())
+      );
 
       if (!response.ok) {
         const errorData = await response.text();

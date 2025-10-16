@@ -60,7 +60,7 @@ export const PlatformLinker: React.FC = () => {
   const [scanning, setScanning] = useState(false);
   const { secretKey } = useAuth();
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Instalar bot en una plataforma

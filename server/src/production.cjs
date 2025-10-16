@@ -104,7 +104,7 @@ console.warn = (...args) => {
 // Create server function
 async function createServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || 7777;
 
   // Load routes if not already loaded
   if (!routes) {
@@ -155,7 +155,7 @@ async function killProcessOnPort(port) {
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
-    
+
     if (process.platform === 'win32') {
       await execAsync(`netstat -ano | findstr :${port}`);
     } else {
@@ -169,7 +169,7 @@ async function killProcessOnPort(port) {
 // Start server function
 async function startProductionServer() {
   try {
-    const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || 7777;
 
     console.log('='.repeat(60));
     console.log('🚀 IPTRADE Production Server Starting...');
@@ -191,7 +191,7 @@ async function startProductionServer() {
 
     return new Promise((resolve, reject) => {
       const startAttempt = (attempt = 1) => {
-        const server = app.listen(PORT, '127.0.0.1', (err) => {
+        const server = app.listen(PORT, '127.0.0.1', err => {
           if (err) {
             console.error('Failed to start server:', err);
             reject(err);
@@ -214,7 +214,7 @@ async function startProductionServer() {
           resolve(server);
         });
 
-        server.on('error', async (err) => {
+        server.on('error', async err => {
           if (err.code === 'EADDRINUSE') {
             console.warn(`⚠️  Port ${PORT} is in use (attempt ${attempt}/3)`);
 
@@ -242,7 +242,6 @@ async function startProductionServer() {
 
       startAttempt();
     });
-
   } catch (error) {
     console.error('💥 Fatal Error Starting Production Server:', error);
     console.error('Stack:', error.stack);
@@ -251,7 +250,7 @@ async function startProductionServer() {
 }
 
 // Handle process termination gracefully
-const shutdownGracefully = (signal) => {
+const shutdownGracefully = signal => {
   console.log('');
   console.log(`🛑 Received ${signal} signal`);
   console.log('🔄 Shutting down server gracefully...');
@@ -273,7 +272,7 @@ process.on('SIGINT', () => shutdownGracefully('SIGINT'));
 // Handle Windows signals
 if (process.platform === 'win32') {
   // Windows doesn't support POSIX signals well, so we use IPC
-  process.on('message', (msg) => {
+  process.on('message', msg => {
     if (msg === 'shutdown') {
       shutdownGracefully('shutdown message');
     }
@@ -284,14 +283,14 @@ if (process.platform === 'win32') {
   if (process.stdin && process.stdin.isTTY) {
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
     rl.on('SIGINT', () => shutdownGracefully('SIGINT'));
   }
 }
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('💥 Uncaught Exception:', error);
   console.error('Stack:', error.stack);
 
@@ -308,27 +307,27 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start the server with error handling
-startProductionServer().catch((error) => {
+startProductionServer().catch(error => {
   console.error('💥 Failed to start server:', error);
   console.error('💥 Error details:', {
     message: error.message,
     stack: error.stack,
     code: error.code,
     errno: error.errno,
-    syscall: error.syscall
+    syscall: error.syscall,
   });
-  
+
   // Send error message to parent process if available
   if (process.send) {
-    process.send({ 
-      type: 'server-error', 
+    process.send({
+      type: 'server-error',
       error: {
         message: error.message,
         code: error.code,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
   }
-  
+
   process.exit(1);
 });

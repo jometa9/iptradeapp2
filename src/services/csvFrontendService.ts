@@ -72,7 +72,7 @@ class CSVFrontendService extends SimpleEventEmitter {
   constructor() {
     super();
     // Configurar puerto del servidor
-    this.serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+    this.serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
     this.init();
   }
 
@@ -260,7 +260,7 @@ class CSVFrontendService extends SimpleEventEmitter {
           'x-api-key': this.getApiKey(),
         },
       });
-      
+
       if (response.ok) {
         const result = await response.json();
         return result;
@@ -319,7 +319,7 @@ class CSVFrontendService extends SimpleEventEmitter {
 
       // Obtener datos actualizados usando el endpoint unificado
       const unifiedData = await this.getUnifiedAccountData();
-      
+
       // Emitir eventos con los datos actualizados
       this.emit('csvUpdated', unifiedData);
       this.emit('dataUpdated', unifiedData);
@@ -394,7 +394,7 @@ class CSVFrontendService extends SimpleEventEmitter {
 
       // Obtener datos actualizados usando el endpoint unificado
       const unifiedData = await this.getUnifiedAccountData();
-      
+
       // Emitir eventos con los datos actualizados
       this.emit('csvUpdated', unifiedData);
       this.emit('dataUpdated', unifiedData);
@@ -498,7 +498,7 @@ class CSVFrontendService extends SimpleEventEmitter {
 
         // Obtener datos actualizados usando el endpoint unificado
         const unifiedData = await this.getUnifiedAccountData();
-        
+
         // Emitir eventos con los datos actualizados
         this.emit('csvUpdated', unifiedData);
         this.emit('dataUpdated', unifiedData);

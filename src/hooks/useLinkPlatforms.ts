@@ -71,13 +71,18 @@ class LinkPlatformsManager {
     this.listeners.forEach(callback => callback());
   }
 
-  startPolling(secretKey: string, isLinking: boolean, onFindBotsCompleted?: () => void, linkingSource?: 'link' | 'bot' | null) {
+  startPolling(
+    secretKey: string,
+    isLinking: boolean,
+    onFindBotsCompleted?: () => void,
+    linkingSource?: 'link' | 'bot' | null
+  ) {
     // Find Bots is now synchronous, no need for polling
     if (linkingSource === 'bot') {
       console.log('🔍 Skipping polling for Find Bots (now synchronous)');
       return;
     }
-    
+
     if (this.isPolling || !isLinking || !secretKey) return;
 
     this.isPolling = true;
@@ -119,16 +124,15 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
   // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
   // Track isLinking state changes
-  const setIsLinkingWithLog = useCallback((
-    newValue: boolean,
-    reason: string,
-    source?: 'link' | 'bot' | null
-  ) => {
-    setIsLinking(newValue);
-    if (newValue === false || source !== undefined) {
-      setLinkingSource(source || null);
-    }
-  }, []);
+  const setIsLinkingWithLog = useCallback(
+    (newValue: boolean, reason: string, source?: 'link' | 'bot' | null) => {
+      setIsLinking(newValue);
+      if (newValue === false || source !== undefined) {
+        setLinkingSource(source || null);
+      }
+    },
+    []
+  );
 
   // Check if Link Platforms is currently running on server
   const checkLinkingStatus = useCallback(async () => {
@@ -138,7 +142,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
     }
 
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
       const response = await fetch(`http://localhost:${serverPort}/api/link-platforms/status`, {
         headers: {
           'x-api-key': secretKey || 'test-key', // TEMPORAL: usar test-key si no hay secretKey
@@ -215,7 +219,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
     console.log('🔍 FRONTEND HOOK: findBots called at', new Date().toISOString());
     console.log('🔍 FRONTEND HOOK: secretKey exists:', !!secretKey);
     console.log('🔍 FRONTEND HOOK: current isLinking state:', isLinking);
-    
+
     if (!secretKey) {
       console.error('❌ FRONTEND HOOK: No secretKey available');
       setError('Authentication required');
@@ -237,10 +241,10 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
     try {
       console.log('🔍 FRONTEND HOOK: Starting Find Bots (synchronous)...');
       console.log('🔍 FRONTEND HOOK: Calling linkPlatformsService.findBots...');
-      
+
       // The API now waits for completion before responding
       const result = await linkPlatformsService.findBots(secretKey);
-      
+
       const duration = Date.now() - startTime;
       console.log(`🔍 FRONTEND HOOK: Find Bots completed in ${duration}ms:`, result);
       console.log('🔍 FRONTEND HOOK: Result structure:', {
@@ -248,19 +252,19 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
         message: result.message,
         hasResult: !!result.result,
         csvFilesCount: result.result?.csvFiles?.length || 0,
-        errorsCount: result.result?.errors?.length || 0
+        errorsCount: result.result?.errors?.length || 0,
       });
-      
+
       // Process completed, update state
       setLastResult(result);
       setIsLinkingWithLog(false, 'find bots completed successfully');
-      
+
       // Trigger unified data refresh immediately after completion
       if (onFindBotsCompleted) {
         console.log('✅ FRONTEND HOOK: Find Bots completed, refreshing unified data...');
         onFindBotsCompleted();
       }
-      
+
       if (result.result?.errors?.length > 0) {
         console.warn('⚠️ FRONTEND HOOK: Find Bots completed with errors:', result.result.errors);
       }
@@ -273,7 +277,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
       console.error('❌ FRONTEND HOOK: Error details:', err);
       setError(errorMessage);
       setIsLinkingWithLog(false, 'find bots request failed');
-      
+
       throw err;
     }
   };
@@ -302,7 +306,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
             setError(null);
             setProgress({
               message: data.message || 'Starting Link Platforms process...',
-              progress: data.progress
+              progress: data.progress,
             });
             break;
 
@@ -310,21 +314,21 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
             setProgress({
               message: data.message || 'Processing...',
               progress: data.progress,
-              details: data.details
+              details: data.details,
             });
             break;
 
           case 'scanning':
             setProgress({
               message: data.message || 'Scanning for platforms...',
-              progress: data.progress
+              progress: data.progress,
             });
             break;
 
           case 'syncing':
             setProgress({
               message: data.message || 'Syncing files...',
-              progress: data.progress
+              progress: data.progress,
             });
             break;
 
@@ -338,7 +342,7 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
             }
             setProgress({
               message: data.message || 'Process completed successfully',
-              progress: data.progress || { current: 100, total: 100, percentage: 100 }
+              progress: data.progress || { current: 100, total: 100, percentage: 100 },
             });
             // Removed clearHiddenAccounts - functionality moved to useUnifiedAccountData
 
@@ -347,9 +351,9 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
             } else {
               // Check if this was a Find Bots process completion BEFORE resetting linkingSource
               const wasFindBotsProcess = linkingSource === 'bot';
-              
+
               setIsLinkingWithLog(false, 'SSE completed event');
-              
+
               // If this was a Find Bots process completion, trigger unified data refresh IMMEDIATELY
               if (wasFindBotsProcess && onFindBotsCompleted) {
                 console.log('✅ Find Bots completed, refreshing unified data...');
@@ -422,11 +426,11 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
   // Polling fallback: Check linking status every second when isLinking is true (usando singleton)
   useEffect(() => {
     const manager = LinkPlatformsManager.getInstance();
-    
+
     if (isLinking && secretKey) {
       // Iniciar polling solo si no está ya en curso
       manager.startPolling(secretKey, isLinking, onFindBotsCompleted, linkingSource);
-      
+
       // Suscribirse a notificaciones de completion
       const unsubscribe = manager.addListener(() => {
         if (isLinking) {

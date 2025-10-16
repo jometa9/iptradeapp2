@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '')
 
-  // Get server port from environment variable or default to 3000
-  const serverPort = env.VITE_SERVER_PORT || env.PORT || '3000'
+  // Get server port from environment variable or default to 7777
+  const serverPort = env.VITE_SERVER_PORT || env.PORT || '7777'
 
   return {
     base: './',

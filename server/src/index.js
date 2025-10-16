@@ -6,7 +6,6 @@ import { join } from 'path';
 import swaggerUi from 'swagger-ui-express';
 
 // import mt5Routes from './routes/mt5.js';
-import linkPlatformsController from './controllers/linkPlatformsController.js';
 import { killProcessOnPort } from './controllers/ordersController.js';
 import accountsRoutes from './routes/accounts.js';
 import configRoutes from './routes/config.js';
@@ -37,7 +36,7 @@ if (existsSync(rootEnvPath)) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7777;
 
 app.use(cors());
 app.use(express.json());
@@ -72,7 +71,6 @@ app.use((err, req, res, next) => {
 export default app;
 
 async function startServer() {
-
   // Kill any existing processes on this port
   await killProcessOnPort(PORT);
 
@@ -89,7 +87,7 @@ async function startServer() {
 
       server.on('error', async err => {
         if (err.code === 'EADDRINUSE') {
-          (`⚠️  Port ${PORT} is still in use (attempt ${attempt}/3), cleaning again...`);
+          `⚠️  Port ${PORT} is still in use (attempt ${attempt}/3), cleaning again...`;
 
           if (attempt < 3) {
             // Try to kill processes again and retry
@@ -120,6 +118,10 @@ async function startServer() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].endsWith('server.js') || process.env.NODE_ENV === 'production') {
+if (
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1].endsWith('server.js') ||
+  process.env.NODE_ENV === 'production'
+) {
   startServer();
 }

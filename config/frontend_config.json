@@ -1,6 +1,6 @@
 {
   "app": {
-    "serverPort": 3000,
+    "serverPort": 7777,
     "environment": "production",
     "helpUrl": "https://iptradecopier.com/faqs"
   },

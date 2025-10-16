@@ -3,7 +3,6 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowBigRight,
-  CheckCircle,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -305,7 +304,8 @@ const TradingAccountsConfigComponent = () => {
   }, [serverStats]);
 
   // Derived values for subscription limits
-  const totalConfiguredAccounts = serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
+  const totalConfiguredAccounts =
+    serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
   const totalAccounts = serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts;
   const canAddMoreAccounts = userInfo ? canCreateMoreAccounts(userInfo, totalAccounts) : false;
   const planDisplayName = userInfo ? getPlanDisplayName(userInfo.subscriptionType) : 'Free';
@@ -370,7 +370,7 @@ const TradingAccountsConfigComponent = () => {
   // Fetch pending accounts count
   const fetchPendingAccountsCount = useCallback(async () => {
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
       const response = await fetch(`http://localhost:${serverPort}/api/accounts/pending`, {
         headers: {
           'x-api-key': secretKey || '',
@@ -759,7 +759,7 @@ const TradingAccountsConfigComponent = () => {
   const disconnectSlaveAccount = async (slaveAccountId: string, masterAccountId: string) => {
     try {
       setIsDisconnecting(slaveAccountId);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
       const response = await fetch(
         `http://localhost:${serverPort}/api/slave-config/${slaveAccountId}/disconnect/${masterAccountId}`,
         {
@@ -797,7 +797,7 @@ const TradingAccountsConfigComponent = () => {
   const disconnectAllSlaves = async (masterAccountId: string) => {
     try {
       setIsDisconnecting(masterAccountId);
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
       const response = await fetch(
         `http://localhost:${serverPort}/api/slave-config/master/${masterAccountId}/disconnect-all`,
         {
@@ -847,7 +847,7 @@ const TradingAccountsConfigComponent = () => {
     setIsSubmitting(true);
 
     try {
-      const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+      const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
       let response;
       let payload;
 
@@ -1084,7 +1084,7 @@ const TradingAccountsConfigComponent = () => {
 
       await fetchAccounts();
       await fetchPendingAccountsCount();
-      
+
       // Asegurarse de que los datos unificados se actualicen también
       await refreshCSVData();
 
@@ -1253,7 +1253,6 @@ const TradingAccountsConfigComponent = () => {
     }
   };
 
-
   const getStatusBadge = (status: boolean) => {
     return status ? (
       <Badge className="bg-green-100 text-green-800 border border-green-400">
@@ -1326,20 +1325,25 @@ const TradingAccountsConfigComponent = () => {
       {/* Debug logs removed */}
 
       {/* Subscription Info Card para planes con límites */}
-      {userInfo && shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts) && (
-        <Card
-          className="border-yellow-200 bg-yellow-50 flex items-center p-4  gap-3 mb-3"
-          style={fadeInDownAnimation}
-        >
-          <AlertTriangle className="w-5 h-5 text-yellow-900" />
-          <div className="gap-3 ">
-            <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
-            <p className="text-sm mt-1.5 text-yellow-800">
-              {getAccountLimitMessage(userInfo, totalAccounts)} {getLotSizeMessage(userInfo)}
-            </p>
-          </div>
-        </Card>
-      )}
+      {userInfo &&
+        shouldShowSubscriptionLimitsCardDetailed(
+          userInfo,
+          totalConfiguredAccounts,
+          totalAccounts
+        ) && (
+          <Card
+            className="border-yellow-200 bg-yellow-50 flex items-center p-4  gap-3 mb-3"
+            style={fadeInDownAnimation}
+          >
+            <AlertTriangle className="w-5 h-5 text-yellow-900" />
+            <div className="gap-3 ">
+              <CardTitle className="text-yellow-800 mt-1">Subscription Limits</CardTitle>
+              <p className="text-sm mt-1.5 text-yellow-800">
+                {getAccountLimitMessage(userInfo, totalAccounts)} {getLotSizeMessage(userInfo)}
+              </p>
+            </div>
+          </Card>
+        )}
 
       {/* Eliminada la tarjeta verde para usuarios ilimitados según requisitos */}
 
@@ -1390,8 +1394,6 @@ const TradingAccountsConfigComponent = () => {
               </div>
             </div>
           </div>
-
-
 
           {/* Add/Edit Account Form */}
           {(isAddingAccount || editingAccount) && (
@@ -1474,9 +1476,11 @@ const TradingAccountsConfigComponent = () => {
                       {/* Para cuentas nuevas o cuentas master existentes, mostrar todos los campos */}
 
                       {/* Mostrar sección de Account Type solo si no es una cuenta master con slaves */}
-                      {!(editingAccount?.accountType === 'master' && 
-                          editingAccount.totalSlaves && 
-                          editingAccount.totalSlaves > 0) && (
+                      {!(
+                        editingAccount?.accountType === 'master' &&
+                        editingAccount.totalSlaves &&
+                        editingAccount.totalSlaves > 0
+                      ) && (
                         <div
                           className={
                             // Si estamos editando una cuenta y seleccionamos master o pending, hacer que ocupe todo el ancho
@@ -1517,63 +1521,61 @@ const TradingAccountsConfigComponent = () => {
                       )}
 
                       {/* Mostrar botón de Disconnect All Slaves si es master con slaves */}
-                      {editingAccount?.accountType === 'master' && 
-                        editingAccount.totalSlaves && 
-                        editingAccount.totalSlaves > 0 ? (
-                          <div className="col-span-1">
-                            {!disconnectAllFromEditForm ? (
+                      {editingAccount?.accountType === 'master' &&
+                      editingAccount.totalSlaves &&
+                      editingAccount.totalSlaves > 0 ? (
+                        <div className="col-span-1">
+                          {!disconnectAllFromEditForm ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 w-full"
+                              onClick={e => {
+                                e.preventDefault();
+                                setDisconnectAllFromEditForm(true);
+                              }}
+                            >
+                              <Unlink className="h-4 w-4 mr-2" />
+                              Disconnect All Slaves
+                            </Button>
+                          ) : (
+                            <div className="flex space-x-4">
                               <Button
                                 type="button"
                                 variant="outline"
-                                className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 w-full"
-                                onClick={(e) => {
+                                className="flex-1 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
+                                onClick={async e => {
                                   e.preventDefault();
-                                  setDisconnectAllFromEditForm(true);
+                                  await disconnectAllSlaves(editingAccount.accountNumber);
+                                  setDisconnectAllFromEditForm(false);
+                                  closeEditForm();
                                 }}
+                                disabled={isDisconnecting === editingAccount.id}
                               >
-                                <Unlink className="h-4 w-4 mr-2" />
-                                Disconnect All Slaves
+                                {isDisconnecting === editingAccount.id ? (
+                                  <>Disconnecting Slaves...</>
+                                ) : (
+                                  <>Disconnect Slaves</>
+                                )}
                               </Button>
-                            ) : (
-                              <div className="flex space-x-4">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="flex-1 bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
-                                  onClick={async (e) => {
-                                    e.preventDefault();
-                                    await disconnectAllSlaves(editingAccount.accountNumber);
-                                    setDisconnectAllFromEditForm(false);
-                                    closeEditForm();
-                                  }}
-                                  disabled={isDisconnecting === editingAccount.id}
-                                >
-                                  {isDisconnecting === editingAccount.id ? (
-                                    <>
-                                      Disconnecting Slaves...
-                                    </>
-                                  ) : (
-                                    <>
-                                      Disconnect Slaves
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="flex-1 bg-white border-gray-300 text-gray-700 hover:bg-gray-100"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    cancelDisconnectFromEditForm();
-                                  }}
-                                  disabled={isDisconnecting === editingAccount.id}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                      ) : <></>}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="flex-1 bg-white border-gray-300 text-gray-700 hover:bg-gray-100"
+                                onClick={e => {
+                                  e.preventDefault();
+                                  cancelDisconnectFromEditForm();
+                                }}
+                                disabled={isDisconnecting === editingAccount.id}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <></>
+                      )}
 
                       {/* Configuration fields for Master accounts - only prefix/suffix */}
                       {formState.accountType === 'master' && editingAccount && (
@@ -1648,7 +1650,7 @@ const TradingAccountsConfigComponent = () => {
                                       }}
                                       className="bg-white border border-gray-200"
                                     />
-                                    <ArrowBigRight className="h-12 w-12 text-gray-500"/>
+                                    <ArrowBigRight className="h-12 w-12 text-gray-500" />
                                     <Input
                                       placeholder="To symbol"
                                       value={to}
@@ -2013,8 +2015,8 @@ const TradingAccountsConfigComponent = () => {
                                       }}
                                       className="bg-white border border-gray-200"
                                     />
-                                          <ArrowBigRight className="h-12 w-12 text-gray-500"/>
-                                          <Input
+                                    <ArrowBigRight className="h-12 w-12 text-gray-500" />
+                                    <Input
                                       placeholder="To symbol"
                                       value={to}
                                       onChange={e => {
@@ -2029,25 +2031,24 @@ const TradingAccountsConfigComponent = () => {
                                       }}
                                       className="bg-white border border-gray-200"
                                     />
-     
+
                                     <Button
-      variant="outline"
-      size="sm"
-      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
-      onClick={() => {
-        const newTranslations = {
-          ...(formState.translations || {}),
-        };
-        delete newTranslations[from];
-        setFormState(prev => ({
-          ...prev,
-          translations: newTranslations,
-        }));
-      }}
-      
-    >
-      <Trash className="h-4 w-4 text-red-600" />
-    </Button>
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-9 w-20 p-0 ml-1 rounded-lg bg-white border border-red-200 hover:bg-red-50"
+                                      onClick={() => {
+                                        const newTranslations = {
+                                          ...(formState.translations || {}),
+                                        };
+                                        delete newTranslations[from];
+                                        setFormState(prev => ({
+                                          ...prev,
+                                          translations: newTranslations,
+                                        }));
+                                      }}
+                                    >
+                                      <Trash className="h-4 w-4 text-red-600" />
+                                    </Button>
                                   </div>
                                 )
                               )}
@@ -2065,7 +2066,6 @@ const TradingAccountsConfigComponent = () => {
                                   }));
                                 }}
                                 className="w-full bg-white text-blue-800 border border-gray-200"
-
                               >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Translation
@@ -2271,18 +2271,20 @@ const TradingAccountsConfigComponent = () => {
                                         Suffix {masterAccount.config.suffix}
                                       </div>
                                     )}
-                                    
+
                                     {/* Translation badges for master accounts */}
-                                    {masterAccount?.translations && Object.keys(masterAccount.translations).length > 0 && 
-                                      Object.entries(masterAccount.translations).map(([from, to]) => (
-                                        <div 
-                                          key={`translate-${from}-${to}`}
-                                          className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
-                                        >
-                                          {String(from)} to {String(to)}
-                                        </div>
-                                      ))
-                                    }
+                                    {masterAccount?.translations &&
+                                      Object.keys(masterAccount.translations).length > 0 &&
+                                      Object.entries(masterAccount.translations).map(
+                                        ([from, to]) => (
+                                          <div
+                                            key={`translate-${from}-${to}`}
+                                            className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
+                                          >
+                                            {String(from)} to {String(to)}
+                                          </div>
+                                        )
+                                      )}
                                   </div>
                                 </td>
                                 <td className=" px-4 py-2 whitespace-nowrap align-middle actions-column">
@@ -2431,7 +2433,7 @@ const TradingAccountsConfigComponent = () => {
                                       className={`bg-white hover:bg-muted/50 ${recentlyDeployedSlaves.has(accountToUse.accountNumber) ? 'ring-2 ring-green-500 ring-opacity-50' : ''}`}
                                     >
                                       <td className=" px-2 py-1.5 align-middle"></td>
-               
+
                                       <td className=" px-4 py-1.5 align-middle actions-column">
                                         <div className="flex items-center justify-center">
                                           <Switch
@@ -2550,17 +2552,22 @@ const TradingAccountsConfigComponent = () => {
                                               }
 
                                               // Translates (mostrar cada translate como un badge separado)
-                                              if (config.translations && Object.keys(config.translations).length > 0) {
-                                                Object.entries(config.translations).forEach(([from, to]) => {
-                                                  labels.push(
-                                                    <div
-                                                      key={`translate-${from}-${to}`}
-                                                      className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
-                                                    >
-                                                      {String(from)} to {String(to)}
-                                                    </div>
-                                                  );
-                                                });
+                                              if (
+                                                config.translations &&
+                                                Object.keys(config.translations).length > 0
+                                              ) {
+                                                Object.entries(config.translations).forEach(
+                                                  ([from, to]) => {
+                                                    labels.push(
+                                                      <div
+                                                        key={`translate-${from}-${to}`}
+                                                        className="rounded-full px-2 py-0.5 text-xs bg-amber-100 text-amber-800 border border-amber-600 inline-block"
+                                                      >
+                                                        {String(from)} to {String(to)}
+                                                      </div>
+                                                    );
+                                                  }
+                                                );
                                               }
                                             }
 
@@ -2894,7 +2901,10 @@ const TradingAccountsConfigComponent = () => {
                                     }
 
                                     // Translates (mostrar cada translate como un badge separado)
-                                    if (config.translations && Object.keys(config.translations).length > 0) {
+                                    if (
+                                      config.translations &&
+                                      Object.keys(config.translations).length > 0
+                                    ) {
                                       Object.entries(config.translations).forEach(([from, to]) => {
                                         labels.push(
                                           <div

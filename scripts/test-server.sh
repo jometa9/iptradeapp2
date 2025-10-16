@@ -36,12 +36,12 @@ echo ""
 # Start server in background
 echo "🚀 Starting production server..."
 cd server
-PORT=3000 node src/production.js > /tmp/iptrade-server-test.log 2>&1 &
+PORT=7777 node src/production.js > /tmp/iptrade-server-test.log 2>&1 &
 SERVER_PID=$!
 cd ..
 
 echo "   Server PID: $SERVER_PID"
-echo "   Port: 3000 (testing)"
+echo "   Port: 7777 (testing)"
 echo "   Waiting for server to start..."
 sleep 4
 
@@ -60,7 +60,7 @@ echo "🔍 Testing API endpoints..."
 
 # Test 1: Status endpoint
 echo -n "   Testing /api/status... "
-RESPONSE=$(curl -s http://localhost:3000/api/status)
+RESPONSE=$(curl -s http://localhost:7777/api/status)
 if [[ $RESPONSE == *"running"* ]] || [[ $RESPONSE == *"ok"* ]]; then
   echo -e "${GREEN}✅${NC}"
 else
@@ -70,7 +70,7 @@ fi
 
 # Test 2: Config endpoint
 echo -n "   Testing /api/config... "
-RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/config)
+RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7777/api/config)
 if [ "$RESPONSE" = "200" ]; then
   echo -e "${GREEN}✅${NC}"
 else
@@ -79,7 +79,7 @@ fi
 
 # Test 3: Swagger docs
 echo -n "   Testing /api-docs... "
-RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api-docs/)
+RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7777/api-docs/)
 if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "301" ]; then
   echo -e "${GREEN}✅${NC}"
 else
@@ -88,7 +88,7 @@ fi
 
 # Test 4: Copier status endpoint
 echo -n "   Testing /api/copier-status... "
-RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/copier-status)
+RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7777/api/copier-status)
 if [ "$RESPONSE" = "200" ]; then
   echo -e "${GREEN}✅${NC}"
 else

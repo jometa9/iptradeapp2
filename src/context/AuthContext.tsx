@@ -127,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ valid: boolean; userInfo?: UserInfo; message?: string }> => {
     try {
       const baseEndpoint =
-        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:3000/api/validate-subscription';
+        import.meta.env.VITE_LICENSE_API_URL || 'http://localhost:7777/api/validate-subscription';
       const url = `${baseEndpoint}?apiKey=${encodeURIComponent(apiKey)}`;
 
       const response = await fetch(url);
@@ -211,8 +211,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Validate token against local server endpoint
       const baseUrl =
         window.location.hostname === 'localhost'
-          ? 'http://localhost:3000'
-          : `${window.location.protocol}//${window.location.hostname}:3000`;
+          ? 'http://localhost:7777'
+          : `${window.location.protocol}//${window.location.hostname}:7777`;
 
       const response = await fetch(`${baseUrl}/api/validate-token`, {
         method: 'POST',
@@ -314,7 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Clear backend data if we have an API key
     if (currentSecretKey) {
       try {
-        const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+        const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:7777';
         const response = await fetch(
           `${baseUrl}/api/clear-user-data?apiKey=${encodeURIComponent(currentSecretKey)}`,
           {

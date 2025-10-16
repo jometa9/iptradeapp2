@@ -1,5 +1,5 @@
-import fs, { existsSync } from 'fs';
-import { join, dirname } from 'path';
+import fs from 'fs';
+import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import linkPlatformsController from './controllers/linkPlatformsController.js';
@@ -28,13 +28,13 @@ try {
   console.warn('⚠️ Failed to load config, using defaults:', error.message);
   config = {
     server: {
-      port: 3000,
-      environment: process.env.NODE_ENV || 'development'
+      port: 7777,
+      environment: process.env.NODE_ENV || 'development',
     },
     paths: {
       configDir: 'config',
-      autoLinkCacheFile: 'config/auto_link_cache.json'
-    }
+      autoLinkCacheFile: 'config/auto_link_cache.json',
+    },
   };
 }
 
@@ -93,8 +93,10 @@ const markAutoLinkExecuted = () => {
 // Enhanced server startup for both development and production
 async function startDevServer() {
   const isProduction = config.server.environment === 'production';
-  console.log(`🚀 Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode on port ${DEV_PORT}`);
-  
+  console.log(
+    `🚀 Starting server in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode on port ${DEV_PORT}`
+  );
+
   await killProcessOnPort(DEV_PORT);
 
   // Wait a moment to ensure port is fully free
@@ -106,11 +108,11 @@ async function startDevServer() {
         console.log(`✅ Server successfully started on port ${DEV_PORT}`);
         console.log(`🌐 Server available at: http://localhost:${DEV_PORT}`);
         console.log(`📚 API Documentation: http://localhost:${DEV_PORT}/api-docs`);
-        
+
         (async () => {
           try {
             console.log('🔍 Checking auto-link execution status...');
-            
+
             // Verificar si ya se ejecutó el auto-link (cache nunca expira)
             if (hasAutoLinkExecuted()) {
               console.log('✅ Auto-link already executed previously (cached), skipping');

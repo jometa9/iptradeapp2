@@ -3,17 +3,15 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Unlink, Zap } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
 import {
   canCreateMoreAccounts,
   getAccountLimitMessage,
   getPlanDisplayName,
-  getSubscriptionLimits,
   isUnlimitedPlan,
-  shouldShowSubscriptionLimitsCard,
   shouldShowSubscriptionLimitsCardDetailed,
 } from '../lib/subscriptionUtils';
 import { getPlatformDisplayName } from '../lib/utils';
-import { useUnifiedAccountData } from '../hooks/useUnifiedAccountData';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -39,7 +37,11 @@ const SubscriptionLimitsCard: React.FC<{
   totalAccounts: number;
   canAddMoreAccounts: boolean;
 }> = ({ userInfo, totalConfiguredAccounts, totalAccounts, canAddMoreAccounts }) => {
-  const showCard = shouldShowSubscriptionLimitsCardDetailed(userInfo, totalConfiguredAccounts, totalAccounts);
+  const showCard = shouldShowSubscriptionLimitsCardDetailed(
+    userInfo,
+    totalConfiguredAccounts,
+    totalAccounts
+  );
 
   if (!showCard) return null;
 
@@ -56,8 +58,7 @@ const SubscriptionLimitsCard: React.FC<{
           {!canAddMoreAccounts && (
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
               <p className="text-sm text-yellow-800">
-                You have reached your account limit. Please upgrade your plan to add more
-                accounts.
+                You have reached your account limit. Please upgrade your plan to add more accounts.
               </p>
             </div>
           )}
@@ -131,7 +132,7 @@ export const TradingAccountsManager: React.FC = () => {
     masterAccountId: 'none',
   });
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Register subscription change callback
@@ -157,7 +158,8 @@ export const TradingAccountsManager: React.FC = () => {
   };
 
   // Calculate total accounts for limit checking
-  const totalConfiguredAccounts = serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
+  const totalConfiguredAccounts =
+    serverStats.totalMasterAccounts + (serverStats.totalConnectedSlaves || 0);
   const totalAccounts = serverStats.totalMasterAccounts + serverStats.totalSlaveAccounts;
 
   // Check if user can create more accounts
@@ -186,8 +188,7 @@ export const TradingAccountsManager: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to register master account');
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   const registerSlaveAccount = async () => {
@@ -221,15 +222,11 @@ export const TradingAccountsManager: React.FC = () => {
 
         // Reload accounts to show the new slave account
         await refresh();
-
-   
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to register slave account');
       }
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   };
 
   const deleteMasterAccount = async (masterAccountId: string) => {
@@ -398,15 +395,15 @@ export const TradingAccountsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-             {/* Subscription Info Card para planes con límites */}
-       {userInfo && (
-         <SubscriptionLimitsCard 
-           userInfo={userInfo} 
-           totalConfiguredAccounts={totalConfiguredAccounts}
-           totalAccounts={totalAccounts} 
-           canAddMoreAccounts={canAddMoreAccounts}
-         />
-       )}
+      {/* Subscription Info Card para planes con límites */}
+      {userInfo && (
+        <SubscriptionLimitsCard
+          userInfo={userInfo}
+          totalConfiguredAccounts={totalConfiguredAccounts}
+          totalAccounts={totalAccounts}
+          canAddMoreAccounts={canAddMoreAccounts}
+        />
+      )}
 
       {/* Información de plan sin límites para planes premium */}
       {userInfo && userInfo.subscriptionType === 'premium' && !isUnlimitedPlan(userInfo) ? (
@@ -666,32 +663,32 @@ export const TradingAccountsManager: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-             <div className="bg-blue-50 p-4 rounded-lg">
-               <div className="text-2xl font-bold text-blue-600">
-                 {serverStats.totalMasterAccounts || 0}
-               </div>
-               <div className="text-sm text-blue-700">Master Accounts</div>
-             </div>
-             <div className="bg-green-50 p-4 rounded-lg">
-               <div className="text-2xl font-bold text-green-600">
-                 {serverStats.totalSlaveAccounts || 0}
-               </div>
-               <div className="text-sm text-green-700">Slave Accounts</div>
-             </div>
-             <div className="bg-purple-50 p-4 rounded-lg">
-               <div className="text-2xl font-bold text-purple-600">
-                 {serverStats.totalUnconnectedSlaves || 0}
-               </div>
-               <div className="text-sm text-purple-700">Unconnected Slaves</div>
-             </div>
-             <div className="bg-gray-50 p-4 rounded-lg">
-               <div className="text-2xl font-bold text-gray-600">
-                 {serverStats.totalCSVFiles || 0}
-               </div>
-               <div className="text-sm text-gray-700">CSV Files</div>
-             </div>
-           </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">
+                {serverStats.totalMasterAccounts || 0}
+              </div>
+              <div className="text-sm text-blue-700">Master Accounts</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">
+                {serverStats.totalSlaveAccounts || 0}
+              </div>
+              <div className="text-sm text-green-700">Slave Accounts</div>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-purple-600">
+                {serverStats.totalUnconnectedSlaves || 0}
+              </div>
+              <div className="text-sm text-purple-700">Unconnected Slaves</div>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="text-2xl font-bold text-gray-600">
+                {serverStats.totalCSVFiles || 0}
+              </div>
+              <div className="text-sm text-gray-700">CSV Files</div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

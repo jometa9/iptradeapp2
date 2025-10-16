@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 let serverProcess = null;
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 7777;
 
 /**
  * Get the correct base path for the app
@@ -21,7 +21,7 @@ function getBasePath() {
       // Production: use resources path where server files are bundled
       const resourcesPath = path.join(process.resourcesPath, 'server');
       console.log('🔍 [PRODUCTION] Checking resources path:', resourcesPath);
-      
+
       // Verify the path exists
       if (fs.existsSync(resourcesPath)) {
         console.log('✅ [PRODUCTION] Resources path exists');
@@ -35,7 +35,9 @@ function getBasePath() {
           console.log('✅ [PRODUCTION] App path exists');
           return appPath;
         }
-        throw new Error(`Server directory not found in resources (${resourcesPath}) or app (${appPath})`);
+        throw new Error(
+          `Server directory not found in resources (${resourcesPath}) or app (${appPath})`
+        );
       }
     } else {
       // Development: use project server directory
@@ -94,7 +96,7 @@ function startProductionServer() {
         NODE_ENV: 'production',
         ELECTRON_RESOURCES_PATH: userDataPath,
         // Add node_modules paths for production
-        NODE_PATH: path.join(basePath, 'node_modules')
+        NODE_PATH: path.join(basePath, 'node_modules'),
       };
 
       console.log('🔧 [PRODUCTION] Environment setup:');
@@ -109,7 +111,7 @@ function startProductionServer() {
         cwd: basePath,
         env: serverEnv,
         silent: false, // Let output go to parent's stdio
-        execArgv: [] // No special flags needed for CommonJS
+        execArgv: [], // No special flags needed for CommonJS
       });
 
       console.log('🔄 Server process forked with PID:', serverProcess.pid);
@@ -124,7 +126,7 @@ function startProductionServer() {
       }, 10000);
 
       // Handle IPC messages from child process
-      serverProcess.on('message', (message) => {
+      serverProcess.on('message', message => {
         console.log('[SERVER MESSAGE]', message);
 
         if (message && message.type === 'server-started') {
@@ -142,7 +144,7 @@ function startProductionServer() {
       });
 
       // Handle process exit
-      serverProcess.on('close', (code) => {
+      serverProcess.on('close', code => {
         console.log(`[SERVER] Process exited with code ${code}`);
         serverProcess = null;
 
@@ -153,7 +155,7 @@ function startProductionServer() {
       });
 
       // Handle process errors
-      serverProcess.on('error', (err) => {
+      serverProcess.on('error', err => {
         console.error('[SERVER] Process error:', err);
         clearTimeout(startupTimeout);
 
@@ -161,7 +163,6 @@ function startProductionServer() {
           reject(err);
         }
       });
-
     } catch (error) {
       console.error('❌ Failed to start production server:', error);
       reject(error);
@@ -173,7 +174,7 @@ function startProductionServer() {
  * Stop the production server
  */
 function stopProductionServer() {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (serverProcess) {
       console.log('🛑 Stopping production server...');
 
@@ -235,5 +236,5 @@ module.exports = {
   startProductionServer,
   stopProductionServer,
   getServerUrl,
-  isServerRunning
+  isServerRunning,
 };

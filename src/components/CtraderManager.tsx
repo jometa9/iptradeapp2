@@ -87,7 +87,7 @@ export const CtraderManager: React.FC = () => {
     return Object.values(unifiedData.configuredAccounts.masterAccounts) as MasterAccount[];
   }, [unifiedData]);
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Get userId from authenticated user context

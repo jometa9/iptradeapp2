@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 7777;
 
 // Middleware básico
 app.use(cors());
@@ -22,10 +22,12 @@ app.get('/api/csv/events/frontend', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   // Enviar estado inicial
-  res.write(`data: ${JSON.stringify({
-    type: 'initial_data',
-    copierStatus: { globalStatus: false }
-  })}\n\n`);
+  res.write(
+    `data: ${JSON.stringify({
+      type: 'initial_data',
+      copierStatus: { globalStatus: false },
+    })}\n\n`
+  );
 
   // Mantener la conexión viva
   const interval = setInterval(() => {
@@ -61,8 +63,8 @@ app.get('/api/config', (req, res) => {
       res.json({
         server: {
           port: 30,
-          environment: 'production'
-        }
+          environment: 'production',
+        },
       });
     }
   } catch (error) {
@@ -77,15 +79,15 @@ app.get('/api/csv/accounts', (req, res) => {
     if (!fs.existsSync(csvPath)) {
       return res.json([]);
     }
-    
+
     const files = fs.readdirSync(csvPath).filter(file => file.endsWith('.csv'));
     const accounts = [];
-    
+
     files.forEach(file => {
       const filePath = path.join(csvPath, file);
       const content = fs.readFileSync(filePath, 'utf8');
       const lines = content.split('\n');
-      
+
       lines.forEach(line => {
         if (line.startsWith('[TYPE]')) {
           const parts = line.split(' ').filter(part => part.trim());
@@ -93,13 +95,13 @@ app.get('/api/csv/accounts', (req, res) => {
             accounts.push({
               platform: parts[1],
               accountId: parts[2],
-              file: file
+              file: file,
             });
           }
         }
       });
     });
-    
+
     res.json(accounts);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read CSV files' });
@@ -110,7 +112,7 @@ app.get('/api/csv/accounts', (req, res) => {
 app.get('/api/copier-status', (req, res) => {
   res.json({
     globalStatus: false,
-    accounts: []
+    accounts: [],
   });
 });
 

@@ -19,7 +19,7 @@ export const useRealTimeEvents = (onEvent?: (event: SystemEvent) => void) => {
   const clientIdRef = useRef<string>(generateClientId());
   const onEventRef = useRef(onEvent);
 
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3000';
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '7777';
   const baseUrl = `http://localhost:${serverPort}/api`;
 
   // Update the ref when the callback changes

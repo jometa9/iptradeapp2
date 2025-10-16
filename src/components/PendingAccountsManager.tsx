@@ -8,7 +8,6 @@ import {
   HardDriveDownload,
   HousePlug,
   Inbox,
-  Link,
   PartyPopper,
   Plus,
   TrafficCone,
@@ -94,7 +93,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
   progress: propProgress,
 }) => {
   const { secretKey, userInfo } = useAuth();
-  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3000';
+  const baseUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:7777';
   const {
     isLinking: hookIsLinking,
     linkPlatforms: hookLinkPlatforms,
@@ -265,7 +264,12 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         progress: null,
         details: null,
       },
-      error: { message: 'Error linking accounts. Please try again.', isLoading: false, progress: null, details: null },
+      error: {
+        message: 'Error linking accounts. Please try again.',
+        isLoading: false,
+        progress: null,
+        details: null,
+      },
     };
 
     // Return the status from the map, or a fallback if the step is not recognized
@@ -594,7 +598,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       if (conversionForm.suffix) {
         configSummary.push(`Comment suffix: "${conversionForm.suffix}"`);
       }
-      
+
       // Add translations to the summary
       const translations = Object.entries(conversionForm.translations || {});
       if (translations.length > 0) {
@@ -794,7 +798,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                 onClick={toggleHidden}
                 className="text-gray-400 hover:text-gray-900 text-sm font-medium"
               >
-                <EyeOff className="w-4 h-4" />  
+                <EyeOff className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -868,7 +872,9 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                         : 'border-blue-200 cursor-pointer link-platforms-shine'
                     }  hover:shadow-lg transition-all duration-300`}
                   >
-                    <HardDriveDownload className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`} />
+                    <HardDriveDownload
+                      className={`h-4 w-4 mr-2 z-10 ${isLinking ? 'text-gray-700' : ''}`}
+                    />
                     {isLinking && linkingSource === 'link' ? 'Installing...' : 'Install bots'}
                   </Button>
                   <Button
@@ -921,9 +927,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                           <div className="flex items-center gap-2">
                             <h3
                               className={`font-semibold ml-2 ${
-                                confirmingMasterId === account.account_id
-                                  ? ''
-                                  : 'text-green-900'
+                                confirmingMasterId === account.account_id ? '' : 'text-green-900'
                               }`}
                             >
                               {account.account_id}
@@ -1052,48 +1056,44 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
                             ) : (
                               <>
                                 {/* Show normal buttons for all accounts */}
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="bg-white h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
-                                      onClick={async () =>
-                                        await openConversionForm(account, 'master')
-                                      }
-                                      title="Make Master"
-                                      disabled={
-                                        isConverting ||
-                                        (subscriptionLimits.maxAccounts !== null &&
-                                          totalAccounts >= subscriptionLimits.maxAccounts) ||
-                                        false
-                                      }
-                                    >
-                                      <HousePlug className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="bg-white h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-gray-50"
-                                      onClick={async () =>
-                                        await openConversionForm(account, 'slave')
-                                      }
-                                      title="Make Slave"
-                                      disabled={
-                                        isConverting ||
-                                        (subscriptionLimits.maxAccounts !== null &&
-                                          totalAccounts >= subscriptionLimits.maxAccounts) ||
-                                        false
-                                      }
-                                    >
-                                      <Unplug className="h-4 w-4" />
-                                    </Button>
-                                    <DeleteButton
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteAccount(account.account_id);
-                                      }}
-                                      disabled={isDeletingAccount === account.account_id}
-                                      title="Delete from cache"
-                                    />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-white h-9 w-9 p-0 rounded-lg border-blue-200 text-blue-700 hover:bg-gray-50"
+                                  onClick={async () => await openConversionForm(account, 'master')}
+                                  title="Make Master"
+                                  disabled={
+                                    isConverting ||
+                                    (subscriptionLimits.maxAccounts !== null &&
+                                      totalAccounts >= subscriptionLimits.maxAccounts) ||
+                                    false
+                                  }
+                                >
+                                  <HousePlug className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-white h-9 w-9 p-0 rounded-lg border-green-200 text-green-700 hover:bg-gray-50"
+                                  onClick={async () => await openConversionForm(account, 'slave')}
+                                  title="Make Slave"
+                                  disabled={
+                                    isConverting ||
+                                    (subscriptionLimits.maxAccounts !== null &&
+                                      totalAccounts >= subscriptionLimits.maxAccounts) ||
+                                    false
+                                  }
+                                >
+                                  <Unplug className="h-4 w-4" />
+                                </Button>
+                                <DeleteButton
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleDeleteAccount(account.account_id);
+                                  }}
+                                  disabled={isDeletingAccount === account.account_id}
+                                  title="Delete from cache"
+                                />
                               </>
                             )}
                           </div>

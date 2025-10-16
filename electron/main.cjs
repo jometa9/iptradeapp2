@@ -15,9 +15,12 @@ const path = require('path');
 const fs = require('fs');
 const { EventSource } = require('eventsource');
 // ADD THIS LINE after other requires:
-const { startProductionServer, stopProductionServer, getServerUrl } = require('../server-production.cjs');
+const {
+  startProductionServer,
+  stopProductionServer,
+  getServerUrl,
+} = require('../server-production.cjs');
 const { setupDirectories } = require('../scripts/setup-directories.cjs');
-
 
 // Función para manejar permisos de macOS de manera eficiente
 async function requestMacOSPermissions() {
@@ -60,7 +63,7 @@ function getPortFromEnv() {
     if (vitePortMatch) return vitePortMatch[1];
   }
 
-  return '3000'; // fallback por defecto
+  return '7777'; // fallback por defecto
 }
 
 // Mejorar la detección de modo desarrollo
@@ -85,11 +88,11 @@ if (!gotTheLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
-    
+
     // Handle deep link on second instance (Windows/Linux)
     if (process.platform === 'win32' || process.platform === 'linux') {
       // Keep only command line / deep linked arguments
-      deeplinkingUrl = commandLine.find((arg) => arg.startsWith('iptrade://'));
+      deeplinkingUrl = commandLine.find(arg => arg.startsWith('iptrade://'));
       if (deeplinkingUrl && mainWindow) {
         handleDeepLink(deeplinkingUrl);
       }
@@ -102,7 +105,7 @@ function handleDeepLink(url) {
   console.log('Deep link received:', url);
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('deep-link', { url });
-    
+
     // Focus the window when receiving deep link
     if (mainWindow.isMinimized()) {
       mainWindow.restore();
@@ -196,16 +199,16 @@ ipcMain.handle('check-server-status', async () => {
   try {
     const port = getPortFromEnv();
     const response = await fetch(`http://localhost:${port}/api/status`);
-    return { 
-      running: response.ok, 
+    return {
+      running: response.ok,
       status: response.status,
-      url: `http://localhost:${port}`
+      url: `http://localhost:${port}`,
     };
   } catch (error) {
-    return { 
-      running: false, 
+    return {
+      running: false,
       error: error.message,
-      url: `http://localhost:${getPortFromEnv()}`
+      url: `http://localhost:${getPortFromEnv()}`,
     };
   }
 });
@@ -322,12 +325,13 @@ async function startServer() {
       }
 
       // Production: Use the new server-production.cjs manager to spawn full server
-      console.log(`🚀 [PRODUCTION] Starting backend server... (attempt ${retryCount + 1}/${maxRetries})`);
-      
+      console.log(
+        `🚀 [PRODUCTION] Starting backend server... (attempt ${retryCount + 1}/${maxRetries})`
+      );
+
       await startProductionServer();
       console.log('✅ [PRODUCTION] Server started successfully');
       return; // Success, exit the retry loop
-
     } catch (error) {
       retryCount++;
       console.error(`❌ Failed to start server (attempt ${retryCount}/${maxRetries}):`, error);
@@ -336,7 +340,7 @@ async function startServer() {
         stack: error.stack,
         code: error.code,
         errno: error.errno,
-        syscall: error.syscall
+        syscall: error.syscall,
       });
 
       if (retryCount < maxRetries) {
@@ -359,10 +363,7 @@ The application will continue running, but the backend server is not available.
 Please check the console logs for more information.
       `.trim();
 
-      dialog.showErrorBox(
-        'Server Startup Error',
-        errorDetails
-      );
+      dialog.showErrorBox('Server Startup Error', errorDetails);
 
       // Don't quit the app - let it continue running
       // The frontend can still load and show an error state
@@ -383,14 +384,14 @@ async function createAdaptiveIcon() {
 
     // Crear un icono monocromático para template (solo negro)
     // Fondo transparente
-  ctx.clearRect(0, 0, size, size);
+    ctx.clearRect(0, 0, size, size);
 
     // Solo texto "IP" en negro (se invertirá automáticamente)
     ctx.fillStyle = '#000000';
-  ctx.font = 'bold 54px Arial'; // Fuente más grande ya que no hay borde
+    ctx.font = 'bold 54px Arial'; // Fuente más grande ya que no hay borde
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-  ctx.fillText('IP', size / 2, size / 2);
+    ctx.fillText('IP', size / 2, size / 2);
 
     const buffer = canvas.toBuffer('image/png');
     const icon = nativeImage.createFromBuffer(buffer);
@@ -551,14 +552,14 @@ function createWindow() {
       path.join(__dirname, '../dist/app-icon.ico'),
       path.join(process.resourcesPath, 'app.asar.unpacked/dist/app-icon.ico'),
     ];
-    
+
     for (const possiblePath of possiblePaths) {
       if (fs.existsSync(possiblePath)) {
         iconPath = possiblePath;
         break;
       }
     }
-    
+
     // Si no se encuentra en ninguna ubicación, usar la primera como fallback
     if (!iconPath) {
       iconPath = possiblePaths[0];
@@ -603,7 +604,7 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowConfig);
-   //mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
 
   // Forzar el uso del icono personalizado en Windows
   if (process.platform === 'win32') {
@@ -736,7 +737,7 @@ function createWindow() {
     // mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-    
+
     // Log frontend events
     mainWindow.webContents.on('did-finish-load', () => {
       try {
@@ -744,7 +745,9 @@ function createWindow() {
         if (!fs.existsSync(logsDir)) {
           fs.mkdirSync(logsDir, { recursive: true });
         }
-        const frontendLogFile = fs.createWriteStream(path.join(logsDir, 'frontend.log'), { flags: 'a' });
+        const frontendLogFile = fs.createWriteStream(path.join(logsDir, 'frontend.log'), {
+          flags: 'a',
+        });
         frontendLogFile.write(`\n[${new Date().toISOString()}] Frontend loaded successfully\n`);
       } catch (error) {
         console.error('Failed to create frontend log:', error);
@@ -757,8 +760,13 @@ function createWindow() {
         if (!fs.existsSync(logsDir)) {
           fs.mkdirSync(logsDir, { recursive: true });
         }
-        const frontendErrorLogFile = fs.createWriteStream(path.join(logsDir, 'frontend-error.log'), { flags: 'a' });
-        frontendErrorLogFile.write(`\n[${new Date().toISOString()}] Frontend failed to load: ${errorDescription} (${errorCode})\n`);
+        const frontendErrorLogFile = fs.createWriteStream(
+          path.join(logsDir, 'frontend-error.log'),
+          { flags: 'a' }
+        );
+        frontendErrorLogFile.write(
+          `\n[${new Date().toISOString()}] Frontend failed to load: ${errorDescription} (${errorCode})\n`
+        );
       } catch (error) {
         console.error('Failed to create frontend error log:', error);
       }
@@ -776,7 +784,7 @@ app.whenReady().then(async () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.iptrade.app');
   }
-  
+
   // Set app as default protocol handler for iptrade://
   const userDataPath = setupDirectories();
   console.log(`📂 User data initialized: ${userDataPath}`);
@@ -786,13 +794,13 @@ app.whenReady().then(async () => {
     // In development, we need to set the path to the electron executable
     app.setAsDefaultProtocolClient('iptrade', process.execPath, [path.resolve(process.argv[1])]);
   }
-  
+
   // Handle deep link from command line arguments (Windows/Linux)
   if (process.platform === 'win32' || process.platform === 'linux') {
     // Keep only command line / deep linked arguments
-    deeplinkingUrl = process.argv.find((arg) => arg.startsWith('iptrade://'));
+    deeplinkingUrl = process.argv.find(arg => arg.startsWith('iptrade://'));
   }
-  
+
   // Solicitar permisos necesarios una sola vez al inicio
   await requestMacOSPermissions();
 
@@ -801,13 +809,13 @@ app.whenReady().then(async () => {
     // Set cache directory to a writable location
     const userDataPath = app.getPath('userData');
     const cachePath = path.join(userDataPath, 'cache');
-    
+
     // Ensure cache directory exists and is writable
     try {
       if (!fs.existsSync(cachePath)) {
         fs.mkdirSync(cachePath, { recursive: true });
       }
-      
+
       // Set cache directory for the session
       app.setPath('cache', cachePath);
     } catch (error) {
