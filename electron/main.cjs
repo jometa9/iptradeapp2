@@ -684,14 +684,11 @@ function createWindow() {
     // mainWindow.webContents.closeDevTools();
   });
 
-  // Prevenir que se abran nuevas ventanas
+  // Manejar enlaces externos y prevenir nuevas ventanas
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    return { action: 'deny' };
-  });
-
-  // Manejar enlaces externos
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Abrir el enlace en el navegador externo
     shell.openExternal(url);
+    // Prevenir que se abra una nueva ventana en Electron
     return { action: 'deny' };
   });
 

@@ -1,7 +1,8 @@
 {
   "app": {
     "serverPort": 3000,
-    "environment": "production"
+    "environment": "production",
+    "helpUrl": "https://iptradecopier.com/faqs"
   },
   "paths": {
     "configDir": "test"
