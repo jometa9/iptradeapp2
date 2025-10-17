@@ -62,7 +62,7 @@ app.get('/api/config', (req, res) => {
     } else {
       res.json({
         server: {
-          port: 30,
+          port: 7777,
           environment: 'production',
         },
       });

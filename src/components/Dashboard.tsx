@@ -38,8 +38,6 @@ export const Dashboard: React.FC = () => {
 
   // Visibility state is now handled above with refresh function
 
-  // Hook para ejecutar Link Platforms automáticamente cuando cambien las cuentas
-  useAutoLinkPlatforms();
 
   const [userIP, setUserIP] = useState<string>('Loading...');
   // Inicializar showIP desde localStorage

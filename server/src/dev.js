@@ -109,33 +109,34 @@ async function startDevServer() {
         console.log(`🌐 Server available at: http://localhost:${DEV_PORT}`);
         console.log(`📚 API Documentation: http://localhost:${DEV_PORT}/api-docs`);
 
-        (async () => {
-          try {
-            console.log('🔍 Checking auto-link execution status...');
+        // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+        // (async () => {
+        //   try {
+        //     console.log('🔍 Checking auto-link execution status...');
 
-            // Verificar si ya se ejecutó el auto-link (cache nunca expira)
-            if (hasAutoLinkExecuted()) {
-              console.log('✅ Auto-link already executed previously (cached), skipping');
-              return;
-            }
+        //     // Verificar si ya se ejecutó el auto-link (cache nunca expira)
+        //     if (hasAutoLinkExecuted()) {
+        //       console.log('✅ Auto-link already executed previously (cached), skipping');
+        //       return;
+        //     }
 
-            if (linkPlatformsController.isLinking) {
-              console.log('⏳ Auto-link is already in progress, skipping');
-              return;
-            }
+        //     if (linkPlatformsController.isLinking) {
+        //       console.log('⏳ Auto-link is already in progress, skipping');
+        //       return;
+        //     }
 
-            console.log('🚀 Starting auto-link process...');
-            const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
-            console.log('✅ Auto-link process completed:', result);
+        //     console.log('🚀 Starting auto-link process...');
+        //     const result = await linkPlatformsController.findAndSyncMQLFoldersManual();
+        //     console.log('✅ Auto-link process completed:', result);
 
-            // Marcar como ejecutado en el cache
-            markAutoLinkExecuted();
+        //     // Marcar como ejecutado en el cache
+        //     markAutoLinkExecuted();
 
-            console.log('📊 CSV watching is integrated into the main process');
-          } catch (err) {
-            console.error('❌ Auto Link Platforms failed on start:', err);
-          }
-        })();
+        //     console.log('📊 CSV watching is integrated into the main process');
+        //   } catch (err) {
+        //     console.error('❌ Auto Link Platforms failed on start:', err);
+        //   }
+        // })();
 
         resolve(server);
       });

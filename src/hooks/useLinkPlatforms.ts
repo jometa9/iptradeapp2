@@ -300,6 +300,12 @@ export const useLinkPlatforms = (onFindBotsCompleted?: () => void) => {
 
       // Escuchar eventos de Link Platforms
       if (data.type === 'linkPlatformsEvent') {
+        // NO procesar eventos SSE para Find Bots - es síncrono
+        if (linkingSource === 'bot') {
+          console.log('🔍 FRONTEND HOOK: Ignoring SSE event for Find Bots (synchronous process)');
+          return;
+        }
+
         switch (data.eventType) {
           case 'started':
             setIsLinkingWithLog(true, 'SSE started event');

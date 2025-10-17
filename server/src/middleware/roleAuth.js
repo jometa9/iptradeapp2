@@ -47,7 +47,7 @@ export const authenticateAccount = (req, res, next) => {
   }
 
   // For now, use a temporary API key - this should be replaced with proper user-based authentication
-  const tempApiKey = apiKey || 'iptrade_89536f5b9e643c0433f3';
+  const tempApiKey = apiKey || 'iptrade_89536f5b9e643c043sa31';
 
   const userAccounts = getUserAccounts(tempApiKey);
 

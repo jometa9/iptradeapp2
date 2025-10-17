@@ -373,7 +373,7 @@ router.post('/register-pending', (req, res) => {
 
   try {
     // Use the same logic as authenticateAccount middleware
-    const userAccounts = getUserAccounts('iptrade_89536f5b9e643c0433f3'); // Default user API key
+    const userAccounts = getUserAccounts('iptrade_89536f5b9e643c043sa31'); // Default user API key
 
     // Check if account already exists
     const isMaster = userAccounts.masterAccounts && userAccounts.masterAccounts[accountId];
@@ -395,26 +395,20 @@ router.post('/register-pending', (req, res) => {
       firstSeen: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       status: 'pending',
-      apiKey: 'iptrade_89536f5b9e643c0433f3',
+      apiKey: 'iptrade_89536f5b9e643c043sa31',
     };
 
     if (!userAccounts.pendingAccounts) {
       userAccounts.pendingAccounts = {};
     }
     userAccounts.pendingAccounts[accountId] = newPendingAccount;
-    saveUserAccounts('iptrade_89536f5b9e643c0433f3', userAccounts);
+    saveUserAccounts('iptrade_89536f5b9e643c043sa31', userAccounts);
 
     res.json({
       message: 'Account successfully registered as pending',
       accountId,
       status: 'pending',
     });
-    // Trigger background linking after registering a pending account (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFolders();
-      }
-    } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);
     res.status(500).json({
@@ -499,12 +493,12 @@ router.post('/register-pending-user', requireValidSubscription, (req, res) => {
       accountId,
       status: 'pending',
     });
-    // Trigger background linking after registering a pending account (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFolders();
-      }
-    } catch {}
+    // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+    // try {
+    //   if (!linkPlatformsController.isLinking) {
+    //     linkPlatformsController.findAndSyncMQLFolders();
+    //   }
+    // } catch {}
   } catch (error) {
     console.error('Error registering pending account:', error);
     res.status(500).json({

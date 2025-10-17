@@ -129,13 +129,13 @@ export const registerMasterAccount = (req, res) => {
       status: 'success',
       copyingEnabled: false,
     });
-    // Trigger background linking after registering master (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
-      } else {
-      }
-    } catch {}
+    // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+    // try {
+    //   if (!linkPlatformsController.isLinking) {
+    //     linkPlatformsController.findAndSyncMQLFoldersManual();
+    //   } else {
+    //   }
+    // } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register master account' });
   }
@@ -220,13 +220,13 @@ export const registerSlaveAccount = (req, res) => {
     }
 
     res.json(responseData);
-    // Trigger background linking after registering slave (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
-      } else {
-      }
-    } catch {}
+    // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+    // try {
+    //   if (!linkPlatformsController.isLinking) {
+    //     linkPlatformsController.findAndSyncMQLFoldersManual();
+    //   } else {
+    //   }
+    // } catch {}
   } else {
     res.status(500).json({ error: 'Failed to register slave account' });
   }
@@ -543,13 +543,13 @@ export const updateMasterAccount = (req, res) => {
       account: userAccounts.masterAccounts[masterAccountId],
       status: 'success',
     });
-    // Trigger background linking after master update (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
-      } else {
-      }
-    } catch {}
+    // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+    // try {
+    //   if (!linkPlatformsController.isLinking) {
+    //     linkPlatformsController.findAndSyncMQLFoldersManual();
+    //   } else {
+    //   }
+    // } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update master account' });
   }
@@ -647,13 +647,13 @@ export const updateSlaveAccount = async (req, res) => {
       connectedTo: userAccounts.connections[slaveAccountId] || null,
       status: 'success',
     });
-    // Trigger background linking after slave update (only if not already running)
-    try {
-      if (!linkPlatformsController.isLinking) {
-        linkPlatformsController.findAndSyncMQLFoldersManual();
-      } else {
-      }
-    } catch {}
+    // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+    // try {
+    //   if (!linkPlatformsController.isLinking) {
+    //     linkPlatformsController.findAndSyncMQLFoldersManual();
+    //   } else {
+    //   }
+    // } catch {}
   } else {
     res.status(500).json({ error: 'Failed to update slave account' });
   }
@@ -1511,13 +1511,13 @@ export const convertPendingToMaster = async (req, res) => {
         status: 'converted_to_master',
         copyingEnabled: false,
       });
-      // Trigger background linking after conversion to master (only if not already running)
-      try {
-        if (!linkPlatformsController.isLinking) {
-          linkPlatformsController.findAndSyncMQLFoldersManual();
-        } else {
-        }
-      } catch {}
+      // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+      // try {
+      //   if (!linkPlatformsController.isLinking) {
+      //     linkPlatformsController.findAndSyncMQLFoldersManual();
+      //   } else {
+      //   }
+      // } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }
@@ -1632,14 +1632,14 @@ export const convertPendingToSlave = async (req, res) => {
       }
 
       res.json(responseData);
-      // Trigger background linking after conversion to slave (only if not already running)
-      try {
-        if (!linkPlatformsController.isLinking) {
-          ('🔄 Triggering background Link Platforms after conversion to slave');
-          linkPlatformsController.findAndSyncMQLFoldersManual();
-        } else {
-        }
-      } catch {}
+      // Auto-link deshabilitado - solo se ejecuta manualmente cuando el usuario presiona el botón
+      // try {
+      //   if (!linkPlatformsController.isLinking) {
+      //     ('🔄 Triggering background Link Platforms after conversion to slave');
+      //     linkPlatformsController.findAndSyncMQLFoldersManual();
+      //   } else {
+      //   }
+      // } catch {}
     } else {
       res.status(500).json({ error: 'Failed to save account configuration' });
     }
