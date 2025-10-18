@@ -17,7 +17,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
 import { UpdateTestProvider } from '../context/UpdateTestContext';
-import { useAutoLinkPlatforms } from '../hooks/useAutoLinkPlatforms';
 import { useExternalLink } from '../hooks/useExternalLink';
 // Removed useHiddenPendingAccounts - functionality moved to useUnifiedAccountData
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';

@@ -17,7 +17,6 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useUnifiedAccountDataContext } from '../context/UnifiedAccountDataContext';
-import { getAutoLinkSkippedByCache } from '../hooks/useAutoLinkPlatforms';
 import { useLinkPlatforms } from '../hooks/useLinkPlatforms';
 import {
   getPlanDisplayName,
@@ -259,7 +258,7 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
         details: null,
       },
       completed: {
-        message: getAutoLinkSkippedByCache() ? '' : 'Success! Platforms linked successfully',
+        message: 'Success! Platforms linked successfully',
         isLoading: false,
         progress: null,
         details: null,
@@ -389,35 +388,29 @@ export const PendingAccountsManager: React.FC<PendingAccountsManagerProps> = ({
       });
     }
 
+    // Only show success message if we were actually in a linking process
+    // and it's not already completed or in error state
     if (
       !isLinking &&
       linkingStatus.isActive &&
+      linkingStatus.step === 'starting' &&
       linkingStatus.step !== 'completed' &&
       linkingStatus.step !== 'error'
     ) {
-      // Verificar si se omitió por cache para no mostrar mensaje de éxito
-      if (getAutoLinkSkippedByCache()) {
+      setLinkingStatus({
+        step: 'completed',
+        message: 'Success! Platforms linked successfully',
+        isActive: true,
+      });
+
+      // Hide the status after 3 seconds
+      setTimeout(() => {
         setLinkingStatus({
           step: 'idle',
           message: '',
           isActive: false,
         });
-      } else {
-        setLinkingStatus({
-          step: 'completed',
-          message: 'Success! Platforms linked successfully',
-          isActive: true,
-        });
-
-        // Hide the status after 3 seconds
-        setTimeout(() => {
-          setLinkingStatus({
-            step: 'idle',
-            message: '',
-            isActive: false,
-          });
-        }, 3000);
-      }
+      }, 3000);
     }
   }, [isLinking, linkingStatus.step, linkingStatus.isActive]);
 

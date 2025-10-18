@@ -1722,6 +1722,28 @@ class CSVManager extends EventEmitter {
   }
 
   // Obtener todas las cuentas activas - ULTRA MINIMALISTA
+  // Método auxiliar para retry con delay específico para unified endpoint
+  async parseCSVFileWithRetry(filePath, maxRetries = 3, retryDelay = 250) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxRetries} to read CSV: ${path.basename(filePath)}`);
+        const csvData = await this.parseCSVFileAsync(filePath, 1, 0); // Sin retry interno, solo un intento
+        console.log(`✅ Successfully read CSV: ${path.basename(filePath)} on attempt ${attempt}`);
+        return csvData;
+      } catch (error) {
+        console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${path.basename(filePath)}: ${error.message}`);
+        
+        if (attempt === maxRetries) {
+          console.error(`❌ All ${maxRetries} attempts failed for ${path.basename(filePath)}: ${error.message}`);
+          throw error;
+        }
+        
+        console.log(`⏳ Waiting ${retryDelay}ms before retry ${attempt + 1}...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+    }
+  }
+
   async getAllActiveAccounts() {
     console.log('🚀🚀🚀 ULTRA MINIMALISTA getAllActiveAccounts STARTED 🚀🚀🚀');
     
@@ -1741,11 +1763,11 @@ class CSVManager extends EventEmitter {
     const csvPaths = this.getCSVPathsFromCache();
     console.log('📁 CSV paths from cache:', csvPaths);
 
-    // 2. Procesar cada archivo CSV directamente
+    // 2. Procesar cada archivo CSV con retry específico para unified endpoint
     for (const filePath of csvPaths) {
       try {
         console.log(`📄 Processing CSV: ${path.basename(filePath)}`);
-        const csvData = await this.parseCSVFileAsync(filePath);
+        const csvData = await this.parseCSVFileWithRetry(filePath, 3, 250);
         console.log(`📊 Raw CSV data from ${path.basename(filePath)}:`, csvData);
         
         // Procesar cada cuenta del archivo con VALIDACIÓN ESTRICTA
@@ -1794,7 +1816,9 @@ class CSVManager extends EventEmitter {
                                     masterId !== 'NULL' && 
                                     masterId !== 'ENABLED' && 
                                     masterId !== 'DISABLED' &&
-                                    !isNaN(parseInt(masterId));
+                                    masterId !== '0' &&
+                                    !isNaN(parseInt(masterId)) &&
+                                    parseInt(masterId) !== 0;
 
               // Check if the masterId points to a pending account
               const masterIsPending = isValidMasterId && pendingAccountIds.has(masterId);
@@ -1982,7 +2006,9 @@ class CSVManager extends EventEmitter {
               masterId !== 'DISABLED' &&
               masterId !== 'ON' &&
               masterId !== 'OFF' &&
-              !isNaN(parseInt(masterId)); // Debe ser un número
+              masterId !== '0' &&
+              !isNaN(parseInt(masterId)) &&
+              parseInt(masterId) !== 0; // Debe ser un número válido (no 0)
 
             if (isValidMasterId) {
               // Es un slave conectado - CREAR el master si no existe
@@ -2065,7 +2091,9 @@ class CSVManager extends EventEmitter {
             rowMasterId !== 'DISABLED' &&
             rowMasterId !== 'ON' &&
             rowMasterId !== 'OFF' &&
-            !isNaN(parseInt(rowMasterId)); // Debe ser un número
+            rowMasterId !== '0' &&
+            !isNaN(parseInt(rowMasterId)) &&
+            parseInt(rowMasterId) !== 0; // Debe ser un número válido (no 0)
 
           if (isValidMasterId && rowMasterId === masterId) {
             slaves.push({
@@ -2755,47 +2783,84 @@ class CSVManager extends EventEmitter {
       let updated = false;
 
       // Procesar cada línea
+      let hasConfigLine = false;
       for (const line of lines) {
         console.log(`📄 UPDATE STATUS: Processing line:`, line);
         
-        // Para cuentas slave, la línea CONFIG no incluye el accountId
-        if (line.includes('[CONFIG]') && (line.includes(`[${accountId}]`) || (accountType === 'SLAVE' && line.includes('[SLAVE]')))) {
-          console.log(`📄 UPDATE STATUS: Found CONFIG line for account ${accountId}`);
+        // Verificar si ya existe una línea CONFIG
+        if (line.includes('[CONFIG]')) {
+          hasConfigLine = true;
+          console.log(`📄 UPDATE STATUS: Found existing CONFIG line for account ${accountId}`);
           
-          // Extraer los valores actuales
-          const matches = line.match(/\[([^\]]+)\]/g);
-          console.log(`📄 UPDATE STATUS: Extracted values:`, matches);
-          
-          if (matches && matches.length >= 3) {
-            const values = matches.map(m => m.replace(/[\[\]]/g, ''));
-            console.log(`📄 UPDATE STATUS: Parsed values:`, values);
-            const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+          // Para cuentas slave, la línea CONFIG no incluye el accountId
+          if (line.includes(`[${accountId}]`) || (accountType === 'SLAVE' && line.includes('[SLAVE]'))) {
+            console.log(`📄 UPDATE STATUS: Found CONFIG line for account ${accountId}`);
             
-            if (accountType === 'MASTER') {
-              // [CONFIG] [MASTER] [ENABLED/DISABLED] [ACCOUNT_ID] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
-              const prefix = values[8] || 'NULL';
-              const suffix = values[9] || 'NULL';
-              newContent += `[CONFIG] [MASTER] [${newStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
-              updated = true;
-            } else if (accountType === 'SLAVE') {
-              // [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV] [PREFIX] [SUFFIX]
-              // Mantener los valores existentes excepto el estado
-              const currentConfig = line.split(']').map(part => part.trim().replace('[', '')).filter(Boolean);
-              const lotMult = currentConfig[3] || '1';
-              const forceLot = currentConfig[4] || 'NULL';
-              const reverse = currentConfig[5] || 'FALSE';
-              const masterId = currentConfig[6] || 'NULL';
-              const masterCsv = currentConfig[7] || 'NULL';
-              const prefix = currentConfig[8] || 'NULL';
-              const suffix = currentConfig[9] || 'NULL';
-              newContent += `[CONFIG] [SLAVE] [${newStatus}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsv}] [${prefix}] [${suffix}]\n`;
-              updated = true;
+            // Extraer los valores actuales
+            const matches = line.match(/\[([^\]]+)\]/g);
+            console.log(`📄 UPDATE STATUS: Extracted values:`, matches);
+            
+            if (matches && matches.length >= 3) {
+              const values = matches.map(m => m.replace(/[\[\]]/g, ''));
+              console.log(`📄 UPDATE STATUS: Parsed values:`, values);
+              const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+              
+              if (accountType === 'MASTER') {
+                // [CONFIG] [MASTER] [ENABLED/DISABLED] [ACCOUNT_ID] [NULL] [NULL] [NULL] [NULL] [PREFIX] [SUFFIX]
+                const prefix = values[8] || 'NULL';
+                const suffix = values[9] || 'NULL';
+                newContent += `[CONFIG] [MASTER] [${newStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [${prefix}] [${suffix}]\n`;
+                updated = true;
+              } else if (accountType === 'SLAVE') {
+                // [CONFIG] [SLAVE] [ENABLED/DISABLED] [LOT_MULT] [FORCE_LOT] [REVERSE] [MASTER_ID] [MASTER_CSV] [PREFIX] [SUFFIX]
+                // Mantener los valores existentes excepto el estado
+                const currentConfig = line.split(']').map(part => part.trim().replace('[', '')).filter(Boolean);
+                const lotMult = currentConfig[3] || '1';
+                const forceLot = currentConfig[4] || 'NULL';
+                const reverse = currentConfig[5] || 'FALSE';
+                const masterId = currentConfig[6] || 'NULL';
+                const masterCsv = currentConfig[7] || 'NULL';
+                const prefix = currentConfig[8] || 'NULL';
+                const suffix = currentConfig[9] || 'NULL';
+                newContent += `[CONFIG] [SLAVE] [${newStatus}] [${lotMult}] [${forceLot}] [${reverse}] [${masterId}] [${masterCsv}] [${prefix}] [${suffix}]\n`;
+                updated = true;
+              }
+            } else {
+              newContent += line + '\n';
             }
           } else {
             newContent += line + '\n';
           }
         } else {
           newContent += line + '\n';
+        }
+      }
+
+      // Si no existe línea CONFIG, crear una nueva después de la línea TYPE
+      if (!hasConfigLine) {
+        console.log(`📄 UPDATE STATUS: No CONFIG line found, creating new one for account ${accountId}`);
+        const newStatus = enabled ? 'ENABLED' : 'DISABLED';
+        
+        if (accountType === 'MASTER') {
+          // Insertar línea CONFIG después de TYPE
+          const newLines = newContent.split('\n');
+          const typeLineIndex = newLines.findIndex(line => line.includes('[TYPE]'));
+          if (typeLineIndex !== -1) {
+            newLines.splice(typeLineIndex + 1, 0, `[CONFIG] [MASTER] [${newStatus}] [${accountId}] [NULL] [NULL] [NULL] [NULL] [NULL] [NULL]`);
+            newContent = newLines.join('\n');
+            updated = true;
+            console.log(`📄 UPDATE STATUS: Created new CONFIG line for MASTER account ${accountId}`);
+          }
+        } else if (accountType === 'SLAVE') {
+          // Para slaves, necesitamos más información del contexto
+          const newLines = newContent.split('\n');
+          const typeLineIndex = newLines.findIndex(line => line.includes('[TYPE]'));
+          if (typeLineIndex !== -1) {
+            newLines.splice(typeLineIndex + 1, 0, `[CONFIG] [SLAVE] [${newStatus}] [1] [NULL] [FALSE] [NULL] [NULL] [NULL] [NULL]`);
+            newContent = newLines.join('\n');
+            updated = true;
+            console.log(`📄 UPDATE STATUS: Created new CONFIG line for SLAVE account ${accountId}`);
+          }
         }
       }
 
